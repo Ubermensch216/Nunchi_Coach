@@ -171,3 +171,86 @@ def test_boolean_is_not_mistaken_for_a_source_index():
 def test_survived_reflects_whether_anything_is_kept():
     assert verify_sentences([sentence("행정사무감사 접수", [1])], SOURCES).survived
     assert not verify_sentences([sentence("근거 없음", [])], SOURCES).survived
+
+
+# ── 표의 칸 대조 ────────────────────────────────────────────────────
+# 30문항 평가에서 "예산 집행액이 2분기에 적었던 이유가 뭐야?"에 "2분기 집행액은
+# 430입니다"가 나갔다. 430은 3분기 칸이고 2분기는 210이다. 숫자가 근거에 있다는
+# 것만으로는 표를 옳게 읽었다고 할 수 없다.
+
+from app.search.evidence import window  # noqa: E402
+
+
+def shown(text: str) -> str:
+    """검증이 실제로 보는 글 — 증거창을 거친 한 줄."""
+    return window(text, "")
+
+
+SHEET = {1: shown("[집계]\n구분\t1분기\t2분기\t3분기\t4분기\n"
+                  "예산요구액\t820\t0\t0\t0\n집행액\t0\t210\t430\t180")}
+
+
+def kept(text: str, sources=SHEET) -> bool:
+    return bool(verify_sentences([sentence(text, [1])], sources).kept)
+
+
+def test_a_value_from_another_cell_of_the_same_table_is_dropped():
+    result = verify_sentences([sentence("2분기 집행액은 430입니다.", [1])], SHEET)
+    assert result.kept == []
+    assert result.dropped[0].reason == "표에서 짚은 칸의 값이 아니다: 430"
+    assert not kept("예산요구액은 3분기에 820이다.")
+
+
+def test_the_value_of_the_named_cell_passes():
+    assert kept("2분기 집행액은 210입니다.")
+    assert kept("집행액은 3분기에 430이었다.")
+    # 띄어 쓴 행 이름도 같은 행이다.
+    assert kept("예산 요구액은 1분기 820, 2분기 0, 3분기 0, 4분기 0이다.")
+    # 여러 칸을 함께 말하면 그 칸들의 값을 모두 허용한다.
+    assert kept("집행액은 2분기 210, 3분기 430이다.")
+
+
+def test_sentences_that_do_not_name_both_a_row_and_a_column_are_left_alone():
+    """어느 칸을 말하는지 정할 수 없으면 판정하지 않는다."""
+    assert kept("집행액은 430까지 늘었다.")                 # 열을 말하지 않았다
+    assert kept("3분기에는 430이 집계되었다.")              # 행을 말하지 않았다
+    table = {1: shown("항목\t수량\t비고\n요구자료\t12\t제출완료\n추가질의\t3\t답변완료")}
+    assert kept("요구자료는 12건이며 제출완료되었다.", table)
+
+
+def test_row_form_tables_are_checked_the_same_way():
+    row = {1: shown("첫 행: 사업 | 예산 | 집행액\n1열: 시범사업 | 2열: 820 | 3열: 610\n단위: 백만원")}
+    assert row[1] == "첫 행: 사업 | 예산 | 집행액 1열: 시범사업 | 2열: 820 | 3열: 610 / 단위: 백만원"
+    assert kept("시범사업의 예산은 820이다.", row)
+    assert not kept("시범사업의 예산은 610이다.", row)
+
+
+def test_a_number_in_a_row_or_column_name_is_not_taken_for_a_value():
+    quarters = {1: shown("구분\t1분기\t2분기\n처리건수\t2\t1")}
+    assert kept("2분기 처리건수는 1건이다.", quarters)
+    assert not kept("2분기 처리건수는 2건이다.", quarters)
+
+
+def test_tables_from_different_evidence_pieces_are_not_joined():
+    """근거 둘의 표를 하나로 이으면 열이 어긋나 멀쩡한 답을 버린다."""
+    sources = {1: SHEET[1], 2: shown("구분\t목표\t실적\n집행액\t500\t430")}
+    result = verify_sentences([sentence("집행액은 3분기에 430이고 목표는 500이다.", [1, 2])], sources)
+    assert result.kept, result.dropped
+
+
+def test_the_evidence_window_keeps_cell_and_row_boundaries():
+    assert SHEET[1] == ("[집계] 구분 | 1분기 | 2분기 | 3분기 | 4분기 / "
+                        "예산요구액 | 820 | 0 | 0 | 0 / 집행액 | 0 | 210 | 430 | 180 /")
+
+
+# ── 금액 단위 ───────────────────────────────────────────────────────
+
+def test_a_money_unit_that_the_evidence_does_not_carry_is_dropped():
+    """단위 없는 표의 210에 다른 문서의 '백만원'을 붙인 답이 나갔다."""
+    result = verify_sentences([sentence("2분기 집행액은 210백만원입니다.", [1])], SHEET)
+    assert result.kept == []
+    assert result.dropped[0].reason == "인용한 근거에 없는 금액 단위를 썼다: 백만원"
+    with_unit = {1: shown("첫 행: 사업 | 예산\n1열: 시범사업 | 2열: 820\n단위: 백만원")}
+    assert kept("시범사업의 예산은 820백만원이다.", with_unit)
+    assert kept("2분기 집행액은 210입니다.")
+    assert kept("계약금액은 48,000천원이다.", {1: "계약금액: 48,000천원"})

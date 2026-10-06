@@ -13,6 +13,10 @@
   · 원문 순서를 지키고, 건너뛴 자리는 '…'로 표시한다. 없는 문장을 이어
     붙인 것처럼 보이면 안 된다.
   · 질문 낱말이 어디에도 없으면 예전처럼 앞부분을 쓴다.
+  · 표의 칸과 행의 경계를 남긴다. 한 줄로 펴면서 탭과 줄바꿈을 공백으로
+    바꾸면 "집행액 0 210 430 180"이 되어 어느 값이 어느 분기인지 모델도
+    검증도 알 수 없다(30문항 평가에서 2분기 값을 물었는데 3분기 값이 나갔다).
+    칸은 ' | ', 행의 끝은 ' /'로 적는다.
 
 여기서 만든 글이 곧 생성 문맥·사실 검증·화면의 근거 발췌다. 셋이 서로
 다른 글을 보면 검증이 의미를 잃는다.
@@ -33,8 +37,25 @@ _SENTENCE_END = re.compile(r"(?<=[^\d\s][.!?])\s+")
 _HAS_DIGIT = re.compile(r"\d")
 
 
+ROW_END = " /"
+_CELL_LINE = re.compile(r"^\s*1열:")
+
+
+def mark_tables(text: str) -> str:
+    """표의 칸·행 경계를 한 줄로 펴도 남는 표시로 바꾼다."""
+    lines = []
+    for line in (text or "").splitlines():
+        if "\t" in line:
+            line = " | ".join(cell.strip() for cell in line.split("\t")) + ROW_END
+        elif _CELL_LINE.match(line):
+            line = line.rstrip() + ROW_END
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def window(text: str, question: str, budget: int = DEFAULT_BUDGET) -> str:
-    flat = " ".join((text or "").split())
+    text = mark_tables(text)
+    flat = " ".join(text.split())
     if len(flat) <= budget:
         return flat
 

@@ -24,7 +24,7 @@ from ..ai.settings import project_client
 from ..ai.prompts_loader import render
 from ..ai.schemas import ASK_SCHEMA
 from ..db import Database, representative_predicate
-from . import evidence, fts
+from . import evidence, fts, tablemath
 from ..core import korean, provenance
 from ..core.chunking import MAX_CHUNK_CHARS
 from .query import QueryScope, infer_scope
@@ -205,6 +205,17 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
     # 생성·검증·화면 발췌가 모두 이 글을 본다. 따로 자르면 모델이 본 값과
     # 검증이 본 값이 어긋난다.
     source_text = _evidence_text(context_rows, question)
+
+    # 표의 한 행에서 가장 큰/작은 값을 묻는 질문은 규칙으로 답한다. 경량 모델은
+    # 값 견주기를 자주 틀리고, 틀린 값도 표 안의 숫자라 검증을 지나간다.
+    computed = tablemath.extreme(question, source_text)
+    if computed is not None:
+        text, citations = _compose_answer(
+            [VerifiedSentence(text=computed[0], sources=computed[1])],
+            context_rows, official, source_text)
+        return Answer(question=question, text=text, withheld=False, citations=citations,
+                      inferred_years=scope.years, generation={"rule_answer": "table_extreme"})
+
     prompt, _version = render(
         "ask", context=_format_context(context_rows, official, source_text), question=question)
     data, gen_error, raw = client.generate_json(prompt, ASK_SCHEMA, num_predict=GEN_TOKEN_BUDGET)
@@ -287,12 +298,32 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
             generation=generation,
         )
 
+    if _asks_reason(question) and not any(_GIVES_REASON.search(s.text) for s in verified.kept):
+        # 이유를 물었는데 이유를 말하는 문장이 없다. 30문항 평가에서 "집행액이
+        # 2분기에 적었던 이유가 뭐야?"에 "2분기 집행액은 210입니다"가 나갔다 —
+        # 근거에 있는 숫자지만 묻는 것에 대한 답이 아니다.
+        generation["reason_missing"] = True
+        related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
+        return Answer(
+            question=question, text="확인 가능한 자료가 부족합니다.", withheld=True,
+            related_docs=_dedupe(related), model=client.gen_model,
+            inferred_years=scope.years, generation=generation)
+
     text, citations = _compose_answer(verified.kept, context_rows, official, source_text)
     return Answer(question=question, text=text, withheld=False, citations=citations,
                   model=client.gen_model, inferred_years=scope.years, generation=generation)
 
 
 # ── 내부 ────────────────────────────────────────────────────────────
+
+# 이유를 묻는 질문과, 이유를 말하는 문장의 표지.
+_ASKS_REASON = re.compile(r"왜|이유|원인|까닭|어째서")
+_GIVES_REASON = re.compile(r"때문|이유|원인|사유|까닭|인해|탓|덕분|위해|위하여|따라|므로|어서|아서|여서")
+
+
+def _asks_reason(question: str) -> bool:
+    return bool(_ASKS_REASON.search(question))
+
 
 # 빈 문장 목록을 받았을 때 다시 묻는 데 쓴다. 문장을 하나 이상 내야 한다.
 _ASK_SCHEMA_NONEMPTY = {
@@ -545,7 +576,7 @@ def _support_text(context_rows: list, source_text: dict[int, str]) -> dict[int, 
     for index, row in enumerate(context_rows, start=1):
         by_document.setdefault(row["doc_id"], []).append(source_text[index])
     return {
-        index: " ".join(by_document[row["doc_id"]])
+        index: "\n".join(by_document[row["doc_id"]])
         for index, row in enumerate(context_rows, start=1)
     }
 

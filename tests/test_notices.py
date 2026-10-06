@@ -66,6 +66,25 @@ def test_a_license_without_its_text_is_reported_not_passed_over(tmp_path, monkey
     assert notices.main(["--out", str(tmp_path / "out"), "--strict"]) == 0
 
 
+def test_the_shipped_license_texts_are_whole_and_reach_the_notice():
+    """AGPL·LGPL·GPL 본문은 배포판에 없어 저장소에 따로 둔다. 잘린 파일이나 오류
+    페이지가 들어가 있으면 고지문은 있어도 조건은 못 지킨 것이다."""
+    assert notices.missing_texts() == []
+    texts = dict(notices.canonical_texts())
+    heads = {"AGPL-3.0.txt": "GNU AFFERO GENERAL PUBLIC LICENSE",
+             "LGPL-3.0.txt": "GNU LESSER GENERAL PUBLIC LICENSE",
+             "GPL-3.0.txt": "GNU GENERAL PUBLIC LICENSE"}
+    for name, head in heads.items():
+        body = texts[name]
+        assert body.startswith(head) and "Version 3" in body[:80], name
+        assert "<html" not in body.lower() and len(body) > 7000, name
+    for name in ("AGPL-3.0.txt", "GPL-3.0.txt"):
+        assert "END OF TERMS AND CONDITIONS" in texts[name], name
+    rendered = notices.render()
+    assert "싣지\n못했습니다" not in rendered
+    assert texts["AGPL-3.0.txt"][:300] in rendered and texts["LGPL-3.0.txt"][:300] in rendered
+
+
 def test_the_app_shows_the_bundled_file_when_there_is_one(tmp_path, monkeypatch):
     path = notices.write(tmp_path)
     assert path.name == notices.FILENAME

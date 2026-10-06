@@ -202,3 +202,61 @@ def test_answered_without_sentences_is_asked_once_more_for_at_least_one_sentence
     wire(client, [empty, declined])
     answer = ask(db, "실적 보고 제출기한이 언제야?", client=client)
     assert answer.withheld and answer.text == "" and answer.generation["empty_answer"] is True
+
+
+# ── 30문항 평가에 남았던 두 가지 ────────────────────────────────────
+
+def test_a_why_question_answered_with_a_bare_figure_is_withheld(db):
+    """이유를 물었는데 숫자만 답했다. 근거에 있는 숫자여도 묻는 것에 대한 답이 아니다."""
+    figure = {"response": '{"answered": true, "sentences": [{"text": "실적 보고의 제출기한은 '
+                          '9월 30일이다.", "sources": [1]}]}', "done_reason": "stop"}
+    client = OllamaClient()
+    wire(client, [figure])
+    answer = ask(db, "실적 보고 제출기한이 9월 30일인 이유가 뭐야?", client=client)
+    assert answer.withheld and answer.text == "확인 가능한 자료가 부족합니다."
+    assert answer.generation["reason_missing"] is True
+    assert [doc.filename for doc in answer.related_docs] == ["실적.hwpx"]
+
+    # 같은 답이 이유를 묻지 않는 질문에는 그대로 나간다.
+    client = OllamaClient()
+    wire(client, [figure])
+    assert not ask(db, "실적 보고 제출기한이 언제야?", client=client).withheld
+
+
+def test_a_why_question_keeps_an_answer_that_states_a_reason(tmp_path):
+    database = Database(tmp_path / "why.db")
+    database.init()
+    doc = database.upsert_document(database.add_source(r"D:\자료"), {
+        "path": r"D:\자료\안내.hwpx", "filename": "안내.hwpx", "ext": ".hwpx",
+        "parse_status": "ok", "hash": "w"})
+    chunk_id, _ = database.replace_document_chunks(
+        doc, [(1, "1문단", "결산 일정 때문에 실적 보고의 제출기한을 9월 30일로 앞당겼다.")])[0]
+    database.save_chunk_embedding(chunk_id, "bge-m3", 3, pack([1.0, 0.0, 0.0]))
+    client = OllamaClient()
+    wire(client, [{"response": '{"answered": true, "sentences": [{"text": "결산 일정 때문에 '
+                               '제출기한을 9월 30일로 앞당겼다.", "sources": [1]}]}',
+                   "done_reason": "stop"}])
+    answer = ask(database, "제출기한을 앞당긴 이유가 뭐야?", client=client)
+    assert not answer.withheld and "결산 일정 때문에" in answer.text
+    database.close()
+
+
+def test_the_largest_value_in_a_table_row_is_answered_by_rule_without_the_model(tmp_path):
+    database = Database(tmp_path / "t.db")
+    database.init()
+    doc = database.upsert_document(database.add_source(r"D:\자료"), {
+        "path": r"D:\자료\실적.xlsx", "filename": "실적.xlsx", "ext": ".xlsx",
+        "parse_status": "ok", "hash": "t"})
+    chunk_id, _ = database.replace_document_chunks(doc, [(1, "'집계' A1:E3", (
+        "[집계]\n구분\t1분기\t2분기\t3분기\t4분기\n완료율\t92\t88\t95\t90"))])[0]
+    database.save_chunk_embedding(chunk_id, "bge-m3", 3, pack([1.0, 0.0, 0.0]))
+    client = OllamaClient()
+    calls = wire(client, [{"response": '{"answered": true, "sentences": [{"text": "4분기의 '
+                                       '완료율은 90이다.", "sources": [1]}]}',
+                           "done_reason": "stop"}])
+    answer = ask(database, "완료율이 가장 높았던 분기의 완료율은 얼마야?", client=client)
+    assert not answer.withheld and "3분기의 95이(가) 가장 큽니다" in answer.text
+    assert [c.filename for c in answer.citations] == ["실적.xlsx"]
+    assert answer.generation == {"rule_answer": "table_extreme"}
+    assert calls == []                                    # 생성 모델을 부르지 않았다
+    database.close()

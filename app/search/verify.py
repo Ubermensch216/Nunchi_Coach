@@ -14,6 +14,10 @@
      잡지 못한다 — 그건 검색 단계의 몫이다.)
   ④ 인용한 조각과 겹치는 낱말이 거의 없다 — 인용은 했지만 그 내용과
      무관한 말을 하고 있다는 신호.
+  ⑥ 숫자에 붙인 금액 단위(천원·백만원 등)가 인용한 조각에 없다.
+  ⑤ 표의 행과 열을 짚어 말했는데 그 칸의 값이 아니다 — 같은 표의 다른 칸을
+     읽었다. (30문항 평가: "2분기 집행액은 430입니다" — 430은 3분기 칸이고
+     2분기는 210이다. 숫자가 근거에 있으니 ③은 통과한다.)
 
 주의: 이 검증은 '문장이 인용한 근거에 충실한가'만 본다. '그 근거가
 질문과 애초에 관련 있는가'는 검색 단계(R3·R4)와 프롬프트(R6)의 몫이다.
@@ -102,7 +106,8 @@ def verify_sentences(
         if not text:
             continue
 
-        cited_text = " ".join(
+        # 조각마다 한 줄로 둔다 — 표의 칸 대조가 조각을 넘어 표를 잇지 않게.
+        cited_text = "\n".join(
             support_text.get(s, source_text[s]) for s in valid_sources
         )
 
@@ -111,6 +116,18 @@ def verify_sentences(
             result.dropped.append(
                 Dropped(text, f"인용한 근거에 없는 숫자를 썼다: {', '.join(missing)}")
             )
+            continue
+
+        units = _unsupported_units(text, cited_text)
+        if units:
+            result.dropped.append(
+                Dropped(text, f"인용한 근거에 없는 금액 단위를 썼다: {', '.join(units)}"))
+            continue
+
+        wrong_cell = _wrong_table_cell(text, cited_text)
+        if wrong_cell:
+            result.dropped.append(
+                Dropped(text, f"표에서 짚은 칸의 값이 아니다: {', '.join(wrong_cell)}"))
             continue
 
         if not _overlaps_enough(text, cited_text):
@@ -150,6 +167,92 @@ def _unsupported_numbers(text: str, cited_text: str) -> list[str]:
         return (Decimal(number.rstrip("%").replace(",", "")), suffix)
     supported = {canonical(n) for n in _NUMBER.findall(cited_text)}
     return sorted({n for n in _NUMBER.findall(text) if canonical(n) not in supported})
+
+
+# ── 표의 칸 대조 ────────────────────────────────────────────────────
+# 증거창(search/evidence.py)이 표를 한 줄로 펴면서 남기는 꼴은 둘이다. 행은 ' /'로 끝난다.
+#   칸 꼴   "구분 | 1분기 | 2분기 / 집행액 | 0 | 210 /"                  (xlsx·docx·csv)
+#   행 꼴   "첫 행: 구분 | 1분기 | 2분기 1열: 집행액 | 2열: 0 | 3열: 210 /"  (hwpx·odt)
+_ROW_FORM = re.compile(r"(?:첫 행|머리글):\s*(.+?)\s+(1열:.+?)\s/")
+_ROW_CELL = re.compile(r"(\d+)열:\s*(.*?)(?=\s\|\s\d+열:|$)")
+
+
+def _tables(cited_text: str) -> list[tuple[list[str], list[list[str]]]]:
+    """인용한 글에서 (머리글, 행들)을 읽는다. 머리글이 있는 표만 본다.
+
+    근거 조각마다 한 줄이다. 줄을 넘어 표를 잇지 않는다 — 다른 조각의 표와
+    섞이면 열이 어긋난다.
+    """
+    tables: list[tuple[list[str], list[list[str]]]] = []
+    for line in cited_text.splitlines():
+        for match in _ROW_FORM.finditer(line):
+            headers = [part.strip() for part in match.group(1).split(" | ")]
+            cells = {int(n): v.strip() for n, v in _ROW_CELL.findall(match.group(2))}
+            tables.append((headers, [[cells.get(i, "") for i in range(1, len(headers) + 1)]]))
+        block: list[list[str]] = []
+        for segment in [*_ROW_FORM.sub(" ", line).split(" /"), ""]:
+            if " | " in segment and "열:" not in segment:
+                block.append([cell.strip() for cell in segment.split(" | ")])
+                continue
+            if len(block) >= 2:
+                tables.append((block[0], block[1:]))
+            block = []
+    return tables
+
+
+def _wrong_table_cell(text: str, cited_text: str) -> list[str]:
+    """문장이 표의 행 이름과 열 이름을 함께 짚었을 때, 그 칸에 없는 표 안의 숫자.
+
+    행이나 열 가운데 하나만 말한 문장은 건드리지 않는다 — 어느 칸을 말하는지
+    정할 수 없으면 판정하지 않는다. 여러 행·열을 말했으면 그 교차 칸 전부를
+    허용한다. 표에 아예 없는 숫자(연도 등)는 ③의 몫이다.
+    """
+    squeezed = re.sub(r"\s+", "", text)
+    allowed: set = set()
+    in_tables: set = set()
+    labels: set[str] = set()
+    for headers, rows in _tables(cited_text):
+        columns = [i for i, name in enumerate(headers)
+                   if i > 0 and len(name) >= 2 and re.sub(r"\s+", "", name) in squeezed]
+        named = [row for row in rows
+                 if row and len(row[0]) >= 2 and re.sub(r"\s+", "", row[0]) in squeezed]
+        if not columns or not named:
+            continue
+        labels.update(re.sub(r"\s+", "", headers[i]) for i in columns)
+        labels.update(re.sub(r"\s+", "", row[0]) for row in named)
+        for row in rows:
+            for cell in row[1:]:
+                in_tables.update(_canonical(n) for n in _NUMBER.findall(cell))
+        for row in named:
+            for i in columns:
+                if i < len(row):
+                    allowed.update(_canonical(n) for n in _NUMBER.findall(row[i]))
+    if not labels:
+        return []
+    # '2분기'의 2처럼 행·열 이름에 든 숫자는 값이 아니다.
+    for label in sorted(labels, key=len, reverse=True):
+        squeezed = squeezed.replace(label, " ")
+    return sorted({n for n in _NUMBER.findall(squeezed)
+                   if _canonical(n) in in_tables and _canonical(n) not in allowed})
+
+
+def _canonical(number: str):
+    from decimal import Decimal
+    suffix = "%" if number.endswith("%") else ""
+    return (Decimal(number.rstrip("%").replace(",", "")), suffix)
+
+
+# 금액 단위. '원' 하나는 어디에나 있어 따지지 않는다.
+_MONEY = re.compile(r"\d\s*(천만원|백만원|십만원|만원|천원|억원|조원)")
+
+
+def _unsupported_units(text: str, cited_text: str) -> list[str]:
+    """숫자에 붙인 금액 단위 가운데 근거에 없는 것.
+
+    30문항 평가에서 단위가 없는 표의 210에 다른 문서의 '백만원'을 붙여 답했다.
+    단위가 틀리면 값이 천 배, 백만 배로 달라진다.
+    """
+    return sorted({unit for unit in _MONEY.findall(text) if unit not in cited_text})
 
 
 def _contradicts_polarity(text: str, cited_text: str) -> bool:
