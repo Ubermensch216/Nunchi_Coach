@@ -14,9 +14,10 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-from ..core import health
+from ..core import health, provenance
 from ..core.chunking import CHUNKING_VERSION
 from .migrations import SCHEMA_VERSION, add_column, upgrade
+from .workstore import WorkStore
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
@@ -82,7 +83,7 @@ def open_project_at(directory: Path | str) -> "Database":
     return db
 
 
-class Database:
+class Database(WorkStore):
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         self._con: sqlite3.Connection | None = None
@@ -136,8 +137,37 @@ class Database:
                 self.con.execute("DELETE FROM task_steps WHERE task_id=? AND decided_by='ai'", (task_id,))
                 self.con.execute("DELETE FROM task_reading WHERE task_id=?", (task_id,))
                 self.con.execute("DELETE FROM task_health WHERE task_id=?", (task_id,))
-            self.con.execute("DELETE FROM meta WHERE key IN ('cycles_checked','steps_checked','chunks_checked')")
+            self.con.execute("DELETE FROM meta WHERE key IN ('cycles_checked','steps_checked','chunks_checked','items_checked')")
             self.set_meta("content_revision", str(int(self.get_meta("content_revision") or 0) + 1))
+
+    def repair_interrupted(self) -> int:
+        """반쯤 쓰이다 만 문서를 '아직 안 읽음'으로 되돌린다. 되돌린 건수를 준다.
+
+        지금의 파이프라인은 문서 하나를 한 묶음으로 쓰므로 새로 생기지 않는다.
+        이 복구는 그 전 판이 남긴 프로젝트를 위한 것이다 — '읽음'인데 검색
+        색인이 없거나, 글자 수는 있는데 본문 조각이 없는 문서는 기록 도중
+        프로세스가 죽은 흔적이다. 그대로 두면 다시 읽을 계기가 없어 검색과
+        질문에서 영영 빠진다.
+
+        원본이 사라진 문서는 건드리지 않는다. 다시 읽을 수 없는데 상태만
+        되돌리면 남아 있던 기록까지 잃는다. 사람의 교정은 지우지 않는다.
+        """
+        rows = self.con.execute(
+            "SELECT d.id FROM documents d "
+            "WHERE d.missing_since IS NULL AND d.parse_status IN ('ok','partial') "
+            "  AND (NOT EXISTS (SELECT 1 FROM document_index i WHERE i.doc_id = d.id) "
+            "       OR (d.char_count > 0 AND NOT EXISTS "
+            "           (SELECT 1 FROM document_sections s WHERE s.doc_id = d.id)))"
+        ).fetchall()
+        if not rows:
+            return 0
+        with self.transaction():
+            for row in rows:
+                self.invalidate_document_analysis(row["id"])
+                self.con.execute(
+                    "UPDATE documents SET parse_status='pending' WHERE id=?", (row["id"],))
+        self.audit("integrity.repair", detail=f"documents={len(rows)}", result="reparse")
+        return len(rows)
 
     def mark_seen(self, doc_id: int) -> None:
         self.con.execute("UPDATE documents SET missing_since=NULL,last_seen=datetime('now') WHERE id=?", (doc_id,))
@@ -231,10 +261,11 @@ class Database:
             "ON CONFLICT(path) DO UPDATE SET kind = excluded.kind, excludes = excluded.excludes",
             (text, kind, excludes),
         )
-        if cur.lastrowid:
-            self.audit("source.add", text)
-            return cur.lastrowid
+        # lastrowid는 믿지 않는다. 이미 있는 폴더를 다시 등록하면 새 행이 생기지
+        # 않아, 연결이 마지막으로 넣은 **다른 표**의 행 번호가 그대로 남아 있다.
         row = self.con.execute("SELECT id FROM sources WHERE path = ?", (text,)).fetchone()
+        if cur.rowcount and row["id"] == cur.lastrowid:
+            self.audit("source.add", text)
         return row["id"]
 
     def change_source_path(self, source_id: int, path: str | Path, kind: str = "") -> bool:
@@ -919,6 +950,9 @@ class Database:
                 ).fetchone()["y"]
             item["task_latest_year"] = latest_year.get(task_id)
             out[item["id"]] = item
+        # 온나라에서 수집한 공문이면 문서번호·상태·본문/붙임을 함께 준다.
+        for doc_id, official in provenance.official_sources(self, list(out)).items():
+            out[doc_id]["official"] = official
         return out
 
     # ── 인수인계 진행도 (계획서 §18) ────────────────────────────────

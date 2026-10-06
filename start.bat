@@ -3,6 +3,10 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 title NunchiCoach
 
+REM requirements.lock has UTF-8 (Korean) comments; pip on a cp949 locale
+REM would fail to decode it without UTF-8 mode.
+set PYTHONUTF8=1
+
 echo ============================================
 echo   NunchiCoach launcher
 echo ============================================

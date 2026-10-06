@@ -24,8 +24,9 @@ from ..ai.settings import project_client
 from ..ai.prompts_loader import render
 from ..ai.schemas import ASK_SCHEMA
 from ..db import Database, representative_predicate
-from . import fts
-from ..core import korean
+from . import evidence, fts
+from ..core import korean, provenance
+from ..core.chunking import MAX_CHUNK_CHARS
 from .query import QueryScope, infer_scope
 from .rerank import Candidate, collapse_near_duplicates, rerank
 from .vector import normalize, unpack
@@ -43,7 +44,11 @@ TOP_K = 8
 # 주의: 합성 표본 138조각·질문 8개로 잡은 값이다. 실제 기관 자료로
 # 파일럿할 때 같은 방법으로 다시 재야 한다(app/tools/rag_report.py).
 MIN_SIMILARITY = 0.40
+# 조각 하나의 최소 문맥 예산. 앞에서부터 자르지 않고 질문과 관련된 대목을
+# 이 안에 골라 담는다(search/evidence.py).
 MAX_CONTEXT_CHARS = 400
+# 문맥 전체의 기준 예산. 근거가 12건 이하면 이 안에서 조각당 몫을 늘린다.
+CONTEXT_TOTAL_CHARS = 4800
 RELATED_FALLBACK = 5
 
 # 두 순위(의미·정확 일치)를 이 깊이까지 각각 훑은 뒤 RRF로 합친다. 최종
@@ -93,6 +98,8 @@ class Citation:
     # 근거 문장 자체. 원본을 열지 않고도 앱 안에서 확인할 수 있어야 한다
     # (계획서 §14 — Claim → Evidence → Original 3단계).
     snippet: str = ""
+    # 온나라 공식 출처 한 줄(문서번호·상태·본문/붙임). 개인 폴더 자료면 빈 값.
+    official: str = ""
 
 
 @dataclass(slots=True)
@@ -115,6 +122,9 @@ class Answer:
     # questions.filters에 남겨 나중에 "이 질문을 왜 이렇게 좁혔는지"
     # 확인할 수 있게 한다.
     inferred_years: list[int] = field(default_factory=list)
+    # 생성 호출이 어떻게 끝났는가(종료 사유·토큰 수·소요 시간·복구 여부).
+    # 본문은 담지 않는다. 생성까지 가지 않은 답변이면 비어 있다.
+    generation: dict = field(default_factory=dict)
 
 
 def ask(db: Database, question: str, client: OllamaClient | None = None,
@@ -191,8 +201,14 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
         return Answer(question=question, text="확인 가능한 자료가 부족합니다.", withheld=True,
                        inferred_years=scope.years)
 
-    prompt, _version = render("ask", context=_format_context(context_rows), question=question)
+    official = provenance.official_sources(db, [row["doc_id"] for row in context_rows])
+    # 생성·검증·화면 발췌가 모두 이 글을 본다. 따로 자르면 모델이 본 값과
+    # 검증이 본 값이 어긋난다.
+    source_text = _evidence_text(context_rows, question)
+    prompt, _version = render(
+        "ask", context=_format_context(context_rows, official, source_text), question=question)
     data, gen_error, raw = client.generate_json(prompt, ASK_SCHEMA, num_predict=GEN_TOKEN_BUDGET)
+    generation = _generation_record(client)
     if db.get_meta("content_revision") != content_revision:
         return Answer(question=question, text="", withheld=True,
                       error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
@@ -203,10 +219,12 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
         salvaged = _salvage_ask_response(raw)
         if salvaged is not None:
             data, gen_error = salvaged, None
+            # 끊긴 응답에서 건진 답이라는 사실을 남긴다 — 온전한 답과 구분한다.
+            generation["recovered"] = True
 
     if gen_error or data is None:
         return Answer(question=question, text="", withheld=True, error=gen_error or "응답 생성 실패",
-                       inferred_years=scope.years)
+                       inferred_years=scope.years, generation=generation)
 
     if not data.get("answered", False):
         related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
@@ -217,15 +235,12 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
             related_docs=_dedupe(related),
             model=client.gen_model,
             inferred_years=scope.years,
+            generation=generation,
         )
 
     # 모델이 문장·근거를 스스로 짝지어 냈어도, 그 근거가 실제로 그 문장을
     # 뒷받침하는지는 모델이 보장하지 않는다. 여기서 규칙으로 한 번 더
     # 확인한다 — 근거 없는 문장은 화면에 올리지 않는다(§1 측정 1).
-    source_text = {
-        i + 1: " ".join(row["text"].split())[:MAX_CONTEXT_CHARS]
-        for i, row in enumerate(context_rows)
-    }
     verified = verify_sentences(
         data.get("sentences") or [], source_text, _support_text(context_rows, source_text),
     )
@@ -239,14 +254,21 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
             related_docs=_dedupe(related),
             model=client.gen_model,
             inferred_years=scope.years,
+            generation=generation,
         )
 
-    text, citations = _compose_answer(verified.kept, context_rows)
+    text, citations = _compose_answer(verified.kept, context_rows, official, source_text)
     return Answer(question=question, text=text, withheld=False, citations=citations,
-                  model=client.gen_model, inferred_years=scope.years)
+                  model=client.gen_model, inferred_years=scope.years, generation=generation)
 
 
 # ── 내부 ────────────────────────────────────────────────────────────
+
+def _generation_record(client) -> dict:
+    """클라이언트가 남긴 생성 계측값. 계측을 모르는 대역 클라이언트면 빈 값."""
+    record = getattr(client, "last_generation", None)
+    return record.as_dict() if record is not None and record.outcome else {}
+
 
 _ANSWERED = re.compile(r'"answered"\s*:\s*(true|false)')
 # 모델이 문장 안에 직접 적은 인용 표시. 우리가 다시 붙이기 전에 걷어 낸다.
@@ -283,6 +305,8 @@ def _salvage_ask_response(raw: str) -> dict | None:
 
 def _compose_answer(
     sentences: list[VerifiedSentence], context_rows: list,
+    official: dict[int, dict] | None = None,
+    evidence_text: dict[int, str] | None = None,
 ) -> tuple[str, list[Citation]]:
     """검증에서 살아남은 문장으로 답변 본문과 근거 목록을 만든다.
 
@@ -293,6 +317,7 @@ def _compose_answer(
     번호로 보여준다.
     """
     by_index = {i + 1: row for i, row in enumerate(context_rows)}
+    official = official or {}
     citations: list[Citation] = []
     renumbered: dict[int, int] = {}
     parts: list[str] = []
@@ -308,7 +333,10 @@ def _compose_answer(
                 citations.append(Citation(
                     index=renumbered[source], doc_id=row["doc_id"],
                     filename=row["filename"], locator=row["locator"], path=row["path"],
-                    snippet=" ".join(row["text"].split())[:SNIPPET_CHARS],
+                    # 모델이 실제로 본 대목을 보여 준다 — 조각 앞머리가 아니라.
+                    snippet=(evidence_text or {}).get(source)
+                    or " ".join(row["text"].split())[:SNIPPET_CHARS],
+                    official=provenance.describe(official.get(row["doc_id"])),
                 ))
             marks.append(renumbered[source])
         # 모델이 sources를 따로 내면서 문장 안에도 [1]을 적는 일이 잦다
@@ -618,11 +646,38 @@ def _load_chunk_context(db: Database, chunk_ids: list[int]) -> list:
     return sorted(rows, key=lambda r: order.get(r["chunk_id"], len(chunk_ids)))
 
 
-def _format_context(rows) -> str:
+def _context_budget(count: int) -> int:
+    """조각 하나에 쓸 글자 수. 근거가 적으면 넉넉히, 많으면 예전만큼.
+
+    전체 문맥은 예전의 최악(조각마다 400자)을 넘지 않는다 — 근거가 서너
+    건뿐일 때 조각을 통째로 보여 줄 여유가 있는데도 400자에서 자르던
+    것만 고친다.
+    """
+    return max(MAX_CONTEXT_CHARS, min(MAX_CHUNK_CHARS, CONTEXT_TOTAL_CHARS // max(count, 1)))
+
+
+def _evidence_text(rows, question: str) -> dict[int, str]:
+    """{근거 번호: 모델에 보여 줄 글}. 번호는 _format_context와 같다."""
+    budget = _context_budget(len(rows))
+    return {i: evidence.window(row["text"], question, budget) for i, row in enumerate(rows, start=1)}
+
+
+def _format_context(rows, official: dict[int, dict] | None = None,
+                    evidence_text: dict[int, str] | None = None) -> str:
+    """공식 출처가 있으면 머리줄에 함께 적는다.
+
+    등록본과 초안이 같은 주제로 함께 걸렸을 때 모델이 둘을 구분할 단서다.
+    상태만으로 어느 쪽이 맞는지 정하라는 뜻은 아니다 — 충돌은 그대로 드러낸다.
+    """
+    official = official or {}
     parts = []
     for i, row in enumerate(rows, start=1):
-        text = " ".join(row["text"].split())[:MAX_CONTEXT_CHARS]
-        parts.append(f"[{i}] ({row['filename']} · {row['locator']})\n{text}")
+        text = (evidence_text or {}).get(i) or " ".join(row["text"].split())[:MAX_CONTEXT_CHARS]
+        head = f"{row['filename']} · {row['locator']}"
+        label = provenance.describe(official.get(row["doc_id"]))
+        if label:
+            head += f" · {label}"
+        parts.append(f"[{i}] ({head})\n{text}")
     return "\n\n".join(parts)
 
 

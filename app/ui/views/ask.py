@@ -50,6 +50,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...core import provenance
 from ...db import Database
 from ...ai.settings import model_names
 from ...jobs import AskRunner, WarmupRunner
@@ -612,6 +613,7 @@ class AskView(QWidget):
         label, _kind = _freshness(info)
         if label:
             parts.append(label)
+        parts.append(provenance.describe(info.get("official")))
         if citation.index == self._selected:
             parts.append("오른쪽에서 보고 있음")
         return "  ·  ".join(part for part in parts if part)
@@ -1010,6 +1012,9 @@ def _meta_strip(db: Database, citation, info: dict, sections: int) -> QWidget:
         parts.append(f"{sections}문단")
     if citation.locator:
         parts.append(f"인용 {citation.locator}")
+    official = provenance.describe(info.get("official"))
+    if official:
+        parts.append(official)
     return muted_label("   ·   ".join(parts), small=True)
 
 

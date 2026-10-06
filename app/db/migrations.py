@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "5"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -132,10 +132,252 @@ _V3_STATEMENTS = (
 )
 
 
+# ── v3 → v4 ─────────────────────────────────────────────────────────
+# 온나라 공식 출처(구축계획서 §5.1). 새 표만 만든다 — 기존 문서·교정·업무
+# 연결은 건드리지 않는다. 열 정의는 schema.sql과 같아야 한다.
+
+def _to_v4(con: sqlite3.Connection) -> None:
+    for statement in _V4_STATEMENTS:
+        con.execute(statement)
+
+
+_V4_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS collection_runs (
+        id                 INTEGER PRIMARY KEY,
+        collection_key     TEXT NOT NULL UNIQUE,
+        adapter            TEXT NOT NULL,
+        institution        TEXT NOT NULL,
+        system_id          TEXT NOT NULL,
+        scope              TEXT NOT NULL,
+        simulation         INTEGER NOT NULL DEFAULT 0,
+        live_verified      INTEGER NOT NULL DEFAULT 0,
+        status             TEXT,
+        completeness       TEXT,
+        expected_documents INTEGER,
+        documents          INTEGER NOT NULL DEFAULT 0,
+        assets             INTEGER NOT NULL DEFAULT 0,
+        downloaded         INTEGER NOT NULL DEFAULT 0,
+        failed             INTEGER NOT NULL DEFAULT 0,
+        started_at         TEXT,
+        collected_at       TEXT,
+        registered_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS source_records (
+        id              INTEGER PRIMARY KEY,
+        run_id          INTEGER NOT NULL REFERENCES collection_runs(id) ON DELETE CASCADE,
+        institution     TEXT NOT NULL,
+        system_id       TEXT NOT NULL,
+        document_id     TEXT NOT NULL,
+        title           TEXT NOT NULL DEFAULT '',
+        document_number TEXT NOT NULL DEFAULT '',
+        author_id       TEXT NOT NULL DEFAULT '',
+        author_name     TEXT NOT NULL DEFAULT '',
+        department      TEXT NOT NULL DEFAULT '',
+        author_role     TEXT NOT NULL DEFAULT '',
+        status          TEXT NOT NULL DEFAULT 'unknown',
+        authored_at     TEXT,
+        registered_at   TEXT,
+        approved_at     TEXT,
+        first_collected TEXT NOT NULL DEFAULT (datetime('now')),
+        last_collected  TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (institution, system_id, document_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS source_assets (
+        id            INTEGER PRIMARY KEY,
+        record_id     INTEGER NOT NULL REFERENCES source_records(id) ON DELETE CASCADE,
+        asset_id      TEXT NOT NULL,
+        role          TEXT NOT NULL,
+        filename      TEXT NOT NULL DEFAULT '',
+        media_type    TEXT NOT NULL DEFAULT '',
+        sha256        TEXT,
+        size          INTEGER,
+        status        TEXT NOT NULL DEFAULT 'pending',
+        error         TEXT,
+        downloaded_at TEXT,
+        doc_id        INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+        UNIQUE (record_id, asset_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_source_assets_doc ON source_assets(doc_id)",
+    "CREATE INDEX IF NOT EXISTS idx_source_assets_hash ON source_assets(sha256)",
+)
+
+
+# ── v4 → v5 ─────────────────────────────────────────────────────────
+# 업무 복원·수행(구축계획서 §5.1). 새 표만 만든다 — 기존 업무·교정·인계
+# 확인 표시는 건드리지 않는다. 열 정의는 schema.sql과 같아야 한다.
+
+def _to_v5(con: sqlite3.Connection) -> None:
+    for statement in _V5_STATEMENTS:
+        con.execute(statement)
+
+
+_V5_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS work_contexts (
+        id           INTEGER PRIMARY KEY,
+        mode         TEXT NOT NULL DEFAULT 'materials',
+        period_start TEXT,
+        period_end   TEXT,
+        basis_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        predecessor  TEXT,
+        note         TEXT,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS task_items (
+        id            INTEGER PRIMARY KEY,
+        task_id       INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        context_id    INTEGER REFERENCES work_contexts(id) ON DELETE SET NULL,
+        kind          TEXT NOT NULL,
+        slot          TEXT NOT NULL DEFAULT '',
+        content       TEXT NOT NULL DEFAULT '',
+        auto_content  TEXT,
+        origin        TEXT NOT NULL DEFAULT 'auto',
+        basis_state   TEXT NOT NULL DEFAULT 'stated',
+        applicability TEXT NOT NULL DEFAULT 'unknown',
+        human_state   TEXT NOT NULL DEFAULT 'none',
+        excluded      INTEGER NOT NULL DEFAULT 0,
+        version       INTEGER NOT NULL DEFAULT 1,
+        extractor     TEXT,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (task_id, kind, slot)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS work_steps (
+        id             INTEGER PRIMARY KEY,
+        task_id        INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        context_id     INTEGER REFERENCES work_contexts(id) ON DELETE SET NULL,
+        slot           TEXT NOT NULL DEFAULT '',
+        ordinal        INTEGER NOT NULL DEFAULT 0,
+        label          TEXT NOT NULL,
+        auto_label     TEXT,
+        inputs         TEXT,
+        forms          TEXT,
+        output         TEXT,
+        done_criteria  TEXT,
+        procedure_kind TEXT NOT NULL DEFAULT 'precedent',
+        after_step_id  INTEGER REFERENCES work_steps(id) ON DELETE SET NULL,
+        task_step_id   INTEGER REFERENCES task_steps(id) ON DELETE SET NULL,
+        origin         TEXT NOT NULL DEFAULT 'auto',
+        basis_state    TEXT NOT NULL DEFAULT 'stated',
+        applicability  TEXT NOT NULL DEFAULT 'unknown',
+        human_state    TEXT NOT NULL DEFAULT 'none',
+        excluded       INTEGER NOT NULL DEFAULT 0,
+        version        INTEGER NOT NULL DEFAULT 1,
+        created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (task_id, slot)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_work_steps_task ON work_steps(task_id, ordinal)",
+    """
+    CREATE TABLE IF NOT EXISTS evidence (
+        id           INTEGER PRIMARY KEY,
+        owner_kind   TEXT NOT NULL,
+        owner_id     INTEGER NOT NULL,
+        doc_id       INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+        doc_hash     TEXT,
+        locator      TEXT NOT NULL DEFAULT '',
+        quote        TEXT NOT NULL DEFAULT '',
+        extracted_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_evidence_owner ON evidence(owner_kind, owner_id)",
+    "CREATE INDEX IF NOT EXISTS idx_evidence_doc   ON evidence(doc_id)",
+    """
+    CREATE TABLE IF NOT EXISTS info_gaps (
+        id          INTEGER PRIMARY KEY,
+        task_id     INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        step_id     INTEGER REFERENCES work_steps(id) ON DELETE SET NULL,
+        item_id     INTEGER REFERENCES task_items(id) ON DELETE SET NULL,
+        kind        TEXT NOT NULL,
+        origin      TEXT NOT NULL DEFAULT 'user',
+        gap_key     TEXT NOT NULL DEFAULT '',
+        field       TEXT NOT NULL DEFAULT '',
+        detail      TEXT NOT NULL DEFAULT '',
+        research    TEXT,
+        next_action TEXT,
+        state       TEXT NOT NULL DEFAULT 'open',
+        resolution  TEXT,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        resolved_at TEXT
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_info_gaps_task ON info_gaps(task_id, state)",
+    """
+    CREATE TABLE IF NOT EXISTS step_runs (
+        step_id       INTEGER PRIMARY KEY REFERENCES work_steps(id) ON DELETE CASCADE,
+        state         TEXT NOT NULL DEFAULT 'not_started',
+        started_at    TEXT,
+        finished_at   TEXT,
+        result_doc_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+        result_path   TEXT,
+        note          TEXT,
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS reviews (
+        id             INTEGER PRIMARY KEY,
+        target_kind    TEXT NOT NULL,
+        target_id      INTEGER NOT NULL,
+        target_version INTEGER NOT NULL DEFAULT 1,
+        action         TEXT NOT NULL,
+        before_val     TEXT,
+        after_val      TEXT,
+        reviewer_name  TEXT NOT NULL DEFAULT '',
+        reviewer_role  TEXT NOT NULL DEFAULT 'successor',
+        created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_reviews_target ON reviews(target_kind, target_id)",
+    """
+    CREATE TABLE IF NOT EXISTS snapshots (
+        id           INTEGER PRIMARY KEY,
+        kind         TEXT NOT NULL DEFAULT 'restoration',
+        label        TEXT NOT NULL DEFAULT '',
+        context_id   INTEGER REFERENCES work_contexts(id) ON DELETE SET NULL,
+        basis_at     TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        summary      TEXT NOT NULL,
+        payload      TEXT NOT NULL,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_snapshots_kind ON snapshots(kind, id)",
+    """
+    CREATE TRIGGER IF NOT EXISTS task_items_evidence_ad AFTER DELETE ON task_items BEGIN
+        DELETE FROM evidence WHERE owner_kind = 'item' AND owner_id = old.id;
+    END
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS work_steps_evidence_ad AFTER DELETE ON work_steps BEGIN
+        DELETE FROM evidence WHERE owner_kind = 'step' AND owner_id = old.id;
+    END
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS info_gaps_evidence_ad AFTER DELETE ON info_gaps BEGIN
+        DELETE FROM evidence WHERE owner_kind = 'gap' AND owner_id = old.id;
+    END
+    """,
+)
+
+
 # 버전 문자열 → 그 버전으로 올리는 함수.
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
+    "4": _to_v4,
+    "5": _to_v5,
 }
 
 

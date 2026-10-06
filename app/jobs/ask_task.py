@@ -219,7 +219,8 @@ def _citations_json(answer: Answer) -> str:
 
     return json.dumps(
         [
-            {"doc_id": c.doc_id, "filename": c.filename, "locator": c.locator}
+            {"doc_id": c.doc_id, "filename": c.filename, "locator": c.locator,
+             **({"official": c.official} if c.official else {})}
             for c in answer.citations
         ],
         ensure_ascii=False,
@@ -230,6 +231,11 @@ def _filters_json(answer: Answer) -> str | None:
     """질문에서 규칙으로 뽑아낸 범위. 나중에 '왜 이렇게 좁혔는지' 확인용이다."""
     import json
 
-    if not answer.inferred_years:
-        return None
-    return json.dumps({"years": answer.inferred_years}, ensure_ascii=False)
+    filters = {}
+    if answer.inferred_years:
+        filters["years"] = answer.inferred_years
+    if answer.generation:
+        # 생성이 어떻게 끝났는지도 같은 자리에 남긴다 — 빈 응답·잘림·복구를
+        # 나중에 질문 기록에서 셀 수 있어야 한다(본문은 들어 있지 않다).
+        filters["generation"] = answer.generation
+    return json.dumps(filters, ensure_ascii=False) if filters else None

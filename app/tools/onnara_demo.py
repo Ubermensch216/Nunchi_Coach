@@ -8,6 +8,7 @@ from pathlib import Path
 import zipfile
 
 from ..connectors.onnara import FixtureConnector, SearchScope
+from ..core.provenance import register_collection
 from ..jobs.onnara_collect import Collection
 
 
@@ -73,11 +74,13 @@ def index_collection(state, collection_root: Path, project_dir: Path):
                             (source_id,)).fetchone()[0]
     failed = db.con.execute("SELECT COUNT(*) FROM documents WHERE source_id=? AND parse_status NOT IN ('ok','partial')",
                             (source_id,)).fetchone()[0]
-    # Metadata remains in the collection manifest, linked by each document path.
+    # Official IDs, status and body/attachment relations follow each file into the project.
+    linked = register_collection(db, state, collection_root)
     db.set_meta("onnara_manifest", str((collection_root / "manifest.json").resolve()))
     db.audit("onnara.fixture.index", str(source_id), detail=f"parsed={parsed}; failed={failed}")
     db.close()
-    return {"parsed": parsed, "failed": failed}
+    return {"parsed": parsed, "failed": failed, "records": linked["records"],
+            "linked": linked["linked"], "unlinked": linked["unlinked"]}
 
 
 def main(argv=None):

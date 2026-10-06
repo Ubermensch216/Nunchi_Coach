@@ -21,7 +21,7 @@ from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
 from ..ai import OllamaClient
 from ..ai.settings import project_client
 from ..ai.discover import discover
-from ..core import dating, timeline
+from ..core import dating, handover_release, reconstruction, timeline
 from ..core import diagnostics
 from ..core.chunking import build_chunks
 from ..core.labeling import label_document
@@ -47,6 +47,7 @@ STAGE_EMBED = "의미 색인"
 STAGE_DISCOVER = "업무 파악"
 STAGE_CYCLES = "일정 파악"
 STAGE_STEPS = "처리 순서 파악"
+STAGE_RESTORE = "업무 복원"
 STAGE_CHUNKS = "질문 준비"
 CHUNK_EMBED_BATCH = 32
 
@@ -98,6 +99,8 @@ class Pipeline(QObject):
         try:
             db.audit("pipeline.start")
             diagnostics.record("pipeline.start")
+            # 예전 실행이 문서 하나를 반쯤 쓰다 죽었으면 여기서 되돌린다.
+            db.repair_interrupted()
             self._scan(db)
             if not self._stop:
                 self._hash(db)
@@ -113,6 +116,8 @@ class Pipeline(QObject):
                 self._cycles(db)
             if not self._stop:
                 self._steps(db)
+            if not self._stop:
+                self._restore(db)
             if not self._stop:
                 self._chunks(db)
             db.audit("pipeline.stop", result="cancelled" if self._stop else "completed")
@@ -185,7 +190,7 @@ class Pipeline(QObject):
     def _parse(self, db: Database) -> None:
         rows = db.con.execute(
             """
-            SELECT d.id, d.path, d.filename
+            SELECT d.id, d.path, d.filename, d.hash
             FROM documents d
             LEFT JOIN jobs j ON j.doc_id = d.id AND j.kind = 'parse'
             WHERE d.missing_since IS NULL
@@ -203,47 +208,68 @@ class Pipeline(QObject):
         for index, row in enumerate(rows, start=1):
             if self._stop:
                 break
+            # 해시 없는 문서를 '읽음'으로 올리지 않는다. 해시 단계가 이 파일을
+            # 못 읽었거나 건너뛰었으면 여기서 한 번 더 뜬다. 끝내 못 뜨면 읽지
+            # 않고 남겨 둔다 — 중복 판정이 빠진 문서가 준비 완료로 보이면 같은
+            # 내용이 근거 목록에 여러 번 나온다.
+            digest = row["hash"]
+            if digest is None:
+                digest, hash_error = sha256(row["path"])
+                if digest is None:
+                    locked += 1
+                    report.errors.append(
+                        f"{row['filename']}: 중복 확인을 못 해 건너뜀 ({hash_error})")
+                    report.done = index
+                    continue
+
             result = _parse_with_retry(row["path"])
 
-            if result.ok:
-                # 파서 판본 변경으로 재처리한 문서도 옛 질문 조각을 남기면 안 된다.
-                db.invalidate_document_analysis(row["id"])
+            # 문서 하나의 기록은 전부 쓰이거나 전혀 안 쓰인다. 예전에는 문장마다
+            # 따로 확정돼서, '읽음' 표시와 본문 저장 사이에 프로세스가 죽으면
+            # 본문도 검색 색인도 없는 문서가 영영 '읽음'으로 남았다.
+            with db.transaction():
+                if row["hash"] is None:
+                    db.update_document(row["id"], hash=digest)
 
-            db.update_document(
-                row["id"],
-                parse_status=result.status,
-                parse_error=result.error,
-                parse_note=result.note,
-                parser=result.parser,
-                parser_version=result.parser_version,
-                char_count=result.char_count,
-                author=result.meta.author,
-                doc_title=result.meta.title,
-                meta_created=result.meta.created,
-                meta_modified=result.meta.modified,
-            )
+                if result.ok:
+                    # 파서 판본 변경으로 재처리한 문서도 옛 질문 조각을 남기면 안 된다.
+                    db.invalidate_document_analysis(row["id"])
 
-            if result.ok:
-                db.replace_sections(
+                db.update_document(
                     row["id"],
-                    [(s.kind, s.ordinal, s.locator, s.text) for s in result.sections],
+                    parse_status=result.status,
+                    parse_error=result.error,
+                    parse_note=result.note,
+                    parser=result.parser,
+                    parser_version=result.parser_version,
+                    char_count=result.char_count,
+                    author=result.meta.author,
+                    doc_title=result.meta.title,
+                    meta_created=result.meta.created,
+                    meta_modified=result.meta.modified,
                 )
-                db.index_document(
-                    row["id"], row["filename"], row["path"],
-                    result.meta.author or "", result.text,
-                )
-                _clear_job(db, row["id"], "parse")
-            elif result.status == LOCKED:
-                # 잠긴 파일은 실패로 굳히지 않는다. pending으로 되돌려
-                # 다음 실행에서 다시 읽고, 재시도 횟수도 세지 않는다 —
-                # 사용자가 문서를 닫기만 하면 정상 처리되어야 한다.
-                db.update_document(row["id"], parse_status="pending")
-                locked += 1
-                report.errors.append(f"{row['filename']}: 다른 프로그램이 열고 있어 건너뜀")
-            else:
-                failures += 1
-                _record_failure(db, row["id"], "parse", result.error or result.status)
-                report.errors.append(f"{row['filename']}: {result.error or result.status}")
+
+                if result.ok:
+                    db.replace_sections(
+                        row["id"],
+                        [(s.kind, s.ordinal, s.locator, s.text) for s in result.sections],
+                    )
+                    db.index_document(
+                        row["id"], row["filename"], row["path"],
+                        result.meta.author or "", result.text,
+                    )
+                    _clear_job(db, row["id"], "parse")
+                elif result.status == LOCKED:
+                    # 잠긴 파일은 실패로 굳히지 않는다. pending으로 되돌려
+                    # 다음 실행에서 다시 읽고, 재시도 횟수도 세지 않는다 —
+                    # 사용자가 문서를 닫기만 하면 정상 처리되어야 한다.
+                    db.update_document(row["id"], parse_status="pending")
+                    locked += 1
+                    report.errors.append(f"{row['filename']}: 다른 프로그램이 열고 있어 건너뜀")
+                else:
+                    failures += 1
+                    _record_failure(db, row["id"], "parse", result.error or result.status)
+                    report.errors.append(f"{row['filename']}: {result.error or result.status}")
 
             report.done = index
             if index % 10 == 0 or index == len(rows):
@@ -297,15 +323,16 @@ class Pipeline(QObject):
                 fs_mtime=row["fs_mtime"],
             )
 
-            db.replace_dates(row["id"], [c.as_row() for c in resolution.candidates])
-            db.update_document(
-                row["id"],
-                eff_date=resolution.value,
-                eff_date_kind=resolution.kind,
-                eff_precision=resolution.precision,
-                eff_year=resolution.year,
-                eff_month=resolution.month,
-            )
+            with db.transaction():
+                db.replace_dates(row["id"], [c.as_row() for c in resolution.candidates])
+                db.update_document(
+                    row["id"],
+                    eff_date=resolution.value,
+                    eff_date_kind=resolution.kind,
+                    eff_precision=resolution.precision,
+                    eff_year=resolution.year,
+                    eff_month=resolution.month,
+                )
             if resolution.value is None:
                 undated += 1
 
@@ -420,6 +447,8 @@ class Pipeline(QObject):
         found = 0
 
         for index, task in enumerate(tasks, start=1):
+            if self._stop:
+                break
             rows = db.task_grid_documents(task["id"])
             docs = [
                 timeline.DatedDoc(
@@ -449,7 +478,8 @@ class Pipeline(QObject):
                     "confidence": guess.confidence,
                     "evidence": ",".join(str(i) for i in guess.evidence_doc_ids),
                 })
-            db.replace_task_cycles(task["id"], cycles)
+            with db.transaction():
+                db.replace_task_cycles(task["id"], cycles)
 
             if index % 5 == 0 or index == len(tasks):
                 self.progress.emit(STAGE_CYCLES, index, len(tasks), task["name"])
@@ -458,7 +488,10 @@ class Pipeline(QObject):
         report.note = f"반복 업무 {found}개 발견" if tasks else "업무가 없습니다"
         # cycles_found==0(반복을 하나도 못 찾음)과 '아직 안 살펴봄'을 구분해야
         # 매 실행마다 파이프라인이 불필요하게 다시 도는 것을 막을 수 있다.
-        db.set_meta("cycles_checked", "1")
+        # 중간에 멈췄으면 '살펴봤다'고 적지 않는다 — 적으면 남은 업무를 다음
+        # 실행이 이어서 보지 않는다.
+        if not self._stop:
+            db.set_meta("cycles_checked", "1")
         self.stage_done.emit(report)
 
 
@@ -477,6 +510,8 @@ class Pipeline(QObject):
         steps_made = 0
 
         for task in tasks:
+            if self._stop:
+                break
             for year in db.task_years(task["id"]):
                 if self._stop:
                     break
@@ -491,13 +526,14 @@ class Pipeline(QObject):
                     for row in rows
                 ]
                 steps = timeline.reconstruct_steps(candidates, year)
-                db.replace_task_steps(task["id"], year, [
-                    {
-                        "ordinal": s.ordinal, "label": s.label, "month": s.month,
-                        "day_hint": s.day_hint, "doc_id": s.doc_id, "gap_note": s.gap_note,
-                    }
-                    for s in steps
-                ])
+                with db.transaction():
+                    db.replace_task_steps(task["id"], year, [
+                        {
+                            "ordinal": s.ordinal, "label": s.label, "month": s.month,
+                            "day_hint": s.day_hint, "doc_id": s.doc_id, "gap_note": s.gap_note,
+                        }
+                        for s in steps
+                    ])
                 steps_made += len(steps)
                 done += 1
                 if done % 5 == 0 or done == total_years:
@@ -505,11 +541,48 @@ class Pipeline(QObject):
 
         report.done = report.total
         report.note = f"{steps_made:,}단계 재구성" if steps_made else "재구성할 자료가 없습니다"
-        db.set_meta("steps_checked", "1")
+        if not self._stop:
+            db.set_meta("steps_checked", "1")
         self.stage_done.emit(report)
 
 
-    # ── 9단계: 질문 준비 (RAG 재료) ─────────────────────────────────
+    # ── 9단계: 업무 복원 (항목·근거) ────────────────────────────────
+    def _restore(self, db: Database) -> None:
+        """업무마다 문서에 명시된 기한·금액·제출처·절차 등을 근거와 함께 올린다.
+
+        규칙으로만 읽으므로 Ollama가 꺼져 있어도 돈다. 전임자의 입력을
+        기다리지 않는다 — 후임자가 처음 여는 화면에 이미 채워져 있어야 한다.
+        """
+        report = StageReport(STAGE_RESTORE)
+        totals = reconstruction.restore(db, should_stop=self._stopped)
+        report.done = report.total = totals["tasks"]
+        if not totals["tasks"]:
+            report.note = "업무가 없습니다"
+        elif not totals["items"]:
+            report.note = "문서에 명시된 항목을 찾지 못했습니다"
+            if totals["steps"]:
+                report.note += f" · 과거 수행 사례 {totals['steps']:,}단계"
+        else:
+            report.note = f"항목 {totals['items']:,}개"
+            if totals["stated_steps"]:
+                report.note += f" · 문서에 적힌 절차 {totals['stated_steps']:,}단계"
+            if totals["conflicts"]:
+                report.note += f" · 자료가 엇갈림 {totals['conflicts']:,}"
+            if totals["recheck"]:
+                report.note += f" · 재확인 필요 {totals['recheck']:,}"
+        if totals["gaps"]:
+            report.note += f" · 확인할 공백 {totals['gaps']:,}"
+        if not self._stop:
+            db.set_meta("items_checked", "1")
+            # 복원이 끝난 판을 굳혀 둔다. 전임자의 확인을 기다리지 않는다 —
+            # 내용이 지난번과 같으면 새로 만들지 않는다.
+            saved = handover_release.autosave(db)
+            if saved and saved[1]:
+                report.note += " · 복원본 저장"
+        self.stage_done.emit(report)
+
+
+    # ── 10단계: 질문 준비 (RAG 재료) ────────────────────────────────
     def _chunks(self, db: Database) -> None:
         """문서를 조각으로 나누고 임베딩한다 — 질문 화면의 재료다.
 
@@ -554,7 +627,10 @@ class Pipeline(QObject):
                 if not pieces:
                     report.done = index
                     continue
-                made += len(db.replace_document_chunks(row["id"], pieces))
+                # 조각을 지우고 다시 넣는 사이에 죽으면 조각이 반만 남는다. 그 문서는
+                # '조각이 있는 문서'로 분류돼 나머지 조각을 다시 만들지 않는다.
+                with db.transaction():
+                    made += len(db.replace_document_chunks(row["id"], pieces))
 
             pending = db.chunks_needing_embedding(row["id"], client.embed_model)
             for start in range(0, len(pending), CHUNK_EMBED_BATCH):
@@ -565,9 +641,11 @@ class Pipeline(QObject):
                 if error:
                     report.errors.append(f"{row['filename']}: {error}")
                     break
-                for (chunk_id, _text), vector in zip(batch, vectors):
-                    db.save_chunk_embedding(chunk_id, client.embed_model, len(vector), pack(vector))
-                    embedded += 1
+                with db.transaction():
+                    for (chunk_id, _text), vector in zip(batch, vectors):
+                        db.save_chunk_embedding(
+                            chunk_id, client.embed_model, len(vector), pack(vector))
+                        embedded += 1
 
             report.done = index
             if index % 5 == 0 or index == len(rows):
@@ -583,7 +661,8 @@ class Pipeline(QObject):
             report.note += f" · {left:,}조각 남음"
         if report.errors:
             report.note += " · 일부 실패"
-        db.set_meta("chunks_checked", "1")
+        if not self._stop:
+            db.set_meta("chunks_checked", "1")
         self.stage_done.emit(report)
 
 

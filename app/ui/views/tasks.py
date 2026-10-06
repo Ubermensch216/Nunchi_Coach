@@ -42,6 +42,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...core import compare, guide, handover, health, report, status, timeline
+from ...core import continuity, handover_release, reconstruction, workcard, workstate
 from ...core.output_policy import UnsafeOutputError, safe_text_writer
 from ...db import Database
 from .. import stages, theme
@@ -49,6 +50,7 @@ from ..widgets import (
     Badge,
     Card,
     EmptyState,
+    Evidence,
     EvidenceDrawer,
     FlowGrid,
     InfoDot,
@@ -89,8 +91,9 @@ STAGES = [
 ]
 
 # 상세 화면의 네 질문. 라벨은 개념 이름이 아니라 사용자가 실제로 품는 질문이다.
-READ, WHEN, HOW, DOCS = "read", "when", "how", "docs"
+WORK, READ, WHEN, HOW, DOCS = "work", "read", "when", "how", "docs"
 DETAIL_TABS = (
+    (WORK, "지금 할 일"),
     (READ, "먼저 읽을 문서"),
     (WHEN, "언제 하는 일인가"),
     (HOW, "어떻게 처리했나"),
@@ -110,6 +113,8 @@ _CHANGE_MARK = {
 }
 
 DETAIL_HINTS = {
+    WORK: "남은 자료에서 읽어 낸 기한·절차·준비물입니다. 사람이 확인하지 않은 값은 그렇게 "
+          "표시합니다. 모르는 것이 있어도 할 수 있는 일부터 보여 줍니다.",
     READ: "이 업무를 처음 맡았다면 이 순서로 읽으세요. 고른 이유를 함께 적었습니다.",
     WHEN: "자료에 남은 문서의 시점을 연도별로 편 것입니다. "
           "세로로 같은 달이 겹치면 반복입니다.",
@@ -218,7 +223,9 @@ class TasksView(QWidget):
 
     def open_task(self, task_id: int) -> None:
         self._task_id = task_id
-        self._tab = READ   # 새 업무를 열면 언제나 "무엇부터 읽나"부터다
+        # 자료에서 복원한 내용이 있으면 "지금 할 일"부터, 없으면 "무엇부터 읽나"부터다.
+        # 빈 카드를 첫 화면으로 내밀지 않는다.
+        self._tab = READ if workcard.build(self.db, task_id).empty else WORK
         self.drawer.dismiss()
         self.refresh()
 
@@ -277,6 +284,15 @@ class TasksView(QWidget):
         )
         export.clicked.connect(self._export_report)
         marks.addWidget(export)
+        snapshots = QPushButton("업무 복원본")
+        snapshots.setObjectName("Quiet")
+        snapshots.setCursor(Qt.CursorShape.PointingHandCursor)
+        snapshots.setToolTip(
+            "자료에서 복원한 업무·절차·수행 기록을 그 시점 그대로 저장한 판을 보고, "
+            "지금 상태를 저장하거나 글 파일로 내보냅니다."
+        )
+        snapshots.clicked.connect(lambda _=False: self._open_snapshots())
+        marks.addWidget(snapshots)
         self.head.addLayout(marks)
 
         self._render_start_here(tasks, progress, tally)
@@ -292,6 +308,11 @@ class TasksView(QWidget):
 
         self._render_health()
         self._render_leftovers(counts)
+
+    def _open_snapshots(self) -> None:
+        from ..snapshot_dialog import SnapshotDialog
+
+        SnapshotDialog(self.db, self).exec()
 
     def _export_report(self) -> None:
         """보고서 내보내기 (계획서 §33, PRD §10.9).
@@ -754,6 +775,9 @@ class TasksView(QWidget):
             )
 
         cycle = self.db.task_cycle(task_id)
+        work = workcard.build(self.db, task_id)
+        # 확인할 것이 남은 탭은 열어 보기 전에 알려 준다.
+        self.tabs.set_label(WORK, "지금 할 일" + ("  ◐" if work.gaps else ""))
         self.tabs.set_count(READ, "먼저 읽을 문서", len(picks))
         self.tabs.set_count(DOCS, "이 업무의 문서", len(docs))
         # 손댈 곳이 있는 탭은 열어 보기 전에 알려 준다.
@@ -763,6 +787,7 @@ class TasksView(QWidget):
             + ("  ◐" if cycle and status.of_cycle(cycle) != status.CONFIRMED else ""),
         )
 
+        self._render_work(self.pages[WORK].reset(), task_id, work)
         self._render_reading(self.pages[READ].reset(), picks)
         self._render_when(self.pages[WHEN].reset(), task_id, cycle)
         self._render_how(self.pages[HOW].reset(), task_id)
@@ -1620,6 +1645,409 @@ class TasksView(QWidget):
     def _open(self, path: str) -> None:
         open_original(self, self.db, path)
 
+    # ── 지금 할 일 — 첫 업무 카드 (구축계획서 C05, §4.4) ─────────────
+    def _render_work(self, column: QVBoxLayout, task_id: int, card) -> None:
+        """자료에서 복원한 것을 한 화면에: 다음 행동 → 해야 할 일 → 순서 → 공백.
+
+        전임자의 확인을 기다리는 칸이 없다. 사람 확인은 값 옆의 표시일 뿐이고,
+        확인이 없어도 근거를 열고 단계를 진행하고 초안을 저장할 수 있다.
+        """
+        column.addWidget(hint_row("자료로 시작하기", DETAIL_HINTS[WORK]))
+        if card.empty:
+            column.addWidget(UnknownBlock(
+                "이 업무의 문서에서 기한·절차 같은 항목을 아직 읽어 내지 못했습니다. "
+                "분석이 끝나면 여기에 채워집니다. 그동안 ‘먼저 읽을 문서’부터 볼 수 있습니다."))
+            return
+
+        top = QHBoxLayout()
+        top.setSpacing(theme.SP_SM)
+        top.addWidget(muted_label(card.headline(), small=True), 1)
+        draft = QPushButton("결과 초안 저장")
+        draft.setObjectName("Quiet")
+        draft.setCursor(Qt.CursorShape.PointingHandCursor)
+        draft.setToolTip("자료에서 확인한 값·절차·확인할 것을 글 파일로 저장합니다. "
+                         "원본 자료 폴더에는 저장되지 않습니다")
+        draft.clicked.connect(lambda _=False: self._export_draft(task_id))
+        top.addWidget(draft)
+        column.addLayout(top)
+        column.addWidget(self._reviewer_bar(task_id))
+
+        # 1) 다음 행동 — 확인할 것이 남아 있어도 할 수 있는 일이 먼저다.
+        actions = Card()
+        actions.body.setSpacing(theme.SP_SM)
+        actions.body.addWidget(section_title("다음 행동"))
+        if not card.actions:
+            actions.body.addWidget(muted_label("남은 행동이 없습니다."))
+        for action in card.actions:
+            mark = "▶ 지금 할 수 있는 일" if action["type"] == "do" else "◐ 확인"
+            actions.body.addWidget(muted_label(f"{mark} — {action['text']}"))
+        column.addWidget(actions)
+
+        # 2) 해야 할 일 / 현재까지의 기록 / 시작 준비
+        for title, rows, empty in (
+            ("해야 할 일", card.todo, "자료에 적힌 목적·기한·제출처를 찾지 못했습니다."),
+            ("현재까지의 기록", card.records, ""),
+            ("시작 준비", card.prepare, ""),
+            ("보충 설명", card.notes, ""),
+        ):
+            if not rows and not empty:
+                continue
+            block = Card()
+            block.body.setSpacing(theme.SP_SM)
+            if title == "해야 할 일":
+                # 문서에 없는 것을 아는 사람이 보탤 자리. 비워 둬도 된다.
+                head = QHBoxLayout()
+                head.addWidget(section_title(title), 1)
+                more = QPushButton("아는 내용 보태기")
+                more.setObjectName("Quiet")
+                more.setCursor(Qt.CursorShape.PointingHandCursor)
+                more.setToolTip("문서에 없는 기한·제출처·주의할 점을 적습니다. "
+                                "누가 보탰는지 함께 남습니다")
+                more.clicked.connect(lambda _=False: self._ask_work_item(task_id))
+                head.addWidget(more)
+                block.body.addLayout(head)
+            else:
+                block.body.addWidget(section_title(title))
+            if not rows:
+                block.body.addWidget(muted_label(empty, small=True))
+            for item in rows:
+                block.body.addWidget(self._work_item_row(item))
+            column.addWidget(block)
+
+        # 3) 처리 순서 — 적힌 절차와 과거 사례를 섞지 않는다.
+        column.addWidget(self._work_steps_card(card))
+        if card.precedent_steps:
+            past = Card()
+            past.body.setSpacing(theme.SP_SM)
+            past.body.addWidget(section_title("과거 수행 사례"))
+            past.body.addWidget(muted_label(
+                "지난 회차에 이렇게 했다는 기록입니다. 반드시 이 순서로 해야 한다는 뜻이 "
+                "아닙니다.", small=True))
+            for step in card.precedent_steps:
+                line = QHBoxLayout()
+                line.setSpacing(theme.SP_SM)
+                line.addWidget(muted_label(f"· {step['label']}"), 1)
+                if step["evidence"]:
+                    line.addWidget(self._evidence_button(
+                        step["output"] or "근거", "이 사례의 근거 문서를 봅니다",
+                        lambda s=step: self._show_evidence(
+                            self._work_evidence(s), "과거 수행 사례의 근거")))
+                past.body.addLayout(line)
+            column.addWidget(past)
+
+        # 4) 확인이 필요한 정보
+        if card.gaps:
+            gaps = Card()
+            gaps.body.setSpacing(theme.SP_SM)
+            gaps.body.addWidget(section_title(f"확인이 필요한 정보 {len(card.gaps)}건"))
+            for gap in card.gaps:
+                gaps.body.addWidget(self._work_gap_panel(gap))
+            column.addWidget(gaps)
+
+    def _work_item_row(self, item: dict) -> QWidget:
+        holder = SubPanel()
+        holder.body.setSpacing(theme.SP_XS)
+        head = QHBoxLayout()
+        head.setSpacing(theme.SP_SM)
+        label = workcard.item_label(item)
+        head.addWidget(muted_label(label, small=True))
+        head.addWidget(Badge.state(item["display_state"]))
+        head.addStretch(1)
+        if item["evidence"]:
+            head.addWidget(self._evidence_button(
+                f"근거 {len(item['evidence'])}건", "이 값이 적힌 대목을 봅니다",
+                lambda i=item: self._show_evidence(self._work_evidence(i), f"{label}의 근거")))
+        if item["kind"] != reconstruction.RECORD:
+            if item["human_state"] not in workstate.CONFIRMED_BY:
+                confirm = QPushButton("맞습니다")
+                confirm.setObjectName("Quiet")
+                confirm.setCursor(Qt.CursorShape.PointingHandCursor)
+                confirm.setToolTip("이 값을 확인했다고 남깁니다. 확인하지 않아도 계속 쓸 수 있습니다")
+                confirm.clicked.connect(
+                    lambda _=False, i=item["id"]: self._review_work_item(i, "confirm"))
+                head.addWidget(confirm)
+            edit = QPushButton("고치기")
+            edit.setObjectName("Quiet")
+            edit.setCursor(Qt.CursorShape.PointingHandCursor)
+            edit.clicked.connect(
+                lambda _=False, i=item["id"], c=item["content"]: self._edit_work_item(i, c))
+            head.addWidget(edit)
+        holder.body.addLayout(head)
+        holder.body.addWidget(body_text(item["content"]))
+        holder.body.addWidget(muted_label(workcard.state_line(item), small=True))
+        if item["human_state"] == workstate.RECHECK and item["auto_content"]:
+            # 사람이 정한 값은 그대로 두고, 자료가 지금 말하는 값을 옆에 보인다.
+            holder.body.addWidget(muted_label(
+                f"확인 뒤에 자료가 달라졌습니다. 지금 자료의 값: {item['auto_content']}",
+                small=True))
+        return holder
+
+    def _work_steps_card(self, card) -> QWidget:
+        block = Card()
+        block.body.setSpacing(theme.SP_SM)
+        head = QHBoxLayout()
+        head.addWidget(section_title("처리 순서"), 1)
+        more = QPushButton("단계 보태기")
+        more.setObjectName("Quiet")
+        more.setCursor(Qt.CursorShape.PointingHandCursor)
+        more.setToolTip("문서에 없지만 실제로 거치는 단계를 적습니다")
+        more.clicked.connect(lambda _=False, t=card.task_id: self._ask_work_step(t))
+        head.addWidget(more)
+        block.body.addLayout(head)
+        if not card.stated_steps:
+            if card.conflicting_procedure:
+                text = ("자료가 서로 다른 절차를 적고 있어 순서를 세우지 않았습니다: "
+                        + card.conflicting_procedure["content"])
+            else:
+                text = "문서에 적힌 절차를 찾지 못했습니다."
+            block.body.addWidget(UnknownBlock(text))
+            return block
+        block.body.addWidget(muted_label(
+            "문서에 적힌 절차입니다. ‘사람이 알려 준 단계’는 문서에 없던 것을 보탠 것입니다.",
+            small=True))
+        for number, step in enumerate(card.stated_steps, start=1):
+            block.body.addWidget(self._work_step_row(number, step))
+        return block
+
+    def _work_step_row(self, number: int, step: dict) -> QWidget:
+        holder = SubPanel()
+        holder.body.setSpacing(theme.SP_XS)
+        head = QHBoxLayout()
+        head.setSpacing(theme.SP_SM)
+        head.addWidget(body_text(f"{_circled(number)} {step['label']}"), 1)
+        if step["procedure_kind"] == workstate.PROCEDURE_TOLD:
+            head.addWidget(Badge(
+                f"{workstate.human_label(step['human_state'])} · 문서에 없음", "neutral"))
+        run = step["run_state"]
+        head.addWidget(Badge(workstate.run_label(run),
+                             "ok" if run == workstate.DONE else "neutral"))
+        if step["evidence"]:
+            head.addWidget(self._evidence_button(
+                "근거", "이 절차가 적힌 대목을 봅니다",
+                lambda s=step: self._show_evidence(self._work_evidence(s), "절차의 근거")))
+        # 완료는 사용자가 누를 때만 기록된다. 화면을 열어 봤다고 끝난 일이 되지 않는다.
+        for text, state in _RUN_BUTTONS[run]:
+            button = QPushButton(text)
+            button.setObjectName("Primary" if state == workstate.DONE else "Quiet")
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(
+                lambda _=False, i=step["id"], st=state: self._set_step_run(i, st))
+            head.addWidget(button)
+        holder.body.addLayout(head)
+        details = [f"{name}: {step[key]}" for name, key in (
+            ("준비 자료", "inputs"), ("서식", "forms"), ("완료 확인", "done_criteria")) if step[key]]
+        if details:
+            holder.body.addWidget(muted_label("  ·  ".join(details), small=True))
+        if step["blocked"]:
+            holder.body.addWidget(muted_label(
+                "◐ 이 단계에 필요한 정보가 아직 확인되지 않았습니다. 아래 ‘확인이 필요한 "
+                "정보’를 보세요. 다른 단계는 진행할 수 있습니다.", small=True))
+        if step["result_path"] or step["run_note"]:
+            holder.body.addWidget(muted_label(
+                "기록 — " + " · ".join(part for part in (step["result_path"], step["run_note"])
+                                        if part), small=True))
+        return holder
+
+    def _work_gap_panel(self, gap: dict) -> QWidget:
+        holder = SubPanel()
+        holder.body.setSpacing(theme.SP_XS)
+        head = QHBoxLayout()
+        head.setSpacing(theme.SP_SM)
+        head.addWidget(body_text(gap["field"]), 1)
+        head.addWidget(Badge(_GAP_LABEL.get(gap["kind"], gap["kind"]), "attention"))
+        evidence = self.db.evidence_for("gap", [gap["id"]]).get(gap["id"], [])
+        if evidence:
+            head.addWidget(self._evidence_button(
+                f"근거 {len(evidence)}건", "견주어 볼 대목을 봅니다",
+                lambda e=evidence, g=gap: self._show_evidence(
+                    self._work_evidence({"evidence": e}), f"{g['field']} — 견줄 자료")))
+        done = QPushButton("확인했습니다")
+        done.setObjectName("Quiet")
+        done.setCursor(Qt.CursorShape.PointingHandCursor)
+        done.setToolTip("어떻게 확인했는지 적고 닫습니다")
+        done.clicked.connect(lambda _=False, i=gap["id"]: self._resolve_work_gap(i))
+        head.addWidget(done)
+        holder.body.addLayout(head)
+        holder.body.addWidget(muted_label(gap["detail"]))
+        if gap["research"]:
+            holder.body.addWidget(muted_label(f"다시 찾아본 결과 — {gap['research']}", small=True))
+        if gap["next_action"]:
+            holder.body.addWidget(muted_label(f"다음 행동 — {gap['next_action']}"))
+        return holder
+
+    def _work_evidence(self, row: dict) -> list:
+        return [
+            Evidence(
+                label=item["filename"] or "원본 없음",
+                locator=workcard.evidence_line(self.db, item).split(" · ", 1)[-1]
+                if item["filename"] else "",
+                snippet=item["quote"] or "",
+                path=item["path"] or "",
+                note="" if item["current"] else "이 근거를 읽은 뒤 원문이 바뀌었거나 사라졌습니다",
+            )
+            for item in row["evidence"]
+        ]
+
+    # ── 사람의 확인·보충 (선택 경로, C07) ───────────────────────────
+    def _reviewer_bar(self, task_id: int) -> QWidget:
+        """확인·보충을 누구의 것으로 남길지. 정하지 않아도 모든 기능을 쓴다.
+
+        전임자가 함께 볼 수 있을 때만 '전임자'로 바꾼다. 바꾼다고 이미 있는
+        항목이나 수행 기록이 달라지지 않는다.
+        """
+        name, role = self.db.reviewer()
+        bar = SubPanel()
+        row = QHBoxLayout()
+        row.setSpacing(theme.SP_SM)
+        row.addWidget(muted_label("확인·보충을 남기는 사람", small=True))
+        who = QComboBox()
+        for key in (workstate.SUCCESSOR, workstate.PREDECESSOR):
+            who.addItem(workstate.ROLE_LABEL[key], key)
+        who.setCurrentIndex(who.findData(role))
+        row.addWidget(who)
+        entry = QLineEdit(name)
+        entry.setPlaceholderText("이름 (선택)")
+        entry.setMaximumWidth(160)
+        row.addWidget(entry)
+        who.activated.connect(
+            lambda _index: self._set_reviewer(entry.text(), who.currentData()))
+        entry.editingFinished.connect(
+            lambda: self._set_reviewer(entry.text(), who.currentData()))
+        row.addWidget(muted_label(
+            "전임자가 없어도 됩니다. 함께 볼 수 있을 때만 바꾸세요.", small=True), 1)
+        if role == workstate.PREDECESSOR:
+            publish = QPushButton("검토 인계본 발행")
+            publish.setObjectName("Quiet")
+            publish.setCursor(Qt.CursorShape.PointingHandCursor)
+            publish.setToolTip("지금까지 확인·보충한 내용을 인계본으로 굳힙니다. "
+                               "확인하지 않은 항목은 그렇게 적혀 나갑니다")
+            publish.clicked.connect(lambda _=False: self._ask_publish())
+            row.addWidget(publish)
+        bar.body.addLayout(row)
+        return bar
+
+    def _set_reviewer(self, name: str, role: str) -> None:
+        if (" ".join(name.split()), role) == self.db.reviewer():
+            return
+        self.db.set_reviewer(name, role)
+        self.refresh()
+
+    def _after_work_change(self, task_id: int | None = None) -> None:
+        """사람이 값을 정하거나 보태면 공백도 그 자리에서 다시 맞춘다 — 방금
+        알려 준 기한을 두고 '기한을 모른다'고 계속 띄우지 않는다."""
+        task_id = task_id or self._task_id
+        if task_id is not None:
+            continuity.review_task(self.db, task_id)
+        self.refresh()
+
+    def _review_work_item(self, item_id: int, action: str, content: str | None = None) -> None:
+        name, role = self.db.reviewer()
+        self.db.review_task_item(item_id, action, content, name, role)
+        self._after_work_change()
+
+    def _edit_work_item(self, item_id: int, current: str) -> None:
+        text, accepted = QInputDialog.getText(
+            self, "값 고치기", "확인한 값을 적어 주세요. 자료의 값은 따로 보관됩니다.",
+            text=current)
+        if accepted and text.strip() and text.strip() != current:
+            self._review_work_item(item_id, "edit", text)
+
+    def _ask_work_item(self, task_id: int) -> None:
+        kinds = [k for k in reconstruction.KIND_LABEL
+                 if k not in (reconstruction.RECORD, reconstruction.PROCEDURE)]
+        labels = [reconstruction.KIND_LABEL[k] for k in kinds]
+        label, accepted = QInputDialog.getItem(
+            self, "아는 내용 보태기", "무엇에 관한 내용인가요?", labels,
+            labels.index(reconstruction.KIND_LABEL[reconstruction.NOTE]), False)
+        if not accepted:
+            return
+        text, accepted = QInputDialog.getText(
+            self, "아는 내용 보태기", "내용을 적어 주세요. 문서에 없는 내용으로 표시됩니다.")
+        if accepted and text.strip():
+            self._add_work_item(task_id, kinds[labels.index(label)], text)
+
+    def _add_work_item(self, task_id: int, kind: str, content: str) -> int:
+        name, role = self.db.reviewer()
+        item_id = self.db.add_task_item(task_id, kind, content, reviewer_name=name,
+                                        reviewer_role=role)
+        self._after_work_change(task_id)
+        return item_id
+
+    def _ask_work_step(self, task_id: int) -> None:
+        text, accepted = QInputDialog.getText(
+            self, "단계 보태기", "문서에 없지만 실제로 거치는 단계를 적어 주세요.")
+        if accepted and text.strip():
+            self._add_work_step(task_id, text)
+
+    def _add_work_step(self, task_id: int, label: str) -> int:
+        name, role = self.db.reviewer()
+        step_id = self.db.add_work_step(task_id, label, name, role)
+        self._after_work_change(task_id)
+        return step_id
+
+    def _ask_publish(self) -> None:
+        note, accepted = QInputDialog.getText(
+            self, "검토 인계본 발행",
+            "후임자에게 남길 말이 있으면 적어 주세요(선택). 확인하지 않은 항목은 "
+            "인계본에 따로 적혀 나갑니다.")
+        if not accepted:
+            return
+        try:
+            _id, created = self._publish_handover(note)
+        except ValueError as exc:
+            QMessageBox.warning(self, "발행하지 못했습니다", str(exc))
+            return
+        QMessageBox.information(
+            self, "검토 인계본",
+            "인계본을 발행했습니다. 업무 목록의 ‘업무 복원본’에서 글 파일로 내보낼 수 "
+            "있습니다." if created else "마지막 인계본과 달라진 것이 없어 새로 만들지 않았습니다.")
+
+    def _publish_handover(self, note: str = "") -> tuple[int, bool]:
+        return handover_release.publish(self.db, note)
+
+    def _set_step_run(self, step_id: int, state: str, result_path: str | None = None,
+                      note: str | None = None) -> None:
+        self.db.set_step_run(step_id, state, result_path=result_path, note=note)
+        self.refresh()
+
+    def _resolve_work_gap(self, gap_id: int) -> None:
+        text, accepted = QInputDialog.getText(
+            self, "확인한 내용", "어떻게 확인했는지 한 줄로 남겨 주세요(다음 담당자가 봅니다).")
+        if accepted:
+            self._close_work_gap(gap_id, text)
+
+    def _close_work_gap(self, gap_id: int, text: str) -> None:
+        """누가 닫았는지를 해결 내용 앞에 적는다 — 나중에 근거를 되물을 수 있게."""
+        name, role = self.db.reviewer()
+        who = workstate.ROLE_LABEL[role] + (f" {name}" if name else "")
+        self.db.resolve_info_gap(gap_id, f"{who} 확인 — {text.strip()}".rstrip(" —"))
+        self.refresh()
+
+    def _export_draft(self, task_id: int) -> None:
+        """결과 초안 저장. 경로 묻기와 쓰기를 나눈다(보고서 내보내기와 같은 이유)."""
+        card = workcard.build(self.db, task_id)
+        folder = workcard.default_output_dir(self.db)
+        path, _filter = QFileDialog.getSaveFileName(
+            self, "결과 초안 저장", str(folder / workcard.draft_filename(card)),
+            "Markdown (*.md)")
+        if not path:
+            return
+        try:
+            self._write_draft(task_id, path)
+        except (UnsafeOutputError, OSError) as exc:
+            QMessageBox.warning(self, "초안을 저장하지 못했습니다", str(exc))
+            return
+        QMessageBox.information(
+            self, "초안을 저장했습니다",
+            path + "\n\n글 파일입니다. 고쳐 쓰거나 기관 서식에 옮겨 적으세요.")
+
+    def _write_draft(self, task_id: int, path: str) -> int:
+        text = workcard.draft_markdown(self.db, task_id)
+        with safe_text_writer(path, self.db) as handle:
+            handle.write(text)
+        self.db.audit("work.draft.export", str(task_id))
+        return len(text)
+
     # ── 근거 (계획서 §14·§29) ───────────────────────────────────────
     def _evidence_button(self, text: str, tip: str, slot) -> QPushButton:
         button = QPushButton(text)
@@ -1694,6 +2122,24 @@ class SplitDialog(QDialog):
             item.data(Qt.ItemDataRole.UserRole) for item in dialog.list.selectedItems()
         ]
         return picked, dialog.name.text().strip()
+
+
+# 수행 상태별로 내밀 단추. (문구, 눌렀을 때의 상태)
+_RUN_BUTTONS = {
+    workstate.NOT_STARTED: (("시작", workstate.IN_PROGRESS), ("완료로 기록", workstate.DONE)),
+    workstate.IN_PROGRESS: (("확인 대기", workstate.WAITING), ("완료로 기록", workstate.DONE)),
+    workstate.WAITING: (("다시 진행", workstate.IN_PROGRESS), ("완료로 기록", workstate.DONE)),
+    workstate.DONE: (("완료 취소", workstate.IN_PROGRESS),),
+}
+_GAP_LABEL = {"missing": "자료 없음", "conflict": "자료가 엇갈림", "stale": "지난 기한"}
+
+
+def body_text(text: str) -> QLabel:
+    """값 그 자체. 길어도 줄을 바꿔 다 보이게 하고, 긁어 갈 수 있게 한다."""
+    label = QLabel(text)
+    label.setWordWrap(True)
+    label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    return label
 
 
 def _stage_line(stage: str, done: int, limit: int, total_key: str | None) -> str:

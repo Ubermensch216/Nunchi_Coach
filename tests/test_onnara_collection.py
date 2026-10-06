@@ -123,7 +123,7 @@ def test_collected_odt_and_attachments_reach_project_fts(tmp_path):
     state = Collection(connector, SCOPE, output).run()
     project = tmp_path / "project"
     result = index_collection(state, output, project)
-    assert result == {"parsed": 6, "failed": 0}
+    assert result == {"parsed": 6, "failed": 0, "records": 2, "linked": 6, "unlinked": 0}
     db = Database(project / "project.db")
     try:
         assert db.sources()[0]["kind"] == "onnara"

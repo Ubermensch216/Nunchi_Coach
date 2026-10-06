@@ -357,6 +357,7 @@ class MainWindow(QMainWindow):
         needs_discovery = counts["embedded"] > 0 and counts["in_task"] == 0
         needs_cycles = counts["tasks"] > 0 and self.db.get_meta("cycles_checked") is None
         needs_steps = counts["tasks"] > 0 and self.db.get_meta("steps_checked") is None
+        needs_items = counts["tasks"] > 0 and self.db.get_meta("items_checked") is None
         # 질문 준비는 플래그가 아니라 실제 상태로 판단한다. 플래그만 보면
         # 한 번 세운 뒤에는 임베딩이 빠진 조각을 영영 다시 시도하지 않는다.
         # 위 pending 질의가 이미 쓰는 방식이고, 이쪽만 달랐다.
@@ -365,7 +366,8 @@ class MainWindow(QMainWindow):
             and (self.db.get_meta("chunks_checked") is None
                  or self.db.unembedded_chunk_count(embed_model) > 0)
         )
-        if pending or needs_discovery or needs_cycles or needs_steps or needs_chunks:
+        if (pending or needs_discovery or needs_cycles or needs_steps or needs_items
+                or needs_chunks):
             self._start_pipeline()
 
     def _start_pipeline(self) -> None:

@@ -59,6 +59,42 @@ class ModelProfile:
         return " · ".join(parts)
 
 
+OUTCOME_OK = "ok"
+OUTCOME_EMPTY = "empty"                # 응답이 비었다 (사고 과정이 한도를 다 쓴 경우 포함)
+OUTCOME_TRUNCATED = "truncated"        # 생성 한도에 걸려 JSON이 중간에 끊겼다
+OUTCOME_INVALID = "invalid_json"       # 한도와 무관하게 형식이 틀렸다
+OUTCOME_ERROR = "error"                # 연결·시간 초과 등 응답 자체를 못 받았다
+
+# 빈 응답을 한도 탓으로 보고 한 번 더 부를 때의 예산. 사고형 모델은 답을 쓰기
+# 전에 한도를 다 써 버릴 수 있다 — 같은 한도로 다시 불러 봐야 같은 결과다.
+EMPTY_RETRY_SCALE = 4
+EMPTY_RETRY_CAP = 2048
+# 이보다 작은 호출(예열 등)은 답을 기대하지 않으므로 다시 부르지 않는다.
+EMPTY_RETRY_MIN_BUDGET = 32
+
+
+@dataclass(slots=True)
+class Generation:
+    """마지막 생성 호출이 어떻게 끝났는가. 본문·질문은 담지 않는다.
+
+    '실패했다'만으로는 원인을 가를 수 없다. 한도가 모자랐는지, 모델이 형식을
+    어겼는지, 연결이 끊겼는지에 따라 고칠 곳이 다르다(구축계획서 B06).
+    """
+
+    model: str = ""
+    outcome: str = ""
+    done_reason: str = ""              # Ollama가 알려 준 종료 사유: stop | length | …
+    num_predict: int = 0               # 마지막 시도에 준 생성 한도
+    eval_count: int = 0                # 실제로 생성한 토큰 수
+    prompt_eval_count: int = 0
+    elapsed_ms: int = 0
+    attempts: int = 0
+    think_disabled: bool = False       # 사고 기능을 끄고 불렀는가
+
+    def as_dict(self) -> dict[str, Any]:
+        return {name: getattr(self, name) for name in self.__slots__}
+
+
 @dataclass(slots=True)
 class Health:
     ok: bool
@@ -83,6 +119,21 @@ class OllamaClient:
         self.gen_model = gen_model
         self.embed_model = embed_model
         self._cancelled = threading.Event()
+        self._capabilities: dict[str, list[str]] = {}
+        self.last_generation = Generation()
+
+    def _supports(self, capability: str) -> bool:
+        """설치된 모델이 스스로 밝힌 기능만 믿는다. 모르면 없는 것으로 본다.
+
+        조회에 성공한 결과만 기억한다 — Ollama가 잠깐 꺼져 있었다고 그 모델을
+        끝까지 '기능 없음'으로 굳히지 않는다.
+        """
+        if self.gen_model not in self._capabilities:
+            profile = self.profile()
+            if profile is None:
+                return False
+            self._capabilities[self.gen_model] = profile.capabilities
+        return capability in self._capabilities[self.gen_model]
 
     @property
     def cancelled(self) -> bool:
@@ -190,37 +241,84 @@ class OllamaClient:
         이유: 토큰 한도에 걸려 중간에 잘린 응답도 완성된 부분은 건질 수
         있다 — 그 복구는 스키마마다 뜻이 다르므로 호출자(예: search/rag.py)
         가 판단한다. 이 계층은 스키마를 모른다.
+
+        어떻게 끝났는지는 `last_generation`에 남긴다. 사고 기능이 있는 모델은
+        끄고 부른다 — 구조화 응답에서는 사고 과정이 생성 한도만 소진한다.
+        모든 모델에 강제하지 않고 그 기능을 밝힌 모델에만 적용한다.
         """
-        payload = {
-            "model": self.gen_model,
-            "prompt": prompt,
-            "format": schema,
-            "stream": False,
-            "keep_alive": KEEP_ALIVE,
-            "options": {"temperature": temperature, "num_predict": num_predict},
-        }
-        try:
-            response = self._request(
-                "POST", "/api/generate", json=payload, timeout=GENERATE_TIMEOUT
-            )
-            response.raise_for_status()
-            body = response.json()
-        except httpx.TimeoutException:
-            return None, "모델 응답 시간 초과", ""
-        except httpx.ConnectError:
-            return None, "Ollama 연결 끊김", ""
-        except httpx.HTTPError as exc:
-            return None, f"모델 호출 실패: {exc}", ""
-        except ValueError as exc:
-            return None, f"응답을 읽을 수 없음: {exc}", ""
-
         import json
+        import time
 
-        raw = body.get("response", "")
-        try:
-            return json.loads(raw), None, raw
-        except json.JSONDecodeError as exc:
-            return None, f"JSON 형식 오류: {exc}", raw
+        started = time.monotonic()
+        think_off = self._supports("thinking")
+        record = self.last_generation = Generation(
+            model=self.gen_model, num_predict=num_predict, think_disabled=think_off,
+        )
+
+        def finish(outcome: str):
+            record.outcome = outcome
+            record.elapsed_ms = int((time.monotonic() - started) * 1000)
+
+        budget = num_predict
+        while True:
+            record.attempts += 1
+            record.num_predict = budget
+            payload = {
+                "model": self.gen_model,
+                "prompt": prompt,
+                "format": schema,
+                "stream": False,
+                "keep_alive": KEEP_ALIVE,
+                "options": {"temperature": temperature, "num_predict": budget},
+            }
+            if think_off:
+                payload["think"] = False
+            try:
+                response = self._request(
+                    "POST", "/api/generate", json=payload, timeout=GENERATE_TIMEOUT
+                )
+                response.raise_for_status()
+                body = response.json()
+            except httpx.TimeoutException:
+                finish(OUTCOME_ERROR)
+                return None, "모델 응답 시간 초과", ""
+            except httpx.ConnectError:
+                finish(OUTCOME_ERROR)
+                return None, "Ollama 연결 끊김", ""
+            except httpx.HTTPError as exc:
+                finish(OUTCOME_ERROR)
+                return None, f"모델 호출 실패: {exc}", ""
+            except ValueError as exc:
+                finish(OUTCOME_ERROR)
+                return None, f"응답을 읽을 수 없음: {exc}", ""
+
+            raw = body.get("response") or ""
+            record.done_reason = str(body.get("done_reason") or "")
+            record.eval_count = int(body.get("eval_count") or 0)
+            record.prompt_eval_count = int(body.get("prompt_eval_count") or 0)
+            hit_limit = record.done_reason == "length"
+
+            if not raw.strip():
+                if (hit_limit and record.attempts == 1
+                        and num_predict >= EMPTY_RETRY_MIN_BUDGET and not self.cancelled):
+                    budget = min(num_predict * EMPTY_RETRY_SCALE, EMPTY_RETRY_CAP)
+                    if budget > num_predict:
+                        continue
+                finish(OUTCOME_EMPTY)
+                if hit_limit:
+                    return None, "모델이 생성 한도를 다 쓰고도 답을 내지 못했습니다", ""
+                return None, "모델이 빈 응답을 냈습니다", ""
+
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                if hit_limit:
+                    finish(OUTCOME_TRUNCATED)
+                    return None, "생성 한도에 걸려 응답이 중간에 끊겼습니다", raw
+                finish(OUTCOME_INVALID)
+                return None, f"JSON 형식 오류: {exc}", raw
+            finish(OUTCOME_OK)
+            return data, None, raw
 
     # ── 임베딩 ──────────────────────────────────────────────────────
     def embed(self, texts: list[str]) -> tuple[list[list[float]] | None, str | None]:

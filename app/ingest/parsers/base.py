@@ -12,7 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 # v2: 재파싱 시 날짜·문서/조각 색인을 함께 갱신하는 계약으로 기존 자료도 재처리한다.
-PARSER_VERSION = "3"
+# v4: HWPX 표를 행 단위(첫 행·단위·병합 포함)로 낸다 — 기존 HWPX도 다시 읽는다.
+PARSER_VERSION = "4"
 
 # 파싱 상태
 OK = "ok"                    # 본문 정상 추출

@@ -22,7 +22,7 @@ from .widgets import Card, UnknownBlock, clear_layout, muted_label, section_titl
 
 STAGE_ORDER = [
     "파일 찾기", "중복 확인", "내용 읽기", "시점 확인", "의미 색인",
-    "업무 파악", "일정 파악", "처리 순서 파악", "질문 준비",
+    "업무 파악", "일정 파악", "처리 순서 파악", "업무 복원", "질문 준비",
 ]
 
 
