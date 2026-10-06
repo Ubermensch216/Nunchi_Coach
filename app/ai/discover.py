@@ -152,17 +152,22 @@ def _clear_proposals(db: Database) -> None:
 
     사용자가 승인·수정한 업무와 직접 배정한 문서는 재발견이 덮어쓰지 않는다
     (NFR-SAF-004).
+
+    **업무 자체를 확인하지 않았더라도**, 그 업무의 항목을 고치거나 단계를
+    수행했거나 공백을 닫았으면 지우지 않는다. 업무 행을 지우면 그 아래의
+    항목·단계·수행 기록이 연쇄로 함께 지워진다 — 후임자가 '이 업무 확인함'을
+    누르지 않고 일부터 시작하는 것은 흔한 일이고, 그 일이 다음 분석에서
+    사라지면 안 된다. 그런 업무는 문서 배정도 그대로 둔다.
     """
-    db.con.execute(
-        "DELETE FROM task_docs WHERE origin = 'ai' AND task_id IN ("
-        "  SELECT id FROM tasks WHERE origin = 'ai' AND status = 'proposed')"
+    replaceable = (
+        "SELECT id FROM tasks WHERE origin = 'ai' AND status = 'proposed' "
+        f"AND id NOT IN ({db.HUMAN_WORK_SQL})"
     )
     db.con.execute(
-        "DELETE FROM task_reading WHERE task_id IN ("
-        "  SELECT id FROM tasks WHERE origin = 'ai' AND status = 'proposed')"
-    )
+        f"DELETE FROM task_docs WHERE origin = 'ai' AND task_id IN ({replaceable})")
+    db.con.execute(f"DELETE FROM task_reading WHERE task_id IN ({replaceable})")
     db.con.execute(
-        "DELETE FROM tasks WHERE origin = 'ai' AND status = 'proposed' "
+        f"DELETE FROM tasks WHERE id IN ({replaceable}) "
         "  AND id NOT IN (SELECT task_id FROM task_docs)"
     )
 

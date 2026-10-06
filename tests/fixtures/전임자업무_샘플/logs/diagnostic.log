@@ -1,0 +1,4 @@
+2026-10-06 22:09:40,169 {"event": "app.start", "version": "0.1.0"}
+2026-10-06 22:09:52,986 {"event": "pipeline.start"}
+2026-10-06 22:11:17,970 {"event": "pipeline.stop"}
+2026-10-06 22:11:53,955 {"event": "app.stop"}

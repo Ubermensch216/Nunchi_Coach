@@ -288,7 +288,9 @@ _V5_STATEMENTS = (
         doc_hash     TEXT,
         locator      TEXT NOT NULL DEFAULT '',
         quote        TEXT NOT NULL DEFAULT '',
-        extracted_at TEXT NOT NULL DEFAULT (datetime('now'))
+        extracted_at TEXT NOT NULL DEFAULT (datetime('now')),
+        doc_name     TEXT,
+        doc_relpath  TEXT
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_evidence_owner ON evidence(owner_kind, owner_id)",
@@ -354,6 +356,16 @@ _V5_STATEMENTS = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_snapshots_kind ON snapshots(kind, id)",
+    """
+    CREATE TABLE IF NOT EXISTS snapshot_receipts (
+        id            INTEGER PRIMARY KEY,
+        snapshot_id   INTEGER REFERENCES snapshots(id) ON DELETE SET NULL,
+        content_hash  TEXT NOT NULL,
+        receiver_name TEXT NOT NULL DEFAULT '',
+        relink        TEXT NOT NULL DEFAULT '{}',
+        received_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
     """
     CREATE TRIGGER IF NOT EXISTS task_items_evidence_ad AFTER DELETE ON task_items BEGIN
         DELETE FROM evidence WHERE owner_kind = 'item' AND owner_id = old.id;

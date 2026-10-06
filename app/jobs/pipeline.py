@@ -21,7 +21,7 @@ from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
 from ..ai import OllamaClient
 from ..ai.settings import project_client
 from ..ai.discover import discover
-from ..core import dating, handover_release, reconstruction, timeline
+from ..core import dating, handover_release, reconstruction, timeline, transfer
 from ..core import diagnostics
 from ..core.chunking import build_chunks
 from ..core.labeling import label_document
@@ -554,6 +554,9 @@ class Pipeline(QObject):
         기다리지 않는다 — 후임자가 처음 여는 화면에 이미 채워져 있어야 한다.
         """
         report = StageReport(STAGE_RESTORE)
+        # 가져온 복원본의 근거나, 자료 폴더를 옮겨 끊긴 근거를 지금 있는 문서에
+        # 다시 잇는다. 문서를 훑고 해시를 뜬 뒤라야 찾을 수 있어 여기서 한다.
+        transfer.relink_evidence(db)
         totals = reconstruction.restore(db, should_stop=self._stopped)
         report.done = report.total = totals["tasks"]
         if not totals["tasks"]:

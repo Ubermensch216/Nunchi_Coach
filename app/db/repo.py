@@ -25,6 +25,9 @@ SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("documents", "meta_created", "meta_created TEXT"),
     ("documents", "meta_modified", "meta_modified TEXT"),
+    # v5 안에서 나중에 붙은 열. 그 전에 v5로 올라간 프로젝트가 있다.
+    ("evidence", "doc_name", "doc_name TEXT"),
+    ("evidence", "doc_relpath", "doc_relpath TEXT"),
 )
 
 APP_DIR_NAME = "NunchiCoach"

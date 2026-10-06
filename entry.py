@@ -29,8 +29,12 @@ def main() -> int:
             print("Selftest failed: required application resources are missing.", file=sys.stderr)
             return 1
         from app.tools.parse_report import main as parse_report_main
+        from app.tools.selfcheck import main as selfcheck_main
 
-        return parse_report_main([*sys.argv[2:], "--strict"])
+        # 문서를 읽는 것만으로는 부족하다 — 업무 복원에서 이어받기까지도 묶음
+        # 안에서 실제로 돌려 본다. 둘 다 통과해야 통과다.
+        parsed = parse_report_main([*sys.argv[2:], "--strict"])
+        return selfcheck_main() or parsed
 
     from app.main import main as app_main
 

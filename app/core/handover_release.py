@@ -22,9 +22,9 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime
-from pathlib import Path, PureWindowsPath
 
 from . import provenance, reconstruction as rc, workcard, workstate as ws
+from .paths import relative_to_source
 
 FORMAT_VERSION = 1
 
@@ -44,7 +44,9 @@ def build_payload(db, basis_at: str | None = None) -> dict:
             if doc_id and doc_id not in documents:
                 documents[doc_id] = _document_entry(db, doc_id, sources)
             out.append({
-                "doc": doc_id, "locator": evidence.get("locator") or "",
+                "doc": doc_id, "doc_name": evidence.get("doc_name") or evidence.get("filename"),
+                "doc_relpath": evidence.get("doc_relpath"),
+                "locator": evidence.get("locator") or "",
                 "quote": evidence.get("quote") or "", "doc_hash": evidence.get("doc_hash"),
                 # 저장하는 순간에 이 근거가 원문과 맞았는가.
                 "current": bool(evidence.get("current")),
@@ -84,7 +86,7 @@ def build_payload(db, basis_at: str | None = None) -> dict:
                 "detail": gap["detail"], "research": gap["research"],
                 "next_action": gap["next_action"], "state": gap["state"],
                 "resolution": gap["resolution"], "origin": gap["origin"],
-                "step_id": gap["step_id"],
+                "gap_key": gap["gap_key"], "step_id": gap["step_id"],
             } for gap in db.info_gaps(row["id"], state=None)],
             "actions": [{"type": action["type"], "text": action["text"]}
                         for action in card.actions],
@@ -116,22 +118,11 @@ def _document_entry(db, doc_id: int, sources: dict) -> dict:
     return {
         "id": doc_id, "filename": row["filename"], "hash": row["hash"], "size": row["size"],
         "source_kind": source["kind"] if source else "",
-        "relative_path": _relative(row["path"], source["path"] if source else ""),
+        "relative_path": relative_to_source(row["path"], source["path"] if source else ""),
         "eff_date": row["eff_date"],
         "official": provenance.describe(official),
         "official_document_id": official["document_id"] if official else None,
     }
-
-
-def _relative(path: str, root: str) -> str:
-    """자료원 폴더 안에서의 위치. 폴더 밖이면 파일명만 남긴다(절대 경로를 싣지 않는다)."""
-    try:
-        return PureWindowsPath(path).relative_to(PureWindowsPath(root)).as_posix()
-    except ValueError:
-        try:
-            return Path(path).relative_to(Path(root)).as_posix()
-        except ValueError:
-            return PureWindowsPath(path).name
 
 
 def summarize(payload: dict) -> dict:
@@ -248,7 +239,9 @@ def to_markdown(payload: dict, kind: str = ws.SNAPSHOT_RESTORATION) -> str:
         marks = []
         for evidence in evidence_rows:
             doc = documents.get(evidence["doc"])
-            parts = [doc["filename"] if doc else "원본 없음"]
+            parts = [doc["filename"] if doc else evidence.get("doc_name") or "원본 없음"]
+            if not doc:
+                parts.append("저장 당시 원문을 찾지 못함")
             if evidence["locator"]:
                 parts.append(evidence["locator"])
             if doc and doc["official"]:

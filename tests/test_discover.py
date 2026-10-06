@@ -175,3 +175,56 @@ def test_duplicate_copies_are_not_recommended_twice(project):
     discover(project, client=None, min_size=3)
     picks = project.task_reading(project.tasks()[0]["id"])
     assert len(picks) == 1, [p["filename"] for p in picks]
+
+
+# ── 재발견은 사람이 해 둔 일을 지우지 않는다 ────────────────────────
+# 실제 모델로 전체 분석을 다시 돌리다 발견했다. 업무 재발견이 '아직 확인하지
+# 않은 업무'를 지우고 새로 만들면서, 그 아래의 항목·단계·수행 기록까지 연쇄로
+# 지웠다. 후임자가 '이 업무 확인함'을 누르지 않고 일부터 시작하는 것은 흔하다.
+
+@pytest.mark.parametrize("work", ["step_run", "item_edit", "item_added", "step_added", "gap_closed"])
+def test_rediscovery_keeps_an_unconfirmed_task_that_someone_worked_on(project, work):
+    from app.core import workstate as ws
+
+    _seed(project, {"행정사무감사": 5, "예산관리": 4})
+    discover(project, client=None, min_size=3)
+    touched = next(row["id"] for row in project.tasks() if row["name"] == "행정사무감사")
+    other = next(row["id"] for row in project.tasks() if row["name"] == "예산관리")
+    assert project.task(touched)["status"] == "proposed"      # 업무 자체는 확인하지 않았다
+
+    for task_id in (touched, other):
+        project.sync_task_items(task_id, [{"kind": "deadline", "slot": "제출기한",
+                                           "content": "2025-09-30"}])
+        project.sync_work_steps(task_id, [{"slot": "stated-1", "label": "취합", "ordinal": 1,
+                                           "procedure_kind": ws.PROCEDURE_STATED}])
+        project.sync_info_gaps(task_id, [{"gap_key": "missing:recipient", "kind": "missing",
+                                          "field": "제출처"}])
+    item = project.task_items(touched)[0]["id"]
+    step = project.work_steps(touched)[0]["id"]
+    if work == "step_run":
+        project.set_step_run(step, ws.DONE, note="취합 끝")
+    elif work == "item_edit":
+        project.review_task_item(item, "edit", "2025-10-02")
+    elif work == "item_added":
+        project.add_task_item(touched, "note", "예산팀에 미리 연락")
+    elif work == "step_added":
+        project.add_work_step(touched, "과장 사전 보고")
+    else:
+        project.resolve_info_gap(project.info_gaps(touched)[0]["id"], "기획예산과로 확인")
+    assert project.tasks_with_human_work() == {touched}
+
+    discover(project, client=None, min_size=3)
+
+    # 손댄 업무는 같은 번호로 남고, 그 아래의 것도 문서 배정도 그대로다.
+    assert project.task(touched) is not None
+    assert project.task_items(touched) and project.work_steps(touched)
+    assert len(project.task_documents(touched)) == 5
+    if work == "step_run":
+        assert project.work_steps(touched)[0]["run_note"] == "취합 끝"
+    if work == "item_edit":
+        assert project.task_items(touched)[0]["content"] == "2025-10-02"
+    # 아무도 손대지 않은 제안은 예전처럼 갈아 끼운다 — 새 행이라 아래가 비어 있고,
+    # 다음 '업무 복원' 단계가 자료에서 다시 채운다.
+    renewed = next(row["id"] for row in project.tasks() if row["name"] == "예산관리")
+    assert project.task_items(renewed) == [] and project.work_steps(renewed) == []
+    assert {row["name"] for row in project.tasks()} == {"행정사무감사", "예산관리"}

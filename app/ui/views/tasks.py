@@ -2131,7 +2131,8 @@ _RUN_BUTTONS = {
     workstate.WAITING: (("다시 진행", workstate.IN_PROGRESS), ("완료로 기록", workstate.DONE)),
     workstate.DONE: (("완료 취소", workstate.IN_PROGRESS),),
 }
-_GAP_LABEL = {"missing": "자료 없음", "conflict": "자료가 엇갈림", "stale": "지난 기한"}
+_GAP_LABEL = {"missing": "자료 없음", "conflict": "자료가 엇갈림", "stale": "지난 기한",
+              "changed": "이전과 다름"}
 
 
 def body_text(text: str) -> QLabel:

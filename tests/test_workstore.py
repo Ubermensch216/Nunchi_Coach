@@ -13,7 +13,8 @@ from app.db import Database
 from app.db.migrations import SCHEMA_VERSION
 
 NEW_TABLES = {"work_contexts", "task_items", "work_steps", "evidence",
-              "info_gaps", "step_runs", "reviews", "snapshots"}
+              "info_gaps", "step_runs", "reviews", "snapshots",
+              "snapshot_receipts"}
 
 
 @pytest.fixture

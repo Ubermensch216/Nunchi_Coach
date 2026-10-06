@@ -157,3 +157,16 @@ def test_failed_generation_keeps_its_reason_with_the_withheld_answer(db):
     answer = ask(db, "실적 보고 제출기한이 언제야?", client=client)
     assert answer.withheld and "한도" in answer.error
     assert answer.generation["outcome"] == "empty" and answer.generation["attempts"] == 2
+
+
+def test_answered_without_sentences_is_a_generation_failure_not_missing_material(db):
+    """실제 모델(gemma4:e2b)에서 겪었다: 같은 질문·같은 근거에 빈 문장 목록이 돌아왔다."""
+    client = OllamaClient()
+    wire(client, [{"response": '{"answered": true, "sentences": []}', "done_reason": "stop",
+                   "eval_count": 17}])
+    answer = ask(db, "실적 보고 제출기한이 언제야?", client=client)
+    assert answer.withheld and answer.text == ""
+    # '자료가 부족하다'고 하지 않는다 — 자료는 있고 생성이 실패했다.
+    assert "문장을 만들지 못했습니다" in answer.error and "자료가 없다는 뜻은 아닙니다" in answer.error
+    assert [doc.filename for doc in answer.related_docs] == ["실적.hwpx"]
+    assert answer.generation["empty_answer"] is True and answer.generation["outcome"] == "ok"

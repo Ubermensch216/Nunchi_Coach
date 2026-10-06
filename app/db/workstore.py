@@ -19,6 +19,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from ..core import workstate as ws
+from ..core.paths import relative_to_source
 
 # 표마다 다른 것: (표, 근거 소유자, 보이는 값 열, 자동 값 열, 그 밖에 갱신할 열)
 _ITEMS = ("task_items", "item", "content", "auto_content", ())
@@ -185,12 +186,24 @@ class WorkStore:
             "DELETE FROM evidence WHERE owner_kind = ? AND owner_id = ?", (owner, owner_id))
         for doc_id, locator, quote in evidence:
             # 문서의 지금 해시를 함께 적는다 — 이 인용이 어느 판에서 나왔는지다.
-            self.con.execute(
-                "INSERT INTO evidence(owner_kind, owner_id, doc_id, doc_hash, locator, quote) "
-                "VALUES (?, ?, ?, (SELECT hash FROM documents WHERE id = ?), ?, ?)",
-                (owner, owner_id, doc_id, doc_id, locator or "",
-                 " ".join(str(quote or "").split())[:500]),
-            )
+            # 이름과 자료원 안의 위치도 적어, 문서 번호가 달라지는 다른 PC에서
+            # 같은 원문을 다시 찾을 수 있게 한다.
+            document = self.con.execute(
+                "SELECT d.hash, d.filename, d.path, s.path AS root FROM documents d "
+                "LEFT JOIN sources s ON s.id = d.source_id WHERE d.id = ?", (doc_id,)).fetchone()
+            self.add_evidence(
+                owner, owner_id, doc_id, document["hash"] if document else None, locator, quote,
+                document["filename"] if document else None,
+                relative_to_source(document["path"], document["root"] or "") if document else None)
+
+    def add_evidence(self, owner: str, owner_id: int, doc_id: int | None, doc_hash: str | None,
+                     locator: str, quote: str, doc_name: str | None,
+                     doc_relpath: str | None) -> int:
+        return self.con.execute(
+            "INSERT INTO evidence(owner_kind, owner_id, doc_id, doc_hash, locator, quote, "
+            "doc_name, doc_relpath) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (owner, owner_id, doc_id, doc_hash, locator or "",
+             " ".join(str(quote or "").split())[:500], doc_name, doc_relpath)).lastrowid
 
     # ── 읽기 ────────────────────────────────────────────────────────
     def evidence_for(self, owner_kind: str, owner_ids: Sequence[int]) -> dict[int, list[dict]]:
@@ -207,6 +220,8 @@ class WorkStore:
             (owner_kind, *ids),
         ):
             item = dict(row)
+            # 원문을 못 찾았어도 무엇의 근거였는지는 보여 준다.
+            item["filename"] = item["filename"] or item["doc_name"]
             item["current"] = bool(
                 item["doc_id"] is not None and item["missing_since"] is None
                 and item["doc_hash"] is not None and item["doc_hash"] == item["hash_now"])
@@ -316,6 +331,26 @@ class WorkStore:
         return self.con.execute(
             "SELECT * FROM reviews WHERE target_kind = ? AND target_id = ? ORDER BY id",
             (target_kind, target_id)).fetchall()
+
+    # ── 사람의 작업이 걸린 업무 ─────────────────────────────────────
+    # 업무 재발견(ai/discover.py)은 아직 확인하지 않은 업무 제안을 지우고 다시
+    # 만든다. 업무 행이 지워지면 그 아래의 항목·단계·수행 기록이 연쇄로 함께
+    # 지워지므로, 사람이 무엇이든 해 둔 업무는 그 대상에서 빼야 한다.
+    HUMAN_WORK_SQL = (
+        "SELECT task_id FROM task_items "
+        " WHERE origin = 'user' OR human_state != 'none' OR excluded = 1 "
+        "UNION SELECT task_id FROM work_steps "
+        " WHERE origin = 'user' OR human_state != 'none' OR excluded = 1 "
+        "UNION SELECT s.task_id FROM step_runs r JOIN work_steps s ON s.id = r.step_id "
+        " WHERE r.state != 'not_started' "
+        "UNION SELECT task_id FROM info_gaps "
+        " WHERE origin = 'user' OR (state = 'resolved' AND COALESCE(resolution, '') != '"
+        + "새 자료에서 확인되어 자동으로 닫았습니다." + "')"
+    )
+
+    def tasks_with_human_work(self) -> set[int]:
+        """사람이 고치거나 확인했거나 수행을 기록했거나 공백을 닫은 업무."""
+        return {row["task_id"] for row in self.con.execute(self.HUMAN_WORK_SQL)}
 
     # ── 지금 확인하는 사람 (선택) ───────────────────────────────────
     def reviewer(self) -> tuple[str, str]:
@@ -475,6 +510,20 @@ class WorkStore:
     def snapshot(self, snapshot_id: int):
         return self.con.execute(
             "SELECT * FROM snapshots WHERE id = ?", (snapshot_id,)).fetchone()
+
+    def add_receipt(self, snapshot_id: int, content_hash: str, receiver_name: str,
+                    relink: str) -> int:
+        """가져온 사실을 남긴다. 받았다는 기록이지 내용을 승인했다는 기록이 아니다."""
+        receipt_id = self.con.execute(
+            "INSERT INTO snapshot_receipts(snapshot_id, content_hash, receiver_name, relink) "
+            "VALUES (?, ?, ?, ?)",
+            (snapshot_id, content_hash, (receiver_name or "").strip(), relink)).lastrowid
+        self.audit("work.snapshot.receive", str(snapshot_id))
+        return receipt_id
+
+    def receipts(self) -> list:
+        return self.con.execute(
+            "SELECT * FROM snapshot_receipts ORDER BY id DESC").fetchall()
 
     # ── 수행 기록 ───────────────────────────────────────────────────
     def set_step_run(self, step_id: int, state: str, result_doc_id: int | None = None,

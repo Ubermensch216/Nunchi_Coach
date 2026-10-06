@@ -252,9 +252,30 @@ def choose(found: list[Found], basis: date) -> list[dict]:
             "basis_state": ws.CONFLICT if conflict else ws.STATED,
             "applicability": _applicability(shown, newest, basis, conflict),
             "evidence": _evidence(current, shown),
+            # 항목으로 올리지는 않지만 버리지도 않는다. 최근 문서라는 이유만으로
+            # 지금 값을 확정한 것처럼 보이지 않게, 공백 처리에서 나란히 보여 준다.
+            "earlier": _earlier(kind, items, newest, values, period),
         })
     candidates.sort(key=lambda c: (list(KIND_LABEL).index(c["kind"]), c["slot"]))
     return candidates
+
+
+# 해마다 달라지는 것이 당연한 기한·금액은 '이전과 다름'으로 따지지 않는다.
+_TRACK_CHANGES = (PROCEDURE, FORM, RECIPIENT, INPUT)
+_MAX_EARLIER = 2
+
+
+def _earlier(kind: str, items: list[Found], newest: int, values: dict, period) -> list[dict]:
+    """가장 최근 시기와 값이 다른, 그 이전 시기의 값(가까운 시기부터)."""
+    if kind not in _TRACK_CHANGES:
+        return []
+    older: dict[str, Found] = {}
+    for item in sorted(items, key=lambda i: (-period(i), i.doc_id)):
+        if 0 < period(item) < newest and item.key not in values:
+            older.setdefault(item.key, item)
+    return [{"value": item.value, "year": period(item), "doc_id": item.doc_id,
+             "locator": item.locator, "quote": item.quote}
+            for item in list(older.values())[:_MAX_EARLIER]]
 
 
 def _applicability(shown: list[Found], newest: int, basis: date, conflict: bool) -> str:
@@ -372,7 +393,18 @@ def _shown_date(value: str, precision: str | None) -> str:
 _ARROW = re.compile(r"\s*(?:→|⇒|⇨|➜|➡|▶|->|=>)\s*")
 _CIRCLED = re.compile(r"\s*[①-⑳]\s*")
 _NUMBERED = re.compile(r"(?:^|\s)(\d{1,2})[.)]\s+(?=\S)")
-_SUBMITS = re.compile("제출|보고|회신|송부|통보|납부")
+# 바깥으로 내는 단계. '통보'는 넣지 않는다 — 신청인에게 결과를 알리는 일이라
+# 제출처·제출기한이 걸리는 단계가 아니다(시나리오 평가에서 잘못 걸렸다).
+_SUBMITS = re.compile("제출|보고|회신|송부|납부")
+# 받는 쪽의 기한. 우리가 내는 기한이 아니므로 내는 단계에 잇지 않는다.
+_INTAKE_DEADLINE = re.compile("^(?:신청|접수)")
+
+
+def closes_step(item: dict) -> bool:
+    """이 항목이 '내는 단계'의 완료 조건인가(제출처, 그리고 우리가 지킬 기한)."""
+    if item["kind"] == RECIPIENT:
+        return True
+    return item["kind"] == DEADLINE and not _INTAKE_DEADLINE.match(item["slot"])
 _MAX_STEP_LABEL = 80
 PRECEDENT_BASE = 100   # 과거 사례는 적힌 절차 뒤에 따로 놓인다
 
@@ -396,8 +428,9 @@ def split_procedure(text: str) -> list[str]:
     return steps if len(steps) >= 2 else []
 
 
-def build_steps(db, task_id: int, items: list[dict]) -> list[dict]:
+def build_steps(db, task_id: int, items: list[dict], basis: date | None = None) -> list[dict]:
     """업무 항목 후보와 과거 처리 기록에서 수행 단계 후보를 만든다."""
+    basis = basis or date.today()
     by_kind: dict[str, list[dict]] = {}
     for item in items:
         by_kind.setdefault(item["kind"], []).append(item)
@@ -419,9 +452,14 @@ def build_steps(db, task_id: int, items: list[dict]) -> list[dict]:
         _attach(steps, by_kind.get(FORM, []), "forms", fallback=None)
         _closing(steps[-1], by_kind)
 
-    # 처리 기록이 남아 있는 가장 최근 회차. 문서는 있는데 순서를 아직 못 세운
-    # 해는 건너뛴다.
-    for year in reversed(db.task_years(task_id)):
+    # 과거 사례는 **끝까지 간 회차**에서 가져온다 — 기준 연도보다 앞선 해 가운데
+    # 처리 기록이 남은 가장 최근 해. 올해는 아직 진행 중이라 앞부분만 있고,
+    # 그것을 사례로 내밀면 '다음에 무엇을 했는가'가 빠진다. 지난 회차가 없을
+    # 때에만 올해 것을 쓴다.
+    years = db.task_years(task_id)
+    ordered = ([y for y in reversed(years) if y < basis.year]
+               + [y for y in reversed(years) if y >= basis.year])
+    for year in ordered:
         rows = db.task_steps(task_id, year)
         if not rows:
             continue
@@ -467,6 +505,8 @@ def _closing(step: dict, by_kind: dict[str, list[dict]]) -> None:
     parts = []
     for kind in (RECIPIENT, DEADLINE):
         for item in by_kind.get(kind, []):
+            if not closes_step(item):
+                continue
             note = "" if item["basis_state"] == ws.STATED else f" ({ws.basis_label(item['basis_state'])})"
             if kind == DEADLINE and item["applicability"] == ws.PAST:
                 note += " (과거 기한)"
@@ -514,7 +554,7 @@ def restore(db, basis: date | None = None, should_stop=lambda: False) -> dict[st
         if should_stop():
             break
         candidates = extract_task(db, task["id"], basis)
-        steps = build_steps(db, task["id"], candidates)
+        steps = build_steps(db, task["id"], candidates, basis)
         with db.transaction():
             result = db.sync_task_items(
                 task["id"], candidates + record_items(db, task["id"], basis),
@@ -523,7 +563,7 @@ def restore(db, basis: date | None = None, should_stop=lambda: False) -> dict[st
             step_result = db.sync_work_steps(task["id"], steps, context_id)
             _link_stated_order(db, task["id"])
             # 항목과 단계가 정해진 뒤에 공백을 본다(C04).
-            continuity.review_task(db, task["id"], basis)
+            continuity.review_task(db, task["id"], basis, candidates)
         totals["gaps"] += len(db.info_gaps(task["id"]))
         totals["tasks"] += 1
         totals["items"] += len(candidates)

@@ -127,8 +127,9 @@ def test_stated_procedure_and_precedent_are_kept_apart_in_one_task(db):
 
     stated, cases = steps_of(db, ws.PROCEDURE_STATED), steps_of(db, ws.PROCEDURE_PRECEDENT)
     assert [s["label"] for s in stated] == ["취합", "작성", "제출"]
-    # 과거 사례는 가장 최근 회차 한 줄만, 적힌 절차 뒤에 따로 놓인다.
-    assert [s["label"] for s in cases] == ["자료 요청 (2025년 9월 초)"]
+    # 과거 사례는 끝까지 간 회차(기준 연도보다 앞선 가장 최근 해) 한 줄만 쓴다.
+    # 올해 것은 아직 앞부분뿐이라 '그다음에 무엇을 했는가'가 없다.
+    assert [s["label"] for s in cases] == ["제출 (2024년 9월 초)"]
     assert max(s["ordinal"] for s in stated) < min(s["ordinal"] for s in cases)
     assert cases[0]["after_step_id"] is None
 

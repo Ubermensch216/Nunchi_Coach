@@ -77,9 +77,17 @@ def research(db, task_id: int, kind: str) -> tuple[list[rc.Found], int]:
 
 # ── 공백 찾기 ───────────────────────────────────────────────────────
 
-def find_gaps(db, task_id: int, basis: date | None = None) -> list[dict]:
-    """이 업무의 공백을 다음 행동과 함께 만든다. 저장하지 않는다."""
+def find_gaps(db, task_id: int, basis: date | None = None,
+              candidates: list[dict] | None = None) -> list[dict]:
+    """이 업무의 공백을 다음 행동과 함께 만든다. 저장하지 않는다.
+
+    `candidates`는 방금 자료에서 읽은 항목 후보다(없으면 다시 읽는다). 이전 시기의
+    다른 값은 저장된 항목에 없고 후보에만 실려 있다.
+    """
     basis = basis or date.today()
+    if candidates is None:
+        candidates = rc.extract_task(db, task_id, basis)
+    earlier = {(c["kind"], c["slot"]): c.get("earlier") or [] for c in candidates}
     items = db.task_items(task_id)
     steps = db.work_steps(task_id)
     by_kind: dict[str, list[dict]] = {}
@@ -102,11 +110,13 @@ def find_gaps(db, task_id: int, basis: date | None = None) -> list[dict]:
             gaps.append(_missing(context, kind, closing))
 
     for item in items:
-        blocked = closing["id"] if closing and item["kind"] in _CLOSING_KINDS else None
+        blocked = closing["id"] if closing and rc.closes_step(item) else None
         if item["human_state"] in ws.CONFIRMED_BY:
             # 사람이 값을 정했다. 자료가 여전히 엇갈려도 더 묻지 않는다 —
             # 그 뒤에 자료가 또 달라지면 '재확인 필요'가 되어 다시 걸린다.
             continue
+        if earlier.get((item["kind"], item["slot"])) and item["basis_state"] == ws.STATED:
+            gaps.append(_changed(db, item, earlier[(item["kind"], item["slot"])]))
         if item["basis_state"] == ws.CONFLICT:
             gaps.append(_conflict(db, item, blocked))
         elif item["kind"] == rc.DEADLINE and item["applicability"] == ws.PAST:
@@ -210,6 +220,34 @@ def _conflict(db, item: dict, step_id) -> dict:
     }
 
 
+def _changed(db, item: dict, earlier: list[dict]) -> dict:
+    """최근 자료의 값을 올렸지만, 그 이전 자료는 다르게 적고 있다.
+
+    개정된 지침이 대표적이다. 최근 문서가 대개 맞지만 '대개'다 — 경과 조치나
+    적용 시점에 따라 이전 기준이 적용되는 건이 있다. 그래서 값을 숨기지도,
+    최근 것이라고 확정하지도 않고 둘을 나란히 보인다. 어떤 단계도 막지 않는다.
+    """
+    name = rc.KIND_LABEL.get(item["kind"], item["kind"])
+    names = {row["id"]: row["filename"] for row in db.con.execute(
+        f"SELECT id, filename FROM documents WHERE id IN ({', '.join('?' * len(earlier))})",
+        [old["doc_id"] for old in earlier])}
+    before = "; ".join(f"{old['year']}년 ‘{old['value']}’ — {names.get(old['doc_id'], '')}"
+                       for old in earlier)
+    return {
+        "gap_key": f"changed:{item['kind']}:{item['slot']}", "kind": "changed",
+        "field": f"{name} · 이전과 다름", "item_id": item["id"], "step_id": None,
+        "detail": (f"가장 최근 자료의 값 ‘{item['content']}’을(를) 올렸습니다. 그 이전 자료는 "
+                   f"다르게 적고 있습니다. 최근 문서라는 이유만으로 이번 건에 적용된다고 "
+                   f"확정하지 않았습니다."),
+        "research": f"이전 자료: {before}",
+        "next_action": ("최근 문서에 시행일이나 적용 대상이 적혀 있는지 확인하세요. 이번 건이 "
+                        "그 이전에 시작됐거나 경과 조치 대상이면 이전 기준이 적용될 수 "
+                        "있습니다. 확인되면 항목에 ‘맞습니다’를 누르면 됩니다."),
+        "evidence": ([(e["doc_id"], e["locator"], e["quote"]) for e in item["evidence"]]
+                     + [(old["doc_id"], old["locator"], old["quote"]) for old in earlier]),
+    }
+
+
 def _past_deadline(context: _Context, item: dict, step_id, basis: date) -> dict:
     action = "이번 회차의 요청 공문이 새로 왔는지 확인하세요."
     if context.recipient():
@@ -231,11 +269,18 @@ def _afterwards(context: _Context, item: dict) -> dict:
     action = "마지막 기록 이후에 만든 파일이 폴더에 있는지, 결재·발송 문서가 있는지 확인하세요."
     position = next((index for index, case in enumerate(context.cases)
                      if any(e["doc_id"] == last_doc for e in case["evidence"])), None)
+    if position is None:
+        # 지난 회차의 사례라면 문서는 다르다. 마지막 기록과 같은 종류의 단계를 찾는다.
+        record = next((r for r in context.by_kind.get(rc.RECORD, [])
+                       if r["slot"] == rc.SLOT_LAST_RECORD), None)
+        stage = record["content"].split(" · ", 1)[-1].split(" — ")[0] if record else ""
+        position = next((index for index, case in enumerate(context.cases)
+                         if stage and case["label"].startswith(stage)), None)
     if position is not None and position + 1 < len(context.cases):
         following = context.cases[position + 1]
-        action = (f"기록상 다음 순서는 '{following['label']}'였습니다. 이에 해당하는 "
-                  f"이번 회차 파일({following['output'] or '산출물'}과 같은 종류)이 있는지 "
-                  f"확인하세요.")
+        action = (f"지난 기록에서는 그다음에 '{following['label']}'을(를) 했습니다. 이에 "
+                  f"해당하는 이번 회차 파일({following['output'] or '산출물'}과 같은 종류)이 "
+                  f"있는지 확인하세요.")
     return {
         "gap_key": "afterwards", "kind": "missing", "field": "이후 상태",
         "item_id": item["id"], "step_id": None,
@@ -245,9 +290,10 @@ def _afterwards(context: _Context, item: dict) -> dict:
     }
 
 
-def review_task(db, task_id: int, basis: date | None = None) -> dict[str, int]:
+def review_task(db, task_id: int, basis: date | None = None,
+                candidates: list[dict] | None = None) -> dict[str, int]:
     """공백을 다시 찾아 저장된 자동 공백과 맞춘다."""
-    return db.sync_info_gaps(task_id, find_gaps(db, task_id, basis))
+    return db.sync_info_gaps(task_id, find_gaps(db, task_id, basis, candidates))
 
 
 # ── 다음 행동 ───────────────────────────────────────────────────────
@@ -275,12 +321,14 @@ def next_actions(db, task_id: int) -> list[dict]:
         break
     if not stated:
         cases = [s for s in steps if s["procedure_kind"] == ws.PROCEDURE_PRECEDENT]
-        if cases:
-            first = cases[0]
-            text = (f"문서에 적힌 절차는 없습니다. 지난 회차에는 '{first['label']}'부터 "
-                    f"했습니다 — 그때의 자료({first['output'] or '근거 문서'})를 열어 "
-                    f"준비를 시작할 수 있습니다.")
-            actions.append({"type": "do", "text": text, "step_id": first["id"], "gap_id": None})
+        # 이미 했다고 기록한 사례는 다시 권하지 않는다.
+        todo = next((case for case in cases if case["run_state"] != ws.DONE), None)
+        if todo is not None:
+            where = "부터 했습니다" if todo is cases[0] else "을(를) 그다음에 했습니다"
+            text = (f"문서에 적힌 절차는 없습니다. 지난 회차에는 '{todo['label']}'{where} — "
+                    f"그때의 자료({todo['output'] or '근거 문서'})를 열어 "
+                    f"준비할 수 있습니다.")
+            actions.append({"type": "do", "text": text, "step_id": todo["id"], "gap_id": None})
 
     for gap in gaps:
         if gap["next_action"]:

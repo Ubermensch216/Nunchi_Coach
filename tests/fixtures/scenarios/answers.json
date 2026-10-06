@@ -1,0 +1,100 @@
+{
+  "note": [
+    "시나리오 평가의 **정답**이다. 평가 도구만 읽는다. 제품 입력(자료 폴더·프로젝트 DB)에는 넣지 않는다.",
+    "",
+    "fields      사람이 입력하기 전에 제품이 내놓아야 하는 항목. kind·contains는 필수.",
+    "            slot_contains·applicability·basis는 적었을 때만 본다.",
+    "steps       문서에 적힌 절차로 세워져야 하는 단계(이 순서로, 문구 일부 일치).",
+    "missed      사람이 문서를 읽으면 알 수 있지만 문장으로만 적혀 있어 규칙 추출이 놓칠 것으로",
+    "            보는 항목. 분모에 넣는다 — 빼면 복원율이 부풀려진다.",
+    "gaps        떠야 하는 공백. blocks는 그 공백이 막아야 하는 단계 문구(없으면 null = 아무 단계도 막지 않음).",
+    "no_gaps     뜨면 안 되는 공백(자료에 답이 있는데 '없다'고 하는 경우).",
+    "forbidden   나오면 안 되는 주장. where: item_value(종류별 항목 값) | text(항목·공백·다음 행동·초안 전체).",
+    "first_action 맨 처음 내놓는 다음 행동.",
+    "",
+    "이 정답으로 프롬프트나 규칙을 반복 조정하면 평가가 아니라 암기가 된다. 규칙을 고칠 때는",
+    "이 파일이 아니라 실제 문서 유형을 보고 고친다."
+  ],
+  "threshold": 0.9,
+  "scenarios": {
+    "report": {
+      "fields": [
+        {"kind": "deadline", "contains": "2025-09-30", "applicability": "current", "basis": "stated"},
+        {"kind": "recipient", "contains": "기획예산과", "basis": "stated"},
+        {"kind": "purpose", "contains": "정기 점검"},
+        {"kind": "form", "contains": "별지 제3호"},
+        {"kind": "input", "contains": "부서별 집계 자료"},
+        {"kind": "amount", "slot_contains": "시범사업", "contains": "820"},
+        {"kind": "amount", "slot_contains": "운영비", "contains": "95"},
+        {"kind": "record", "contains": "2025-09-05"}
+      ],
+      "steps": ["부서별 집계 자료 취합", "실적표 작성", "과장 검토", "기획예산과 제출"],
+      "missed": [
+        {"what": "증감 사유는 전년 동기 대비로 적는다", "why": "이름표 없는 문장"}
+      ],
+      "gaps": [{"key": "afterwards", "blocks": null}],
+      "no_gaps": ["missing:deadline", "missing:recipient", "missing:procedure"],
+      "forbidden": [
+        {"where": "item_value", "kind": "deadline", "contains": "2024", "why": "과거 제출일을 현재 기한으로 혼동"},
+        {"where": "text", "contains": "지연", "why": "기한이 남았는데 지연으로 단정"}
+      ],
+      "first_action": {"type": "do", "contains": "부서별 집계 자료 취합"},
+      "draft_complete": true
+    },
+    "contract": {
+      "fields": [
+        {"kind": "amount", "slot_contains": "계약금액", "contains": "48,000"},
+        {"kind": "deadline", "slot_contains": "납기", "contains": "2025-11-28", "applicability": "current"},
+        {"kind": "contact", "contains": "재무과 계약팀"},
+        {"kind": "amount", "slot_contains": "지급액", "contains": "19,200"},
+        {"kind": "record", "contains": "2025-08-20"}
+      ],
+      "steps": [],
+      "missed": [
+        {"what": "준공검사 뒤 30일 이내 정산", "why": "이름표 없는 문장 — 정산 기한"},
+        {"what": "1차 기성금 지급 완료", "why": "이름표 없는 문장 — 진행 상태"}
+      ],
+      "gaps": [
+        {"key": "afterwards", "blocks": null},
+        {"key": "missing:procedure", "blocks": null},
+        {"key": "missing:recipient", "blocks": null}
+      ],
+      "no_gaps": ["missing:deadline"],
+      "forbidden": [
+        {"where": "item_value", "kind": "amount", "slot_contains": "계약금액", "contains": "45,000", "why": "지난해 계약금액을 올해 값으로"},
+        {"where": "text", "contains": "미완료", "why": "후속 문서가 없다는 이유로 미완료 단정"},
+        {"where": "text", "contains": "완료되었습니다", "why": "후속 문서가 없는데 완료 단정"},
+        {"where": "text", "contains": "지연", "why": "지연 단정"}
+      ],
+      "first_action": {"type": "do", "contains": "지난 회차"},
+      "precedent_year": 2024,
+      "draft_complete": false
+    },
+    "revised": {
+      "fields": [
+        {"kind": "form", "contains": "별지 제2호"},
+        {"kind": "deadline", "slot_contains": "신청기한", "contains": "2025-04-30", "applicability": "past"},
+        {"kind": "record", "contains": "2025-04-15"}
+      ],
+      "steps": ["신청서 접수", "서류 검토", "심의위원회 심의", "교부 결정 통보"],
+      "missed": [
+        {"what": "2025년 4월 1일 이후 접수분부터 적용", "why": "이름표 없는 문장 — 시행일"}
+      ],
+      "gaps": [
+        {"key": "stale:deadline:신청기한", "blocks": null},
+        {"key": "changed:procedure:처리절차", "blocks": null},
+        {"key": "changed:form:사용서식", "blocks": null},
+        {"key": "afterwards", "blocks": null},
+        {"key": "missing:recipient", "blocks": null}
+      ],
+      "no_gaps": ["missing:procedure", "missing:deadline"],
+      "forbidden": [
+        {"where": "item_value", "kind": "form", "contains": "제1호", "why": "개정 전 서식을 현재 서식으로"},
+        {"where": "item_value", "kind": "deadline", "contains": "2023", "why": "개정 전 기한을 현재 기한으로"},
+        {"where": "text", "contains": "지연", "why": "지난 기한을 지연으로 단정"}
+      ],
+      "first_action": {"type": "do", "contains": "신청서 접수"},
+      "draft_complete": false
+    }
+  }
+}

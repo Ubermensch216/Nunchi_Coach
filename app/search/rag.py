@@ -238,6 +238,21 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
             generation=generation,
         )
 
+    if not (data.get("sentences") or []):
+        # 답할 수 있다고 하고는 문장을 하나도 내지 않았다. 실제 모델에서 겪었다 —
+        # 같은 질문·같은 근거에 어떤 때는 옳게 답하고 어떤 때는 빈 목록을 냈다.
+        # 이것은 자료가 없는 것이 아니라 생성이 실패한 것이다. '자료 부족'으로
+        # 보여 주면 사용자는 문서를 찾으러 간다.
+        generation["empty_answer"] = True
+        related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
+        return Answer(
+            question=question, text="", withheld=True,
+            error="모델이 답변 문장을 만들지 못했습니다. 자료가 없다는 뜻은 아닙니다 — "
+                  "다시 질문하거나 아래 문서를 직접 확인해 보세요.",
+            related_docs=_dedupe(related), model=client.gen_model,
+            inferred_years=scope.years, generation=generation,
+        )
+
     # 모델이 문장·근거를 스스로 짝지어 냈어도, 그 근거가 실제로 그 문장을
     # 뒷받침하는지는 모델이 보장하지 않는다. 여기서 규칙으로 한 번 더
     # 확인한다 — 근거 없는 문장은 화면에 올리지 않는다(§1 측정 1).

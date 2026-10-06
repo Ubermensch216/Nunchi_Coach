@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core import handover_release, workcard, workstate
+from ..core import handover_release, transfer, workcard, workstate
 from ..core.output_policy import UnsafeOutputError, safe_text_writer
 from . import theme
 from .widgets import muted_label, section_title
@@ -66,6 +66,21 @@ class SnapshotDialog(QDialog):
         self.export_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.export_button.clicked.connect(lambda _=False: self._export_selected())
         row.addWidget(self.export_button)
+        self.package_button = QPushButton("묶음으로 내보내기")
+        self.package_button.setObjectName("Quiet")
+        self.package_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.package_button.setToolTip(
+            "다른 PC의 눈치코치에서 이어받을 수 있는 파일로 내보냅니다. 원문 파일은 "
+            "들어가지 않고, 인용문은 들어갑니다")
+        self.package_button.clicked.connect(lambda _=False: self._export_package_selected())
+        row.addWidget(self.package_button)
+        receive = QPushButton("묶음 가져오기")
+        receive.setObjectName("Quiet")
+        receive.setCursor(Qt.CursorShape.PointingHandCursor)
+        receive.setToolTip("다른 곳에서 내보낸 복원본·인계본을 이 프로젝트로 가져옵니다. "
+                           "여기서 이미 고치거나 수행한 것은 덮지 않습니다")
+        receive.clicked.connect(lambda _=False: self._import_package())
+        row.addWidget(receive)
         row.addStretch(1)
         close = QPushButton("닫기")
         close.setObjectName("Quiet")
@@ -95,6 +110,7 @@ class SnapshotDialog(QDialog):
     def _show_selected(self) -> None:
         snapshot_id = self.selected_id()
         self.export_button.setEnabled(snapshot_id is not None)
+        self.package_button.setEnabled(snapshot_id is not None)
         if snapshot_id is None:
             self.detail.setText("아직 저장한 복원본이 없습니다. 분석이 끝나면 자동으로 "
                                 "하나 저장됩니다.")
@@ -141,6 +157,57 @@ class SnapshotDialog(QDialog):
             QMessageBox.warning(self, "저장하지 못했습니다", str(exc))
             return
         QMessageBox.information(self, "저장했습니다", path)
+
+    def _export_package_selected(self) -> None:
+        snapshot_id = self.selected_id()
+        if snapshot_id is None:
+            return
+        folder = workcard.default_output_dir(self.db)
+        name = f"{Path(self.db.path).parent.name}_인계묶음_{datetime.now():%Y%m%d}_{snapshot_id}.zip"
+        path, _filter = QFileDialog.getSaveFileName(
+            self, "묶음으로 내보내기", str(folder / name), "눈치코치 묶음 (*.zip)")
+        if not path:
+            return
+        try:
+            self.export_package(snapshot_id, path)
+        except (UnsafeOutputError, transfer.PackageError, OSError) as exc:
+            QMessageBox.warning(self, "내보내지 못했습니다", str(exc))
+            return
+        QMessageBox.information(self, "묶음을 만들었습니다", f"{path}\n\n{transfer.NOTICE}")
+
+    def export_package(self, snapshot_id: int, path: str) -> Path:
+        return transfer.export_package(self.db, snapshot_id, path)
+
+    def _import_package(self) -> None:
+        path, _filter = QFileDialog.getOpenFileName(
+            self, "묶음 가져오기", "", "눈치코치 묶음 (*.zip)")
+        if not path:
+            return
+        try:
+            result = self.import_package(path)
+        except transfer.PackageError as exc:
+            QMessageBox.warning(self, "가져오지 못했습니다", str(exc))
+            return
+        QMessageBox.information(self, "가져왔습니다", self.receipt_text(result))
+
+    def import_package(self, path: str) -> dict:
+        result = transfer.import_package(self.db, path)
+        self.reload(select=result["snapshot_id"])
+        return result
+
+    @staticmethod
+    def receipt_text(result: dict) -> str:
+        lines = [
+            f"{workstate.SNAPSHOT_LABEL[result['kind']]}을 가져왔습니다.",
+            f"업무 {result['tasks']}개 · 항목 {result['items']}개 · 단계 {result['steps']}개 · "
+            f"확인할 정보 {result['gaps']}건",
+            f"근거 문서: {transfer.describe_relink(result['relink'])}",
+        ]
+        if result["kept_local"]:
+            lines.append(f"여기서 이미 고치거나 수행한 {result['kept_local']}건은 그대로 두었습니다.")
+        lines.append("자료 폴더를 지정하고 분석을 돌리면 아직 못 찾은 근거를 다시 찾습니다. "
+                     "가져왔다는 것이 내용을 모두 확인했다는 뜻은 아닙니다.")
+        return "\n".join(lines)
 
     def export(self, snapshot_id: int, path: str) -> int:
         """저장한 판을 그대로 글로 옮긴다. 지금 화면의 내용으로 다시 만들지 않는다."""

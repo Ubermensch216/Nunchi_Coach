@@ -488,7 +488,11 @@ CREATE TABLE IF NOT EXISTS evidence (
     doc_hash     TEXT,
     locator      TEXT NOT NULL DEFAULT '',
     quote        TEXT NOT NULL DEFAULT '',
-    extracted_at TEXT NOT NULL DEFAULT (datetime('now'))
+    extracted_at TEXT NOT NULL DEFAULT (datetime('now')),
+    -- 원문을 다시 찾을 때 쓰는 이름과 자료원 안의 위치. 다른 PC로 옮기면 문서
+    -- 번호는 달라지므로, 해시가 같거나 같은 자리에 있는 문서를 이것으로 찾는다.
+    doc_name     TEXT,
+    doc_relpath  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_evidence_owner ON evidence(owner_kind, owner_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_doc   ON evidence(doc_id);
@@ -500,7 +504,7 @@ CREATE TABLE IF NOT EXISTS info_gaps (
     task_id     INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     step_id     INTEGER REFERENCES work_steps(id) ON DELETE SET NULL,
     item_id     INTEGER REFERENCES task_items(id) ON DELETE SET NULL,
-    kind        TEXT NOT NULL,                  -- missing | conflict | stale
+    kind        TEXT NOT NULL,                  -- missing | conflict | stale | changed
     origin      TEXT NOT NULL DEFAULT 'user',   -- auto(분석이 찾음) | user(사람이 적음)
     gap_key     TEXT NOT NULL DEFAULT '',       -- 재분석 때 같은 공백을 찾는 이름
     field       TEXT NOT NULL DEFAULT '',
@@ -558,6 +562,18 @@ CREATE TABLE IF NOT EXISTS snapshots (
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_snapshots_kind ON snapshots(kind, id);
+
+-- 수신 기록. 다른 곳에서 만든 복원본·인계본을 이 프로젝트로 가져온 사실과,
+-- 그때 근거 문서를 얼마나 다시 찾았는지. 받았다는 기록일 뿐 내용 전체를
+-- 승인했다는 뜻이 아니다.
+CREATE TABLE IF NOT EXISTS snapshot_receipts (
+    id            INTEGER PRIMARY KEY,
+    snapshot_id   INTEGER REFERENCES snapshots(id) ON DELETE SET NULL,
+    content_hash  TEXT NOT NULL,
+    receiver_name TEXT NOT NULL DEFAULT '',
+    relink        TEXT NOT NULL DEFAULT '{}',
+    received_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 -- 근거의 소유자는 표가 셋이라 외래키로 묶을 수 없다. 소유자가 지워지면
 -- (업무 삭제의 연쇄 포함) 근거도 함께 지운다.
