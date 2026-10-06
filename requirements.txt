@@ -1,0 +1,19 @@
+# 눈치코치 — 실행 의존성
+# 개발 환경 기준(범위 지정). **배포·재현 빌드의 기준은 requirements.lock이다.**
+#   python -m app.tools.lockfile           잠금 파일 다시 만들기
+#   python -m app.tools.lockfile --check   지금 환경이 잠금 파일과 같은지 검사
+
+PySide6>=6.11
+PyMuPDF>=1.28
+python-docx>=1.2
+python-pptx>=1.0
+openpyxl>=3.1
+olefile>=0.47
+lxml>=6.1
+numpy>=2.0
+httpx>=0.28
+
+# 개발·시험용 (배포 패키지에는 불필요)
+pytest>=9.1
+pytest-cov>=7.1
+pyinstaller>=6.22
