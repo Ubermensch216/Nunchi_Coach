@@ -38,6 +38,7 @@ class Card:
     records: list[dict] = field(default_factory=list)
     prepare: list[dict] = field(default_factory=list)
     notes: list[dict] = field(default_factory=list)       # 사람이 보탠 설명
+    found: list[dict] = field(default_factory=list)       # 모델이 고른 원문 문장
     stated_steps: list[dict] = field(default_factory=list)
     precedent_steps: list[dict] = field(default_factory=list)
     conflicting_procedure: dict | None = None
@@ -48,7 +49,7 @@ class Card:
     @property
     def empty(self) -> bool:
         """자료에서 아무것도 복원하지 못했다(분석 전이거나 문서가 없다)."""
-        return not (self.todo or self.records or self.prepare or self.notes
+        return not (self.todo or self.records or self.prepare or self.notes or self.found
                     or self.stated_steps or self.precedent_steps)
 
     def headline(self) -> str:
@@ -76,6 +77,8 @@ def build(db, task_id: int) -> Card:
             card.records.append(item)
         elif item["kind"] == rc.NOTE:
             card.notes.append(item)
+        elif item["kind"] == rc.STATEMENT:
+            card.found.append(item)
         elif item["kind"] == rc.PROCEDURE and item["basis_state"] == ws.CONFLICT:
             card.conflicting_procedure = item
     order = {kind: index for index, kind in enumerate(_TODO_KINDS + _PREPARE_KINDS)}
@@ -101,12 +104,16 @@ def build(db, task_id: int) -> Card:
 
 
 _RECORD_LABEL = {rc.SLOT_LAST_RECORD: "마지막 기록", rc.SLOT_AFTERWARDS: "그 이후"}
+FOUND_NOTE = ("이름표 없이 문장으로만 적혀 있어 AI가 골라낸 대목입니다. 문장은 문서에 적힌 "
+              "그대로이고, 이 업무에 중요한 내용이라는 판단만 추정입니다.")
 
 
 def item_label(item: dict) -> str:
     """'기한 · 회신기한', '제출처'. 종류와 이름표가 같은 말이면 한 번만 적는다."""
     if item["kind"] == rc.RECORD:
         return _RECORD_LABEL.get(item["slot"], rc.KIND_LABEL[rc.RECORD])
+    if item["kind"] == rc.STATEMENT:
+        return (item["slot"] or "").split(" · ")[0] or rc.KIND_LABEL[rc.STATEMENT]
     name = rc.KIND_LABEL.get(item["kind"], item["kind"])
     slot = item["slot"] or ""
     if not slot or slot.replace(" ", "") == name.replace(" ", ""):
@@ -196,6 +203,12 @@ def draft_markdown(db, task_id: int, today: date | None = None) -> str:
     out += [f"- {rc.KIND_LABEL[item['kind']]}: {item['content']} {cite(item)}".rstrip()
             for item in card.prepare] or ["- 자료에 적힌 준비 자료·서식이 없습니다."]
     out.append("")
+
+    if card.found:
+        out += ["## 문장에서 찾은 내용", "", FOUND_NOTE, ""]
+        out += [f"- {item_label(item)}: {item['content']} {cite(item)}".rstrip()
+                for item in card.found]
+        out.append("")
 
     if card.notes:
         out += ["## 보충 설명", "",

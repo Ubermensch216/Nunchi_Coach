@@ -1,0 +1,376 @@
+{
+  "note": [
+    "개발용 30문항 평가셋 (구축계획서 G1). app/tools/rag_report.py --cases 로 읽는다.",
+    "앞의 9문항은 cases.json과 같고, 뒤의 21문항을 더했다. 답해야 하는 질문 19개 · 유보해야 하는 질문 11개.",
+    "채점 규칙(expect·must_cite_any·must_not_cite·must_contain·expect_year·min_distinct_docs)은 cases.json의 note와 같다.",
+    "",
+    "합성 표본(app.tools.make_fixtures)에 맞춘 문항이다. 문항과 정답을 같은 사람이 만들었고 실제 기관",
+    "자료가 아니다. 프롬프트·검색을 이 문항에 맞춰 반복 조정하면 평가가 아니라 암기가 된다 —",
+    "최종 평가용 60문항은 따로, 실제 자료로 만든다."
+  ],
+  "cases": [
+    {
+      "id": "year-scope",
+      "question": "2025년 행정사무감사 때 뭘 제출했어?",
+      "why": "연도와 업무가 모두 명시된 가장 기본적인 질의. 이걸 못하면 나머지는 볼 것도 없다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "2025_행정사무감사_제출자료",
+        "2025_행정사무감사_의원질의답변"
+      ],
+      "must_not_cite": [
+        "계약관리",
+        "수질통계",
+        "월간실적보고"
+      ],
+      "expect_year": 2025
+    },
+    {
+      "id": "relative-year",
+      "question": "작년 예산 요구자료는 어떤 내용이야?",
+      "why": "'작년'을 연도 조건으로 해석하는가. 실측에서 2022·2023 자료가 섞여 나왔다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "예산관리_예산요구자료"
+      ],
+      "must_not_cite": [
+        "행정사무감사",
+        "수질통계"
+      ]
+    },
+    {
+      "id": "duplicate-flood",
+      "question": "수질통계는 언제 작성해?",
+      "why": "중복본이 근거 자리를 독점하는가. 실측에서 8건 전부 같은 문서의 사본이었다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "수질통계"
+      ],
+      "must_not_cite": [],
+      "min_distinct_docs": 2
+    },
+    {
+      "id": "wrong-task-hallucination",
+      "question": "계약관리 업무는 어떤 순서로 처리해?",
+      "why": "실측에서 월간실적보고 숫자로 표를 지어냈다. 자료에 처리 순서 설명이 없으면 유보해야 한다.",
+      "expect": "withhold",
+      "must_not_cite": [
+        "월간실적보고",
+        "수질통계"
+      ]
+    },
+    {
+      "id": "absent-topic",
+      "question": "정수장 소독약품 구매 단가는 얼마야?",
+      "why": "코퍼스에 아예 없는 주제. 유보하지 않으면 지어낸 것이다.",
+      "expect": "withhold",
+      "must_not_cite": []
+    },
+    {
+      "id": "absent-person",
+      "question": "김철수 주무관이 담당한 업무가 뭐야?",
+      "why": "자료에 없는 사람. 사람 이름은 특히 지어내기 쉽다.",
+      "expect": "withhold",
+      "must_not_cite": []
+    },
+    {
+      "id": "task-scope",
+      "question": "의원 질의에는 어떻게 대응했어?",
+      "why": "업무명을 직접 말하지 않고 내용으로 묻는다. 의미 검색이 실제로 작동하는가.",
+      "expect": "answer",
+      "must_cite_any": [
+        "의원질의답변"
+      ],
+      "must_not_cite": [
+        "수질통계",
+        "계약관리"
+      ]
+    },
+    {
+      "id": "exact-term",
+      "question": "부서별자료요청 문서는 언제 만들어졌어?",
+      "why": "고유명사 정확 일치. 벡터 검색만으로는 약한 유형이라 하이브리드 검색의 시금석이다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "부서별자료요청"
+      ],
+      "must_not_cite": []
+    },
+    {
+      "id": "table-needs-context",
+      "question": "2023년 예산 요구액이 얼마야?",
+      "why": "표 조각에만 있는 숫자를 묻는다. 표('[집계] 예산요구액 820')에는 연도도 업무명도 없고 그 정보는 이웃 조각(본문)에만 있다 — 경계에 걸친 근거를 살리는지 본다(R7 이웃 확장).",
+      "expect": "answer",
+      "must_cite_any": [
+        "예산관리_예산요구자료"
+      ],
+      "must_not_cite": [
+        "행정사무감사",
+        "수질통계"
+      ],
+      "must_contain": [
+        "820"
+      ]
+    },
+    {
+      "id": "table-count",
+      "question": "행정사무감사 요구자료는 몇 건이었어?",
+      "why": "문서 표(항목·수량·비고)에만 있는 수량을 묻는다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "행정사무감사"
+      ],
+      "must_not_cite": [
+        "수질통계",
+        "월간실적보고"
+      ],
+      "must_contain": [
+        "12"
+      ]
+    },
+    {
+      "id": "table-status",
+      "question": "행정사무감사 추가질의는 몇 건이고 어떻게 처리됐어?",
+      "why": "표의 한 행에서 수량과 비고를 함께 읽어야 한다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "행정사무감사"
+      ],
+      "must_not_cite": [
+        "수질통계",
+        "예산관리"
+      ],
+      "must_contain": [
+        "3"
+      ]
+    },
+    {
+      "id": "sheet-quarter",
+      "question": "월간실적보고의 1분기 처리건수는 몇 건이야?",
+      "why": "집계 시트의 행·열을 맞춰 읽는가. 다른 업무의 집계표를 끌어오면 안 된다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "월간실적보고"
+      ],
+      "must_not_cite": [
+        "수질통계",
+        "예산관리"
+      ],
+      "must_contain": [
+        "41"
+      ]
+    },
+    {
+      "id": "sheet-compare",
+      "question": "월간실적보고 완료율이 가장 높았던 분기의 완료율은 얼마야?",
+      "why": "표의 네 값을 견줘야 한다. 경량 모델에는 어려운 유형이라 일부러 넣었다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "월간실적보고"
+      ],
+      "must_not_cite": [
+        "수질통계"
+      ],
+      "must_contain": [
+        "95"
+      ]
+    },
+    {
+      "id": "sheet-other-row",
+      "question": "예산 집행액은 3분기에 얼마였어?",
+      "why": "같은 표의 다른 행(예산요구액 820)과 혼동하지 않는가.",
+      "expect": "answer",
+      "must_cite_any": [
+        "예산관리"
+      ],
+      "must_not_cite": [
+        "월간실적보고",
+        "수질통계"
+      ],
+      "must_contain": [
+        "430"
+      ]
+    },
+    {
+      "id": "step-of-year",
+      "question": "2024년 월간실적보고 문서는 어떤 단계에서 작성됐어?",
+      "why": "연도 범위 안에서 본문의 단계 표기를 읽는다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "2024_월간실적보고"
+      ],
+      "must_not_cite": [
+        "수질통계"
+      ],
+      "expect_year": 2024
+    },
+    {
+      "id": "doctype",
+      "question": "2022년 주요업무계획 문서의 문서유형은 뭐야?",
+      "why": "발표 자료(pptx) 본문의 이름표 값.",
+      "expect": "answer",
+      "must_cite_any": [
+        "2022_업무계획"
+      ],
+      "must_not_cite": [
+        "행정사무감사"
+      ],
+      "must_contain": [
+        "계획서"
+      ],
+      "expect_year": 2022
+    },
+    {
+      "id": "month-of-doc",
+      "question": "2025년 다음연도 예산편성 자료는 몇 월에 작성됐어?",
+      "why": "같은 업무의 다른 단계(3월 예산 요구자료)와 구분해야 한다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "다음연도예산편성"
+      ],
+      "must_not_cite": [
+        "행정사무감사"
+      ],
+      "must_contain": [
+        "12"
+      ],
+      "expect_year": 2025
+    },
+    {
+      "id": "when-step-1",
+      "question": "행정사무감사 제출자료는 몇 월에 작성해?",
+      "why": "단계별 시기. 9월(접수)·11월(답변)과 섞이지 않는가.",
+      "expect": "answer",
+      "must_cite_any": [
+        "제출자료"
+      ],
+      "must_not_cite": [
+        "수질통계"
+      ],
+      "must_contain": [
+        "10"
+      ]
+    },
+    {
+      "id": "when-step-2",
+      "question": "의원질의 답변 자료는 몇 월에 작성했어?",
+      "why": "업무명을 말하지 않고 단계 이름으로만 묻는다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "의원질의답변"
+      ],
+      "must_not_cite": [
+        "수질통계",
+        "예산관리"
+      ],
+      "must_contain": [
+        "11"
+      ]
+    },
+    {
+      "id": "prior-year-ref",
+      "question": "2023년 행정사무감사는 어느 해 자료를 참고해서 진행했어?",
+      "why": "본문의 '전년도(2022년) 자료를 참고' 문장. 질문의 연도와 답의 연도가 다르다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "2023_행정사무감사"
+      ],
+      "must_not_cite": [
+        "수질통계"
+      ],
+      "must_contain": [
+        "2022"
+      ],
+      "expect_year": 2023
+    },
+    {
+      "id": "yearly-cycle",
+      "question": "주요업무계획은 매년 몇 월에 만들어?",
+      "why": "여러 해의 같은 문서에서 반복 시기를 읽는다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "업무계획"
+      ],
+      "must_not_cite": [
+        "수질통계"
+      ],
+      "must_contain": [
+        "12"
+      ]
+    },
+    {
+      "id": "month-label",
+      "question": "예산 요구자료는 몇 월에 작성해?",
+      "why": "'요구자료'는 행정사무감사에도 있는 말이다. 예산 쪽을 골라야 한다.",
+      "expect": "answer",
+      "must_cite_any": [
+        "예산요구자료"
+      ],
+      "must_not_cite": [
+        "행정사무감사"
+      ],
+      "must_contain": [
+        "3월"
+      ]
+    },
+    {
+      "id": "absent-year",
+      "question": "2019년 예산 요구액은 얼마였어?",
+      "why": "자료에 없는 연도. 다른 해의 820을 답하면 지어낸 것이다(연도 범위 밖 대체 금지).",
+      "expect": "withhold",
+      "must_not_cite": []
+    },
+    {
+      "id": "absent-name",
+      "question": "행정사무감사 요구자료를 낸 의원 이름이 뭐야?",
+      "why": "자료에 의원 이름이 없다.",
+      "expect": "withhold",
+      "must_not_cite": []
+    },
+    {
+      "id": "absent-target",
+      "question": "월간실적보고 처리건수의 목표치는 몇 건이야?",
+      "why": "실적은 있고 목표는 없다. 실적 숫자를 목표로 내놓으면 안 된다.",
+      "expect": "withhold",
+      "must_not_cite": []
+    },
+    {
+      "id": "absent-detail",
+      "question": "수질검사에서 부적합 판정을 받은 항목은 뭐야?",
+      "why": "업무는 있지만 그 내용은 자료에 없다.",
+      "expect": "withhold",
+      "must_not_cite": []
+    },
+    {
+      "id": "unreadable-source",
+      "question": "용역 계약의 계약 상대방 업체 이름은 뭐야?",
+      "why": "계약서는 있지만 업체 이름이 적혀 있지 않다.",
+      "expect": "withhold",
+      "must_not_cite": [
+        "월간실적보고",
+        "수질통계"
+      ]
+    },
+    {
+      "id": "absent-reason",
+      "question": "예산 집행액이 2분기에 적었던 이유가 뭐야?",
+      "why": "숫자는 있고 이유는 없다. 이유를 지어내기 쉬운 유형.",
+      "expect": "withhold",
+      "must_not_cite": []
+    },
+    {
+      "id": "absent-topic-2",
+      "question": "인사 발령 일정은 어떻게 돼?",
+      "why": "자료에 없는 업무.",
+      "expect": "withhold",
+      "must_not_cite": []
+    },
+    {
+      "id": "absent-contact",
+      "question": "행정사무감사 담당자 전화번호 알려줘",
+      "why": "연락처는 자료에 없다. 번호를 지어내면 치명적이다.",
+      "expect": "withhold",
+      "must_not_cite": []
+    }
+  ]
+}

@@ -59,6 +59,7 @@ class WorkStore:
         """자료에서 읽어 낸 항목 후보로 이 업무의 자동 항목을 맞춘다.
 
         후보: {kind, slot, content, basis_state, applicability, evidence:[(doc_id, locator, quote)]}
+        후보에 extractor가 있으면 그 항목에는 그것을 적는다(규칙과 모델이 섞여 들어온다).
         """
         return self._sync(_ITEMS, task_id, candidates, context_id, extractor)
 
@@ -110,7 +111,7 @@ class WorkStore:
                                "applicability": applies, **values}
                     if is_item:
                         columns["kind"] = candidate["kind"]
-                        columns["extractor"] = extractor
+                        columns["extractor"] = candidate.get("extractor") or extractor
                     marks = ", ".join("?" * len(columns))
                     row_id = self.con.execute(
                         f"INSERT INTO {table}({', '.join(columns)}) VALUES ({marks})",
@@ -140,7 +141,7 @@ class WorkStore:
                 assignments = {text_col: text, auto_col: text, "basis_state": basis,
                                "applicability": applies, **values}
                 if is_item:
-                    assignments["extractor"] = extractor
+                    assignments["extractor"] = candidate.get("extractor") or extractor
                 sets = ", ".join(f"{name} = ?" for name in assignments)
                 self.con.execute(
                     f"UPDATE {table} SET {sets}, version = version + ?, "

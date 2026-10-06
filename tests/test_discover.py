@@ -177,6 +177,65 @@ def test_duplicate_copies_are_not_recommended_twice(project):
     assert len(picks) == 1, [p["filename"] for p in picks]
 
 
+# ── 벡터로 묶이지 않은 문서 ─────────────────────────────────────────
+# 실제 모델로 묶었을 때 문서 수가 적고 형식이 섞인 업무 둘이 어느 업무에도
+# 묶이지 않아 '지금 할 일' 카드가 생기지 않았다. 군집 기준은 그대로 두고,
+# 남은 문서만 파일명으로 묶어 낮은 확신의 제안으로 올린다.
+
+def _loose(db: Database, names: list[str], start: int = 0) -> list[int]:
+    """서로 닮지 않은 벡터의 문서들 — 벡터로는 하나도 묶이지 않는다."""
+    source_id = db.add_source(r"D:\자료")
+    ids = []
+    for index, name in enumerate(names, start=start):
+        doc_id = db.upsert_document(source_id, {
+            "path": rf"D:\자료\{name}", "filename": name, "ext": ".txt",
+            "parse_status": "ok", "hash": f"loose{index}", "char_count": 300,
+            "eff_year": 2025, "eff_date": "2025-05-01", "eff_date_kind": "body"})
+        vector = [0.0] * 24
+        vector[index] = 1.0
+        db.save_doc_embedding(doc_id, "bge-m3", 24, pack(vector), 100)
+        ids.append(doc_id)
+    return ids
+
+
+def test_leftover_documents_sharing_a_filename_topic_become_a_low_confidence_proposal(project):
+    contract = _loose(project, ["2025_용역계약_체결보고.hwpx", "2025_용역_중간점검_회의.txt",
+                                "2024_용역_정산_보고.txt"])
+    _loose(project, ["2025_회의록.txt", "메모.txt"], start=3)
+    result = discover(project, client=None, min_size=3)
+
+    assert result.clusters == 0 and result.grouped_by_filename == 1
+    assert result.unassigned == 2 and project.unclassified_count() == 2
+    task = project.tasks()[0]
+    assert task["name"] == "용역" and task["status"] == "proposed"
+    assert task["confidence"] == "low"                 # 확신하는 것처럼 보이지 않는다
+    assert "확인" in task["description"]
+    assert {row["id"] for row in project.task_documents(task["id"])} == set(contract)
+    assert project.task_reading(task["id"])
+
+    # 다시 돌려도 불어나지 않는다.
+    discover(project, client=None, min_size=3)
+    assert [(row["name"], row["doc_count"]) for row in project.tasks()] == [("용역", 3)]
+
+
+def test_leftovers_are_not_pushed_into_an_existing_task(project):
+    """남은 문서의 파일명이 이미 있는 업무와 같아도 그 업무에 밀어 넣지 않는다."""
+    seeded = _seed(project, {"예산관리": 4}, dims=24)
+    _loose(project, ["2025_예산관리_메모1.txt", "2025_예산관리_메모2.txt",
+                     "2025_예산관리_메모3.txt"], start=10)
+    result = discover(project, client=None, min_size=3)
+
+    assert result.grouped_by_filename == 0 and result.unassigned == 3
+    task = project.tasks()[0]
+    assert {row["id"] for row in project.task_documents(task["id"])} == set(seeded["예산관리"])
+
+
+def test_two_leftover_documents_are_still_not_a_task(project):
+    _loose(project, ["2025_보조금_지침.txt", "2024_보조금_통보.txt"])
+    result = discover(project, client=None, min_size=3)
+    assert result.tasks == 0 and result.unassigned == 2
+
+
 # ── 재발견은 사람이 해 둔 일을 지우지 않는다 ────────────────────────
 # 실제 모델로 전체 분석을 다시 돌리다 발견했다. 업무 재발견이 '아직 확인하지
 # 않은 업무'를 지우고 새로 만들면서, 그 아래의 항목·단계·수행 기록까지 연쇄로

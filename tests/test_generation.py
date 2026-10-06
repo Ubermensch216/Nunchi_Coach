@@ -170,3 +170,35 @@ def test_answered_without_sentences_is_a_generation_failure_not_missing_material
     assert "문장을 만들지 못했습니다" in answer.error and "자료가 없다는 뜻은 아닙니다" in answer.error
     assert [doc.filename for doc in answer.related_docs] == ["실적.hwpx"]
     assert answer.generation["empty_answer"] is True and answer.generation["outcome"] == "ok"
+    assert answer.generation["empty_answer_retry"] is True      # 한 번은 다시 물었다
+
+
+def test_answered_without_sentences_is_asked_once_more_for_at_least_one_sentence(db):
+    """30문항 평가에서 6문항이 빈 문장 목록으로 끝났다. 문법을 좁혀 한 번 더 묻고,
+    받은 문장은 여느 답처럼 근거 검증을 거친다."""
+    empty = {"response": '{"answered": true, "sentences": []}', "done_reason": "stop"}
+    good = {"response": '{"answered": true, "sentences": [{"text": "실적 보고의 제출기한은 '
+                        '9월 30일이다.", "sources": [1]}]}', "done_reason": "stop"}
+    client = OllamaClient()
+    calls = wire(client, [empty, good])
+    answer = ask(db, "실적 보고 제출기한이 언제야?", client=client)
+    assert not answer.withheld and "9월 30일" in answer.text and answer.error is None
+    assert answer.generation["empty_answer_retry"] is True
+    assert "minItems" not in json.dumps(calls[0]["format"])
+    assert calls[1]["format"]["properties"]["sentences"]["minItems"] == 1
+
+    # 다시 받은 문장이 근거에 없으면 답으로 올리지 않는다.
+    made_up = {"response": '{"answered": true, "sentences": [{"text": "제출기한은 12월 31일이며 '
+                           '예산은 5,000만원이다.", "sources": [1]}]}', "done_reason": "stop"}
+    client = OllamaClient()
+    wire(client, [empty, made_up])
+    answer = ask(db, "실적 보고 제출기한이 언제야?", client=client)
+    assert answer.withheld and "12월 31일" not in answer.text
+
+    # 다시 물었더니 답할 수 없다고 하면 처음의 빈 답으로 남는다(지어내게 몰지 않는다).
+    declined = {"response": '{"answered": false, "sentences": [{"text": "자료 없음", '
+                            '"sources": []}]}', "done_reason": "stop"}
+    client = OllamaClient()
+    wire(client, [empty, declined])
+    answer = ask(db, "실적 보고 제출기한이 언제야?", client=client)
+    assert answer.withheld and answer.text == "" and answer.generation["empty_answer"] is True

@@ -23,6 +23,15 @@ from app.tools import scenario_eval  # noqa: E402
 BASIS = date(2025, 9, 10)
 
 
+@pytest.fixture(scope="module", autouse=True)
+def qapp():
+    """평가 도구는 화면 없는 QCoreApplication만 만든다. 이 모듈이 먼저 돌면 그것이
+    프로세스의 앱이 되어 뒤따르는 화면 시험이 깨지므로, 화면용 앱을 먼저 세운다."""
+    from PySide6.QtWidgets import QApplication
+
+    return QApplication.instance() or QApplication([])
+
+
 @pytest.fixture(scope="module")
 def results(tmp_path_factory):
     return scenario_eval.run(tmp_path_factory.mktemp("scenarios"))
@@ -75,6 +84,32 @@ def test_tool_exit_code_reflects_the_unmet_threshold(tmp_path, capsys):
     assert (tmp_path / "out.md").read_text(encoding="utf-8").startswith("# 업무 수행 시나리오 평가")
     # --work를 주면 자료와 프로젝트가 남아 사람이 열어 볼 수 있다.
     assert (tmp_path / "work" / "report" / "project" / "project.db").is_file()
+
+
+def test_with_a_model_sentences_it_finds_count_as_restored_but_marked_inferred(tmp_path):
+    """--model 경로. 모델이 고른 문장은 복원으로 세되 '추정' 항목으로만 들어간다."""
+    from app.core import statements
+
+    class Labels:
+        gen_model = "fake"
+
+        def generate_json(self, prompt, schema, num_predict=400, temperature=0.0):
+            count = prompt.split("[문장 목록]")[1].count("\n")
+            return {"found": [{"n": n, "type": "howto"} for n in range(1, count + 1)]}, None, ""
+
+    results = scenario_eval.run(tmp_path, client=Labels())
+    totals = scenario_eval.summary(results, 0.9, "fake")
+    assert (totals["restored"], totals["expected"]) == (28, 28)
+    assert totals["failed_checks"] == 0 and totals["critical"] == 0
+    text = scenario_eval.to_markdown(results, totals)
+    assert "생성 모델 fake (문장에서 찾은 내용 포함)" in text and "| (문장) " in text
+    db = Database(tmp_path / "contract" / "project" / "project.db")
+    try:
+        told = [i for i in db.task_items(1) if i["kind"] == rc.STATEMENT]
+        assert len(told) == 2 and all(i["basis_state"] == ws.INFERRED for i in told)
+        assert all(i["slot"].startswith(statements.CATEGORIES["howto"]) for i in told)
+    finally:
+        db.close()
 
 
 # ── 평가가 드러내 고친 것들 ─────────────────────────────────────────

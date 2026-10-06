@@ -550,14 +550,22 @@ class Pipeline(QObject):
     def _restore(self, db: Database) -> None:
         """업무마다 문서에 명시된 기한·금액·제출처·절차 등을 근거와 함께 올린다.
 
-        규칙으로만 읽으므로 Ollama가 꺼져 있어도 돈다. 전임자의 입력을
-        기다리지 않는다 — 후임자가 처음 여는 화면에 이미 채워져 있어야 한다.
+        항목·절차·공백은 규칙으로만 읽으므로 Ollama가 꺼져 있어도 돈다. 전임자의
+        입력을 기다리지 않는다 — 후임자가 처음 여는 화면에 이미 채워져 있어야 한다.
+        모델이 준비돼 있으면 문장으로만 적힌 내용을 '추정'으로 덧붙인다.
         """
         report = StageReport(STAGE_RESTORE)
         # 가져온 복원본의 근거나, 자료 폴더를 옮겨 끊긴 근거를 지금 있는 문서에
         # 다시 잇는다. 문서를 훑고 해시를 뜬 뒤라야 찾을 수 있어 여기서 한다.
         transfer.relink_evidence(db)
-        totals = reconstruction.restore(db, should_stop=self._stopped)
+        # 이름표 없이 문장으로만 적힌 내용은 생성 모델이 고른다. 의미 색인이 없는
+        # 프로젝트(AI 없이 쓰는 경우)와 모델이 준비되지 않은 경우에는 부르지 않는다.
+        client = None
+        if db.counts()["embedded"]:
+            candidate = self._client = project_client(db, OllamaClient)
+            if candidate.health().generation_ready:
+                client = candidate
+        totals = reconstruction.restore(db, should_stop=self._stopped, client=client)
         report.done = report.total = totals["tasks"]
         if not totals["tasks"]:
             report.note = "업무가 없습니다"
@@ -573,6 +581,8 @@ class Pipeline(QObject):
                 report.note += f" · 자료가 엇갈림 {totals['conflicts']:,}"
             if totals["recheck"]:
                 report.note += f" · 재확인 필요 {totals['recheck']:,}"
+        if totals["statements"]:
+            report.note += f" · 문장에서 찾은 내용 {totals['statements']:,}"
         if totals["gaps"]:
             report.note += f" · 확인할 공백 {totals['gaps']:,}"
         if not self._stop:

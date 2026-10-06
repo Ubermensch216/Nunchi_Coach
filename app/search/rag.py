@@ -238,8 +238,23 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
             generation=generation,
         )
 
+    if not (data.get("sentences") or []) and not getattr(client, "cancelled", False):
+        # 답할 수 있다고 하고는 문장을 하나도 내지 않았다. 30문항 평가에서 6문항이
+        # 이렇게 끝났고, 같은 조건으로 다시 물으면 같은 빈 목록이 온다. 문장을
+        # 하나 이상 내도록 문법을 좁혀 한 번만 다시 묻는다. 그렇게 받은 문장도
+        # 아래의 근거 검증을 그대로 거치므로, 근거 없는 문장은 화면에 오르지 않는다.
+        forced, forced_error, _raw = client.generate_json(
+            prompt, _ASK_SCHEMA_NONEMPTY, num_predict=GEN_TOKEN_BUDGET)
+        generation = {**generation, **_generation_record(client), "empty_answer_retry": True}
+        if db.get_meta("content_revision") != content_revision:
+            return Answer(question=question, text="", withheld=True,
+                          error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
+        if not forced_error and isinstance(forced, dict) and forced.get("answered"):
+            data = forced
+
     if not (data.get("sentences") or []):
-        # 답할 수 있다고 하고는 문장을 하나도 내지 않았다. 실제 모델에서 겪었다 —
+        # 다시 물어도 문장이 없다. 같은 질문·같은 근거에 어떤 때는 옳게 답하고
+        # 어떤 때는 빈 목록을 낸다 —
         # 같은 질문·같은 근거에 어떤 때는 옳게 답하고 어떤 때는 빈 목록을 냈다.
         # 이것은 자료가 없는 것이 아니라 생성이 실패한 것이다. '자료 부족'으로
         # 보여 주면 사용자는 문서를 찾으러 간다.
@@ -278,6 +293,14 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
 
 
 # ── 내부 ────────────────────────────────────────────────────────────
+
+# 빈 문장 목록을 받았을 때 다시 묻는 데 쓴다. 문장을 하나 이상 내야 한다.
+_ASK_SCHEMA_NONEMPTY = {
+    **ASK_SCHEMA,
+    "properties": {**ASK_SCHEMA["properties"],
+                   "sentences": {**ASK_SCHEMA["properties"]["sentences"], "minItems": 1}},
+}
+
 
 def _generation_record(client) -> dict:
     """클라이언트가 남긴 생성 계측값. 계측을 모르는 대역 클라이언트면 빈 값."""

@@ -1688,12 +1688,20 @@ class TasksView(QWidget):
             ("해야 할 일", card.todo, "자료에 적힌 목적·기한·제출처를 찾지 못했습니다."),
             ("현재까지의 기록", card.records, ""),
             ("시작 준비", card.prepare, ""),
+            ("문장에서 찾은 내용", card.found, ""),
             ("보충 설명", card.notes, ""),
         ):
             if not rows and not empty:
                 continue
             block = Card()
             block.body.setSpacing(theme.SP_SM)
+            if rows is card.found:
+                block.body.addWidget(section_title(title))
+                block.body.addWidget(muted_label(workcard.FOUND_NOTE, small=True))
+                for item in rows:
+                    block.body.addWidget(self._work_item_row(item))
+                column.addWidget(block)
+                continue
             if title == "해야 할 일":
                 # 문서에 없는 것을 아는 사람이 보탤 자리. 비워 둬도 된다.
                 head = QHBoxLayout()
@@ -1954,7 +1962,8 @@ class TasksView(QWidget):
 
     def _ask_work_item(self, task_id: int) -> None:
         kinds = [k for k in reconstruction.KIND_LABEL
-                 if k not in (reconstruction.RECORD, reconstruction.PROCEDURE)]
+                 if k not in (reconstruction.RECORD, reconstruction.PROCEDURE,
+                              reconstruction.STATEMENT)]
         labels = [reconstruction.KIND_LABEL[k] for k in kinds]
         label, accepted = QInputDialog.getItem(
             self, "아는 내용 보태기", "무엇에 관한 내용인가요?", labels,

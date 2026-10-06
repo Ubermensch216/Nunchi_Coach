@@ -30,7 +30,23 @@ data 파일
     자동으로 못 찾는다. 명시적으로 포함해야 하며, 원본과 같은 상대 경로
     구조를 유지해야 코드의 Path(__file__).with_name(...) 조회가 그대로
     맞는다.
+
+오픈소스 고지문
+    빌드할 때마다 지금 환경에서 다시 만든다(app.tools.notices). 실행물 안
+    (app/licenses, 설정 화면이 읽는다)과 실행 파일 옆(받은 사람이 프로그램을
+    띄우지 않고도 읽는다) 두 곳에 둔다.
 """
+
+import shutil
+import sys
+from pathlib import Path
+
+sys.path.insert(0, SPECPATH)
+from app.tools import notices
+
+NOTICES = notices.write(Path(SPECPATH) / 'build' / 'licenses')
+for name in notices.missing_texts():
+    print(f'WARNING: 고지문에 {name[:-4]} 본문이 없다 — {notices.CANONICAL[name]}')
 
 a = Analysis(
     ['entry.py'],
@@ -40,6 +56,7 @@ a = Analysis(
         ('app/ai/prompts', 'app/ai/prompts'),
         ('app/db/schema.sql', 'app/db'),
         ('app/ui/assets', 'app/ui/assets'),
+        (str(NOTICES), 'app/licenses'),
     ],
     # 선 아이콘(app/ui/icons.py)은 QtSvg로 그린다. try/except로 감싸 놓아
     # 빠져도 죽지는 않지만, 빠지면 아이콘이 통째로 기호로 물러선다.
@@ -79,3 +96,4 @@ coll = COLLECT(
     upx_exclude=[],
     name='NunchiCoach',
 )
+shutil.copy2(NOTICES, Path(DISTPATH) / 'NunchiCoach' / notices.FILENAME)

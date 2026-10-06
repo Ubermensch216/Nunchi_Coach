@@ -1,6 +1,6 @@
 """업무 수행 시나리오 평가 — 전임자 없이 자료만으로 어디까지 가는가 (구축계획서 §7).
 
-    python -m app.tools.scenario_eval [--work 폴더] [--json 경로] [--report 경로]
+    python -m app.tools.scenario_eval [--model] [--work 폴더] [--json 경로] [--report 경로]
 
 질문에 답을 잘하는지(rag_report)와는 다른 것을 잰다. 빈 프로젝트에 원문 폴더만
 넣었을 때, 사람이 아무것도 입력하기 전에
@@ -17,7 +17,9 @@
 제품에는 넣지 않는다.
 
 읽을 때 주의
-  · 생성 모델을 쓰지 않는다. 그래서 결과가 실행마다 같다.
+  · 기본은 생성 모델을 쓰지 않는다. 그래서 결과가 실행마다 같다.
+  · `--model`을 주면 이 PC의 Ollama로 문장에서 찾은 내용(core/statements.py)까지
+    넣어 잰다. 모델에 따라 달라지는 수치이므로 기본 결과와 따로 적는다.
   · 문서를 업무에 묶는 일(임베딩 군집)은 건너뛰고 시나리오의 문서를 그 업무에
     직접 배정한다. 업무 묶기의 품질은 여기서 재지 않는다.
   · 합성 자료 세 건이다. 실제 기관 문서에서의 정확도를 말해 주지 않는다.
@@ -122,7 +124,7 @@ def _fingerprint(root: Path) -> dict[str, str]:
 
 # ── 제품 돌리기 ─────────────────────────────────────────────────────
 
-def analyse(project: Path, source: Path, task_name: str, basis: date):
+def analyse(project: Path, source: Path, task_name: str, basis: date, client=None):
     """빈 프로젝트에 원문 폴더만 넣고 분석한다. 사람의 입력은 없다."""
     from PySide6.QtCore import QCoreApplication
 
@@ -140,7 +142,7 @@ def analyse(project: Path, source: Path, task_name: str, basis: date):
     worker._parse(db)
     worker._date(db)
     # 업무 묶기(임베딩 군집)는 이 평가의 대상이 아니다. 시나리오의 문서를 그
-    # 업무에 직접 배정한다. 생성 모델은 한 번도 부르지 않는다.
+    # 업무에 직접 배정한다. client를 주지 않으면 생성 모델은 한 번도 부르지 않는다.
     task_id = db.con.execute(
         "INSERT INTO tasks(name, origin, confidence) VALUES (?, 'seeded', 'high')",
         (task_name,)).lastrowid
@@ -151,7 +153,7 @@ def analyse(project: Path, source: Path, task_name: str, basis: date):
             (task_id, row["id"]))
     worker._cycles(db)
     worker._steps(db)
-    rc.restore(db, basis)
+    rc.restore(db, basis, client=client)
     handover_release.autosave(db)
     return db, task_id
 
@@ -187,8 +189,14 @@ def judge(db, task_id: int, scenario: dict, answer: dict, basis: date,
         result.add("자동 복원", "문서에 절차가 없으면 절차를 지어내지 않는다", not stated,
                    "" if not stated else f"세워진 단계: {labels}")
     # 문장으로만 적혀 있어 놓칠 것으로 본 항목. 분모에 넣고, 내놓지 못했다고 적는다.
+    # 모델이 문장에서 찾아 '추정'으로 내놓았으면 복원한 것으로 센다.
+    told = [item["content"] for item in items if item["kind"] == rc.STATEMENT]
     for missed in answer.get("missed", []):
         result.expected += 1
+        if any(missed["contains"] in content for content in told):
+            result.restored += 1
+            result.add("자동 복원", f"(문장) {missed['what']}", True, "문장에서 찾음 · 추정으로 표시")
+            continue
         result.add("자동 복원", f"(놓침 예상) {missed['what']}", True,
                    f"내놓지 못함 — {missed['why']}")
 
@@ -320,7 +328,7 @@ def _continuity(db, task_id: int, basis: date, result: Result) -> None:
 
 # ── 실행 ────────────────────────────────────────────────────────────
 
-def run(work: Path | None = None) -> list[Result]:
+def run(work: Path | None = None, client=None) -> list[Result]:
     corpus = json.loads((FIXTURES / "corpus.json").read_text(encoding="utf-8"))
     answers = json.loads((FIXTURES / "answers.json").read_text(encoding="utf-8"))
     basis = date.fromisoformat(corpus["basis"])
@@ -335,7 +343,7 @@ def run(work: Path | None = None) -> list[Result]:
             source, project = folder / "자료", folder / "project"
             write_corpus(source, scenario)
             before = _fingerprint(source)
-            db, task_id = analyse(project, source, scenario["task"], basis)
+            db, task_id = analyse(project, source, scenario["task"], basis, client)
             try:
                 results.append(judge(db, task_id, scenario, answers["scenarios"][scenario["id"]],
                                      basis, before, source))
@@ -347,12 +355,13 @@ def run(work: Path | None = None) -> list[Result]:
     return results
 
 
-def summary(results: list[Result], threshold: float) -> dict:
+def summary(results: list[Result], threshold: float, model: str = "") -> dict:
     restored = sum(r.restored for r in results)
     expected = sum(r.expected for r in results)
     return {
         "restored": restored, "expected": expected,
         "rate": restored / expected if expected else 1.0, "threshold": threshold,
+        "model": model,
         "failed_checks": sum(len(r.failures) for r in results),
         "checks": sum(len(r.checks) for r in results),
         "critical": sum(1 for r in results for c in r.failures if c.area == "오판 방지"),
@@ -365,7 +374,8 @@ def to_markdown(results: list[Result], totals: dict) -> str:
            f"({totals['rate']:.0%}, 기준 {totals['threshold']:.0%})",
            f"- 검사 {totals['checks']}건 중 실패 {totals['failed_checks']}건 · "
            f"오판(치명) {totals['critical']}건",
-           "- 생성 모델 미사용 · 업무 묶기는 직접 배정 · 합성 자료", ""]
+           f"- {'생성 모델 ' + totals['model'] + ' (문장에서 찾은 내용 포함)' if totals.get('model') else '생성 모델 미사용'}"
+           " · 업무 묶기는 직접 배정 · 합성 자료", ""]
     for result in results:
         out += [f"## {result.title}", "",
                 f"자동 복원 {result.restored}/{result.expected} ({result.rate:.0%})", "",
@@ -387,13 +397,23 @@ def main(argv: list[str] | None = None) -> int:
             pass
     parser = argparse.ArgumentParser(description="전임자 없이 자료만으로 하는 업무 수행 평가")
     parser.add_argument("--work", type=Path, help="자료와 프로젝트를 만들 폴더(남겨 둔다)")
+    parser.add_argument("--model", action="store_true",
+                        help="이 PC의 Ollama로 문장에서 찾은 내용까지 넣어 잰다")
     parser.add_argument("--json", type=Path)
     parser.add_argument("--report", type=Path)
     args = parser.parse_args(argv)
 
     answers = json.loads((FIXTURES / "answers.json").read_text(encoding="utf-8"))
-    results = run(args.work)
-    totals = summary(results, answers["threshold"])
+    client = None
+    if args.model:
+        from ..ai.client import OllamaClient
+
+        client = OllamaClient()
+        if not client.health().generation_ready:
+            print("생성 모델이 준비되지 않았습니다. Ollama와 모델을 확인하세요.", file=sys.stderr)
+            return 2
+    results = run(args.work, client)
+    totals = summary(results, answers["threshold"], client.gen_model if client else "")
     text = to_markdown(results, totals)
     print(text)
     if args.report:

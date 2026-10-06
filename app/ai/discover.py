@@ -20,7 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from ..core import scoring
-from ..core.clustering import Cluster, cluster, common_tokens
+from ..core.clustering import DEFAULT_MIN_SIZE, Cluster, _tokenize, cluster, common_tokens
 from ..db import Database
 from ..search.vector import VectorStore
 from .analyze import name_task
@@ -37,10 +37,13 @@ class Discovery:
     unassigned: int = 0
     named_by_model: int = 0
     named_by_filename: int = 0
+    grouped_by_filename: int = 0     # 벡터로 묶이지 않아 파일명으로 묶은 제안
     errors: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         parts = [f"업무 {self.tasks}개", f"배정 {self.assigned:,}건"]
+        if self.grouped_by_filename:
+            parts.append(f"파일명으로 묶은 제안 {self.grouped_by_filename}개")
         if self.unassigned:
             parts.append(f"미분류 {self.unassigned:,}건")
         if self.named_by_filename:
@@ -97,9 +100,57 @@ def discover(
         if on_progress:
             on_progress(index, len(grouping.clusters), named.label)
 
+    if not (client is not None and getattr(client, "cancelled", False)):
+        _group_leftovers(db, grouping.unassigned, min_size or DEFAULT_MIN_SIZE, result)
+
     result.tasks = db.con.execute("SELECT COUNT(*) AS n FROM tasks").fetchone()["n"]
     db.audit("task.discover", detail=result.summary(), result="ok")
     return result
+
+
+# ── 묶이지 않은 문서 ────────────────────────────────────────────────
+# 업무 복원('지금 할 일')은 업무에 묶인 문서에서만 일어난다. 문서가 몇 건뿐이고
+# 형식이 섞인 업무(계약 체결 보고·회의록·정산 보고)는 내용이 충분히 비슷하지
+# 않아 벡터로는 묶이지 않고, 그러면 그 업무에는 카드가 아예 생기지 않는다
+# (단계 4 검증에서 시나리오 세 묶음 중 둘이 그랬다).
+#
+# 군집 기준을 낮추지 않는다 — 이미 묶인 업무의 분류가 흐트러진다. 대신 남은
+# 문서만 놓고 파일명이 같은 낱말로 시작하는 것끼리 '낮은 확신'의 제안으로
+# 묶는다. 이미 있는 업무에는 밀어 넣지 않는다.
+
+def _group_leftovers(db: Database, doc_ids: list[int], min_size: int, result: Discovery) -> None:
+    if not doc_ids:
+        return
+    marks = ", ".join("?" * len(doc_ids))
+    rows = db.con.execute(
+        f"SELECT id, filename FROM documents WHERE id IN ({marks}) "
+        "  AND missing_since IS NULL "
+        "  AND id NOT IN (SELECT doc_id FROM task_docs) ORDER BY id", doc_ids).fetchall()
+    first: dict[int, str] = {}
+    for row in rows:
+        tokens = _tokenize(row["filename"])
+        if tokens:
+            first[row["id"]] = tokens[0]
+
+    # '용역'과 '용역계약'은 같은 업무의 다른 표기일 수 있다. 가장 짧은 표기로 모은다.
+    keys = sorted(set(first.values()), key=lambda key: (len(key), key))
+    groups: dict[str, list[int]] = {}
+    for doc_id, key in first.items():
+        groups.setdefault(next(k for k in keys if key.startswith(k)), []).append(doc_id)
+
+    taken = {row["name"] for row in db.con.execute("SELECT name FROM tasks")}
+    for key, members in groups.items():
+        name = key[:20]
+        if len(members) < min_size or name in taken:
+            continue
+        group = Cluster(seed_id=members[0], doc_ids=members)   # 응집도 0 → 확신 '낮음'
+        task_id = _upsert_task(db, Named(name, description=(
+            f"내용만으로는 묶이지 않은 문서 가운데 파일명이 ‘{key}’(으)로 시작하는 "
+            f"{len(members)}건입니다. 같은 업무인지 확인해 주세요.")), group)
+        result.assigned += _attach(db, task_id, members)
+        _store_reading(db, task_id, members)
+        result.unassigned -= len(members)
+        result.grouped_by_filename += 1
 
 
 # ── 이름 짓기 ───────────────────────────────────────────────────────

@@ -340,6 +340,9 @@ KIND_LABEL[RECORD] = "현재까지의 기록"
 # 문서에는 없고 사람만 아는 것. 자동 추출이 만들지 않는다 — 사람이 보탤 때만 생긴다.
 NOTE = "note"
 KIND_LABEL[NOTE] = "보충 설명"
+# 이름표 없이 문장으로만 적힌 내용. 모델이 고르고 값은 원문 그대로다(core/statements.py).
+STATEMENT = "statement"
+KIND_LABEL[STATEMENT] = "문장에서 찾은 내용"
 SLOT_LAST_RECORD = "마지막기록"
 SLOT_AFTERWARDS = "이후상태"
 
@@ -532,32 +535,43 @@ def _link_stated_order(db, task_id: int) -> None:
         previous = row["id"]
 
 
-def restore(db, basis: date | None = None, should_stop=lambda: False) -> dict[str, int]:
+def restore(db, basis: date | None = None, should_stop=lambda: False,
+            client=None, statements: bool = True) -> dict[str, int]:
     """모든 업무의 항목과 수행 단계를 자료에서 다시 읽어 맞춘다.
 
     전임자 정보 없이 시작한다. 시작 맥락이 아직 없으면 '자료로 시작'으로
     하나 만든다. 사람이 고치거나 확인한 것과 이미 수행한 단계는 저장 계층이 지킨다.
+
+    client(생성 모델)를 주면 이름표 없이 문장으로만 적힌 내용도 찾는다. 주지
+    않으면 규칙으로만 읽고, 예전에 모델로 찾아 둔 것은 문장이 그대로인 한 남긴다.
     """
     basis = basis or date.today()
     totals = {"tasks": 0, "items": 0, "added": 0, "updated": 0, "removed": 0,
-              "recheck": 0, "conflicts": 0, "steps": 0, "stated_steps": 0, "gaps": 0}
+              "recheck": 0, "conflicts": 0, "steps": 0, "stated_steps": 0, "gaps": 0,
+              "statements": 0}
     # 공백 처리는 이 모듈의 읽기 규칙을 쓴다 — 서로 물리지 않게 여기서 들인다.
-    from . import continuity
+    from . import continuity, statements as statement_finder
 
     tasks = db.tasks()
     if not tasks:
         return totals
     context = db.work_context()
     context_id = context["id"] if context else db.start_work_context()
+    common = (statement_finder.common_skeletons(db, [task["id"] for task in tasks])
+              if statements else frozenset())
 
     for task in tasks:
         if should_stop():
             break
         candidates = extract_task(db, task["id"], basis)
         steps = build_steps(db, task["id"], candidates, basis)
+        # 문장에서 찾은 내용은 항목으로만 보탠다. 절차·공백 계산에는 넣지 않는다.
+        told = (statement_finder.find(db, task["id"], client, basis, common)
+                if statements else [])
+        totals["statements"] += len(told)
         with db.transaction():
             result = db.sync_task_items(
-                task["id"], candidates + record_items(db, task["id"], basis),
+                task["id"], candidates + record_items(db, task["id"], basis) + told,
                 context_id, extractor=EXTRACTOR)
             # '항목'은 문서에서 읽어 낸 것만 센다. 기록 요약은 항상 생기므로 세지 않는다.
             step_result = db.sync_work_steps(task["id"], steps, context_id)

@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QStackedWidget,
@@ -58,7 +59,7 @@ from ..widgets import (
 SECTIONS = [
     ("appearance", "text-medium", "화면", "글자 크기와 밝기"),
     ("sources", "folder", "자료 폴더", "어디를 읽는가"),
-    ("system", "system", "시스템", "AI·저장 위치·최근 활동"),
+    ("system", "system", "시스템", "AI·저장 위치·최근 활동·오픈소스 고지"),
 ]
 
 SOURCE_KIND_LABEL = {"local": "내 PC", "unc": "네트워크", "removable": "이동식"}
@@ -387,6 +388,26 @@ class SettingsDialog(QDialog):
         body.addWidget(self._ai_card())
         body.addWidget(self._storage_card())
         body.addWidget(self._audit_card())
+        body.addWidget(self._notices_card())
+
+    def _notices_card(self) -> Card:
+        card = Card(tone="static")
+        head = QHBoxLayout()
+        head.addWidget(section_title("오픈소스 고지"))
+        head.addStretch(1)
+        show = QPushButton("고지문 보기")
+        show.clicked.connect(self._show_notices)
+        head.addWidget(show)
+        card.body.addLayout(head)
+        card.body.addWidget(muted_label(
+            "이 프로그램에 들어 있거나 만드는 데 쓴 오픈소스 구성요소와 라이선스입니다. "
+            "PDF를 읽는 PyMuPDF는 AGPL-3.0, 화면을 그리는 Qt(PySide6)는 LGPL-3.0 조건으로 "
+            "씁니다. 같은 내용이 실행 파일 옆의 THIRD_PARTY_NOTICES.txt에도 있습니다.",
+            small=True))
+        return card
+
+    def _show_notices(self) -> None:
+        NoticesDialog(self).exec()
 
     def _ai_card(self) -> Card:
         card = Card(tone="static")
@@ -591,6 +612,31 @@ class SettingsDialog(QDialog):
                 writer.writerow([row["at"], row["action"], row["target"], row["detail"], row["result"]])
         self.db.audit("audit_log.export", path)
         return len(rows)
+
+
+class NoticesDialog(QDialog):
+    """오픈소스 고지문 전문. 읽고 복사할 수 있고 고칠 수는 없다."""
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        from ...tools import notices
+
+        self.setWindowTitle("오픈소스 고지")
+        self.setMinimumSize(720, 560)
+        layout = QVBoxLayout(self)
+        self.text = QPlainTextEdit()
+        self.text.setObjectName("Mono")
+        self.text.setReadOnly(True)
+        self.text.setAccessibleName("오픈소스 고지문")
+        self.text.setPlainText(notices.load())
+        layout.addWidget(self.text, 1)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        close = QPushButton("닫기")
+        close.setObjectName("Primary")
+        close.clicked.connect(self.accept)
+        row.addWidget(close)
+        layout.addLayout(row)
 
 
 class _SettingsNav(QWidget):

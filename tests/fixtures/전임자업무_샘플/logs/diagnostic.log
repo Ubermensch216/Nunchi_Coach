@@ -2,3 +2,5 @@
 2026-10-06 22:09:52,986 {"event": "pipeline.start"}
 2026-10-06 22:11:17,970 {"event": "pipeline.stop"}
 2026-10-06 22:11:53,955 {"event": "app.stop"}
+2026-10-06 23:06:12,191 {"event": "app.start", "version": "0.1.0"}
+2026-10-06 23:06:58,453 {"event": "app.stop"}

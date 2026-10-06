@@ -9,7 +9,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.tools.rag_report import DEFAULT_CASES, Outcome, _judge, _load_cases
+import pytest
+
+from app.tools.rag_report import DEFAULT_CASES, DEV_CASES, Outcome, _judge, _load_cases
 
 
 def outcome(**fields) -> Outcome:
@@ -104,25 +106,43 @@ def test_error_is_reported_as_a_single_failure():
 
 # ── 평가셋 파일 ─────────────────────────────────────────────────────
 
-def test_shipped_cases_are_wellformed():
-    cases = _load_cases(Path(DEFAULT_CASES))
-    assert cases, "평가셋이 비어 있다"
-    for case in cases:
+@pytest.fixture(params=[DEFAULT_CASES, DEV_CASES], ids=["기본", "개발용30"])
+def shipped(request):
+    return _load_cases(Path(request.param))
+
+
+def test_shipped_cases_are_wellformed(shipped):
+    assert shipped, "평가셋이 비어 있다"
+    for case in shipped:
         assert case["id"] and case["question"]
         assert case["expect"] in ("answer", "withhold")
         assert case.get("why"), f"{case['id']}: 이 사례를 왜 넣었는지 적어야 한다"
+        # 유보해야 하는 질문에 '답에 있어야 할 내용'을 적으면 채점이 모순된다.
+        assert not (case["expect"] == "withhold" and case.get("must_contain")), case["id"]
 
 
-def test_shipped_cases_include_questions_that_must_be_withheld():
+def test_shipped_cases_include_questions_that_must_be_withheld(shipped):
     """유보해야 하는 질문이 없는 평가셋은 지어내기를 못 잡는다."""
-    cases = _load_cases(Path(DEFAULT_CASES))
-    assert sum(1 for c in cases if c["expect"] == "withhold") >= 2
+    assert sum(1 for c in shipped if c["expect"] == "withhold") >= 2
 
 
-def test_case_ids_are_unique():
-    cases = _load_cases(Path(DEFAULT_CASES))
-    ids = [c["id"] for c in cases]
+def test_case_ids_are_unique(shipped):
+    ids = [c["id"] for c in shipped]
     assert len(ids) == len(set(ids))
+
+
+def test_dev_set_has_thirty_cases_and_keeps_the_base_ones():
+    base, dev = _load_cases(Path(DEFAULT_CASES)), _load_cases(Path(DEV_CASES))
+    assert len(dev) == 30
+    assert dev[:len(base)] == base                    # 기본 문항의 추이를 이어서 볼 수 있다
+    withheld = sum(1 for c in dev if c["expect"] == "withhold")
+    assert 10 <= withheld <= 15                       # 셋 중 하나는 유보해야 하는 질문
+
+
+def test_dev_option_selects_the_dev_set():
+    from app.tools.rag_report import _parse_args
+
+    assert _parse_args(["--dev"]).dev and not _parse_args([]).dev
 
 
 def test_cases_file_is_valid_json():
