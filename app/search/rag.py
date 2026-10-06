@@ -237,6 +237,21 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
         return Answer(question=question, text="", withheld=True, error=gen_error or "응답 생성 실패",
                        inferred_years=scope.years, generation=generation)
 
+    if not data.get("answered", False) and not getattr(client, "cancelled", False):
+        # 같은 질문·같은 근거에 모델이 어떤 때는 답하고 어떤 때는 답할 수 없다고
+        # 한다(실측: 같은 질문을 잇달아 두 번 물으면 두 번째에 answered=false가
+        # 왔다). 근거로 쓸 만한 조각이 있어 여기까지 온 질문이므로 한 번만 다시
+        # 묻는다. 다시 받은 답도 아래의 검증을 그대로 거친다.
+        again, again_error, _raw = client.generate_json(
+            prompt, ASK_SCHEMA, num_predict=GEN_TOKEN_BUDGET)
+        generation = {**generation, **_generation_record(client), "asked_twice": True}
+        if db.get_meta("content_revision") != content_revision:
+            return Answer(question=question, text="", withheld=True,
+                          error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
+        if (not again_error and isinstance(again, dict) and again.get("answered")
+                and again.get("sentences")):
+            data = again
+
     if not data.get("answered", False):
         related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
         return Answer(

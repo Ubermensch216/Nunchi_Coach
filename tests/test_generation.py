@@ -260,3 +260,28 @@ def test_the_largest_value_in_a_table_row_is_answered_by_rule_without_the_model(
     assert answer.generation == {"rule_answer": "table_extreme"}
     assert calls == []                                    # 생성 모델을 부르지 않았다
     database.close()
+
+
+def test_a_refusal_is_asked_once_more_and_a_second_refusal_stands(db):
+    """같은 질문·같은 근거에 모델이 답했다 안 했다 한다. 한 번만 다시 묻는다."""
+    no = {"response": '{"answered": false, "sentences": []}', "done_reason": "stop"}
+    yes = {"response": '{"answered": true, "sentences": [{"text": "실적 보고의 제출기한은 '
+                       '9월 30일이다.", "sources": [1]}]}', "done_reason": "stop"}
+    client = OllamaClient()
+    calls = wire(client, [no, yes])
+    answer = ask(db, "실적 보고 제출기한이 언제야?", client=client)
+    assert not answer.withheld and "9월 30일" in answer.text
+    assert answer.generation["asked_twice"] is True and len(calls) == 2
+
+    client = OllamaClient()
+    calls = wire(client, [no, no, yes])
+    answer = ask(db, "실적 보고 제출기한이 언제야?", client=client)
+    assert answer.withheld and answer.text == "확인 가능한 자료가 부족합니다."
+    assert len(calls) == 2                                 # 두 번을 넘겨 묻지 않는다
+
+    # 다시 받은 답도 검증을 거친다.
+    made_up = {"response": '{"answered": true, "sentences": [{"text": "제출기한은 12월 31일이다.",'
+                           ' "sources": [1]}]}', "done_reason": "stop"}
+    client = OllamaClient()
+    wire(client, [no, made_up])
+    assert ask(db, "실적 보고 제출기한이 언제야?", client=client).withheld

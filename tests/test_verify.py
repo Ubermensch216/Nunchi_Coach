@@ -254,3 +254,15 @@ def test_a_money_unit_that_the_evidence_does_not_carry_is_dropped():
     assert kept("시범사업의 예산은 820백만원이다.", with_unit)
     assert kept("2분기 집행액은 210입니다.")
     assert kept("계약금액은 48,000천원이다.", {1: "계약금액: 48,000천원"})
+
+
+# ── 대신 답하기 ─────────────────────────────────────────────────────
+
+def test_saying_there_is_no_answer_and_offering_something_else_is_dropped():
+    sources = {1: "2025년 행정사무감사 요구자료 접수 문서와 제출자료 문서가 작성되었다"}
+    hedge = "요구자료의 수량에 대한 구체적인 정보는 없으나, 요구자료 접수 및 제출자료 관련 문서들이 존재합니다."
+    result = verify_sentences([sentence(hedge, [1])], sources)
+    assert result.kept == [] and result.dropped[0].reason == "답이 없다고 하면서 다른 내용을 내놓았다"
+    # 자료가 그렇게 적고 있는 것을 옮긴 문장은 그대로 둔다.
+    plain = {1: "요구자료 접수 이후 추가 요청은 없었다"}
+    assert verify_sentences([sentence("요구자료 접수 이후 추가 요청은 없었다.", [1])], plain).kept

@@ -14,6 +14,7 @@
      잡지 못한다 — 그건 검색 단계의 몫이다.)
   ④ 인용한 조각과 겹치는 낱말이 거의 없다 — 인용은 했지만 그 내용과
      무관한 말을 하고 있다는 신호.
+  ⑦ "정보는 없으나 …"처럼 답이 없다고 하면서 다른 내용을 내놓는다.
   ⑥ 숫자에 붙인 금액 단위(천원·백만원 등)가 인용한 조각에 없다.
   ⑤ 표의 행과 열을 짚어 말했는데 그 칸의 값이 아니다 — 같은 표의 다른 칸을
      읽었다. (30문항 평가: "2분기 집행액은 430입니다" — 430은 3분기 칸이고
@@ -116,6 +117,10 @@ def verify_sentences(
             result.dropped.append(
                 Dropped(text, f"인용한 근거에 없는 숫자를 썼다: {', '.join(missing)}")
             )
+            continue
+
+        if _HEDGE.search(text):
+            result.dropped.append(Dropped(text, "답이 없다고 하면서 다른 내용을 내놓았다"))
             continue
 
         units = _unsupported_units(text, cited_text)
@@ -241,6 +246,13 @@ def _canonical(number: str):
     suffix = "%" if number.endswith("%") else ""
     return (Decimal(number.rstrip("%").replace(",", "")), suffix)
 
+
+# "A에 대한 정보는 없으나, B는 …" — 프롬프트가 금지한 '대신 답하기'다. 묻는 것은
+# 없다고 하면서 곁가지를 답처럼 내놓는다(30문항 평가: "수량에 대한 구체적인 정보는
+# 없으나, … 관련 문서들이 존재합니다"가 근거 8건을 달고 답으로 나갔다).
+_HEDGE = re.compile(r"(?:정보|내용|자료|언급|기록|명시)[은는이가도]?\s*"
+                    r"(?:없으나|없지만|없으며|없고|확인되지 않으나|확인되지 않지만|"
+                    r"나와 있지 않으나|나와 있지 않지만|포함되어 있지 않으나|포함되어 있지 않지만)")
 
 # 금액 단위. '원' 하나는 어디에나 있어 따지지 않는다.
 _MONEY = re.compile(r"\d\s*(천만원|백만원|십만원|만원|천원|억원|조원)")
