@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path

@@ -1,7 +1,7 @@
 """Transport-independent collection contract without authentication secrets."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Protocol
@@ -86,6 +86,8 @@ class Connector(Protocol):
 
     @property
     def protected_roots(self) -> tuple[Path, ...]: ...
+
+    def resolve_author(self, name: str) -> list[tuple[str, str, str]]: ...
 
     def list_documents(self, scope: SearchScope, cursor: str | None) -> SearchPage: ...
 

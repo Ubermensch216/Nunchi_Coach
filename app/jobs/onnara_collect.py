@@ -164,6 +164,7 @@ class Collection:
                         entry = {"document_id": document_id, "asset": asdict(asset), "status": "pending"}
                         if old.get("asset") == asdict(asset):
                             entry = old.copy()
+                            entry["document_id"] = document_id
                         current_assets[key] = entry
                 except AuthenticationRequired:
                     raise
@@ -207,8 +208,15 @@ class Collection:
         if entry.get("status") != "downloaded" or not entry.get("path"):
             return False
         path = (self.root / entry["path"]).resolve()
-        return (path.is_relative_to(self.root / "files") and path.is_file()
-                and path.stat().st_size <= MAX_BYTES and _digest(path) == entry.get("sha256"))
+        if not path.is_relative_to(self.root / "files") or not path.is_file():
+            return False
+        size = path.stat().st_size
+        asset = entry["asset"]
+        if size <= 0 or size > MAX_BYTES or (asset.get("size") is not None and size != asset["size"]):
+            return False
+        digest = _digest(path)
+        return (digest == entry.get("sha256")
+                and (not asset.get("sha256") or digest == asset["sha256"]))
 
     def _download(self, entry, asset):
         directory = self.root / "files" / hashlib.sha256(entry["document_id"].encode()).hexdigest()[:20]

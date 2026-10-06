@@ -130,7 +130,7 @@ def test_generic_token_buried_deep_in_fts_does_not_become_strong_evidence(db: Da
     def seed(filename: str, text: str, hash_: str) -> int:
         doc_id = db.upsert_document(source_id, {
             "path": f"/자료/{filename}", "filename": filename, "ext": ".hwp",
-            "parse_status": "ok", "hash": hash_,
+            "parse_status": "ok", "hash": hash_, "eff_year": 2025,
         })
         chunk_id, _ = db.replace_document_chunks(doc_id, [(1, "1문단", text)])[0]
         db.save_chunk_embedding(chunk_id, "bge-m3", 3, pack([0.0, 1.0, 0.0]))

@@ -168,9 +168,12 @@ def test_empty_answer_text_is_treated_as_withheld(db: Database):
 # ── 정상 응답과 출처 ────────────────────────────────────────────────
 
 def test_successful_answer_carries_citations_for_every_context_chunk(db: Database):
+    from datetime import date
     source_id = db.add_source(r"D:\자료")
-    _seed_chunk(db, source_id, "행감자료.hwp", "3쪽 2문단", "수질 관련 제출자료 내용",
-                [1.0, 0.0, 0.0], "a")
+    doc_id, _ = _seed_chunk(db, source_id, "행감자료.hwp", "3쪽 2문단", "수질 관련 제출자료 내용",
+                            [1.0, 0.0, 0.0], "a")
+    # A question about last year requires dated evidence under the strict scope policy.
+    db.update_document(doc_id, eff_year=date.today().year - 1)
 
     client = FakeClient(
         query_vector=[1.0, 0.0, 0.0],

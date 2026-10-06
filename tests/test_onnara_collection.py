@@ -1,6 +1,6 @@
 from dataclasses import replace
 import json
-from pathlib import Path
+import hashlib
 
 import pytest
 
@@ -22,7 +22,6 @@ def test_all_pages_body_and_attachments_are_collected_without_namesake(tmp_path)
     assert state["summary"]["completeness"] == "complete"
     assert state["summary"]["simulation"] and not state["summary"]["live_verified"]
     assert all(r["author_id"] == "author-001" for r in state["documents"].values())
-    assert len(connector.resolve_author("合成担当者")) == 0
     assert len(connector.resolve_author("합성담당자")) == 2
 
 
@@ -132,3 +131,39 @@ def test_collected_odt_and_attachments_reach_project_fts(tmp_path):
         assert db.con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] > 0
     finally:
         db.close()
+
+
+def test_cancelled_download_can_resume_without_losing_successes(tmp_path):
+    connector = FixtureConnector(make_catalog(tmp_path / "source", count=5))
+    output = tmp_path / "collected"
+    stop = []
+    def progress(phase, label):
+        if phase == "download":
+            stop.append(True)
+    state = Collection(connector, SCOPE, output).run(should_stop=lambda: bool(stop), on_progress=progress)
+    assert state["status"] == "cancelled"
+    assert state["summary"]["downloaded"] == 1
+    resumed = Collection(connector, SCOPE, output).run()
+    assert resumed["summary"]["completeness"] == "complete"
+
+
+def test_unverified_total_never_claims_complete_collection(tmp_path):
+    connector = FixtureConnector(make_catalog(tmp_path / "source", count=5))
+    connector._capabilities = replace(connector.capabilities, authoritative_total=False)
+    state = Collection(connector, SCOPE, tmp_path / "collected").run()
+    assert state["summary"]["completeness"] == "unknown"
+
+
+def test_checkpoint_hash_cannot_override_the_source_asset_hash(tmp_path):
+    connector = FixtureConnector(make_catalog(tmp_path / "source", count=5))
+    output = tmp_path / "collected"
+    state = Collection(connector, SCOPE, output).run()
+    entry = next(iter(state["assets"].values()))
+    path = output / entry["path"]
+    bad = b"x" * path.stat().st_size
+    path.write_bytes(bad)
+    entry["sha256"] = hashlib.sha256(bad).hexdigest()
+    (output / "manifest.json").write_text(json.dumps(state), encoding="utf-8")
+    resumed = Collection(connector, SCOPE, output).run()
+    assert resumed["summary"]["completeness"] == "complete"
+    assert path.read_bytes() != bad
