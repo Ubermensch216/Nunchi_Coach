@@ -333,6 +333,15 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
             related_docs=_dedupe(related), model=client.gen_model,
             inferred_years=scope.years, generation=generation)
 
+    off = _off_the_point(question, verified.kept, context_rows, source_text)
+    if off:
+        generation[off] = True
+        related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
+        return Answer(
+            question=question, text="확인 가능한 자료가 부족합니다.", withheld=True,
+            related_docs=_dedupe(related), model=client.gen_model,
+            inferred_years=scope.years, generation=generation)
+
     text, citations = _compose_answer(verified.kept, context_rows, official, source_text)
     return Answer(question=question, text=text, withheld=False, citations=citations,
                   model=client.gen_model, inferred_years=scope.years, generation=generation)
@@ -347,6 +356,67 @@ _GIVES_REASON = re.compile(r"때문|이유|원인|사유|까닭|인해|탓|덕�
 
 def _asks_reason(question: str) -> bool:
     return bool(_ASKS_REASON.search(question))
+
+
+# 질문이 묻는 것(초점) — 물음말 바로 앞의 낱말, 또는 '어떤/무슨' 바로 뒤의 낱말.
+#   "2025년 용역 정산액은 얼마야?" → 정산액    "어떤 불이익이 있어?" → 불이익
+_ASK_WORD = r"(?:얼마|뭐|무엇|뭘|언제|어디|누구|누가|어떻게|어땠|몇)"
+_FOCUS_BEFORE = re.compile(r"([가-힣A-Za-z]{2,})\s+" + _ASK_WORD)
+_FOCUS_AFTER = re.compile(r"(?:어떤|무슨|어느)\s+([가-힣A-Za-z]{2,})")
+_PARTICLE = re.compile(r"(?:에서는|에서|으로|이나|은|는|이|가|을|를|의|에|도|로|과|와)$")
+# 무엇을 묻는지 가리지 못하는 말. 초점으로 삼지 않는다.
+_NO_FOCUS = {"내용", "자료", "문서", "업무", "단계", "순서", "절차", "방법", "결과", "기준", "현재",
+             "그때", "때", "것", "어느", "어떤", "무슨", "매년", "보통", "대략", "모두", "각각"}
+
+
+def _focus(question: str) -> str:
+    """질문이 값을 묻는 낱말. 정할 수 없으면 빈 문자열(그러면 따지지 않는다)."""
+    match = _FOCUS_AFTER.search(question) or _FOCUS_BEFORE.search(question)
+    if not match:
+        return ""
+    word = match.group(1)
+    stripped = _PARTICLE.sub("", word)
+    if len(stripped) < 2:
+        return ""                            # '점이'처럼 한 글자가 남는 말은 초점이 못 된다
+    word = stripped
+    if match.group(1)[-1] in "은는도":        # '질의에는' → '질의에' → '질의'
+        again = re.sub(r"(?:에서|으로|에|로)$", "", word)
+        word = again if len(again) >= 2 else word
+    # '내용이야'처럼 흔한 말로 시작하면 무엇을 묻는지 가리지 못한다.
+    return "" if any(word.startswith(common) for common in _NO_FOCUS) else word
+
+
+# '언제 했어?'에 대한 답이라면 때가 적혀 있어야 한다. '언제까지/언제부터'는 기간·조건으로도
+# 답할 수 있어 따지지 않는다("준공검사를 마친 뒤 30일 이내").
+_ASKS_WHEN = re.compile(r"언제(?!까지|부터)")
+_GIVES_WHEN = re.compile(r"\d+\s*월|(?:19|20)\d{2}|\d+\.\s*\d+|분기|매년|매월|매주|상반기|하반기|연초|연말")
+
+
+def _off_the_point(question: str, kept: list, context_rows: list,
+                   source_text: dict[int, str]) -> str:
+    """살아남은 문장이 질문이 묻는 것에 대한 답이 아니면 그 까닭. 답이면 빈 문자열.
+
+    문장 하나하나는 근거에 있어 검증을 지나가지만 묻는 것과 다른 것을 말하는
+    경우다(60문항 평가: 올해 정산액을 물었는데 계약금액과 지급액을, 늦게 낼 때의
+    불이익을 물었는데 제출기한을, 준공검사를 언제 했는지 물었는데 정산 규정을 답했다).
+    규칙으로 알 수 있는 두 가지만 본다.
+      · 질문이 값을 묻는 낱말(초점)이 인용한 문서 어디에도 없다.
+      · 때를 물었는데 어느 문장에도 때가 없다.
+    """
+    if _ASKS_WHEN.search(question) and not any(_GIVES_WHEN.search(s.text) for s in kept):
+        return "when_missing"
+    # 이유를 묻는 질문은 위의 이유 검사가 본다.
+    focus = "" if _asks_reason(question) else _focus(question)
+    if focus:
+        cited = {source for sentence in kept for source in sentence.sources}
+        docs = {context_rows[source - 1]["doc_id"] for source in cited
+                if 0 < source <= len(context_rows)}
+        about = "".join(
+            row["filename"] + source_text.get(index, "")
+            for index, row in enumerate(context_rows, start=1) if row["doc_id"] in docs)
+        if focus not in re.sub(r"\s+", "", about):
+            return "focus_missing"
+    return ""
 
 
 # 빈 문장 목록을 받았을 때 다시 묻는 데 쓴다. 문장을 하나 이상 내야 한다.
@@ -515,7 +585,9 @@ def _select_context(
         matching = [c for c in candidates if c.eff_year in scope.years]
         candidates = matching
 
-    candidates = rerank(candidates, question)
+    # 연도는 위의 범위 필터가 이미 걸렀다 — 낱말 가산점에서는 뺀다.
+    candidates = rerank(candidates, question, terms=_distinctive_terms(
+        db, [term for term in korean.tokens(question) if not re.search(r"\d", term)]))
 
     ranked = [(c.chunk_id, c.score) for c in candidates]
     doc_of = {cid: meta[cid]["doc_id"] for cid, _s in ranked if cid in meta}

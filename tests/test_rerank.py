@@ -157,3 +157,25 @@ def test_rerank_uses_the_same_final_markers_as_the_reading_list():
         candidate(2, "내용", score=0.0199, filename=f"문서_{marker}.xlsx"),
     ], question="문서")
     assert ranked[0].chunk_id == 2
+
+
+def test_given_terms_the_bonus_follows_how_many_of_them_match():
+    """60문항 평가: 의미 검색 1위 문서가 '최종' 표기를 단 무관한 문서들에 밀려 근거에서 빠졌다."""
+    terms = ["용역", "중간", "점검", "회의에서", "지급액은"]
+    ranked = rerank([
+        candidate(1, "2025년 월간실적보고 실적 취합", score=0.0164, filename="2025_월간실적보고_최종.xlsx",
+                  eff_year=2025),
+        candidate(2, "2025년 시설물 점검 용역 중간 점검 회의 지급액: 19,200천원", score=0.0154,
+                  filename="2025_용역_중간점검_회의.txt", eff_year=2025),
+    ], question="2025년 용역 중간 점검 회의에서 확인된 지급액은 얼마야?", terms=terms)
+    assert ranked[0].chunk_id == 2
+    # 업무 이름이 파일 이름에만 있어도 맞은 것으로 센다.
+    ranked = rerank([
+        candidate(1, "[집계] 구분 | 1분기", score=0.0160, filename="2025_수질통계.csv"),
+        candidate(2, "[집계] 구분 | 1분기", score=0.0158, filename="2025_월간실적보고.xlsx"),
+    ], question="월간실적보고 1분기", terms=["월간실적보고"])
+    assert ranked[0].chunk_id == 2
+    # 가를 낱말이 없으면 낱말 가산점은 없다.
+    ranked = rerank([candidate(1, "가", score=0.02), candidate(2, "나", score=0.01)],
+                    question="뭐야", terms=[])
+    assert [c.chunk_id for c in ranked] == [1, 2]

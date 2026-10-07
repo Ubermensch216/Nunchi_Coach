@@ -305,3 +305,64 @@ def test_a_refusal_is_asked_once_more_and_a_second_refusal_stands(db):
     client = OllamaClient()
     wire(client, [no, made_up])
     assert ask(db, "실적 보고 제출기한이 언제야?", client=client).withheld
+
+
+# ── 묻는 것 대신 곁가지를 답함 (60문항 평가) ────────────────────────
+
+def _one_document(tmp_path, name, text):
+    database = Database(tmp_path / "p.db")
+    database.init()
+    doc = database.upsert_document(database.add_source(r"D:\자료"), {
+        "path": "D:/자료/" + name, "filename": name, "ext": ".txt",
+        "parse_status": "ok", "hash": name})
+    chunk_id, _ = database.replace_document_chunks(doc, [(1, "1문단", text)])[0]
+    database.save_chunk_embedding(chunk_id, "bge-m3", 3, pack([1.0, 0.0, 0.0]))
+    return database
+
+
+def _answering(client, text):
+    return wire(client, [{"response": '{"answered": true, "sentences": [{"text": "%s", '
+                                      '"sources": [1]}]}' % text, "done_reason": "stop"}])
+
+
+CONTRACT = ("2025년 시설물 점검 용역 계약 체결 보고\n계약금액: 48,000천원\n납기: 2025. 11. 28.\n"
+            "대금은 준공검사를 마친 뒤 30일 이내에 정산한다.")
+
+
+def test_an_answer_about_something_else_than_what_was_asked_is_withheld(tmp_path):
+    database = _one_document(tmp_path, "2025_용역계약_체결보고.txt", CONTRACT)
+    client = OllamaClient()
+    # 정산액을 물었는데 계약금액을 답했다. '정산액'은 그 문서에 없다.
+    _answering(client, "2025년 시설물 점검 용역 계약금액은 48,000천원이다.")
+    answer = ask(database, "시설물 점검 용역 정산액은 얼마야?", client=client)
+    assert answer.withheld and answer.generation.get("focus_missing")
+    # 묻는 것이 문서에 있으면 그대로 답한다.
+    _answering(client, "2025년 시설물 점검 용역 계약금액은 48,000천원이다.")
+    answer = ask(database, "시설물 점검 용역 계약금액은 얼마야?", client=client)
+    assert not answer.withheld and "48,000" in answer.text
+    database.close()
+
+
+def test_a_when_question_needs_a_time_in_the_answer(tmp_path):
+    database = _one_document(tmp_path, "2025_용역계약_체결보고.txt", CONTRACT)
+    client = OllamaClient()
+    _answering(client, "대금은 준공검사를 마친 뒤 30일 이내에 정산한다.")
+    answer = ask(database, "용역의 준공검사는 언제 했어?", client=client)
+    assert answer.withheld and answer.generation.get("when_missing")
+    # '언제까지'는 기간으로 답할 수 있다.
+    _answering(client, "대금은 준공검사를 마친 뒤 30일 이내에 정산한다.")
+    assert not ask(database, "용역 대금은 언제까지 정산해야 해?", client=client).withheld
+    _answering(client, "납기는 2025. 11. 28.이다.")
+    assert not ask(database, "용역의 납기는 언제야?", client=client).withheld
+    database.close()
+
+
+def test_the_focus_of_a_question_is_read_only_when_it_is_clear():
+    from app.search.rag import _focus
+
+    assert _focus("2025년 시설물 점검 용역 정산액은 얼마야?") == "정산액"
+    assert _focus("3분기 실적 보고를 늦게 내면 어떤 불이익이 있어?") == "불이익"
+    assert _focus("의원 질의에는 어떻게 대응했어?") == "질의"
+    for unclear in ("작년 예산 요구자료는 어떤 내용이야?", "계약관리 업무는 어떤 순서로 처리해?",
+                    "주요업무계획 발표 때 강조할 점이 뭐라고 적혀 있어?", "행정사무감사 담당자 전화번호 알려줘"):
+        assert _focus(unclear) == "", unclear

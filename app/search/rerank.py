@@ -66,8 +66,15 @@ def collapse_near_duplicates(candidates: list[Candidate]) -> list[Candidate]:
 
 def rerank(
     candidates: list[Candidate], question: str, this_year: int | None = None,
+    terms: list[str] | None = None,
 ) -> list[Candidate]:
     """규칙으로 순위를 조정한다. 검색 순위를 뒤집지 않고 밀어 준다.
+
+    terms(주제를 가르는 질의어)를 주면 낱말 가산점을 **맞은 비율**만큼 준다.
+    하나라도 맞으면 전부 주던 방식은 '2025년' 하나로 그 해의 모든 문서가 같은
+    가산점을 받아 아무것도 가르지 못했다. 60문항 평가에서 의미 검색 1위(유사도
+    0.70)인 '용역 중간점검 회의'가 '최종' 표기 가산점을 받은 무관한 문서들에
+    밀려 10위가 되어 근거에서 빠졌다.
 
     LLM 재정렬 모델을 쓰지 않는다 — 응답 시간 결정(계획서 §0)과 원칙 6에
     따른 것이며, 이 규칙의 한계가 평가셋으로 측정된 뒤에만 재검토한다.
@@ -76,7 +83,8 @@ def rerank(
         return []
 
     scale = max(c.score for c in candidates) or 1.0
-    terms = _query_terms(question)
+    weighted = terms is not None
+    terms = terms if weighted else _query_terms(question)
     latest = this_year if this_year is not None else _latest_year(candidates)
 
     adjusted: list[tuple[float, Candidate]] = []
@@ -86,7 +94,12 @@ def rerank(
             bonus += FINAL_MARKER_BONUS
         if latest is not None and candidate.eff_year == latest:
             bonus += RECENT_YEAR_BONUS
-        if _matches_terms(candidate.text, terms):
+        if weighted:
+            # 본문과 파일 이름을 함께 본다 — 업무 이름은 파일 이름에만 있는 일이 많다.
+            where = f"{candidate.filename}\n{candidate.text}"
+            hits = sum(1 for term in terms if korean.contains(where, term))
+            bonus += TERM_MATCH_BONUS * hits / len(terms) if terms else 0.0
+        elif _matches_terms(candidate.text, terms):
             bonus += TERM_MATCH_BONUS
         adjusted.append((candidate.score + bonus * scale, candidate))
 

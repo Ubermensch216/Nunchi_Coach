@@ -211,20 +211,28 @@ def _swapped_label(text: str, cited_text: str) -> str:
     """문장이 부른 이름표의 값은 없고, 부르지 않은 이름표의 값이 통째로 들어 있으면 그 이름표.
 
     증거창이 이름표 줄의 끝을 ' /'로 남기므로 (이름표, 값)을 다시 읽을 수 있다.
-    짧은 값(네 글자 미만)과 여러 이름표가 함께 가진 값은 따지지 않는다.
+    짧은 값(네 글자 미만)과 여러 이름표가 함께 가진 값은 따지지 않는다. 부른 이름표의
+    값을 풀어 쓴 문장은 건드리지 않는다 — 그 값의 낱말이 하나라도 문장에 있으면 넘긴다
+    ("처리 절차는 부서별 집계 자료 취합, 실적표 작성 … 순"이 구비서류의 값 '부서별 집계
+    자료'를 품고 있다고 버려진 적이 있다).
     """
     squeezed = re.sub(r"\s+", "", text)
     values: dict[str, set[str]] = {}
+    words: dict[str, set[str]] = {}
     for line in cited_text.splitlines():
         for segment in line.split(" /"):
             if " | " in segment:
                 continue
             match = _LABELLED.fullmatch(segment.strip())
             if match:
-                values.setdefault(re.sub(r"\s+", "", match.group(1)), set()).add(
+                label = re.sub(r"\s+", "", match.group(1))
+                values.setdefault(label, set()).add(
                     re.sub(r"\s+", "", match.group(2)).rstrip("."))
+                words.setdefault(label, set()).update(korean.tokens(match.group(2)))
     named = [label for label in values if len(label) >= 2 and label in squeezed]
     if not named or any(value in squeezed for label in named for value in values[label]):
+        return ""
+    if any(korean.contains(text, word) for label in named for word in words[label]):
         return ""
     own = {value for label in named for value in values[label]}
     for label, held in values.items():

@@ -346,5 +346,6 @@ def test_a_value_that_belongs_to_another_label_is_dropped():
     for fine in ("구비서류는 부서별 집계 자료이다.",
                  "제출 서식은 실적표 별지 제3호이다.",
                  "실적표 별지 제3호 서식으로 기획예산과에 낸다.",              # 이름표를 부르지 않았다
-                 "제출 서식은 실적표 별지 제3호이고 구비서류는 부서별 집계 자료이다."):
+                 "제출 서식은 실적표 별지 제3호이고 구비서류는 부서별 집계 자료이다.",
+                 "구비서류로는 부서별로 집계한 자료를 기획예산과에 낸다."):        # 값을 풀어 썼다
         assert len(verify_sentences([sentence(fine, [1])], {1: NOTICE}).kept) == 1, fine
