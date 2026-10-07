@@ -32,6 +32,7 @@ MAX_SENTENCES = 40
 _MIN_LENGTH, _MAX_LENGTH = 12, 200
 _MAX_DOCS = 200             # 한 업무에서 훑는 최근 시기 문서 수
 _BOILERPLATE_DOCS = 3       # 이만큼의 문서에 되풀이되면 틀 문장이다
+_FRAME_MIN_WORDS = 6        # 이보다 짧은 문장은 낱말 하나를 비워 견주지 않는다
 _NUM_PREDICT = 900      # 문장 40개 × 한 줄씩
 
 # 갈래 → 화면에 보일 이름. 모델은 이 열쇠 가운데서만 고른다.
@@ -64,6 +65,7 @@ SCHEMA = {
 
 _SENTENCE_END = re.compile(r"(?<=[다요음함])\.\s+")
 _PREDICATE = re.compile(r"(?:다|요|음|함)\.?$")
+_QUOTED = re.compile(r"['‘\"“「『][^'’\"”」』]{1,40}['’\"”」』]")
 _DATE_LINE = re.compile(r"^(?:작성일|시행일자|등록일|기안일)\s*[:：]")
 
 
@@ -71,19 +73,21 @@ def sentences(db, task_id: int, common: frozenset[str] = frozenset()) -> list[di
     """이 업무의 가장 최근 시기 문서에서, 규칙이 읽지 못한 문장만 추린다.
 
     여러 문서에 되풀이되는 틀 문장은 뺀다('붙임과 같이 제출합니다', '본 문서는
-    ○월 … 단계에서 작성되었다'). 숫자만 다른 문장은 같은 틀로 본다. 실제 모델로
-    돌렸을 때 이런 문장이 갈래를 받아 항목 자리를 채웠다 — 어느 문서에나 있는
-    말은 이 업무에 대해 알려 주는 것이 없다.
+    ○월 … 단계에서 작성되었다'). 숫자와 따옴표 안의 말만 다른 문장, 낱말 하나만
+    다른 문장은 같은 틀로 본다. 실제 모델로 돌렸을 때 이런 문장이 갈래를 받아
+    항목 자리를 채웠다 — 어느 문서에나 있는 말은 이 업무에 대해 알려 주는 것이 없다.
     """
     gathered = _gather(db, task_id)
     in_docs: dict[str, set[int]] = {}
     for item in gathered:
-        in_docs.setdefault(_skeleton(item["text"]), set()).add(item["doc_id"])
+        for shape in _shapes(item["text"]):
+            in_docs.setdefault(shape, set()).add(item["doc_id"])
     out: list[dict] = []
     seen: set[str] = set()
     for item in gathered:
-        shape = _skeleton(item["text"])
-        if shape in seen or shape in common or len(in_docs[shape]) >= _BOILERPLATE_DOCS:
+        shape, *frames = _shapes(item["text"])
+        if shape in seen or any(
+                s in common or len(in_docs[s]) >= _BOILERPLATE_DOCS for s in (shape, *frames)):
             continue
         seen.add(shape)
         out.append(item)
@@ -97,12 +101,33 @@ def common_skeletons(db, task_ids: list[int]) -> frozenset[str]:
     tasks_of: dict[str, set[int]] = {}
     for task_id in task_ids:
         for item in _gather(db, task_id):
-            tasks_of.setdefault(_skeleton(item["text"]), set()).add(task_id)
+            for shape in _shapes(item["text"]):
+                tasks_of.setdefault(shape, set()).add(task_id)
     return frozenset(shape for shape, tasks in tasks_of.items() if len(tasks) >= 2)
 
 
+def _masked(sentence: str) -> str:
+    return re.sub(r"\d+", "#", _QUOTED.sub("#", sentence))
+
+
 def _skeleton(sentence: str) -> str:
-    return re.sub(r"\d+", "#", rc._normalize(sentence))
+    return rc._normalize(_masked(sentence))
+
+
+def _shapes(sentence: str) -> list[str]:
+    """문장의 틀과, 낱말 하나를 비운 틀들. 첫 항목이 문장 자체의 틀이다.
+
+    "본 문서는 2025년 12월 예산관리 업무 중 '다음연도 예산편성' 단계에서
+    작성되었다"는 업무마다 업무 이름 한 낱말만 다르다(실측: 이런 문장 3건이
+    기한·진행 상황으로 올라왔다). 짧은 문장은 낱말 하나가 뜻의 전부일 수 있어
+    비우지 않는다.
+    """
+    words = [w for w in (rc._normalize(part) for part in _masked(sentence).split()) if w]
+    frames = []
+    if len(words) >= _FRAME_MIN_WORDS:
+        frames = ["~" + " ".join((*words[:i], "*", *words[i + 1:]))
+                  for i, word in enumerate(words) if word != "#"]
+    return [_skeleton(sentence), *frames]
 
 
 def _gather(db, task_id: int) -> list[dict]:

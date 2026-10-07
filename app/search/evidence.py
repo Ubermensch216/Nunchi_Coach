@@ -17,6 +17,10 @@
     바꾸면 "집행액 0 210 430 180"이 되어 어느 값이 어느 분기인지 모델도
     검증도 알 수 없다(30문항 평가에서 2분기 값을 물었는데 3분기 값이 나갔다).
     칸은 ' | ', 행의 끝은 ' /'로 적는다.
+  · 이름표가 붙은 줄의 끝도 ' /'로 남긴다. 줄 경계가 사라지면 "제출 서식:
+    실적표 별지 제3호 구비서류: 부서별 집계 자료"가 되어 어느 값이 어느
+    이름표의 것인지 알 수 없다(60문항 평가에서 구비서류를 물었는데 앞 줄의
+    서식이 나갔다).
 
 여기서 만든 글이 곧 생성 문맥·사실 검증·화면의 근거 발췌다. 셋이 서로
 다른 글을 보면 검증이 의미를 잃는다.
@@ -39,6 +43,8 @@ _HAS_DIGIT = re.compile(r"\d")
 
 ROW_END = " /"
 _CELL_LINE = re.compile(r"^\s*1열:")
+# '제출기한: 2025. 9. 30.' 같은 이름표 줄. 값이 같은 줄에 있을 때만이다.
+LABEL_LINE = re.compile(r"^\s*([가-힣A-Za-z][가-힣A-Za-z ·]{0,14}?)\s*(?:\([^)]{1,12}\))?\s*[:：]\s*\S")
 
 
 def mark_tables(text: str) -> str:
@@ -48,6 +54,8 @@ def mark_tables(text: str) -> str:
         if "\t" in line:
             line = " | ".join(cell.strip() for cell in line.split("\t")) + ROW_END
         elif _CELL_LINE.match(line):
+            line = line.rstrip() + ROW_END
+        elif LABEL_LINE.match(line) and not line.lstrip().startswith(_PINNED):
             line = line.rstrip() + ROW_END
         lines.append(line)
     return "\n".join(lines)

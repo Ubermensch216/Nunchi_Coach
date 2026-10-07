@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from app.tools.rag_report import DEFAULT_CASES, DEV_CASES, Outcome, _judge, _load_cases
+from app.tools.rag_report import (DEFAULT_CASES, DEV_CASES, HOLDOUT_CASES, Outcome, _judge,
+                                  _load_cases)
 
 
 def outcome(**fields) -> Outcome:
@@ -106,7 +107,8 @@ def test_error_is_reported_as_a_single_failure():
 
 # ── 평가셋 파일 ─────────────────────────────────────────────────────
 
-@pytest.fixture(params=[DEFAULT_CASES, DEV_CASES], ids=["기본", "개발용30"])
+@pytest.fixture(params=[DEFAULT_CASES, DEV_CASES, HOLDOUT_CASES],
+                ids=["기본", "개발용30", "따로둔60"])
 def shipped(request):
     return _load_cases(Path(request.param))
 
@@ -143,6 +145,22 @@ def test_dev_option_selects_the_dev_set():
     from app.tools.rag_report import _parse_args
 
     assert _parse_args(["--dev"]).dev and not _parse_args([]).dev
+
+
+def test_holdout_set_has_forty_answerable_and_twenty_withheld_and_repeats_no_dev_question():
+    from app.tools.rag_report import _parse_args
+
+    dev, holdout = _load_cases(Path(DEV_CASES)), _load_cases(Path(HOLDOUT_CASES))
+    assert len(holdout) == 60
+    assert sum(1 for c in holdout if c["expect"] == "withhold") == 20
+    # 개발용 문항과 겹치면 '새 질문'이 아니다.
+    squeeze = lambda text: "".join(text.split())
+    assert not {squeeze(c["question"]) for c in dev} & {squeeze(c["question"]) for c in holdout}
+    assert not {c["id"] for c in dev} & {c["id"] for c in holdout}
+    # 답해야 하는 질문은 근거 문서와 답에 있어야 할 내용을 모두 적는다.
+    assert all(c.get("must_cite_any") and c.get("must_contain")
+               for c in holdout if c["expect"] == "answer")
+    assert _parse_args(["--holdout"]).holdout and not _parse_args(["--dev"]).holdout
 
 
 def test_cases_file_is_valid_json():

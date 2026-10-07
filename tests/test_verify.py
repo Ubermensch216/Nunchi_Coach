@@ -28,6 +28,16 @@ def test_sentence_without_sources_is_dropped():
     assert result.dropped[0].reason == "근거를 스스로 밝히지 않았다"
 
 
+def test_a_citation_written_in_the_text_stands_in_for_an_empty_sources_field():
+    """실측: 모델이 근거 번호를 sources가 아니라 문장 끝에 적어 옳은 답이 버려졌다."""
+    result = verify_sentences([sentence("행정사무감사 요구자료를 접수하였다.[1]", [])], SOURCES)
+    assert [(k.text, k.sources) for k in result.kept] == [
+        ("행정사무감사 요구자료를 접수하였다.", [1])]
+    # 그렇게 받은 번호도 검증은 그대로 거친다 — 없는 번호, 근거에 없는 숫자.
+    assert verify_sentences([sentence("접수하였다.[9]", [])], SOURCES).kept == []
+    assert verify_sentences([sentence("요구자료는 777건이다.[1]", [])], SOURCES).kept == []
+
+
 def test_sentence_with_null_sources_is_dropped():
     """모델이 sources를 아예 안 주면 None일 수 있다 — []와 같이 취급한다."""
     result = verify_sentences([{"text": "말한다", "sources": None}], SOURCES)
@@ -266,3 +276,75 @@ def test_saying_there_is_no_answer_and_offering_something_else_is_dropped():
     # 자료가 그렇게 적고 있는 것을 옮긴 문장은 그대로 둔다.
     plain = {1: "요구자료 접수 이후 추가 요청은 없었다"}
     assert verify_sentences([sentence("요구자료 접수 이후 추가 요청은 없었다.", [1])], plain).kept
+
+
+# ── 60문항 평가가 드러낸 것 ─────────────────────────────────────────
+
+TALLY = "[집계] 구분 | 1분기 | 2분기 | 3분기 | 4분기 / 처리건수 | 41 | 38 | 45 | 39 / 완료율 | 92 | 88 | 95 | 90 /"
+BUDGET = "[집계] 구분 | 1분기 | 2분기 | 3분기 | 4분기 / 예산요구액 | 820 | 0 | 0 | 0 / 집행액 | 0 | 210 | 430 | 180 /"
+
+
+def test_a_table_value_given_to_something_the_document_never_mentions_is_dropped():
+    """41은 월간실적보고의 처리건수다. 그 문서에 '수질검사'는 없다."""
+    result = verify_sentences(
+        [sentence("1분기 수질검사 건수는 41건이었다.", [1])], {1: TALLY},
+        question="수질통계에서 1분기 수질검사 건수는 몇 건이었어?",
+        names={1: "2024_월간실적보고_실적취합.xlsx"})
+    assert result.kept == [] and "수질검사" in result.dropped[0].reason
+    # 행과 열이 맞아 칸 대조는 지나가지만, 표는 예산관리의 것이고 '시범사업'은 없다.
+    result = verify_sentences(
+        [sentence("시범사업의 4분기 집행액은 180입니다.", [1])], {1: BUDGET},
+        question="시범사업의 4분기 집행액은 얼마야?",
+        names={1: "2024_예산관리_다음연도예산편성.xlsx"})
+    assert result.kept == [] and "시범사업" in result.dropped[0].reason
+
+
+def test_a_table_value_about_what_the_document_does_talk_about_is_kept():
+    names = {1: "2025_월간실적보고_실적취합.xlsx"}
+    # 업무 이름은 표가 아니라 파일 이름에만 있다.
+    kept = verify_sentences(
+        [sentence("월간실적보고의 1분기 처리건수는 41건이다.", [1])], {1: TALLY},
+        question="월간실적보고에서 1분기 처리건수는 몇 건이야?", names=names).kept
+    assert len(kept) == 1
+    # '작년'·'얼마'처럼 무엇의 값인지를 가리지 않는 말은 따지지 않는다.
+    kept = verify_sentences(
+        [sentence("작년 1분기 처리건수는 41건이다.", [1])], {1: TALLY},
+        question="작년 1분기 처리건수는 얼마야?", names=names).kept
+    assert len(kept) == 1
+    # 질문을 주지 않으면 이 검사는 하지 않는다.
+    assert len(verify_sentences([sentence("1분기 수질검사 건수는 41건이었다.", [1])],
+                                {1: TALLY}).kept) == 1
+    # 표의 숫자를 말하지 않은 문장은 건드리지 않는다.
+    kept = verify_sentences(
+        [sentence("수질검사 자료는 처리건수와 완료율을 분기마다 적는다.", [1])], {1: TALLY},
+        question="수질검사 자료는 뭘 적어?", names=names).kept
+    assert len(kept) == 1
+
+
+def test_a_percent_sign_the_source_does_not_carry_is_still_an_unsupported_number():
+    """'완료율 | 90'을 "90%"라고 한 문장을 받아 주도록 풀어 봤더니, 목표치를 물은 질문에
+    완료율을 늘어놓은 답("92%, 88%, 95%, 90%")이 살아 나갔다(30문항 평가). 되돌렸다 —
+    행과 열을 부른 질문은 규칙(tablemath.count)이 답한다."""
+    assert verify_sentences([sentence("4분기 완료율은 90%이다.", [1])], {1: TALLY}).kept == []
+    assert len(verify_sentences([sentence("4분기 완료율은 90이다.", [1])], {1: TALLY}).kept) == 1
+
+
+NOTICE = window("2025년 3분기 실적 보고 요청\n제출기한: 2025. 9. 30.(화)\n제출처: 기획예산과\n"
+                "제출 서식: 실적표 별지 제3호\n구비서류: 부서별 집계 자료\n"
+                "실적표의 증감 사유는 전년 동기 대비로 적는다.", "")
+
+
+def test_the_evidence_window_keeps_the_end_of_labelled_lines():
+    assert "제출 서식: 실적표 별지 제3호 / 구비서류: 부서별 집계 자료 / 실적표의" in NOTICE
+    assert NOTICE.startswith("2025년 3분기 실적 보고 요청 제출기한:")      # 이름표 없는 줄은 그대로
+
+
+def test_a_value_that_belongs_to_another_label_is_dropped():
+    """60문항 평가: 구비서류를 물었는데 앞 줄의 제출 서식을 답했다."""
+    result = verify_sentences([sentence("구비서류는 실적표 별지 제3호이다.", [1])], {1: NOTICE})
+    assert result.kept == [] and "제출서식" in result.dropped[0].reason
+    for fine in ("구비서류는 부서별 집계 자료이다.",
+                 "제출 서식은 실적표 별지 제3호이다.",
+                 "실적표 별지 제3호 서식으로 기획예산과에 낸다.",              # 이름표를 부르지 않았다
+                 "제출 서식은 실적표 별지 제3호이고 구비서류는 부서별 집계 자료이다."):
+        assert len(verify_sentences([sentence(fine, [1])], {1: NOTICE}).kept) == 1, fine

@@ -15,6 +15,12 @@
   ④ 인용한 조각과 겹치는 낱말이 거의 없다 — 인용은 했지만 그 내용과
      무관한 말을 하고 있다는 신호.
   ⑦ "정보는 없으나 …"처럼 답이 없다고 하면서 다른 내용을 내놓는다.
+  ⑨ 이름표를 부르며 다른 이름표의 값을 말했다. (60문항 평가: "구비서류는 실적표
+     별지 제3호이다" — 그 값은 바로 앞 줄 '제출 서식'의 것이다.)
+  ⑧ 표의 숫자를 말하면서 질문의 낱말을 되받았는데, 그 낱말이 인용한 문서에
+     없다 — 다른 것의 값을 묻는 것의 값처럼 말했다. (60문항 평가: "1분기
+     수질검사 건수는 41건이었다" — 41은 월간실적보고의 처리건수이고 그 문서에
+     '수질검사'는 없다.)
   ⑥ 숫자에 붙인 금액 단위(천원·백만원 등)가 인용한 조각에 없다.
   ⑤ 표의 행과 열을 짚어 말했는데 그 칸의 값이 아니다 — 같은 표의 다른 칸을
      읽었다. (30문항 평가: "2분기 집행액은 430입니다" — 430은 3분기 칸이고
@@ -29,6 +35,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from typing import Any
+
+from ..core import korean
 
 from ..core import korean
 
@@ -64,8 +72,11 @@ class VerifyResult:
 def verify_sentences(
     raw_sentences: list[Any], source_text: dict[int, str],
     support_text: dict[int, str] | None = None,
+    question: str = "", names: dict[int, str] | None = None,
 ) -> VerifyResult:
     """모델이 낸 sentences 배열을 검증해 살아남은 것만 돌려준다.
+
+    question과 names(근거 번호 → 문서 이름)를 주면 ⑧을 함께 본다.
 
     source_text는 {1-based 근거 번호: 그 조각 본문}. _format_context가
     매긴 번호와 같은 번호 체계를 써야 한다 — 다르면 멀쩡한 인용도
@@ -88,6 +99,13 @@ def verify_sentences(
             continue   # 빈 문장은 조용히 넘긴다 — 사유를 남길 것도 없다
 
         sources = _clean_sources(item.get("sources"))
+        if not sources:
+            # 근거 번호를 sources가 아니라 문장 끝에 적는 경우가 있다(30문항 평가:
+            # {"text": "…문서유형은 계획서이다.[1]", "sources": []} — 옳은 답이
+            # '근거 없음'으로 버려졌다). 모델이 밝힌 근거이므로 그 번호로 본다.
+            # 아래의 검증은 그대로 거친다.
+            sources = [int(value.strip()) for mark in _CITATION.findall(text)
+                       for value in mark.split(",")]
         if not sources:
             result.dropped.append(Dropped(text, "근거를 스스로 밝히지 않았다"))
             continue
@@ -135,6 +153,18 @@ def verify_sentences(
                 Dropped(text, f"표에서 짚은 칸의 값이 아니다: {', '.join(wrong_cell)}"))
             continue
 
+        swapped = _swapped_label(text, cited_text)
+        if swapped:
+            result.dropped.append(Dropped(text, f"다른 이름표의 값을 말했다: {swapped}"))
+            continue
+
+        strangers = _foreign_subject(text, question, cited_text + "\n" + "\n".join(
+            (names or {}).get(s, "") for s in valid_sources))
+        if strangers:
+            result.dropped.append(Dropped(
+                text, f"표의 값을 인용한 문서에 없는 것의 값처럼 말했다: {', '.join(strangers)}"))
+            continue
+
         if not _overlaps_enough(text, cited_text):
             result.dropped.append(Dropped(text, "인용한 근거와 겹치는 말이 거의 없다"))
             continue
@@ -172,6 +202,66 @@ def _unsupported_numbers(text: str, cited_text: str) -> list[str]:
         return (Decimal(number.rstrip("%").replace(",", "")), suffix)
     supported = {canonical(n) for n in _NUMBER.findall(cited_text)}
     return sorted({n for n in _NUMBER.findall(text) if canonical(n) not in supported})
+
+
+_LABELLED = re.compile(r"([가-힣A-Za-z][가-힣A-Za-z ·]{0,14}?)\s*(?:\([^)]{1,12}\))?\s*[:：]\s*(.+)")
+
+
+def _swapped_label(text: str, cited_text: str) -> str:
+    """문장이 부른 이름표의 값은 없고, 부르지 않은 이름표의 값이 통째로 들어 있으면 그 이름표.
+
+    증거창이 이름표 줄의 끝을 ' /'로 남기므로 (이름표, 값)을 다시 읽을 수 있다.
+    짧은 값(네 글자 미만)과 여러 이름표가 함께 가진 값은 따지지 않는다.
+    """
+    squeezed = re.sub(r"\s+", "", text)
+    values: dict[str, set[str]] = {}
+    for line in cited_text.splitlines():
+        for segment in line.split(" /"):
+            if " | " in segment:
+                continue
+            match = _LABELLED.fullmatch(segment.strip())
+            if match:
+                values.setdefault(re.sub(r"\s+", "", match.group(1)), set()).add(
+                    re.sub(r"\s+", "", match.group(2)).rstrip("."))
+    named = [label for label in values if len(label) >= 2 and label in squeezed]
+    if not named or any(value in squeezed for label in named for value in values[label]):
+        return ""
+    own = {value for label in named for value in values[label]}
+    for label, held in values.items():
+        if label in named:
+            continue
+        if any(len(value) >= 4 and value in squeezed and value not in own for value in held):
+            return label
+    return ""
+
+
+# 질문의 낱말 가운데 '무엇의 값인가'를 가리지 않는 말. 되받아도 따지지 않는다.
+_NOT_A_SUBJECT = re.compile(r"^(?:작년|지난해|전년도?|올해|금년|내년|얼마|몇|어느|어떤|무슨|언제|어디)")
+
+
+def _foreign_subject(text: str, question: str, about: str) -> list[str]:
+    """문장이 되받은 질문의 낱말 가운데 인용한 문서에 없는 것. 표의 숫자를 말한 문장만 본다.
+
+    "시범사업의 4분기 집행액은 180입니다"는 행(집행액)과 열(4분기)이 맞아 칸
+    대조를 지나간다. 그러나 그 표는 예산관리의 것이고 그 문서 어디에도
+    '시범사업'은 없다. 질문이 물은 것과 표가 말하는 것이 다르면, 표의 값이
+    옳아도 답은 틀렸다.
+    """
+    if not question:
+        return []
+    cells = {cell.replace(",", "") for _headers, rows in _tables(about)
+             for row in rows for cell in row[1:]}
+    said = {number.rstrip("%").replace(",", "") for number in _NUMBER.findall(text)}
+    if not said & cells:
+        return []
+    out = []
+    # '몇 건이야'의 '건이야'는 답의 '41건이다'와 겹친다 — 묻는 말은 빼고 본다.
+    for word in korean.tokens(re.sub(r"몇\s*[가-힣]+", " ", question)):
+        if re.search(r"\d", word) or _NOT_A_SUBJECT.match(word):
+            continue        # 숫자는 ③이 본다
+        if korean.contains(text, word) and not korean.contains(about, word):
+            out.append(korean.strip_punctuation(word))
+    return out
 
 
 # ── 표의 칸 대조 ────────────────────────────────────────────────────

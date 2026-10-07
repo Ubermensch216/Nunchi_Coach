@@ -262,6 +262,26 @@ def test_the_largest_value_in_a_table_row_is_answered_by_rule_without_the_model(
     database.close()
 
 
+def test_a_count_in_one_table_cell_is_answered_by_rule_without_the_model(tmp_path):
+    database = Database(tmp_path / "c.db")
+    database.init()
+    doc = database.upsert_document(database.add_source(r"D:\자료"), {
+        "path": r"D:\자료\요구자료접수.docx", "filename": "요구자료접수.docx", "ext": ".docx",
+        "parse_status": "ok", "hash": "c"})
+    chunk_id, _ = database.replace_document_chunks(doc, [(1, "표1", (
+        "항목\t수량\t비고\n요구자료\t12\t제출완료\n추가질의\t3\t답변완료"))])[0]
+    database.save_chunk_embedding(chunk_id, "bge-m3", 3, pack([1.0, 0.0, 0.0]))
+    client = OllamaClient()
+    calls = wire(client, [{"response": '{"answered": true, "sentences": [{"text": "수량은 표를 '
+                                       '통해 확인할 수 있습니다.", "sources": [1]}]}',
+                           "done_reason": "stop"}])
+    answer = ask(database, "요구자료는 몇 건이었어?", client=client)
+    assert not answer.withheld and "'요구자료' 행 '수량' 칸 값은 12" in answer.text
+    assert answer.generation == {"rule_answer": "table_cell"}
+    assert calls == []                                    # 생성 모델을 부르지 않았다
+    database.close()
+
+
 def test_a_refusal_is_asked_once_more_and_a_second_refusal_stands(db):
     """같은 질문·같은 근거에 모델이 답했다 안 했다 한다. 한 번만 다시 묻는다."""
     no = {"response": '{"answered": false, "sentences": []}', "done_reason": "stop"}

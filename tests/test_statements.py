@@ -116,6 +116,40 @@ def test_template_sentences_repeated_across_documents_are_not_offered(db):
         "시료는 채수한 날 바로 접수한다."]
 
 
+def test_a_frame_that_differs_by_a_quoted_name_or_one_word_is_a_template(db):
+    """실측: 업무 이름과 따옴표 안의 단계 이름만 다른 서식 문구가 기한·진행 상황으로 올라왔다."""
+    frame = "본 문서는 2025년 {m}월 {task} 업무 중 '{step}' 단계에서 작성되었다."
+    for month, step in ((9, "요구자료 접수"), (10, "제출자료"), (11, "의원질의 답변")):
+        add(db, f"2025_감사_{month}월.txt", f"2025-{month:02d}-12",
+            frame.format(m=month, task="행정사무감사", step=step))
+    assert listed(db) == []                       # 한 업무 안: 따옴표 안만 다르다
+
+    db.con.execute("INSERT INTO tasks(id, name) VALUES (2, '예산관리')")
+    db.con.execute("INSERT INTO tasks(id, name) VALUES (3, '업무계획')")
+    for task, name, step, extra in (
+            (2, "예산관리", "다음연도 예산편성", "요구액은 부서 협의를 거쳐 전년 대비 5% 이내로 잡는다."),
+            (3, "업무계획", "주요업무계획", "계획서는 과장 검토를 받은 뒤 기획부서로 보낸다.")):
+        doc = add(db, f"2025_{name}.txt", "2025-12-12",
+                  frame.format(m=12, task=name, step=step) + "\n" + extra)
+        db.con.execute("UPDATE task_docs SET task_id = ? WHERE doc_id = ?", (task, doc))
+    common = statements.common_skeletons(db, [1, 2, 3])
+    # 업무마다 한 건뿐이어도 다른 업무와 낱말 하나만 다르면 서식 문구다. 그 업무만의 문장은 남는다.
+    assert [i["text"] for i in statements.sentences(db, 2, common)] == [
+        "요구액은 부서 협의를 거쳐 전년 대비 5% 이내로 잡는다."]
+    assert [i["text"] for i in statements.sentences(db, 3, common)] == [
+        "계획서는 과장 검토를 받은 뒤 기획부서로 보낸다."]
+
+
+def test_short_sentences_are_not_folded_into_a_one_word_frame(db):
+    db.con.execute("INSERT INTO tasks(id, name) VALUES (2, '수질통계')")
+    add(db, "2025_정산.txt", "2025-07-12", "대금은 준공 뒤 30일 이내에 정산한다.")
+    other = add(db, "2025_수질.txt", "2025-07-12", "시료는 채수 뒤 30일 이내에 분석한다.")
+    db.con.execute("UPDATE task_docs SET task_id = 2 WHERE doc_id = ?", (other,))
+    common = statements.common_skeletons(db, [1, 2])
+    assert [i["text"] for i in statements.sentences(db, 1, common)] == [
+        "대금은 준공 뒤 30일 이내에 정산한다."]
+
+
 def test_the_item_is_the_sentence_itself_marked_as_inferred(contract):
     client = FakeClient(pick(contract, ("30일 이내", "deadline"), ("기성금", "progress")))
     totals = rc.restore(contract, BASIS, client=client)

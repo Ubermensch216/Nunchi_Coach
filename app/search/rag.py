@@ -208,13 +208,20 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
 
     # 표의 한 행에서 가장 큰/작은 값을 묻는 질문은 규칙으로 답한다. 경량 모델은
     # 값 견주기를 자주 틀리고, 틀린 값도 표 안의 숫자라 검증을 지나간다.
-    computed = tablemath.extreme(question, source_text)
+    computed, rule = tablemath.extreme(question, source_text), "table_extreme"
+    if computed is None:
+        # 표의 한 칸에 적힌 수량을 묻는 질문도 같다. 모델은 표에 값이 있는데도
+        # "표를 통해 확인할 수 있습니다"라고만 했다(30문항 평가).
+        about = _support_text(context_rows, source_text)
+        computed, rule = tablemath.count(question, source_text, {
+            index: f"{row['filename']}\n{about[index]}"
+            for index, row in enumerate(context_rows, start=1)}), "table_cell"
     if computed is not None:
         text, citations = _compose_answer(
             [VerifiedSentence(text=computed[0], sources=computed[1])],
             context_rows, official, source_text)
         return Answer(question=question, text=text, withheld=False, citations=citations,
-                      inferred_years=scope.years, generation={"rule_answer": "table_extreme"})
+                      inferred_years=scope.years, generation={"rule_answer": rule})
 
     prompt, _version = render(
         "ask", context=_format_context(context_rows, official, source_text), question=question)
@@ -299,6 +306,8 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
     # 확인한다 — 근거 없는 문장은 화면에 올리지 않는다(§1 측정 1).
     verified = verify_sentences(
         data.get("sentences") or [], source_text, _support_text(context_rows, source_text),
+        question=question,
+        names={index: row["filename"] for index, row in enumerate(context_rows, start=1)},
     )
 
     if not verified.survived:

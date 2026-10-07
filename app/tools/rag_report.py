@@ -1,7 +1,8 @@
 """질문 화면 실측 리포트 — RAG 개선의 자.
 
     python -m app.tools.rag_report [--project 이름] [--data 경로]
-                                   [--cases 경로 | --dev] [--case id] [--json 경로]
+                                   [--cases 경로 | --dev | --holdout] [--case id]
+                                   [--json 경로]
                                    [--repeat 횟수]
 
 왜 필요한가
@@ -43,6 +44,9 @@ DEFAULT_CASES = (
 )
 # 개발용 30문항(구축계획서 G1). 기본 9문항을 포함한다. `--dev`로 고른다.
 DEV_CASES = DEFAULT_CASES.with_name("dev30.json")
+# 따로 떼어 둔 60문항. 개발용 문항으로 고친 것이 새 질문에서도 통하는지 본다 —
+# 이 문항으로는 프롬프트·검색을 반복해 조정하지 않는다. `--holdout`으로 고른다.
+HOLDOUT_CASES = DEFAULT_CASES.with_name("holdout60.json")
 
 
 @dataclass(slots=True)
@@ -70,7 +74,8 @@ def main(argv: list[str] | None = None) -> int:
     _force_utf8()
     args = _parse_args(argv)
 
-    cases = _load_cases(DEV_CASES if args.dev else Path(args.cases))
+    cases = _load_cases(HOLDOUT_CASES if args.holdout
+                        else DEV_CASES if args.dev else Path(args.cases))
     if args.case:
         cases = [c for c in cases if c["id"] == args.case]
         if not cases:
@@ -303,6 +308,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                         help=f"프로젝트 저장 위치 (기본: {default_project_dir()})")
     parser.add_argument("--cases", default=str(DEFAULT_CASES), help="평가셋 경로")
     parser.add_argument("--dev", action="store_true", help="개발용 30문항 평가셋으로 잰다")
+    parser.add_argument("--holdout", action="store_true",
+                        help="따로 떼어 둔 60문항으로 잰다(이 문항으로 조정하지 않는다)")
     parser.add_argument("--case", default=None, help="사례 하나만 실행")
     parser.add_argument(
         "--repeat", type=int, default=1,

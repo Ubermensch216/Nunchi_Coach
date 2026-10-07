@@ -69,6 +69,8 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m app.tools.selfcheck          # 복원 → 복원본 → 묶음 → 이어받기 자체 점검
 .\.venv\Scripts\python.exe -m app.tools.scenario_eval --model   # 로컬 모델로 문장에서 찾은 내용까지 넣은 평가
 .\.venv\Scripts\python.exe -m app.tools.rag_report --project 이름 --dev --repeat 3   # 개발용 30문항 질문 평가
+.\.venv\Scripts\python.exe -m app.tools.rag_report --project 이름 --holdout --repeat 3   # 따로 떼어 둔 60문항(이 문항으로 조정하지 않는다)
+.\.venv\Scripts\python.exe -m app.tools.statement_eval --repeat 3   # 문장 추출의 정밀도·재현율(로컬 모델 필요)
 .\.venv\Scripts\python.exe -m app.tools.notices --strict   # 오픈소스 고지문 만들기(본문이 빠진 라이선스가 있으면 실패)
 ```
 
