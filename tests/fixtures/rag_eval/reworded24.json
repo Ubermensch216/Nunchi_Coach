@@ -1,0 +1,41 @@
+{
+  "note": [
+    "문서와 다른 말로 묻는 24문항 (app/tools/rag_report.py --reworded). 답해야 하는 질문 18 · 유보해야 하는 질문 6.",
+    "개발용 30문항과 60문항은 문서에 적힌 낱말로 물었다('제출기한은 언제야?'). 실제 사람은 '마감', '양식', '어느 팀'처럼",
+    "자기 말로 묻는다. 초점 낱말 검사(rag._off_the_point)는 낱말이 글자 그대로 같을 때만 통하므로, 이런 질문에서",
+    "옳은 답까지 유보하는지를 재려고 만들었다. 묻는 사실은 앞의 문항들과 겹치지만 질문의 말은 겹치지 않는다.",
+    "",
+    "쓰는 법: 고치기 전에 먼저 잰다. 이 문항을 보고 고친 뒤의 수치는 새 질문에서의 성능이 아니다.",
+    "채점 규칙은 cases.json의 note와 같다.",
+    "",
+    "한계: 자료는 시나리오 합성 자료(tests/fixtures/scenarios)이고 문항과 정답을 같은 사람이 만들었다.",
+    "바꿔 말하는 방식도 한 사람의 것이다 — 실제 사용자의 말을 모은 것이 아니다."
+  ],
+  "cases": [
+    {"id": "r-report-due-verb", "question": "2025년 3분기 실적 보고는 언제까지 내야 해?", "why": "'제출기한'이라는 이름표를 부르지 않고 풀어서 묻는다.", "expect": "answer", "must_cite_any": ["실적보고_요청공문"], "must_contain": ["30"]},
+    {"id": "r-report-due-noun", "question": "2025년 3분기 실적 보고 마감은 언제야?", "why": "문서는 '제출기한', 질문은 '마감'. 초점 낱말이 문서에 없다.", "expect": "answer", "must_cite_any": ["실적보고_요청공문"], "must_contain": ["30"]},
+    {"id": "r-report-where", "question": "3분기 실적 보고는 어느 부서에 내?", "why": "문서는 '제출처'.", "expect": "answer", "must_cite_any": ["실적보고_요청공문"], "must_contain": ["기획예산과"]},
+    {"id": "r-report-form", "question": "3분기 실적 보고에 쓰는 양식은 뭐야?", "why": "문서는 '제출 서식', 질문은 '양식'. 옆 줄의 구비서류를 답하면 틀린다.", "expect": "answer", "must_cite_any": ["실적보고_요청공문"], "must_contain": ["제3호"]},
+    {"id": "r-report-attach", "question": "실적 보고할 때 같이 내야 하는 서류는 뭐야?", "why": "문서는 '구비서류'. 옆 줄의 제출 서식을 답하면 틀린다.", "expect": "answer", "must_cite_any": ["실적보고_요청공문"], "must_contain": ["집계 자료"]},
+    {"id": "r-report-steps", "question": "3분기 실적 보고는 어떤 차례로 진행해?", "why": "문서는 '처리 절차', 질문은 '차례'.", "expect": "answer", "must_cite_any": ["실적보고_요청공문"], "must_contain": ["과장 검토"]},
+    {"id": "r-report-budget", "question": "3분기 실적 집계에서 시범사업에 배정된 예산은 얼마야?", "why": "표의 한 칸. 열 이름(예산) 앞에 다른 말이 붙었다.", "expect": "answer", "must_cite_any": ["실적보고_집계자료"], "must_contain": ["820"]},
+    {"id": "r-report-spent", "question": "3분기 실적 집계에서 운영비는 얼마나 썼어?", "why": "표의 열 이름(집행액)을 부르지 않는다. 옆 칸의 예산(95)이나 옆 행(610)이면 틀린다.", "expect": "answer", "must_cite_any": ["실적보고_집계자료"], "must_contain": ["71"]},
+    {"id": "r-contract-amount", "question": "2025년 시설물 점검 용역 계약액은 얼마야?", "why": "문서는 '계약금액', 질문은 '계약액'.", "expect": "answer", "must_cite_any": ["2025_용역계약_체결보고"], "must_contain": ["48,000"]},
+    {"id": "r-contract-due", "question": "2025년 시설물 점검 용역은 언제까지 끝내야 해?", "why": "문서는 '납기'.", "expect": "answer", "must_cite_any": ["2025_용역계약_체결보고"], "must_contain": ["28"]},
+    {"id": "r-contract-team", "question": "시설물 점검 용역 계약은 어느 팀이 맡고 있어?", "why": "문서는 '담당: 재무과 계약팀'.", "expect": "answer", "must_cite_any": ["용역계약_체결보고"], "must_contain": ["계약팀"]},
+    {"id": "r-contract-2024-settled", "question": "2024년 시설물 점검 용역은 최종적으로 얼마로 정산됐어?", "why": "문서는 '정산액: 44,100천원'. 이름표를 풀어서 묻는다.", "expect": "answer", "must_cite_any": ["2024_용역_정산_보고"], "must_contain": ["44,100"]},
+    {"id": "r-contract-paid", "question": "2025년 용역 중간 점검 회의 때까지 지급한 돈은 얼마야?", "why": "문서는 '지급액', 질문은 '지급한 돈'. 계약금액(48,000)이면 틀린다.", "expect": "answer", "must_cite_any": ["2025_용역_중간점검_회의"], "must_contain": ["19,200"]},
+    {"id": "r-contract-2024-passed", "question": "2024년 시설물 점검 용역 준공검사는 통과했어?", "why": "문서는 '적합으로 검토하였다'. 예/아니오로 묻는다.", "expect": "answer", "must_cite_any": ["2024_용역_준공검사_검토"], "must_contain": ["적합"]},
+    {"id": "r-subsidy-due", "question": "2025년 보조금 신청 마감일은 언제야?", "why": "문서는 '신청기한', 질문은 '마감일'. 개정 전 기한(2023. 4. 28.)이면 틀린다.", "expect": "answer", "must_cite_any": ["2025_보조금_교부_지침_개정"], "must_contain": ["30"]},
+    {"id": "r-subsidy-form", "question": "2025년 개정 지침에서 보조금 신청 양식은 뭐야?", "why": "문서는 '사용 서식', 질문은 '양식'.", "expect": "answer", "must_cite_any": ["2025_보조금_교부_지침_개정"], "must_contain": ["제2호"]},
+    {"id": "r-subsidy-effective", "question": "개정된 보조금 교부 지침은 언제부터 시행돼?", "why": "문서는 '적용한다', 질문은 '시행'.", "expect": "answer", "must_cite_any": ["보조금_교부_지침_개정"], "must_contain": ["4월 1일"]},
+    {"id": "r-subsidy-received", "question": "2025년 4월 15일까지 들어온 보조금 신청은 몇 건이야?", "why": "문서는 '접수 12건', 질문은 '들어온'.", "expect": "answer", "must_cite_any": ["2025_보조금_신청접수_현황"], "must_contain": ["12"]},
+
+    {"id": "rw-contract-2025-inspected", "question": "2025년 시설물 점검 용역 준공검사를 마친 날짜는 언제야?", "why": "올해 준공검사 기록은 없다. 납기나 지난해 날짜를 내면 안 된다.", "expect": "withhold"},
+    {"id": "rw-report-sanction", "question": "3분기 실적 보고를 기한 넘겨 내면 어떤 제재를 받아?", "why": "기한은 있지만 제재는 어디에도 없다.", "expect": "withhold"},
+    {"id": "rw-subsidy-max", "question": "보조금은 단체당 최대 얼마까지 받을 수 있어?", "why": "금액이 어디에도 없다.", "expect": "withhold"},
+    {"id": "rw-contract-2025-settled", "question": "2025년 시설물 점검 용역은 최종적으로 얼마로 정산됐어?", "why": "올해는 정산 전이다. 지난해 정산액이나 올해 지급액·계약금액을 내면 안 된다.", "expect": "withhold"},
+    {"id": "rw-subsidy-committee", "question": "보조금 심의위원회에는 몇 사람이 참여해?", "why": "심의위원회는 절차에 이름만 나온다. 접수 건수(12)를 내면 안 된다.", "expect": "withhold"},
+    {"id": "rw-contract-vendor", "question": "시설물 점검 용역을 맡은 업체는 어디야?", "why": "업체 이름이 없다. 담당 부서(재무과 계약팀)를 업체로 내면 안 된다.", "expect": "withhold"}
+  ]
+}

@@ -357,6 +357,57 @@ def test_a_when_question_needs_a_time_in_the_answer(tmp_path):
     database.close()
 
 
+def test_a_when_question_is_not_answered_with_the_date_of_something_else(tmp_path):
+    database = _one_document(tmp_path, "2025_용역계약_체결보고.txt",
+                             CONTRACT.replace("2025. 11. 28.", "2025년 11월 28일"))
+    with database.transaction():                           # 질문의 '2025년'이 이 문서를 가리키게
+        database.con.execute("UPDATE documents SET eff_year=2025")
+    client = OllamaClient()
+    # 준공검사일을 물었는데 납기를 적었다. 때와 '준공검사'가 같은 마디에 없다.
+    _answering(client, "납기는 2025년 11월 28일이며, 대금은 준공검사를 마친 뒤 30일 이내에 정산한다.")
+    answer = ask(database, "2025년 시설물 점검 용역의 준공검사는 언제 했어?", client=client)
+    assert answer.withheld and answer.generation.get("when_elsewhere")
+    # 질문이 적은 해를 되받은 것은 답의 때가 아니다.
+    _answering(client, "2025년 준공검사를 마친 뒤 30일 이내에 정산한다.")
+    assert ask(database, "2025년 용역의 준공검사는 언제 했어?", client=client).withheld
+    # 묻는 것의 때를 적었으면 다른 마디가 붙어 있어도 답이다.
+    _answering(client, "납기는 2025년 11월 28일이며, 대금은 준공검사를 마친 뒤 30일 이내에 정산한다.")
+    assert not ask(database, "2025년 시설물 점검 용역의 납기는 언제야?", client=client).withheld
+    # 묻는 것을 부르지 않은 짧은 답은 따지지 않는다.
+    _answering(client, "2025년 11월 28일이다.")
+    assert not ask(database, "용역의 납기는 언제야?", client=client).withheld
+    database.close()
+
+
+def test_asking_in_other_words_than_the_document_is_still_answered(tmp_path):
+    # 다른 말로 묻는 24문항: 문서는 '계약금액·납기'인데 '계약액·마감'으로 물으면 옳은 답을 버렸다.
+    database = _one_document(tmp_path, "2025_용역계약_체결보고.txt",
+                             CONTRACT + "\n제출기한: 2025. 9. 30.\n제출 서식: 별지 제3호")
+    client = OllamaClient()
+    for question, reply, part in (
+            ("시설물 점검 용역 계약액은 얼마야?", "계약금액은 48,000천원이다.", "48,000"),
+            ("보고 마감은 언제야?", "제출기한은 2025. 9. 30.이다.", "9. 30"),
+            ("보고에 쓰는 양식은 뭐야?", "제출 서식은 별지 제3호이다.", "제3호")):
+        _answering(client, reply)
+        answer = ask(database, question, client=client)
+        assert not answer.withheld and part in answer.text, question
+    # 다른 것을 묻는 말까지 받아 주지는 않는다.
+    _answering(client, "계약금액은 48,000천원이다.")
+    assert ask(database, "시설물 점검 용역 정산액은 얼마야?", client=client).withheld
+    database.close()
+
+
+def test_what_counts_as_the_document_saying_the_focus():
+    from app.search.rag import _focus, _said_in
+
+    assert _said_in("계약액", "계약금액: 48,000천원") and _said_in("마감일", "신청기한: 2025. 4. 30.")
+    assert _said_in("양식", "사용 서식: 별지 제2호 서식")
+    assert not _said_in("정산액", "계약금액: 48,000천원 대금은 30일 이내에 정산한다")
+    assert not _said_in("불이익", "제출기한: 2025. 9. 30.") and not _said_in("양식", "제출기한: 9. 30.")
+    assert _focus("2024년 용역은 최종적으로 얼마로 정산됐어?") == ""
+    assert _focus("3분기 실적 보고는 어떤 차례로 진행해?") == ""
+
+
 def test_the_focus_of_a_question_is_read_only_when_it_is_clear():
     from app.search.rag import _focus
 

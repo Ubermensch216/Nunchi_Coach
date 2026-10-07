@@ -12,6 +12,8 @@
                낮으면 '문장에서 찾은 내용'에 인사말·안내 문구가 섞인다.
   재현율       쓸모 있는 문장 가운데 모델이 갈래를 붙인 비율.
   갈래 정확도  고른 쓸모 있는 문장 가운데 갈래까지 맞은 비율.
+  규칙이 버린 것  모델이 고른 뒤 제품의 규칙 검사가 버린 문장. 위 수치는 버린 뒤의 것이고,
+               버리기 전 정밀도를 함께 적는다. 쓸모 있는 문장을 버렸으면 재현율이 깎인다.
 
 표본은 합성이며 정답도 만든 사람이 붙였다. 실제 기관 문서에서의 수치가 아니다.
 모델의 답은 실행마다 다를 수 있으니 --repeat 3 이상으로 편차를 함께 본다.
@@ -40,6 +42,9 @@ class Tally:
     failed: int = 0             # 모델이 답하지 못한 묶음
     wrong: list[str] = field(default_factory=list)      # 엉뚱하게 고른 문장
     missed: list[str] = field(default_factory=list)     # 놓친 문장
+    # 모델은 골랐지만 규칙(statements.plausible)이 버린 문장. 위의 수는 버린 뒤의 것이다.
+    ruled_out: list[str] = field(default_factory=list)
+    ruled_out_useful: int = 0                           # 그 가운데 쓸모 있던 문장
 
     @property
     def precision(self) -> float:
@@ -78,7 +83,7 @@ def judge(group: dict, picks: list[list] | None, tally: Tally) -> None:
 
 
 def ask(client, group: dict) -> list[list] | None:
-    """제품(statements.find)과 같은 프롬프트·스키마·검증으로 묻는다."""
+    """제품(statements.find)과 같은 프롬프트·스키마·검증으로 묻는다. 규칙 검사는 run이 한다."""
     from ..ai.prompts_loader import render
 
     listed = group["sentences"]
@@ -92,7 +97,19 @@ def ask(client, group: dict) -> list[list] | None:
 def run(client, groups: list[dict]) -> Tally:
     tally = Tally()
     for group in groups:
-        judge(group, ask(client, group), tally)
+        picks = ask(client, group)
+        if picks is not None:
+            listed = group["sentences"]
+            kept = statements.checked(picks, [item["text"] for item in listed])
+            for number, category in picks:
+                if [number, category] not in kept:
+                    item = listed[number - 1]
+                    tally.ruled_out.append(
+                        f"{item['text']}  → {statements.CATEGORIES[category]}"
+                        + ("  (쓸모 있는 문장)" if item["accept"] else ""))
+                    tally.ruled_out_useful += bool(item["accept"])
+            picks = kept
+        judge(group, picks, tally)
     return tally
 
 
@@ -104,6 +121,14 @@ def to_text(rounds: list[Tally], model: str) -> str:
             f"재현율 {tally.hits}/{tally.useful} ({tally.recall:.0%}) · "
             f"갈래 정확도 {tally.right_kind}/{tally.hits} ({tally.kind_accuracy:.0%})"
             + (f" · 답하지 못한 묶음 {tally.failed}" if tally.failed else ""))
+        if tally.ruled_out:
+            raw_hits = tally.hits + tally.ruled_out_useful
+            raw_picked = tally.picked + len(tally.ruled_out)
+            lines.append(
+                f"    규칙이 버린 것 {len(tally.ruled_out)}(그중 쓸모 있는 문장 "
+                f"{tally.ruled_out_useful}) — 버리기 전 정밀도 {raw_hits}/{raw_picked} "
+                f"({raw_hits / raw_picked:.0%})")
+            lines += [f"    − 규칙이 버림: {text}" for text in tally.ruled_out]
         lines += [f"    ✕ 엉뚱하게 고름: {text}" for text in tally.wrong]
         lines += [f"    · 놓침: {text}" for text in tally.missed]
     return "\n".join(lines)
@@ -136,7 +161,8 @@ def main(argv: list[str] | None = None) -> int:
             "model": client.gen_model,
             "rounds": [{"useful": t.useful, "picked": t.picked, "hits": t.hits,
                         "right_kind": t.right_kind, "failed": t.failed,
-                        "wrong": t.wrong, "missed": t.missed} for t in rounds],
+                        "wrong": t.wrong, "missed": t.missed, "ruled_out": t.ruled_out,
+                        "ruled_out_useful": t.ruled_out_useful} for t in rounds],
         }, ensure_ascii=False, indent=2), encoding="utf-8")
     return 0
 

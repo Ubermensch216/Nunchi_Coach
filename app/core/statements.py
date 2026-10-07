@@ -210,7 +210,8 @@ def find(db, task_id: int, client=None, basis: date | None = None,
         picks, extractor = reusable["found"], reusable.get("extractor", "")
 
     candidates = []
-    for number, category in picks:
+    # 지난 결과를 다시 쓸 때에도 거치도록 여기서 거른다(규칙이 바뀌어도 저장된 답을 고칠 필요가 없다).
+    for number, category in checked(picks, [item["text"] for item in listed]):
         item = listed[number - 1]
         mark = hashlib.sha256(rc._normalize(item["text"]).encode("utf-8")).hexdigest()[:6]
         past = bool(item["doc_year"]) and item["doc_year"] < basis.year
@@ -240,6 +241,31 @@ def _verified(data, count: int) -> list[list]:
             taken.add(number)
             picks.append([number, category])
     return sorted(picks)
+
+
+# 갈래가 맞으려면 문장에 있어야 하는 것. 모델은 "참석자는 과장 외 5명이었다"를 금액으로,
+# "일정에 차질이 없도록 협조하여 주시기 바랍니다"를 기한으로 답하기도 한다.
+_HAS_NUMBER = re.compile(r"\d|[천만억]\s*원|[한두세네]\s*(?:건|개|명|부|회|배)|분의")
+_HAS_TIME = re.compile(
+    r"\d\s*(?:일|월|주|개월|년|시|분기)|이내|까지|부터|기한|기간|마감|매월|매년|매주|분기|당일|즉시|전에|뒤에|후에")
+# 당부하는 꼴("… 주시기 바랍니다")에 날짜도 수도 없으면 버리는 규칙은 넣었다가 뺐다. 첫
+# 표본에서는 쓸모없는 문장 3개를 걸렀지만(79% → 87%), 두 번째 표본에서는 "붙임 서식에 맞추어
+# … 작성하여 주시기 바랍니다" 같은 쓸모 있는 문장 3개를 버렸다(재현율 100% → 88%).
+
+
+def plausible(text: str, category: str) -> bool:
+    """모델이 붙인 갈래가 이 문장에 붙을 수 있는가. 규칙으로 알 수 있는 것만 본다."""
+    if category == "amount" and not _HAS_NUMBER.search(text):
+        return False
+    if category == "deadline" and not _HAS_TIME.search(text):
+        return False
+    return True
+
+
+def checked(picks: list[list], texts: list[str]) -> list[list]:
+    """고른 것 가운데 갈래가 문장에 붙을 수 있는 것만. texts는 번호 순서의 문장이다."""
+    return [[number, category] for number, category in picks
+            if plausible(texts[number - 1], category)]
 
 
 def _meta_key(task_id: int) -> str:

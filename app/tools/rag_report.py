@@ -1,7 +1,7 @@
 """질문 화면 실측 리포트 — RAG 개선의 자.
 
     python -m app.tools.rag_report [--project 이름] [--data 경로]
-                                   [--cases 경로 | --dev | --holdout] [--case id]
+                                   [--cases 경로 | --dev | --holdout | --reworded] [--case id]
                                    [--json 경로]
                                    [--repeat 횟수]
 
@@ -47,6 +47,8 @@ DEV_CASES = DEFAULT_CASES.with_name("dev30.json")
 # 따로 떼어 둔 60문항. 개발용 문항으로 고친 것이 새 질문에서도 통하는지 본다 —
 # 이 문항으로는 프롬프트·검색을 반복해 조정하지 않는다. `--holdout`으로 고른다.
 HOLDOUT_CASES = DEFAULT_CASES.with_name("holdout60.json")
+# 문서와 다른 말로 묻는 24문항. 앞의 문항들은 문서의 낱말로 물었다. `--reworded`로 고른다.
+REWORDED_CASES = DEFAULT_CASES.with_name("reworded24.json")
 
 
 @dataclass(slots=True)
@@ -74,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     _force_utf8()
     args = _parse_args(argv)
 
-    cases = _load_cases(HOLDOUT_CASES if args.holdout
+    cases = _load_cases(REWORDED_CASES if args.reworded else HOLDOUT_CASES if args.holdout
                         else DEV_CASES if args.dev else Path(args.cases))
     if args.case:
         cases = [c for c in cases if c["id"] == args.case]
@@ -310,6 +312,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--dev", action="store_true", help="개발용 30문항 평가셋으로 잰다")
     parser.add_argument("--holdout", action="store_true",
                         help="따로 떼어 둔 60문항으로 잰다(이 문항으로 조정하지 않는다)")
+    parser.add_argument("--reworded", action="store_true",
+                        help="문서와 다른 말로 묻는 24문항으로 잰다")
     parser.add_argument("--case", default=None, help="사례 하나만 실행")
     parser.add_argument(
         "--repeat", type=int, default=1,

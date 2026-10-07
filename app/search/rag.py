@@ -365,7 +365,7 @@ _FOCUS_BEFORE = re.compile(r"([가-힣A-Za-z]{2,})\s+" + _ASK_WORD)
 _FOCUS_AFTER = re.compile(r"(?:어떤|무슨|어느)\s+([가-힣A-Za-z]{2,})")
 _PARTICLE = re.compile(r"(?:에서는|에서|으로|이나|은|는|이|가|을|를|의|에|도|로|과|와)$")
 # 무엇을 묻는지 가리지 못하는 말. 초점으로 삼지 않는다.
-_NO_FOCUS = {"내용", "자료", "문서", "업무", "단계", "순서", "절차", "방법", "결과", "기준", "현재",
+_NO_FOCUS = {"내용", "자료", "문서", "업무", "단계", "순서", "절차", "차례", "방법", "결과", "기준", "현재",
              "그때", "때", "것", "어느", "어떤", "무슨", "매년", "보통", "대략", "모두", "각각"}
 
 
@@ -378,6 +378,8 @@ def _focus(question: str) -> str:
     stripped = _PARTICLE.sub("", word)
     if len(stripped) < 2:
         return ""                            # '점이'처럼 한 글자가 남는 말은 초점이 못 된다
+    if match.group(1).endswith("적으로"):
+        return ""                            # '최종적으로 얼마로'의 '최종적'은 묻는 것이 아니다
     word = stripped
     if match.group(1)[-1] in "은는도":        # '질의에는' → '질의에' → '질의'
         again = re.sub(r"(?:에서|으로|에|로)$", "", word)
@@ -386,10 +388,68 @@ def _focus(question: str) -> str:
     return "" if any(word.startswith(common) for common in _NO_FOCUS) else word
 
 
+# 사람은 문서의 말로 묻지 않는다. 다른 말로 묻는 24문항에서 초점 검사가 옳은 답 7건을
+# 버렸다('제출기한'을 '마감'으로, '서식'을 '양식'으로, '계약금액'을 '계약액'으로 물었다).
+# 같은 것을 가리키는 말의 묶음 — 초점이 이 가운데 하나로 끝나면 나머지로 바꿔서도 찾는다.
+_SAME_THING = (("기한", "마감일", "마감", "기일", "시한"), ("서식", "양식"))
+
+
+def _said_in(focus: str, text: str) -> bool:
+    """문서(text)가 초점 낱말을 말하는가. 글자 그대로, 같은 뜻의 말로, 또는 줄인 말로."""
+    squeezed = re.sub(r"\s+", "", text)
+    if focus in squeezed:
+        return True
+    for group in _SAME_THING:
+        for tail in group:
+            if focus.endswith(tail):
+                head = focus[:-len(tail)]
+                # 앞말이 붙어 있으면('신청마감일') 문서에도 그 앞말과 함께 있어야 한다.
+                if any(head + other in squeezed for other in group):
+                    return True
+                break
+    # 줄인 말: '계약액' ← '계약금액'. 첫 글자와 끝 글자가 같고 글자가 차례대로 들어 있는 낱말.
+    if len(focus) >= 3:
+        for word in set(re.findall(r"[가-힣]+", text)):
+            if (len(focus) < len(word) <= len(focus) + 2 and word[0] == focus[0]
+                    and word[-1] == focus[-1] and _in_order(focus, word)):
+                return True
+    return False
+
+
+def _in_order(short: str, long: str) -> bool:
+    rest = iter(long)
+    return all(char in rest for char in short)
+
+
 # '언제 했어?'에 대한 답이라면 때가 적혀 있어야 한다. '언제까지/언제부터'는 기간·조건으로도
 # 답할 수 있어 따지지 않는다("준공검사를 마친 뒤 30일 이내").
 _ASKS_WHEN = re.compile(r"언제(?!까지|부터)")
 _GIVES_WHEN = re.compile(r"\d+\s*월|(?:19|20)\d{2}|\d+\.\s*\d+|분기|매년|매월|매주|상반기|하반기|연초|연말")
+
+
+# 한 문장 안의 마디. 날짜의 '2025. 11. 28.'은 가르지 않는다(마침표 뒤가 한글일 때만).
+_CLAUSE = re.compile(r"[,;]|(?<=[가-힣])며\s|\.\s+(?=[가-힣])")
+
+
+def _when_of_something_else(question: str, focus: str, kept: list) -> bool:
+    """묻는 것을 말하기는 했는데, 적힌 때는 다른 것의 때인가.
+
+    60문항 평가: "준공검사는 언제 했어?"에 "납기는 2025년 11월 28일이며, 대금은
+    준공검사를 마친 뒤 30일 이내에 정산한다" — 때도 있고 '준공검사'도 있지만 같은
+    마디에 있지 않다. 문장이 묻는 것을 아예 부르지 않으면("11월 28일입니다") 따지지
+    않는다. 질문이 스스로 적은 해('2025년')는 답의 때로 치지 않는다.
+    """
+    asked = set(re.findall(r"\d+", question))
+    named = False
+    for sentence in kept:
+        for clause in _CLAUSE.split(sentence.text):
+            if focus not in re.sub(r"\s+", "", clause):
+                continue
+            named = True
+            rest = re.sub(r"\d+", lambda m: "" if m.group() in asked else m.group(), clause)
+            if _GIVES_WHEN.search(rest):
+                return False
+    return named
 
 
 def _off_the_point(question: str, kept: list, context_rows: list,
@@ -399,14 +459,17 @@ def _off_the_point(question: str, kept: list, context_rows: list,
     문장 하나하나는 근거에 있어 검증을 지나가지만 묻는 것과 다른 것을 말하는
     경우다(60문항 평가: 올해 정산액을 물었는데 계약금액과 지급액을, 늦게 낼 때의
     불이익을 물었는데 제출기한을, 준공검사를 언제 했는지 물었는데 정산 규정을 답했다).
-    규칙으로 알 수 있는 두 가지만 본다.
+    규칙으로 알 수 있는 것만 본다.
       · 질문이 값을 묻는 낱말(초점)이 인용한 문서 어디에도 없다.
       · 때를 물었는데 어느 문장에도 때가 없다.
+      · 때를 물었는데 적힌 때가 묻는 것과 다른 마디에 있다.
     """
     if _ASKS_WHEN.search(question) and not any(_GIVES_WHEN.search(s.text) for s in kept):
         return "when_missing"
     # 이유를 묻는 질문은 위의 이유 검사가 본다.
     focus = "" if _asks_reason(question) else _focus(question)
+    if focus and _ASKS_WHEN.search(question) and _when_of_something_else(question, focus, kept):
+        return "when_elsewhere"
     if focus:
         cited = {source for sentence in kept for source in sentence.sources}
         docs = {context_rows[source - 1]["doc_id"] for source in cited
@@ -414,7 +477,7 @@ def _off_the_point(question: str, kept: list, context_rows: list,
         about = "".join(
             row["filename"] + source_text.get(index, "")
             for index, row in enumerate(context_rows, start=1) if row["doc_id"] in docs)
-        if focus not in re.sub(r"\s+", "", about):
+        if not _said_in(focus, about):
             return "focus_missing"
     return ""
 

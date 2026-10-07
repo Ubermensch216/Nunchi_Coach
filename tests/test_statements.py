@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import date
 from pathlib import Path
@@ -176,7 +177,7 @@ def test_answers_that_point_outside_the_list_are_dropped(contract):
         {"n": 0, "type": "deadline"}, {"n": count + 1, "type": "deadline"},
         {"n": 1, "type": "지어낸갈래"}, {"n": "2", "type": "howto"}, {"n": True, "type": "howto"},
         "문장", {"n": 2, "type": statements.NONE},          # 해당 없음이라고 답한 문장
-        {"n": 1, "type": "deadline"}, {"n": 1, "type": "howto"}]})
+        {"n": 1, "type": "progress"}, {"n": 1, "type": "howto"}]})
     rc.restore(contract, BASIS, client=client)
     assert [item["content"] for item in found(contract)] == [listed(contract)[0]]
 
@@ -184,6 +185,48 @@ def test_answers_that_point_outside_the_list_are_dropped(contract):
         contract.con.execute("DELETE FROM meta WHERE key LIKE 'statements:%'")
         rc.restore(contract, BASIS, client=FakeClient(broken))
         assert found(contract) == []
+
+
+def test_a_category_the_sentence_cannot_carry_is_dropped(db):
+    add(db, "2025_실적보고_요청.txt", "2025-09-01",
+        "2025년 3분기 실적 보고 요청\n참석자는 과장 외 담당자들이었다. "
+        "각 부서에서는 기한을 지켜 주시기 바랍니다. "
+        "부서 자료는 9월 20일까지 보내 주시기 바랍니다. "
+        "실적표의 증감 사유는 전년 동기 대비로 적는다.")
+    client = FakeClient(pick(db, ("참석자", "amount"), ("기한을 지켜", "amount"),
+                             ("9월 20일", "deadline"), ("증감 사유", "deadline")))
+    rc.restore(db, BASIS, client=client)
+    # 수가 없는 '금액'과 때가 없는 '기한'은 올리지 않는다.
+    assert [item["content"] for item in found(db)] == ["부서 자료는 9월 20일까지 보내 주시기 바랍니다"]
+
+
+def test_the_rule_check_also_applies_to_an_answer_saved_before_it_existed(contract):
+    texts = listed(contract)
+    number = next(i for i, t in enumerate(texts, 1) if "기성금" in t)
+    client = FakeClient(pick(contract, ("기성금", "progress")))
+    rc.restore(contract, BASIS, client=client)
+    assert len(found(contract)) == 1
+    # 저장된 답의 갈래가 규칙에 맞지 않는 것이었다면, 다시 쓸 때 걸러진다.
+    key = statements._meta_key(1)
+    saved = json.loads(contract.get_meta(key))
+    saved["found"] = [[number, "deadline"]]
+    contract.set_meta(key, json.dumps(saved))
+    rc.restore(contract, BASIS, client=client)
+    assert found(contract) == []
+
+
+def test_what_each_category_needs():
+    ok, no = statements.plausible, lambda *a: not statements.plausible(*a)
+    assert ok("단체당 지원 한도는 2천만원으로 한다.", "amount")
+    assert ok("지체상금은 계약금액의 천분의 일로 한다.", "amount")
+    assert no("참석자는 과장 외 담당자들이었다.", "amount")
+    assert ok("대금은 준공검사를 마친 뒤 30일 이내에 정산한다.", "deadline")
+    assert ok("정기 재물조사는 매년 한다.", "deadline")
+    assert no("성실한 수감 태도가 요구된다.", "deadline")
+    assert no("예산 편성 일정에 차질이 없도록 협조하여 주시기 바랍니다.", "deadline")
+    # 당부하는 꼴이라는 것만으로는 버리지 않는다(두 번째 표본에서 쓸모 있는 문장을 버렸다).
+    assert ok("붙임 서식에 맞추어 사업설명서를 작성하여 주시기 바랍니다.", "howto")
+    assert ok("검수 조서는 감독관과 계약담당자가 함께 서명하여 작성한다.", "howto")
 
 
 def test_found_sentences_never_close_a_required_gap_or_touch_steps(contract):

@@ -65,6 +65,33 @@ def test_the_model_is_asked_the_way_the_product_asks_and_bad_answers_are_dropped
     assert (tally.picked, tally.hits) == (1, 1)             # 없는 번호·없는 갈래·none은 버린다
 
 
+def test_what_the_product_rules_drop_is_counted_apart():
+    group = {"id": "g", "task": "t", "sentences": [
+        {"text": "대금은 준공검사를 마친 뒤 30일 이내에 정산한다.", "accept": ["deadline"]},
+        {"text": "참석자는 과장 외 담당자들이었다.", "accept": []},
+        {"text": "수료 명단은 교육이 끝난 날 인사시스템에 올린다.", "accept": ["deadline", "howto"]},
+    ]}
+    model = Model({"found": [{"n": 1, "type": "deadline"}, {"n": 2, "type": "amount"},
+                             {"n": 3, "type": "deadline"}]})
+    tally = se.run(model, [group])
+    # 제품은 수가 없는 '금액'과 때가 없는 '기한'을 올리지 않는다 — 쓸모 있는 문장이어도.
+    assert (tally.picked, tally.hits, tally.useful) == (1, 1, 2)
+    assert len(tally.ruled_out) == 2 and tally.ruled_out_useful == 1
+    assert tally.precision == 1.0 and tally.recall == 0.5
+    text = se.to_text([tally], "fake")
+    assert "버리기 전 정밀도 2/3" in text and "(쓸모 있는 문장)" in text
+
+
+def test_the_second_sample_is_shaped_like_the_first():
+    first = json.loads(se.DEFAULT_CASES.read_text(encoding="utf-8"))["groups"]
+    second = json.loads(se.DEFAULT_CASES.with_name("precision2.json").read_text(encoding="utf-8"))["groups"]
+    listed = [item for group in second for item in group["sentences"]]
+    assert all(set(item["accept"]) <= set(statements.CATEGORIES) for item in listed)
+    assert all(statements._split(item["text"]) for item in listed)
+    assert not ({item["text"] for item in listed}
+                & {item["text"] for group in first for item in group["sentences"]})
+
+
 def test_a_group_the_model_could_not_answer_counts_as_missed_not_as_clean():
     tally = se.run(Model(error="연결 오류"), [GROUP])
     assert tally.failed == 1 and tally.recall == 0.0 and len(tally.missed) == 2

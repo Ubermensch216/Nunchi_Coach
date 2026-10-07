@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from app.tools.rag_report import (DEFAULT_CASES, DEV_CASES, HOLDOUT_CASES, Outcome, _judge,
-                                  _load_cases)
+from app.tools.rag_report import (DEFAULT_CASES, DEV_CASES, HOLDOUT_CASES, REWORDED_CASES, Outcome,
+                                  _judge, _load_cases)
 
 
 def outcome(**fields) -> Outcome:
@@ -107,8 +107,8 @@ def test_error_is_reported_as_a_single_failure():
 
 # ── 평가셋 파일 ─────────────────────────────────────────────────────
 
-@pytest.fixture(params=[DEFAULT_CASES, DEV_CASES, HOLDOUT_CASES],
-                ids=["기본", "개발용30", "따로둔60"])
+@pytest.fixture(params=[DEFAULT_CASES, DEV_CASES, HOLDOUT_CASES, REWORDED_CASES],
+                ids=["기본", "개발용30", "따로둔60", "다른말24"])
 def shipped(request):
     return _load_cases(Path(request.param))
 
@@ -161,6 +161,21 @@ def test_holdout_set_has_forty_answerable_and_twenty_withheld_and_repeats_no_dev
     assert all(c.get("must_cite_any") and c.get("must_contain")
                for c in holdout if c["expect"] == "answer")
     assert _parse_args(["--holdout"]).holdout and not _parse_args(["--dev"]).holdout
+
+
+def test_reworded_set_asks_known_facts_in_other_words():
+    from app.tools.rag_report import _parse_args
+
+    reworded = _load_cases(Path(REWORDED_CASES))
+    earlier = _load_cases(Path(DEV_CASES)) + _load_cases(Path(HOLDOUT_CASES))
+    assert len(reworded) == 24
+    assert sum(1 for c in reworded if c["expect"] == "withhold") == 6
+    squeeze = lambda text: "".join(text.split())
+    assert not {squeeze(c["question"]) for c in earlier} & {squeeze(c["question"]) for c in reworded}
+    assert not {c["id"] for c in earlier} & {c["id"] for c in reworded}
+    assert all(c.get("must_cite_any") and c.get("must_contain")
+               for c in reworded if c["expect"] == "answer")
+    assert _parse_args(["--reworded"]).reworded and not _parse_args(["--holdout"]).reworded
 
 
 def test_cases_file_is_valid_json():
