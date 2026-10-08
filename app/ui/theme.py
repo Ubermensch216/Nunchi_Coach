@@ -17,6 +17,8 @@ import 시점에 값을 복사해 두면 테마를 바꿔도 그 사본은 옛 �
 
 from __future__ import annotations
 
+from pathlib import Path
+
 # ── 색 두 벌 ────────────────────────────────────────────────────────
 # 이름은 역할이지 색이 아니다. 어두운 벌에서 BG가 검어지듯, 같은 이름이
 # 같은 역할을 계속 맡는다.
@@ -234,6 +236,28 @@ def color(name: str) -> str:
 FONT_CANDIDATES = ("Pretendard", "Malgun Gothic", "맑은 고딕", "Segoe UI")
 _family: str | None = None
 
+# 함께 싣는 글꼴(SIL OFL 1.1, app/licenses/texts/OFL-1.1-Pretendard.txt).
+# 굵기 셋(400·600·700)만 싣는다 — 스타일시트가 쓰는 굵기가 그 셋이다. 맑은
+# 고딕에는 600이 없어 '조금 굵게'로 적은 글자가 그냥 굵게 나오거나 흐려졌다.
+_FONT_DIR = Path(__file__).parent / "assets" / "fonts"
+_fonts_loaded = False
+
+
+def _load_bundled_fonts() -> None:
+    """함께 싣는 글꼴을 이 프로세스에만 등록한다. PC에 설치하지 않는다.
+
+    파일이 없거나 읽지 못해도 조용히 넘어간다 — 그때는 font_family()가 다음
+    후보(맑은 고딕)를 고른다. 앱이 선 뒤에만 불러야 한다(font_family 참고).
+    """
+    global _fonts_loaded
+    if _fonts_loaded:
+        return
+    _fonts_loaded = True
+    from PySide6.QtGui import QFontDatabase
+
+    for path in sorted(_FONT_DIR.glob("*.ttf")):
+        QFontDatabase.addApplicationFont(str(path))
+
 
 def font_family() -> str:
     """이 PC에 실제로 설치된 첫 글꼴. 없으면 시스템 기본에 맡긴다.
@@ -251,6 +275,7 @@ def font_family() -> str:
 
         if QGuiApplication.instance() is None:
             return ""
+        _load_bundled_fonts()
         installed = set(QFontDatabase.families())
     except Exception:                      # pragma: no cover — Qt 없이 부를 때
         return ""
@@ -267,7 +292,7 @@ FS_TITLE = 24
 FS_SECTION = 18
 FS_LEAD = 16
 FS_BODY = 14
-FS_SMALL = 12
+FS_SMALL = 13                # Pretendard는 맑은 고딕보다 글자가 좁아 12에서는 부기가 잘다
 LINE_HEIGHT = 1.6            # 한글은 1.5 이하면 답답하다
 
 # 글자 크기 3단계. 소·중·대이며 저장값은 이 키다.
@@ -574,7 +599,10 @@ def stylesheet(text_size: str = "medium") -> str:
     QPushButton#Chip {{
         background: {BG};
         border: 1px solid {BORDER_STRONG};
+        /* 반지름이 높이의 절반을 넘으면 Qt는 둥근 모서리를 아예 그리지 않는다.
+           글꼴이 바뀌어 칩이 낮아지자 각진 상자가 되었다 — 높이를 못 박는다. */
         border-radius: 14px;
+        min-height: 20px;
         padding: {SP_XS}px {SP_MD}px;
         color: {TEXT_MUTED};
         text-align: left;

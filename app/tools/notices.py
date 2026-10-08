@@ -54,6 +54,12 @@ CANONICAL = {
     "GPL-3.0.txt": "https://www.gnu.org/licenses/gpl-3.0.txt",
 }
 
+# 함께 싣는 글꼴(app/ui/assets/fonts). 파이썬 배포판이 아니라 아래 목록에는
+# 잡히지 않으므로 여기에 판과 출처를 적는다. 글꼴 파일을 바꾸면 함께 고친다.
+# 라이선스 본문은 TEXTS_DIR의 OFL-1.1-Pretendard.txt(받은 그대로)다.
+PRETENDARD_VERSION = "1.3.9"
+PRETENDARD_URL = "https://github.com/orioncactus/pretendard"
+
 # 조건이 따르는 구성요소. 키는 정규화한 배포판 이름.
 _SOURCES = {
     "pymupdf": "https://github.com/pymupdf/PyMuPDF",
@@ -211,6 +217,12 @@ def render(items: list[Component] | None = None) -> str:
         "",
         f"■ Python {python} — PSF License 2.0",
         "  실행물에 인터프리터와 표준 라이브러리가 들어 있습니다.",
+        "",
+        f"■ Pretendard {PRETENDARD_VERSION} — SIL Open Font License 1.1",
+        "  화면 글꼴입니다. 고치지 않은 글꼴 파일 셋(Regular·SemiBold·Bold)을 그대로",
+        "  포함하며 이 프로그램 안에서만 씁니다(PC에 설치하지 않습니다).",
+        "  Copyright (c) 2021, Kil Hyung-jin, with Reserved Font Name Pretendard.",
+        f"    소스: {PRETENDARD_URL}",
         "",
         "■ AI 모델 — 실행물에 포함하지 않음",
         "  생성·임베딩 모델은 이 실행물에 들어 있지 않습니다. 사용자가 Ollama로 따로",

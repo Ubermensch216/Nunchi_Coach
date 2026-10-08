@@ -8,6 +8,11 @@
 | `AGPL-3.0.txt` | PyMuPDF, MuPDF | https://www.gnu.org/licenses/agpl-3.0.txt |
 | `LGPL-3.0.txt` | PySide6, shiboken6, Qt | https://www.gnu.org/licenses/lgpl-3.0.txt |
 | `GPL-3.0.txt` | LGPL-3.0이 참조하는 본문 | https://www.gnu.org/licenses/gpl-3.0.txt |
+| `OFL-1.1-Pretendard.txt` | Pretendard 글꼴(`app/ui/assets/fonts`) | https://github.com/orioncactus/pretendard/blob/v1.3.9/LICENSE |
+
+Pretendard의 본문과 글꼴 파일 셋(`Pretendard-Regular.ttf`·`-SemiBold.ttf`·`-Bold.ttf`)은 2026-10-08에
+jsDelivr의 v1.3.9 태그 사본에서 받았다(`https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/`의
+`LICENSE`와 `packages/pretendard/dist/public/static/alternative/`). 글꼴 파일은 고치지 않았다.
 
 지금 들어 있는 파일은 2026-10-07에 SPDX 라이선스 목록 저장소에서 받았다
 (`https://raw.githubusercontent.com/spdx/license-list-data/main/text/{AGPL,LGPL,GPL}-3.0-only.txt`).
