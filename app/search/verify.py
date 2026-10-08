@@ -63,6 +63,8 @@ class Dropped:
 class VerifyResult:
     kept: list[VerifiedSentence] = field(default_factory=list)
     dropped: list[Dropped] = field(default_factory=list)
+    # 모델이 틀리게 적은 근거 번호를 숫자가 실제로 있는 문서로 고쳐 잡은 문장 수.
+    reattributed: int = 0
 
     @property
     def survived(self) -> bool:
@@ -132,10 +134,19 @@ def verify_sentences(
 
         missing = _unsupported_numbers(text, cited_text)
         if missing:
-            result.dropped.append(
-                Dropped(text, f"인용한 근거에 없는 숫자를 썼다: {', '.join(missing)}")
-            )
-            continue
+            # 문장은 옳은데 근거 번호만 틀리게 적는 일이 있다(실측: 납기를 옳게 말하고
+            # 옆 조각의 번호를 댔다 — 옳은 답이 '근거에 없는 숫자'로 버려졌다). 문장의
+            # 숫자를 모두 가진 문서가 문맥에 **하나뿐**이면 그 문서를 근거로 고쳐 잡는다.
+            # 아래의 검사는 고쳐 잡은 근거로 그대로 거친다.
+            moved = _only_supporting_sources(text, source_text, support_text)
+            if not moved:
+                result.dropped.append(
+                    Dropped(text, f"인용한 근거에 없는 숫자를 썼다: {', '.join(missing)}")
+                )
+                continue
+            valid_sources = moved
+            cited_text = "\n".join(support_text.get(s, source_text[s]) for s in valid_sources)
+            result.reattributed += 1
 
         if _HEDGE.search(text):
             result.dropped.append(Dropped(text, "답이 없다고 하면서 다른 내용을 내놓았다"))
@@ -175,6 +186,37 @@ def verify_sentences(
 
         result.kept.append(VerifiedSentence(text=text, sources=valid_sources))
     return result
+
+
+# 근거 번호를 고쳐 잡을 때, 문장의 낱말 가운데 이만큼이 그 문서에 있어야 같은 문서로 본다.
+_SAME_DOCUMENT = 0.8
+
+
+def _only_supporting_sources(text: str, source_text: dict[int, str],
+                             support_text: dict[int, str]) -> list[int]:
+    """문장의 숫자를 모두 가진 근거. 그런 문서가 하나뿐일 때만 돌려준다.
+
+    둘 이상이면 어느 것의 값인지 정할 수 없다 — 해가 다른 문서에 같은 숫자가 있을 때
+    아무 쪽이나 근거로 붙이면 안 된다. 숫자가 조각 자신에 있는 것만 근거 번호로 삼고,
+    같은 문서의 다른 조각은 사실 확인(support_text)에만 쓴다.
+    """
+    holders: dict[str, list[int]] = {}
+    for number in source_text:
+        about = support_text.get(number, source_text[number])
+        if not _unsupported_numbers(text, about):
+            holders.setdefault(about, []).append(number)
+    # 숫자만 맞아서는 안 된다 — 문장의 말이 대부분 그 문서의 말이어야 한다. 그러지 않으면
+    # 묻는 것과 무관한 표의 숫자를 끌어다 쓴 문장에 그 표를 근거로 붙여 주게 된다.
+    # '제2호'의 2처럼 흔한 숫자는 여러 문서에 있다. 그런 문서가 둘 이상이면 정하지 않는다.
+    holders = {about: numbers for about, numbers in holders.items()
+               if korean.overlap_ratio(text, about) >= _SAME_DOCUMENT}
+    if len(holders) != 1:
+        return []
+    (about, numbers), = holders.items()
+    said = {_canonical(n) for n in _NUMBER.findall(text)}
+    own = [n for n in numbers
+           if said & {_canonical(v) for v in _NUMBER.findall(source_text[n])}]
+    return own or numbers[:1]
 
 
 def _clean_sources(value: Any) -> list[int]:

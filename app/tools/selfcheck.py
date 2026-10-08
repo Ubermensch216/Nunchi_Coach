@@ -7,7 +7,7 @@
 schema.sql의 새 표를 빠뜨리면 앱은 뜨지만 '지금 할 일'이나 복원본 저장에서만
 조용히 깨진다. 임시 폴더에 작은 프로젝트를 만들어 그 길을 한 번 끝까지 간다.
 
-    스키마 만들기 → 문서 읽기 → 항목·절차·공백 복원 → 단계 수행 기록
+    스키마 만들기 → 문서 읽기 → 조각·글자 검색 → 항목·절차·공백 복원 → 단계 수행 기록
     → 복원본 저장 → 묶음 내보내기 → 다른 프로젝트로 가져오기 → 원문 재연결
 
 모델을 부르지 않고 네트워크도 쓰지 않는다. 임시 폴더는 끝나면 지운다.
@@ -29,8 +29,10 @@ TEXT = ("절차: 집계 자료 준비 → 실적표 작성 → 검토 후 제출
 def run() -> list[str]:
     """실패한 점검의 설명 목록. 비어 있으면 모두 통과다."""
     from ..core import handover_release, reconstruction, transfer, workcard, workstate as ws
+    from ..core.chunking import build_chunks
     from ..db import Database
     from ..ingest.parsers import parse
+    from ..search import fts
 
     problems: list[str] = []
     root = Path(tempfile.mkdtemp(prefix="nunchi-selfcheck-"))
@@ -58,7 +60,15 @@ def run() -> list[str]:
             return db, doc
 
         sender, doc = project("보내는쪽")
-        task = sender.con.execute("INSERT INTO tasks(name) VALUES ('정기 실적보고')").lastrowid
+        # 질문 화면의 재료 — 조각과 조각 글자 검색은 모델 없이 생겨야 한다.
+        sections = sender.con.execute(
+            "SELECT kind, locator, text FROM document_sections WHERE doc_id = ? "
+            "ORDER BY ordinal", (doc,)).fetchall()
+        made = sender.replace_document_chunks(
+            doc, build_chunks([(s["kind"], s["locator"], s["text"]) for s in sections]))
+        if not made or made[0][0] not in fts.search_chunk_ids(sender, "기획예산과", limit=5):
+            problems.append("문서를 조각으로 나눠 글자 검색에 올리지 못했다")
+        task =sender.con.execute("INSERT INTO tasks(name) VALUES ('정기 실적보고')").lastrowid
         sender.assign_document(task, doc)
         reconstruction.restore(sender, date(2025, 9, 10))
         card = workcard.build(sender, task)

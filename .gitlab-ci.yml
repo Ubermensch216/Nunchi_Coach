@@ -1,17 +1,37 @@
 stages: [verify]
-windows-verify:
+
+# 릴리스는 세 작업이 모두 통과해야 한다. 실제 모델·실제 기관 문서 시험은 여기서 돌지 않는다.
+.windows:
   stage: verify
   tags: [windows]
   variables:
     QT_QPA_PLATFORM: offscreen
-  script:
+  before_script:
     - py -3.14 -m venv .venv-ci
     - ./.venv-ci/Scripts/python.exe -m pip install -r requirements.lock
+
+windows-guard:
+  extends: .windows
+  script:
+    - ./.venv-ci/Scripts/python.exe -m app.tools.repo_guard
+
+windows-test:
+  extends: .windows
+  variables:
+    QT_QPA_PLATFORM: offscreen
+    NUNCHICOACH_STRICT_SKIPS: '1'
+  script:
+    - ./.venv-ci/Scripts/python.exe -m app.tools.lockfile --check
     - ./.venv-ci/Scripts/python.exe -m app.tools.make_fixtures
-    - ./.venv-ci/Scripts/python.exe -m pytest --junitxml=.test_runs/results.xml
-    - ./.venv-ci/Scripts/python.exe -m PyInstaller NunchiCoach.spec
-    - ./dist/NunchiCoach/NunchiCoach.exe selftest tests/fixtures/sample_tree
+    - ./.venv-ci/Scripts/python.exe -m pytest -rs --junitxml=.test_runs/results.xml
   artifacts:
     when: always
     reports:
       junit: .test_runs/results.xml
+
+windows-package:
+  extends: .windows
+  script:
+    - ./.venv-ci/Scripts/python.exe -m app.tools.make_fixtures
+    - ./.venv-ci/Scripts/python.exe -m PyInstaller NunchiCoach.spec
+    - ./dist/NunchiCoach/NunchiCoach.exe selftest tests/fixtures/sample_tree

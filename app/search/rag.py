@@ -24,7 +24,7 @@ from ..ai.settings import project_client
 from ..ai.prompts_loader import render
 from ..ai.schemas import ASK_SCHEMA
 from ..db import Database, representative_predicate
-from . import evidence, fts, tablemath
+from . import evidence, fts, intent, tablemath
 from ..core import korean, provenance
 from ..core.chunking import MAX_CHUNK_CHARS
 from .query import QueryScope, infer_scope
@@ -205,6 +205,17 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
     # 생성·검증·화면 발췌가 모두 이 글을 본다. 따로 자르면 모델이 본 값과
     # 검증이 본 값이 어긋난다.
     source_text = _evidence_text(context_rows, question)
+    # 문서는 자료이지 지시가 아니다. 모델에게 하는 지시로 보이는 문장은 생성 문맥과
+    # 검증 양쪽에서 뺀다 — 그 문장의 숫자가 '근거에 있는 숫자'로 검증을 지나가면 안 된다.
+    ignored = 0
+    for index in list(source_text):
+        source_text[index], removed = intent.strip_instructions(source_text[index])
+        ignored += removed
+    # 질문을 대상·속성·기간·의도로 푼 것. 이유를 묻는 질문의 초점은 이유 검사가 본다.
+    asked = intent.frame(question, "" if _asks_reason(question) else _focus(question))
+    diagnosis = {"frame": asked.as_record()}
+    if ignored:
+        diagnosis["instructions_ignored"] = ignored
 
     # 표의 한 행에서 가장 큰/작은 값을 묻는 질문은 규칙으로 답한다. 경량 모델은
     # 값 견주기를 자주 틀리고, 틀린 값도 표 안의 숫자라 검증을 지나간다.
@@ -215,18 +226,27 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
         about = _support_text(context_rows, source_text)
         computed, rule = tablemath.count(question, source_text, {
             index: f"{row['filename']}\n{about[index]}"
-            for index, row in enumerate(context_rows, start=1)}), "table_cell"
+            for index, row in enumerate(context_rows, start=1)}, stems=asked.stems), "table_cell"
     if computed is not None:
         text, citations = _compose_answer(
             [VerifiedSentence(text=computed[0], sources=computed[1])],
             context_rows, official, source_text)
         return Answer(question=question, text=text, withheld=False, citations=citations,
-                      inferred_years=scope.years, generation={"rule_answer": rule})
+                      inferred_years=scope.years, generation={**diagnosis, "rule_answer": rule})
+
+    if _subject_unknown(db, question, asked.field if asked.stems else ""):
+        # 묻는 대상의 이름이 자료 어디에도 없다. 같은 속성을 가진 다른 대상의 값이
+        # 답으로 나가면 안 된다(실측: "정수장 소독약품 구매 단가는 얼마야?"에 사무용품
+        # 구매 계약의 "토너의 단가는 58,000원이다"가 나갔다). 모델에 묻지 않고 보류한다.
+        related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
+        return Answer(question=question, text="확인 가능한 자료가 부족합니다.", withheld=True,
+                      related_docs=_dedupe(related), inferred_years=scope.years,
+                      generation={**diagnosis, "withheld": "subject_unknown"})
 
     prompt, _version = render(
         "ask", context=_format_context(context_rows, official, source_text), question=question)
     data, gen_error, raw = client.generate_json(prompt, ASK_SCHEMA, num_predict=GEN_TOKEN_BUDGET)
-    generation = _generation_record(client)
+    generation = {**diagnosis, **_generation_record(client)}
     if db.get_meta("content_revision") != content_revision:
         return Answer(question=question, text="", withheld=True,
                       error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
@@ -249,8 +269,7 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
         # 한다(실측: 같은 질문을 잇달아 두 번 물으면 두 번째에 answered=false가
         # 왔다). 근거로 쓸 만한 조각이 있어 여기까지 온 질문이므로 한 번만 다시
         # 묻는다. 다시 받은 답도 아래의 검증을 그대로 거친다.
-        again, again_error, _raw = client.generate_json(
-            prompt, ASK_SCHEMA, num_predict=GEN_TOKEN_BUDGET)
+        again, again_error, _raw = _ask_again(client, prompt, ASK_SCHEMA)
         generation = {**generation, **_generation_record(client), "asked_twice": True}
         if db.get_meta("content_revision") != content_revision:
             return Answer(question=question, text="", withheld=True,
@@ -260,6 +279,7 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
             data = again
 
     if not data.get("answered", False):
+        generation["withheld"] = "model_declined"
         related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
         return Answer(
             question=question,
@@ -276,8 +296,7 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
         # 이렇게 끝났고, 같은 조건으로 다시 물으면 같은 빈 목록이 온다. 문장을
         # 하나 이상 내도록 문법을 좁혀 한 번만 다시 묻는다. 그렇게 받은 문장도
         # 아래의 근거 검증을 그대로 거치므로, 근거 없는 문장은 화면에 오르지 않는다.
-        forced, forced_error, _raw = client.generate_json(
-            prompt, _ASK_SCHEMA_NONEMPTY, num_predict=GEN_TOKEN_BUDGET)
+        forced, forced_error, _raw = _ask_again(client, prompt, _ASK_SCHEMA_NONEMPTY)
         generation = {**generation, **_generation_record(client), "empty_answer_retry": True}
         if db.get_meta("content_revision") != content_revision:
             return Answer(question=question, text="", withheld=True,
@@ -310,7 +329,13 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
         names={index: row["filename"] for index, row in enumerate(context_rows, start=1)},
     )
 
+    if verified.reattributed:
+        generation["sources_corrected"] = verified.reattributed
+
     if not verified.survived:
+        # 왜 버렸는지를 갈래로만 남긴다 — 사유 문장의 쌍점 뒤(문장의 값)는 넣지 않는다.
+        generation["withheld"] = "unverified"
+        generation["dropped"] = sorted({d.reason.split(":", 1)[0] for d in verified.dropped})
         related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
         return Answer(
             question=question,
@@ -327,22 +352,32 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
         # 2분기에 적었던 이유가 뭐야?"에 "2분기 집행액은 210입니다"가 나갔다 —
         # 근거에 있는 숫자지만 묻는 것에 대한 답이 아니다.
         generation["reason_missing"] = True
+        generation["withheld"] = "reason_missing"
         related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
         return Answer(
             question=question, text="확인 가능한 자료가 부족합니다.", withheld=True,
             related_docs=_dedupe(related), model=client.gen_model,
             inferred_years=scope.years, generation=generation)
 
-    off = _off_the_point(question, verified.kept, context_rows, source_text)
+    off = _off_the_point(question, verified.kept, context_rows, source_text, asked)
     if off:
         generation[off] = True
+        generation["withheld"] = off
         related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
         return Answer(
             question=question, text="확인 가능한 자료가 부족합니다.", withheld=True,
             related_docs=_dedupe(related), model=client.gen_model,
             inferred_years=scope.years, generation=generation)
 
-    text, citations = _compose_answer(verified.kept, context_rows, official, source_text)
+    kept = verified.kept
+    if asked.stems:
+        # 옳은 값을 말한 문장이 있어 답은 나가지만, 다른 속성의 값을 말한 문장은 뺀다.
+        verdicts = _wrong_field(asked, kept, context_rows, source_text)
+        wrong = [verdict not in ("", _CONFIRMED) for verdict in verdicts]
+        if any(wrong):
+            generation["sentences_off_field"] = sum(wrong)
+            kept = [sentence for sentence, off_field in zip(kept, wrong) if not off_field]
+    text, citations = _compose_answer(kept, context_rows, official, source_text)
     return Answer(question=question, text=text, withheld=False, citations=citations,
                   model=client.gen_model, inferred_years=scope.years, generation=generation)
 
@@ -388,37 +423,9 @@ def _focus(question: str) -> str:
     return "" if any(word.startswith(common) for common in _NO_FOCUS) else word
 
 
-# 사람은 문서의 말로 묻지 않는다. 다른 말로 묻는 24문항에서 초점 검사가 옳은 답 7건을
-# 버렸다('제출기한'을 '마감'으로, '서식'을 '양식'으로, '계약금액'을 '계약액'으로 물었다).
-# 같은 것을 가리키는 말의 묶음 — 초점이 이 가운데 하나로 끝나면 나머지로 바꿔서도 찾는다.
-_SAME_THING = (("기한", "마감일", "마감", "기일", "시한"), ("서식", "양식"))
-
-
-def _said_in(focus: str, text: str) -> bool:
-    """문서(text)가 초점 낱말을 말하는가. 글자 그대로, 같은 뜻의 말로, 또는 줄인 말로."""
-    squeezed = re.sub(r"\s+", "", text)
-    if focus in squeezed:
-        return True
-    for group in _SAME_THING:
-        for tail in group:
-            if focus.endswith(tail):
-                head = focus[:-len(tail)]
-                # 앞말이 붙어 있으면('신청마감일') 문서에도 그 앞말과 함께 있어야 한다.
-                if any(head + other in squeezed for other in group):
-                    return True
-                break
-    # 줄인 말: '계약액' ← '계약금액'. 첫 글자와 끝 글자가 같고 글자가 차례대로 들어 있는 낱말.
-    if len(focus) >= 3:
-        for word in set(re.findall(r"[가-힣]+", text)):
-            if (len(focus) < len(word) <= len(focus) + 2 and word[0] == focus[0]
-                    and word[-1] == focus[-1] and _in_order(focus, word)):
-                return True
-    return False
-
-
-def _in_order(short: str, long: str) -> bool:
-    rest = iter(long)
-    return all(char in rest for char in short)
+# 문서가 초점 낱말을 말하는가 — 글자 그대로, 같은 뜻의 말로, 또는 줄인 말로.
+# 같은 뜻의 말 묶음과 판정은 search/intent.py에 있다(속성-값 묶임 검사와 함께 쓴다).
+_said_in = intent.said_in
 
 
 # '언제 했어?'에 대한 답이라면 때가 적혀 있어야 한다. '언제까지/언제부터'는 기간·조건으로도
@@ -453,7 +460,7 @@ def _when_of_something_else(question: str, focus: str, kept: list) -> bool:
 
 
 def _off_the_point(question: str, kept: list, context_rows: list,
-                   source_text: dict[int, str]) -> str:
+                   source_text: dict[int, str], asked: "intent.QueryFrame | None" = None) -> str:
     """살아남은 문장이 질문이 묻는 것에 대한 답이 아니면 그 까닭. 답이면 빈 문자열.
 
     문장 하나하나는 근거에 있어 검증을 지나가지만 묻는 것과 다른 것을 말하는
@@ -463,6 +470,7 @@ def _off_the_point(question: str, kept: list, context_rows: list,
       · 질문이 값을 묻는 낱말(초점)이 인용한 문서 어디에도 없다.
       · 때를 물었는데 어느 문장에도 때가 없다.
       · 때를 물었는데 적힌 때가 묻는 것과 다른 마디에 있다.
+      · 답의 값이 문서에서 묶인 이름표·표 칸이 묻는 속성의 것이 아니다(search/intent.py).
     """
     if _ASKS_WHEN.search(question) and not any(_GIVES_WHEN.search(s.text) for s in kept):
         return "when_missing"
@@ -479,7 +487,71 @@ def _off_the_point(question: str, kept: list, context_rows: list,
             for index, row in enumerate(context_rows, start=1) if row["doc_id"] in docs)
         if not _said_in(focus, about):
             return "focus_missing"
+    if asked is not None and asked.stems:
+        verdicts = _wrong_field(asked, kept, context_rows, source_text)
+        wrong = next((verdict for verdict in verdicts if verdict and verdict != _CONFIRMED), "")
+        # 다른 속성의 값을 말한 문장이 있으면, 묻는 속성의 값임이 문서로 확인되는 문장이
+        # 따로 있어야 답이다. 곁들인 규정 문장("30일 이내에 정산한다")만 남아서는
+        # 묻는 값에 답한 것이 아니다.
+        if wrong and _CONFIRMED not in verdicts:
+            return wrong
     return ""
+
+
+_CONFIRMED = "confirmed"
+_JOSA_END = re.compile(r"(?:에서|으로|까지|부터|에게|은|는|이|가|을|를|의|에|로|도|과|와|만)$")
+
+
+def _subject_unknown(db: Database, question: str, field_word: str) -> bool:
+    """묻는 속성 바로 앞에 붙여 쓴 대상의 이름이 자료 전체에 한 번도 나오지 않는가.
+
+    "정수장 소독약품 구매 단가는"에서 '단가' 앞의 '정수장·소독약품·구매'가 대상이다.
+    조사 없이 이어 쓴 세 글자 이상의 낱말만 본다 — 조사가 붙은 말, 서술어, 꾸밈말은
+    사람이 문서와 다르게 말하는 자리라 따지지 않는다('들어온', '배정된').
+    조각 본문과 파일 이름 어디에도 없을 때만 참이다.
+    """
+    if not field_word:
+        return False
+    words = question.split()
+    at = next((i for i, word in enumerate(words) if word.startswith(field_word)), None)
+    if at is None:
+        return False
+    for word in reversed(words[:at]):
+        if not re.fullmatch(r"[가-힣]{2,}", word) or _JOSA_END.search(word):
+            break
+        # 받침 ㄴ·ㄹ로 끝나는 말은 꾸밈말일 수 있다('매겨진', '배정된', '들어온', '쓸').
+        # 이름인지 꾸밈말인지 가를 수 없으니 따지지 않는다.
+        if len(word) < 3 or (ord(word[-1]) - 0xAC00) % 28 in (4, 8):
+            continue
+        like = f"%{word}%"
+        if not db.con.execute(
+                "SELECT 1 FROM chunks WHERE text LIKE ? LIMIT 1", (like,)).fetchone() and \
+           not db.con.execute(
+                "SELECT 1 FROM documents WHERE filename LIKE ? LIMIT 1", (like,)).fetchone():
+            return True
+    return False
+
+
+def _wrong_field(asked: "intent.QueryFrame", kept: list, context_rows: list,
+                 source_text: dict[int, str]) -> list[str]:
+    """문장마다의 판정. 다른 속성의 값이면 까닭(코드), 묻는 속성의 값임이 문서로
+    확인되면 _CONFIRMED, 알 수 없으면 빈 문자열.
+
+    문장이 인용한 문서의 글로 본다(같은 문서의 다른 조각 포함 — 검증과 같은 범위).
+    """
+    by_doc: dict[int, list[str]] = {}
+    for index, row in enumerate(context_rows, start=1):
+        by_doc.setdefault(row["doc_id"], []).append(source_text.get(index, ""))
+    verdicts = []
+    for sentence in kept:
+        docs = {context_rows[source - 1]["doc_id"] for source in sentence.sources
+                if 0 < source <= len(context_rows)}
+        cited = "\n".join(text for doc in docs for text in by_doc[doc])
+        verdict = intent.mismatch(asked, sentence.text, cited)
+        if not verdict and intent.confirmed(asked, sentence.text, cited):
+            verdict = _CONFIRMED
+        verdicts.append(verdict)
+    return verdicts
 
 
 # 빈 문장 목록을 받았을 때 다시 묻는 데 쓴다. 문장을 하나 이상 내야 한다.
@@ -488,6 +560,19 @@ _ASK_SCHEMA_NONEMPTY = {
     "properties": {**ASK_SCHEMA["properties"],
                    "sentences": {**ASK_SCHEMA["properties"]["sentences"], "minItems": 1}},
 }
+
+
+def _ask_again(client, prompt: str, schema: dict):
+    """같은 것을 한 번 더 묻는다. 씨앗을 고정해 두었으므로 씨앗을 바꿔서 묻는다 —
+    그러지 않으면 같은 답이 그대로 돌아온다. 끝나면 씨앗을 되돌린다."""
+    seed = getattr(client, "seed", None)
+    if seed is not None:
+        client.seed = seed + 1
+    try:
+        return client.generate_json(prompt, schema, num_predict=GEN_TOKEN_BUDGET)
+    finally:
+        if seed is not None:
+            client.seed = seed
 
 
 def _generation_record(client) -> dict:
@@ -788,6 +873,8 @@ def _expand_neighbors(db: Database, chunk_ids: list[int], question: str = "") ->
         if not terms or any(korean.contains(row["text"], t) for t in terms)
     }
 
+    named_rows = _named_table_rows(db, {doc for doc, _ordinal in position.values()}, question)
+
     out: list[int] = []
     seen: set[int] = set()
     for chunk_id in chunk_ids:
@@ -804,7 +891,39 @@ def _expand_neighbors(db: Database, chunk_ids: list[int], question: str = "") ->
             if neighbour is not None and neighbour not in seen:
                 out.append(neighbour)
                 seen.add(neighbour)
+        for row_chunk in named_rows.get(doc_id, []):
+            if row_chunk not in seen:
+                out.append(row_chunk)
+                seen.add(row_chunk)
     return out
+
+
+def _named_table_rows(db: Database, doc_ids: set[int], question: str) -> dict[int, list[int]]:
+    """고른 문서의 표에서 질문이 이름을 부른 행의 조각. 문서마다 TABLE_ROWS_PER_DOC개까지.
+
+    한글·ODT 표는 행마다 조각이 따로다. 제목 문단이 걸려도 바로 옆 조각은 표의 머리
+    행이고, 질문이 묻는 행("운영비")은 두세 조각 뒤에 있어 이웃 확장이 닿지 않는다 —
+    표를 두고도 "자료가 부족하다"로 끝났다(다른 말로 묻는 24문항).
+    행 이름이 질문에 글자 그대로 있을 때만 넣는다.
+    """
+    if not doc_ids:
+        return {}
+    squeezed = re.sub(r"\s+", "", question)
+    marks = ", ".join("?" * len(doc_ids))
+    rows = db.con.execute(
+        f"SELECT id, doc_id, text FROM chunks WHERE doc_id IN ({marks}) "
+        f"AND text LIKE '%1열:%' ORDER BY doc_id, ordinal", sorted(doc_ids)).fetchall()
+    found: dict[int, list[int]] = {}
+    for row in rows:
+        label = _ROW_LABEL.search(row["text"])
+        name = re.sub(r"\s+", "", label.group(1)) if label else ""
+        if len(name) >= 2 and name in squeezed and len(found.get(row["doc_id"], [])) < TABLE_ROWS_PER_DOC:
+            found.setdefault(row["doc_id"], []).append(row["id"])
+    return found
+
+
+_ROW_LABEL = re.compile(r"(?m)^\s*1열:\s*([^|\n]+?)\s*(?:\||$)")
+TABLE_ROWS_PER_DOC = 2
 
 
 def _representative_chunk_ids(db: Database, chunk_ids: list[int]) -> set[int]:

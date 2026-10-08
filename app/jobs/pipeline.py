@@ -600,50 +600,56 @@ class Pipeline(QObject):
         """문서를 조각으로 나누고 임베딩한다 — 질문 화면의 재료다.
 
         파서가 이미 나눠 둔 문단·표·페이지·시트·슬라이드 경계를 그대로
-        쓴다(core/chunking.py). Ollama가 없으면 조용히 건너뛴다 — AI는
-        단일 장애점이 아니다.
+        쓴다(core/chunking.py). 조각 나누기는 모델이 필요 없는 일이라 항상
+        한다 — 조각과 조각 글자 검색(chunk_fts)은 Ollama 없이도 생긴다.
+        임베딩만 Ollama를 기다린다. AI는 단일 장애점이 아니다.
         """
         client = self._client = project_client(db, OllamaClient)
-        health = client.health()
-        if not health.embedding_ready:
-            self.stage_done.emit(
-                StageReport(STAGE_CHUNKS, note=f"건너뜀 — {health.message}")
-            )
-            return
-
-        # 조각이 없는 문서뿐 아니라 '조각은 있는데 임베딩이 빠진' 문서도
-        # 집어낸다. 임베딩이 배치 중간에 실패하면 조각만 남는데, 그 문서를
-        # 다음 실행에서 건너뛰면 질문 화면에서 영영 사라진다.
-        rows = db.documents_needing_chunks(client.embed_model)
-        report = StageReport(STAGE_CHUNKS, total=len(rows))
+        report = StageReport(STAGE_CHUNKS)
         made = 0
         embedded = 0
 
-        for index, row in enumerate(rows, start=1):
+        # 조각이 이미 있는 문서는 다시 만들지 않는다. 다시 만들면 chunk_id가
+        # 바뀌어 멀쩡히 있던 임베딩까지 CASCADE로 함께 지워진다.
+        bare = db.documents_without_chunks()
+        for index, row in enumerate(bare, start=1):
             if self._stop:
                 break
-
-            # 조각이 이미 있으면 다시 만들지 않는다. 다시 만들면 chunk_id가
-            # 바뀌어 멀쩡히 있던 임베딩까지 CASCADE로 함께 지워진다.
-            has_chunks = db.con.execute(
-                "SELECT 1 FROM chunks WHERE doc_id = ? LIMIT 1", (row["id"],)
-            ).fetchone()
-            if not has_chunks:
-                sections = db.con.execute(
-                    "SELECT kind, locator, text FROM document_sections "
-                    "WHERE doc_id = ? ORDER BY ordinal",
-                    (row["id"],),
-                ).fetchall()
-                pieces = build_chunks(
-                    [(s["kind"], s["locator"], s["text"]) for s in sections]
-                )
-                if not pieces:
-                    report.done = index
-                    continue
+            sections = db.con.execute(
+                "SELECT kind, locator, text FROM document_sections "
+                "WHERE doc_id = ? ORDER BY ordinal",
+                (row["id"],),
+            ).fetchall()
+            pieces = build_chunks(
+                [(s["kind"], s["locator"], s["text"]) for s in sections]
+            )
+            if pieces:
                 # 조각을 지우고 다시 넣는 사이에 죽으면 조각이 반만 남는다. 그 문서는
                 # '조각이 있는 문서'로 분류돼 나머지 조각을 다시 만들지 않는다.
                 with db.transaction():
                     made += len(db.replace_document_chunks(row["id"], pieces))
+            if index % 20 == 0 or index == len(bare):
+                self.progress.emit(STAGE_CHUNKS, index, len(bare), row["filename"])
+
+        health = client.health()
+        if not health.embedding_ready:
+            # chunks_checked는 세우지 않는다 — 연결되면 임베딩을 이어서 해야 한다.
+            report.done = report.total = len(bare)
+            report.note = f"임베딩 보류 — {health.message}"
+            if made:
+                report.note = f"{made:,}조각 나눔 · " + report.note
+            self.stage_done.emit(report)
+            return
+
+        # '조각은 있는데 임베딩이 빠진' 문서를 집어낸다. 임베딩이 배치 중간에
+        # 실패하거나 모델 없이 조각만 만들어 둔 문서를 다음 실행에서 건너뛰면
+        # 질문 화면에서 영영 사라진다.
+        rows = db.documents_needing_chunks(client.embed_model)
+        report.total = len(rows)
+
+        for index, row in enumerate(rows, start=1):
+            if self._stop:
+                break
 
             pending = db.chunks_needing_embedding(row["id"], client.embed_model)
             for start in range(0, len(pending), CHUNK_EMBED_BATCH):

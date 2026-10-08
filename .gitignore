@@ -19,6 +19,9 @@ wheelhouse/
 *.db
 *.db-wal
 *.db-shm
+*.bak-v*
+*.sqlite
+*.sqlite3
 
 # 합성 표본 (app.tools.make_fixtures 로 재생성 가능)
 tests/fixtures/sample_tree/

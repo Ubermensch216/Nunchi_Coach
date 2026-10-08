@@ -813,6 +813,17 @@ class Database(WorkStore):
             out.append((cur.lastrowid, text))
         return out
 
+    def documents_without_chunks(self) -> list[sqlite3.Row]:
+        """읽기는 끝났는데 조각이 아직 없는 문서. 모델과 상관없는 판정이다."""
+        return self.con.execute(
+            """
+            SELECT d.id, d.filename FROM documents d
+            WHERE d.missing_since IS NULL AND d.parse_status IN ('ok', 'partial')
+              AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.doc_id = d.id)
+            ORDER BY d.id
+            """
+        ).fetchall()
+
     def documents_needing_chunks(self, model: str) -> list[sqlite3.Row]:
         """조각이 아직 없거나, 조각은 있는데 임베딩이 빠진 문서.
 

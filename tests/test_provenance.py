@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from app.connectors.onnara import FixtureConnector, SearchScope
 from app.core import provenance
 from app.db import Database
@@ -11,6 +13,15 @@ from app.search.verify import VerifiedSentence
 from app.tools.onnara_demo import index_collection, make_catalog
 
 SCOPE = SearchScope(("author-001",), "2025-01-01", "2025-12-31")
+
+
+@pytest.fixture(autouse=True)
+def no_ollama(monkeypatch):
+    """이 파일은 모델 없이 돈다 — 개발 장비에 Ollama가 떠 있어도 원격 CI와 같은 조건."""
+    import app.jobs.pipeline as pipeline_module
+    from app.ai.client import OllamaClient
+    monkeypatch.setattr(pipeline_module, "OllamaClient",
+                        lambda *a, **k: OllamaClient(base_url="http://127.0.0.1:1"))
 
 
 def collect(tmp_path, edit=None):

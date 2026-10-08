@@ -31,6 +31,46 @@ def pytest_configure(config):
         config.option.basetemp = str(root / f"tmp-{uuid4().hex[:12]}")
 
 
+# ── 건너뛴 시험을 숨기지 않는다 ─────────────────────────────────────
+# NUNCHICOACH_STRICT_SKIPS=1 (CI)이면 아래 사유 말고는 건너뛴 시험·xfail을 실패로
+# 친다. 표본을 안 만들어 파서 시험이 통째로 빠진 실행이 녹색으로 끝나면 안 된다.
+# 허용하는 것은 이 장비에서 할 수 없는 것뿐이고, 보고서에는 '미실행'으로 적는다.
+STRICT_SKIPS_ENV = "NUNCHICOACH_STRICT_SKIPS"
+ALLOWED_SKIPS = (
+    "NUNCHICOACH_LIVE_AI",          # 실제 모델 시험 — 별도 수동 실행
+    "실문서 표본이 없습니다",          # 실제 기관 문서 표본 — 저장소에 두지 않는다
+    "프로젝트 .venv가 아닌 환경",      # CI는 lockfile --check 단계로 따로 검사한다
+)
+_unexpected_skips: list[str] = []
+
+
+def pytest_runtest_logreport(report):
+    if not report.skipped or os.environ.get(STRICT_SKIPS_ENV) != "1":
+        return
+    reason = getattr(report, "wasxfail", None)
+    if reason is None:
+        longrepr = report.longrepr
+        reason = longrepr[2] if isinstance(longrepr, tuple) else str(longrepr)
+        if any(allowed in reason for allowed in ALLOWED_SKIPS):
+            return
+    else:
+        reason = f"xfail: {reason}"
+    _unexpected_skips.append(f"{report.nodeid} — {reason}")
+
+
+def pytest_sessionfinish(session, exitstatus):
+    if _unexpected_skips and session.exitstatus == 0:
+        session.exitstatus = 1
+
+
+def pytest_terminal_summary(terminalreporter):
+    if not _unexpected_skips:
+        return
+    terminalreporter.section("허용되지 않은 건너뜀 — 실패로 처리")
+    for line in _unexpected_skips:
+        terminalreporter.write_line(line)
+
+
 @pytest.fixture(autouse=True)
 def release_closed_qt_objects():
     yield

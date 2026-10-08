@@ -3,7 +3,21 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+
+# 릴리스는 guard · test · package 가 모두 통과해야 한다.
+# 실제 모델 시험(NUNCHICOACH_LIVE_AI=1)과 실제 기관 문서 표본 시험은 이 러너에서
+# 돌릴 수 없다. 여기서 통과했다고 그 둘이 확인된 것은 아니다 — 보고서에 '미실행'으로 적는다.
 jobs:
+  guard:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      # 프로젝트 DB·시험 산출물이 추적되고 있으면 여기서 멈춘다.
+      - run: python -m app.tools.repo_guard
+
   test:
     runs-on: windows-latest
     steps:
@@ -12,14 +26,29 @@ jobs:
         with:
           python-version: '3.14'
       - run: python -m pip install -r requirements.lock
+      - run: python -m app.tools.lockfile --check
       - run: python -m app.tools.make_fixtures
-      - run: python -m pytest --junitxml=.test_runs/results.xml
+      # Ollama를 설치하지 않는다. 모델 없이 되는 것이 여기서 확인하는 범위다.
+      # -rs: 건너뛴 시험과 사유를 로그에 남긴다. 허용 목록 밖의 건너뜀은 실패다.
+      - run: python -m pytest -rs --junitxml=.test_runs/results.xml
         env:
           QT_QPA_PLATFORM: offscreen
-      - run: python -m PyInstaller NunchiCoach.spec
-      - run: dist/NunchiCoach/NunchiCoach.exe selftest tests/fixtures/sample_tree
+          NUNCHICOACH_STRICT_SKIPS: '1'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: verification-results
           path: .test_runs/results.xml
+
+  # 시험이 실패해도 실행물 점검은 따로 돈다 — '선행 실패로 미실행'을 남기지 않는다.
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install -r requirements.lock
+      - run: python -m app.tools.make_fixtures
+      - run: python -m PyInstaller NunchiCoach.spec
+      - run: dist/NunchiCoach/NunchiCoach.exe selftest tests/fixtures/sample_tree

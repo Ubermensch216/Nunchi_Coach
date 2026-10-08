@@ -118,6 +118,8 @@ class OllamaClient:
         self.base_url = _require_loopback(base_url)
         self.gen_model = gen_model
         self.embed_model = embed_model
+        # 생성 씨앗. 같은 입력에 같은 답이 나오게 고정해 두고, 다시 물을 때만 바꾼다.
+        self.seed = 0
         self._cancelled = threading.Event()
         self._capabilities: dict[str, list[str]] = {}
         self.last_generation = Generation()
@@ -269,7 +271,9 @@ class OllamaClient:
                 "format": schema,
                 "stream": False,
                 "keep_alive": KEEP_ALIVE,
-                "options": {"temperature": temperature, "num_predict": budget},
+                # 온도 0만으로는 같은 질문·같은 근거의 답이 실행마다 갈렸다. 씨앗도 고정한다.
+                "options": {"temperature": temperature, "num_predict": budget,
+                            "seed": self.seed},
             }
             if think_off:
                 payload["think"] = False

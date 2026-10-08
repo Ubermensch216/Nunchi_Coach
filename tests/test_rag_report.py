@@ -178,6 +178,87 @@ def test_reworded_set_asks_known_facts_in_other_words():
     assert _parse_args(["--reworded"]).reworded and not _parse_args(["--holdout"]).reworded
 
 
+def test_final_set_uses_its_own_documents_and_names_the_wrong_values():
+    """최종 검증 문항은 앞의 문항·자료와 겹치지 않아야 '새 질문'이다 (개발지시서 P0-03)."""
+    from app.tools.rag_report import FINAL_CASES, FINAL_CORPUS, _parse_args
+    from app.tools.scenario_eval import FIXTURES
+
+    final = _load_cases(Path(FINAL_CASES))
+    earlier = [case for path in (DEV_CASES, HOLDOUT_CASES, REWORDED_CASES)
+               for case in _load_cases(Path(path))]
+    assert len(final) == 45 and sum(1 for c in final if c["expect"] == "withhold") == 12
+    assert len({c["id"] for c in final}) == 45
+    squeeze = lambda text: "".join(text.split())
+    assert not {squeeze(c["question"]) for c in earlier} & {squeeze(c["question"]) for c in final}
+    assert not {c["id"] for c in earlier} & {c["id"] for c in final}
+    assert all(c.get("why") and c.get("kind") for c in final)
+    assert all(c.get("must_cite_any") and c.get("must_contain")
+               for c in final if c["expect"] == "answer")
+    assert not any(c.get("must_contain") for c in final if c["expect"] == "withhold")
+
+    def names(path):
+        return {doc["path"].rsplit("/", 1)[-1]
+                for scenario in json.loads(Path(path).read_text(encoding="utf-8"))["scenarios"]
+                for doc in scenario["documents"]}
+    own = names(FINAL_CORPUS)
+    assert not own & names(FIXTURES / "corpus.json")
+    # 기대한 근거는 모두 이 세트의 자료를 가리킨다.
+    assert all(any(wanted in name for name in own)
+               for c in final for wanted in c.get("must_cite_any") or [])
+    assert _parse_args(["--final"]).final and not _parse_args(["--dev"]).final
+
+
+# ── 묻는 것과 다른 값 · 지표 분리 ───────────────────────────────────
+
+def test_answering_with_another_attributes_value_fails_even_with_the_right_source():
+    case = {"id": "t", "question": "정산액은?", "expect": "answer",
+            "must_cite_any": ["행정사무감사"], "must_not_contain": ["48,000"]}
+    failures = _judge(case, outcome(answer="계약금액은 48,000천원입니다."))
+    assert any("묻는 것과 다른 값" in f for f in failures)
+
+
+def test_wrong_value_check_reads_whole_numbers_not_fragments():
+    from app.tools.rag_report import _has_value
+
+    assert not _has_value("2018년 180건, 1,180천원", "18")
+    assert _has_value("7월 18일입니다.", "18") and _has_value("18.", "18")
+    assert not _has_value("148,000천원", "48,000") and _has_value("48,000천원", "48,000")
+    assert _has_value("재무과 구매팀입니다", "구매팀")
+
+
+def test_metrics_are_reported_separately_and_empty_denominators_stay_empty():
+    from app.tools.rag_report import metrics
+
+    cases = [
+        {"id": "a1", "expect": "answer", "must_cite_any": ["행정사무감사"], "must_contain": ["답"]},
+        {"id": "a2", "expect": "answer", "must_cite_any": ["행정사무감사"]},
+        {"id": "a3", "expect": "answer", "must_not_contain": ["48,000"]},
+        {"id": "w1", "expect": "withhold"},
+        {"id": "w2", "expect": "withhold"},
+        {"id": "e1", "expect": "answer"},
+    ]
+    runs = [
+        outcome(case_id="a1"),                                           # 옳게 답함
+        outcome(case_id="a2", withheld=True, citations=[], answer=""),   # 과잉 보류
+        outcome(case_id="a3", answer="48,000천원입니다"),                  # 다른 속성의 값
+        outcome(case_id="w1", expect="withhold", withheld=True, citations=[], answer=""),
+        outcome(case_id="w2", expect="withhold"),                        # 없는 사실을 답함
+        outcome(case_id="e1", error="모델 오류", withheld=True),
+    ]
+    for case, run in zip(cases, runs):
+        run.failures = _judge({"question": "q", **case}, run)
+    got = metrics(cases, runs)
+
+    assert (got["accuracy"]["n"], got["accuracy"]["of"]) == (1, 3)
+    assert (got["withhold_precision"]["n"], got["withhold_precision"]["of"]) == (1, 2)
+    assert (got["withhold_recall"]["n"], got["withhold_recall"]["of"]) == (1, 2)
+    assert (got["citation_accuracy"]["n"], got["citation_accuracy"]["of"]) == (1, 1)
+    assert (got["question_fit"]["n"], got["question_fit"]["of"]) == (1, 3)
+    assert (got["unsupported_assertions"]["n"], got["unsupported_assertions"]["of"]) == (2, 5)
+    assert got["errors"] == 1
+    assert metrics([], [])["accuracy"]["rate"] is None
+
+
 def test_cases_file_is_valid_json():
     json.loads(Path(DEFAULT_CASES).read_text(encoding="utf-8"))
 

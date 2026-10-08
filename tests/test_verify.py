@@ -113,12 +113,27 @@ def test_thousands_separator_inside_a_number_is_preserved():
     assert "1,234" in result.dropped[0].reason
 
 
-def test_number_check_looks_only_at_the_sentences_own_cited_sources():
-    """근거로 밝히지 않은 다른 조각에 그 숫자가 있어도 소용없다 — 인용을 안 했다."""
+def test_a_number_in_another_source_does_not_rescue_a_sentence_that_source_does_not_say():
+    """근거로 밝히지 않은 다른 조각에 그 숫자가 있다는 것만으로는 소용없다."""
     result = verify_sentences(
-        [sentence("1분기 처리건수는 41건이었다", [1])], SOURCES,   # source 1에는 '41'이 없다
+        [sentence("행정사무감사 요구자료는 41건 접수되었다", [1])], SOURCES,   # 41은 계약관리의 것
     )
-    assert result.kept == []
+    assert result.kept == [] and result.reattributed == 0
+    assert "근거에 없는 숫자" in result.dropped[0].reason
+
+
+def test_a_right_sentence_citing_the_wrong_number_is_moved_to_the_source_that_says_it():
+    """2026-10-08에 바꾼 계약. 예전에는 인용한 조각에 숫자가 없으면 무조건 버렸다.
+
+    평가에서 모델이 문장은 옳게 쓰고 근거 번호만 옆 조각으로 적는 일이 잦았고, 그때마다
+    옳은 답이 보류됐다. 문장의 숫자를 모두 가지고 문장의 말도 대부분 하는 문서가 문맥에
+    하나뿐이면 그 문서로 근거를 고쳐 잡는다. 화면에 뜨는 근거는 실제로 그 말을 한 문서다.
+    """
+    result = verify_sentences(
+        [sentence("1분기 처리건수는 41건이었다", [1])], SOURCES,   # 41은 2번 조각에 있다
+    )
+    assert [(k.text, k.sources) for k in result.kept] == [("1분기 처리건수는 41건이었다", [2])]
+    assert result.reattributed == 1
 
 
 # ── 어휘 중첩 ───────────────────────────────────────────────────────

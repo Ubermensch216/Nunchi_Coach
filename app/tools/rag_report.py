@@ -30,7 +30,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -49,6 +51,11 @@ DEV_CASES = DEFAULT_CASES.with_name("dev30.json")
 HOLDOUT_CASES = DEFAULT_CASES.with_name("holdout60.json")
 # 문서와 다른 말로 묻는 24문항. 앞의 문항들은 문서의 낱말로 물었다. `--reworded`로 고른다.
 REWORDED_CASES = DEFAULT_CASES.with_name("reworded24.json")
+# 최종 검증용 45문항과 그 자료(개발지시서 P0-03). 앞의 문항들은 모두 재고 고치는 데
+# 썼으므로 새 질문에서의 성능을 말해 주지 못한다. 이 문항의 결과를 보고 고치지 않는다.
+# `--final`로 고른다. 자료는 `--build-final 폴더`로 만든다.
+FINAL_CASES = DEFAULT_CASES.with_name("final_2026-10-08.json")
+FINAL_CORPUS = DEFAULT_CASES.with_name("final_2026-10-08_corpus.json")
 
 
 @dataclass(slots=True)
@@ -62,6 +69,8 @@ class Outcome:
     answer: str = ""
     error: str | None = None
     failures: list[str] = field(default_factory=list)
+    # 왜 보류했는지(갈래만) 또는 어느 규칙이 답했는지. 과잉 보류의 원인을 가르는 데 쓴다.
+    path: str = ""
 
     @property
     def passed(self) -> bool:
@@ -72,12 +81,57 @@ class Outcome:
         return len(set(self.citations))
 
 
+def build_final(folder: Path) -> Path:
+    """최종 검증용 프로젝트를 새 폴더에 만든다. 돌려주는 값은 `--data`에 줄 경로다.
+
+    최종 문항의 자료만 넣으면 엉뚱한 문서를 끌어올 일이 없어 쉬워진다. 합성 표본과
+    시나리오 자료를 함께 넣어 다른 평가와 같은 크기의 자료 속에서 찾게 한다.
+    Ollama가 있어야 임베딩까지 된다 — 없으면 조각만 생기고 질문은 잴 수 없다.
+    """
+    from PySide6.QtCore import QCoreApplication
+
+    from ..jobs.pipeline import Pipeline
+    from . import make_fixtures, scenario_eval
+
+    folder = folder.resolve()
+    if folder.exists() and any(folder.iterdir()):
+        raise ValueError(f"빈 폴더를 지정해 주세요: {folder}")
+    source = folder / "자료"
+    make_fixtures.main([str(source / "표본")])
+    for corpus in (scenario_eval.FIXTURES / "corpus.json", FINAL_CORPUS):
+        for scenario in json.loads(corpus.read_text(encoding="utf-8"))["scenarios"]:
+            scenario_eval.write_corpus(source / scenario["id"], scenario)
+
+    QCoreApplication.instance() or QCoreApplication([])
+    db = open_project("final", folder / "projects")
+    db.add_source(source)
+    path = db.path
+    db.close()
+    pipeline = Pipeline(path)
+    pipeline.stage_done.connect(lambda report: print(f"■ {report.stage}  {report.note}"))
+    pipeline.run()
+    return folder / "projects"
+
+
 def main(argv: list[str] | None = None) -> int:
     _force_utf8()
     args = _parse_args(argv)
+    if args.build_final:
+        try:
+            data = build_final(Path(args.build_final))
+        except ValueError as exc:
+            print(exc, file=sys.stderr)
+            return 2
+        print(f'\n만들었습니다. 재기:  python -m app.tools.rag_report --final --project final --data "{data}"')
+        return 0
 
-    cases = _load_cases(REWORDED_CASES if args.reworded else HOLDOUT_CASES if args.holdout
-                        else DEV_CASES if args.dev else Path(args.cases))
+    cases_path = (FINAL_CASES if args.final else REWORDED_CASES if args.reworded
+                  else HOLDOUT_CASES if args.holdout else DEV_CASES if args.dev
+                  else Path(args.cases))
+    cases = _load_cases(cases_path)
+    # 어느 문항으로 쟀는지를 결과에 박아 둔다 — 문항이 바뀌면 수치를 견줄 수 없다.
+    cases_hash = hashlib.sha256(cases_path.read_bytes()).hexdigest()
+    print(f"문항      {cases_path.name} · sha256 {cases_hash[:16]}…")
     if args.case:
         cases = [c for c in cases if c["id"] == args.case]
         if not cases:
@@ -107,14 +161,16 @@ def main(argv: list[str] | None = None) -> int:
     outcomes = rounds[-1]
     _print_details(outcomes)
     _print_summary(outcomes)
+    _print_metrics(cases, outcomes)
     if args.repeat > 1:
         _print_stability(rounds)
 
     if args.json:
         Path(args.json).write_text(
             json.dumps(
-                [[_as_dict(o) for o in run] for run in rounds] if args.repeat > 1
-                else [_as_dict(o) for o in outcomes],
+                {"cases_file": cases_path.name, "cases_sha256": cases_hash,
+                 "metrics": [metrics(cases, run) for run in rounds],
+                 "rounds": [[_as_dict(o) for o in run] for run in rounds]},
                 ensure_ascii=False, indent=2,
             ),
             encoding="utf-8",
@@ -142,6 +198,11 @@ def _run(db: Database, case: dict) -> Outcome:
         answer=answer.text,
         error=answer.error,
     )
+    record = answer.generation or {}
+    outcome.path = (record.get("withheld") or ("no_evidence" if answer.withheld and not answer.error else "")
+                    if answer.withheld else record.get("rule_answer") or "model")
+    if record.get("dropped"):
+        outcome.path += " (" + " / ".join(record["dropped"]) + ")"
     outcome.failures = _judge(case, outcome)
     print(f"{'통과' if outcome.passed else '실패'} ({seconds:.1f}초)")
     return outcome
@@ -182,6 +243,13 @@ def _judge(case: dict, outcome: Outcome) -> list[str]:
         if not outcome.withheld and needle not in outcome.answer:
             failures.append(f"답에 있어야 할 내용이 없다: {needle}")
 
+    # 묻는 것과 다른 속성의 값(계약금액을 물었는데 정산액 등). 근거에 있는 숫자라
+    # 인용 검증은 지나가지만 답으로는 틀렸다. 숫자는 낱자리째 견준다 — '18'이
+    # '2018'이나 '180'에 걸리지 않게.
+    for wrong in case.get("must_not_contain") or []:
+        if not outcome.withheld and _has_value(outcome.answer, wrong):
+            failures.append(f"{OFF_TARGET}: {wrong}")
+
     minimum = case.get("min_distinct_docs")
     if minimum and not outcome.withheld and outcome.distinct_docs < minimum:
         failures.append(
@@ -189,6 +257,84 @@ def _judge(case: dict, outcome: Outcome) -> list[str]:
             f"— 중복본이 자리를 독점했을 수 있다"
         )
     return failures
+
+
+OFF_TARGET = "묻는 것과 다른 값을 답했다"
+
+
+def _has_value(answer: str, value: str) -> bool:
+    if not re.fullmatch(r"[\d,.]+", value):
+        return value in answer
+    return re.search(rf"(?<![\d,.]){re.escape(value)}(?![\d]|[,.]\d)", answer) is not None
+
+
+def metrics(cases: list[dict], outcomes: list[Outcome]) -> dict:
+    """한 줄 통과율로 뭉개지 않고 따로 잰다 (개발지시서 P0-03·6.3).
+
+    분모가 0이면 그 값은 None이다 — 0%도 100%도 아니다.
+
+      정답률            답해야 하는 문항 가운데 옳게 답한 것
+      보류 정밀도        보류한 것 가운데 보류가 옳았던 것 (낮으면 과잉 보류)
+      보류 재현율        보류해야 하는 문항 가운데 실제로 보류한 것
+      근거 정확성        답한 것 가운데 기대한 문서를 인용하고 엉뚱한 문서를 섞지 않은 것
+      질문 적합성        답한 것 가운데 묻는 것에 대한 답인 것
+      근거 없는 확정     전체 가운데, 없는 사실을 답했거나 다른 속성의 값을 답한 것
+    """
+    by_id = {case["id"]: case for case in cases}
+    counted = [o for o in outcomes if not o.error]
+    answered = [o for o in counted if not o.withheld]
+    withheld = [o for o in counted if o.withheld]
+    should_answer = [o for o in counted if o.expect == "answer"]
+    should_hold = [o for o in counted if o.expect == "withhold"]
+
+    def off_target(o: Outcome) -> bool:
+        return o.expect == "withhold" or any(f.startswith(OFF_TARGET) for f in o.failures)
+
+    def cited_right(o: Outcome) -> bool:
+        return not any(f.startswith(("기대한 근거가 없다", "엉뚱한 자료", "답을 냈는데 근거가 없다"))
+                       for f in o.failures)
+
+    with_expected_source = [o for o in answered if by_id[o.case_id].get("must_cite_any")
+                            or by_id[o.case_id].get("must_not_cite")]
+
+    def ratio(part: int, whole: int):
+        return {"n": part, "of": whole, "rate": round(part / whole, 4) if whole else None}
+
+    return {
+        "cases": len(outcomes),
+        "errors": len(outcomes) - len(counted),
+        "accuracy": ratio(sum(1 for o in should_answer if o.passed), len(should_answer)),
+        "withhold_precision": ratio(sum(1 for o in withheld if o.expect == "withhold"), len(withheld)),
+        "withhold_recall": ratio(sum(1 for o in should_hold if o.withheld), len(should_hold)),
+        "citation_accuracy": ratio(sum(1 for o in with_expected_source if cited_right(o)),
+                                   len(with_expected_source)),
+        "question_fit": ratio(sum(1 for o in answered if not off_target(o)), len(answered)),
+        "unsupported_assertions": ratio(sum(1 for o in answered if off_target(o)), len(counted)),
+    }
+
+
+def _print_metrics(cases: list[dict], outcomes: list[Outcome]) -> None:
+    values = metrics(cases, outcomes)
+    labels = (("accuracy", "정답률"), ("withhold_precision", "보류 정밀도"),
+              ("withhold_recall", "보류 재현율"), ("citation_accuracy", "근거 정확성"),
+              ("question_fit", "질문 적합성"), ("unsupported_assertions", "근거 없는 확정"))
+    print("─" * 72)
+    for key, label in labels:
+        value = values[key]
+        rate = "—" if value["rate"] is None else f"{value['rate'] * 100:.1f}%"
+        print(f"{label:<12}  {value['n']}/{value['of']}   {rate}")
+    if values["errors"]:
+        print(f"오류로 재지 못한 문항 {values['errors']}건 — 위 수치의 분모에서 빠졌다")
+    kinds: dict[str, list[Outcome]] = {}
+    by_id = {case["id"]: case for case in cases}
+    for outcome in outcomes:
+        kind = by_id[outcome.case_id].get("kind")
+        if kind:
+            kinds.setdefault(kind, []).append(outcome)
+    if kinds:
+        print("유형별 통과    " + " · ".join(
+            f"{kind} {sum(1 for o in group if o.passed)}/{len(group)}"
+            for kind, group in sorted(kinds.items())))
 
 
 # ── 출력 ────────────────────────────────────────────────────────────
@@ -285,6 +431,8 @@ def _as_dict(outcome: Outcome) -> dict:
         "citations": outcome.citations,
         "distinct_docs": outcome.distinct_docs,
         "answer": outcome.answer,
+        "error": outcome.error,
+        "path": outcome.path,
         "failures": outcome.failures,
         "passed": outcome.passed,
     }
@@ -314,6 +462,10 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
                         help="따로 떼어 둔 60문항으로 잰다(이 문항으로 조정하지 않는다)")
     parser.add_argument("--reworded", action="store_true",
                         help="문서와 다른 말로 묻는 24문항으로 잰다")
+    parser.add_argument("--final", action="store_true",
+                        help="최종 검증용 45문항으로 잰다(결과를 보고 고치지 않는다)")
+    parser.add_argument("--build-final", default=None, metavar="폴더",
+                        help="최종 검증용 자료와 프로젝트를 빈 폴더에 만든다(Ollama 필요)")
     parser.add_argument("--case", default=None, help="사례 하나만 실행")
     parser.add_argument(
         "--repeat", type=int, default=1,

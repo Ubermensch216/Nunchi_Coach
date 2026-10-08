@@ -29,6 +29,7 @@ import re
 from decimal import Decimal, InvalidOperation
 
 from ..core import korean
+from .intent import said_in
 from .verify import _tables
 
 _MAX = re.compile(r"가장\s*(?:높|많|큰|크|컸|늘)|최대|최고|최다")
@@ -38,6 +39,10 @@ _MAX_SOURCES = 3
 _HOW_MANY = re.compile(r"몇\s*(?:건|개|회|차례|번|명|부|종|곳)[가-힣]*|(?:건수|수량|개수|횟수)[가-힣]*")
 _HOW_MUCH = re.compile(r"얼마[가-힣]*")
 _COUNT_HEADER = re.compile(r"수량|건수|개수|횟수|인원|물량")
+# 뒤의 이름을 꾸미지만 뜻을 바꾸지 않는 말 — '배정된 예산'은 예산이다. 아무 꾸밈말이나
+# 받으면 안 된다: '삭감된 예산', '이월된 예산'은 예산 칸의 값이 아니다.
+_MODIFIER = re.compile(r"(?:배정|책정|편성|기재|명시|기록)(?:된|되어 있는)|적힌|정해진|잡힌")
+_VERB_END = re.compile(r"(?:어|아|여|해|돼|니|나|지|요|다|까)[?.!]?$")
 
 
 def extreme(question: str, source_text: dict[int, str]) -> tuple[str, list[int]] | None:
@@ -79,11 +84,16 @@ def extreme(question: str, source_text: dict[int, str]) -> tuple[str, list[int]]
 
 
 def count(question: str, source_text: dict[int, str],
-          support_text: dict[int, str] | None = None) -> tuple[str, list[int]] | None:
+          support_text: dict[int, str] | None = None,
+          stems: tuple[str, ...] = ()) -> tuple[str, list[int]] | None:
     """(답 문장, 근거 번호들). 표의 한 칸으로 답할 수 없는 질문이면 None.
 
     support_text는 근거 번호마다 같은 문서의 글이다. 질문의 낱말이 그 문서에
     모두 있는 근거만 쓴다 — 해가 다른 문서의 같은 표를 섞지 않는다.
+
+    stems는 질문이 묻는 속성을 문서에서 가리킬 수 있는 말이다(search/intent.py).
+    열 이름을 부르지 않고 서술어로 물었을 때("운영비는 얼마나 썼어?" → 집행·지출·사용)
+    그 말을 품은 열이 하나뿐이면 그 열로 본다.
     """
     how_many, how_much = bool(_HOW_MANY.search(question)), bool(_HOW_MUCH.search(question))
     if not (how_many or how_much) or _MAX.search(question) or _MIN.search(question):
@@ -93,6 +103,12 @@ def count(question: str, source_text: dict[int, str],
     # '몇 건…'과 '얼마…'만 뺀다.
     words = korean.tokens(_HOW_MUCH.sub(" ", re.sub(
         r"몇\s*(?:건|개|회|차례|번|명|부|종|곳)[가-힣]*", " ", question)))
+    # 뜻을 바꾸지 않는 꾸밈말('배정된 예산'의 '배정된')과 서술어로 물은 끝말('썼어')은
+    # 표가 말하는 것이 아니다. 그 말이 문서에 없다고 표를 버리면 옳은 칸을 두고도
+    # 유보한다(다른 말로 묻는 24문항). 이름을 가리키는 낱말은 그대로 모두 있어야 한다.
+    words = [word for index, word in enumerate(words)
+             if not (_MODIFIER.fullmatch(word) or (stems and index == len(words) - 1
+                                                   and _VERB_END.search(word)))]
     support_text = support_text or source_text
 
     answers: dict[tuple[str, str, str], list[int]] = {}
@@ -108,6 +124,9 @@ def count(question: str, source_text: dict[int, str],
                 if len(label) < 2 or label not in squeezed or len(row) != len(headers):
                     continue
                 numeric = [i for i in range(1, len(row)) if _is_number(row[i])]
+                if not named and stems:
+                    named = [i for i, name in enumerate(headers)
+                             if i > 0 and any(said_in(stem, name) for stem in stems)]
                 if len(named) == 1 and named[0] in numeric:
                     column = named[0]
                 elif (how_many and not named and len(numeric) == 1
