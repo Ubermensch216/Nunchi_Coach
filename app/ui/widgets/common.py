@@ -51,6 +51,21 @@ def open_original(parent: QWidget, db, path: str) -> None:
         subprocess.Popen(["xdg-open", path])
 
 
+def doc_icon(button: QPushButton, size: int = 16) -> QPushButton:
+    """문서를 여는 버튼 앞에 낱장 표지를 붙인다(📄 이모지 대신).
+
+    이모지는 OS가 제 색으로 칠하고, 글꼴에 없으면 다른 글꼴의 그림이 끼어
+    줄 높이를 흔든다. 선으로 그린 표지는 글자와 같은 회색으로 물러선다.
+    """
+    from PySide6.QtCore import QSize
+
+    from .. import icons
+
+    button.setIcon(icons.icon("documents", theme.TEXT_MUTED, size))
+    button.setIconSize(QSize(size, size))
+    return button
+
+
 def clear_layout(layout) -> None:
     """레이아웃을 즉시 비운다.
 
@@ -306,7 +321,26 @@ class InfoDot(QLabel):
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.WhatsThisCursor)
+        # 마우스를 올려야만 보이는 설명은 키보드로는 영영 못 읽는다. Tab으로
+        # 닿게 하고, 누르거나 Enter·Space를 치면 같은 설명을 편다.
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.setAccessibleName("설명")
         self.setInfo(text)
+
+    def _pop(self) -> None:
+        from PySide6.QtWidgets import QToolTip
+
+        QToolTip.showText(self.mapToGlobal(self.rect().bottomLeft()), self.toolTip(), self)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 — Qt 규약
+        self._pop()
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 — Qt 규약
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self._pop()
+            return
+        super().keyPressEvent(event)
 
     def setInfo(self, text: str) -> None:  # noqa: N802 — Qt 명명 규약에 맞춘다
         # 서식 있는 툴팁은 Qt가 스스로 줄을 바꾼다. 폭을 주지 않으면 한 줄로
@@ -357,7 +391,9 @@ class TabBar(QWidget):
         self.setObjectName("TabBar")
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(theme.SP_XS)
+        # 밑줄 탭은 테두리가 없어 간격만이 경계다. 좁으면 건수·◐ 표시가 어느
+        # 탭의 것인지 읽히지 않는다.
+        row.setSpacing(theme.SP_XL)
 
         self._group = QButtonGroup(self)
         self._group.setExclusive(True)
@@ -487,14 +523,56 @@ class IconChoice(QWidget):
             button._icon_mark.setPixmap(art)
 
 
+def _center(row: QHBoxLayout, holder: QWidget, max_width: int) -> None:
+    """기둥을 줄 가운데에 세운다. 폭 상한이 없으면 줄을 다 쓴다."""
+    if not max_width:
+        row.addWidget(holder, 1)
+        return
+    holder.setMaximumWidth(max_width)
+    # 기둥의 몫을 압도적으로 크게 둔다 — 좁은 창에서는 기둥이 폭을 거의 다
+    # 받고, 넓은 창에서는 상한에 걸린 나머지가 양쪽 여백으로 똑같이 나뉜다.
+    row.addStretch(1)
+    row.addWidget(holder, 1000)
+    row.addStretch(1)
+
+
+def center_column(max_width: int = 0) -> tuple[QHBoxLayout, QVBoxLayout]:
+    """머리 띠용 기둥. 본문(Page)의 기둥과 같은 자리에 선다.
+
+    돌려주는 것은 (띠에 넣을 줄, 내용을 쌓을 세로 레이아웃)이다. 띠의 좌우
+    여백은 header_margins()로 맞춘다 — 제목의 왼쪽 끝과 본문 카드의 왼쪽 끝이
+    어긋나면 화면이 두 장을 겹쳐 놓은 것처럼 보인다.
+    """
+    row = QHBoxLayout()
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(0)
+    holder = QWidget()
+    holder.setObjectName("PageColumn")
+    column = QVBoxLayout(holder)
+    column.setContentsMargins(0, 0, 0, 0)
+    _center(row, holder, max_width)
+    return row, column
+
+
+def header_margins(top: int, bottom: int = 0) -> tuple[int, int, int, int]:
+    """머리 띠의 여백. 오른쪽은 본문의 스크롤바 자리만큼 더 둔다(Page 참고)."""
+    return (theme.SP_XL, top, theme.SP_XL + theme.SCROLLBAR_W, bottom)
+
+
 class Page(QWidget):
     """탭 하나의 내용. 각자 스크롤한다 — 탭을 바꿔도 남의 스크롤이 따라오지 않는다.
 
     바탕은 흰색이 아니라 한 단계 낮춘 회색이다. 흰 종이 위에 흰 카드를
     올리면 카드가 카드로 보이지 않는다 — 시인성 문제 절반이 거기서 왔다.
 
-    max_width를 주면 본문 기둥의 폭을 묶는다. 창을 넓혔을 때 한 줄이
-    끝없이 길어지면 다음 줄 첫 글자를 눈이 못 찾는다.
+    max_width를 주면 본문 기둥의 폭을 묶고 **가운데에 세운다.** 창을 넓혔을 때
+    한 줄이 끝없이 길어지면 다음 줄 첫 글자를 눈이 못 찾는다. 예전에는 묶은
+    기둥을 왼쪽에 붙여서, 넓은 창에서는 오른쪽 3분의 1이 빈 채로 화면이 한쪽으로
+    기울어 보였다.
+
+    기둥이 서는 자리는 스크롤바가 있든 없든 같다. 스크롤바가 없을 때는 그 폭만큼
+    오른쪽 여백을 더 둔다 — 그래야 내용이 길어져 스크롤바가 생기는 순간 본문이
+    옆으로 밀리지 않고, 머리 띠의 기둥(center_column)과도 왼쪽 끝이 맞는다.
     """
 
     def __init__(self, max_width: int = 0, parent: QWidget | None = None):
@@ -508,28 +586,32 @@ class Page(QWidget):
         body = QWidget()
         body.setObjectName("PageBody")
         body.setAutoFillBackground(True)
-        outer_body = QHBoxLayout(body)
-        outer_body.setContentsMargins(
-            theme.SP_XL, theme.SP_LG, theme.SP_XL, theme.SP_XL
+        self._gutter = QHBoxLayout(body)
+        self._gutter.setContentsMargins(
+            theme.SP_XL, theme.SP_LG, theme.SP_XL + theme.SCROLLBAR_W, theme.SP_XL
         )
-        outer_body.setSpacing(0)
+        self._gutter.setSpacing(0)
 
         holder = QWidget()
         holder.setObjectName("PageColumn")
-        if max_width:
-            holder.setMaximumWidth(max_width)
         self.column = QVBoxLayout(holder)
         self.column.setContentsMargins(0, 0, 0, 0)
-        self.column.setSpacing(theme.SP_MD)
+        self.column.setSpacing(theme.SP_LG)
         self.column.setAlignment(Qt.AlignmentFlag.AlignTop)
-        outer_body.addWidget(holder, 1)
-        if max_width:
-            outer_body.addStretch(0)
+        _center(self._gutter, holder, max_width)
         scroll.setWidget(body)
+        scroll.verticalScrollBar().rangeChanged.connect(self._reserve_gutter)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(scroll)
+
+    def _reserve_gutter(self, low: int, high: int) -> None:
+        right = theme.SP_XL + (0 if high > low else theme.SCROLLBAR_W)
+        margins = self._gutter.contentsMargins()
+        if margins.right() != right:
+            margins.setRight(right)
+            self._gutter.setContentsMargins(margins)
 
     def reset(self) -> QVBoxLayout:
         clear_layout(self.column)
@@ -613,10 +695,11 @@ class EvidenceChip(QPushButton):
 
     def __init__(self, doc_id: int, label: str, locator: str = "",
                  parent: QWidget | None = None):
-        text = f"📄 {label}" + (f" · {locator}" if locator else "")
+        text = label + (f" · {locator}" if locator else "")
         super().__init__(text, parent)
         self.doc_id = doc_id
         self.setObjectName("Link")
+        doc_icon(self)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(f"{label}\n{locator}\n클릭하면 원본을 엽니다")
         self.clicked.connect(lambda: self.opened.emit(self.doc_id))
@@ -632,16 +715,22 @@ class UnknownBlock(_WrapFrame):
     def __init__(self, message: str = "", parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("UnknownBlock")
+        from .. import icons
+
         row = QHBoxLayout(self)
         row.setContentsMargins(theme.SP_MD, theme.SP_SM, theme.SP_MD, theme.SP_SM)
+        row.setSpacing(theme.SP_SM)
+        mark = icons.label("warning", theme.ATTENTION, 16)
+        if mark is not None:
+            row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
         self.label = WrapLabel()
         self.label.setObjectName("UnknownText")
         self.label.setWordWrap(True)
-        row.addWidget(self.label)
+        row.addWidget(self.label, 1)
         self.setMessage(message)
 
     def setMessage(self, message: str) -> None:
-        self.label.setText(f"⚠ {message}" if message else "")
+        self.label.setText(message)
 
 
 class _EmptyDetailLabel(WrapLabel):

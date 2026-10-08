@@ -114,7 +114,50 @@ _SHAPES = {
         '<path d="M5.6 19.2 L12 4.8 L18.4 19.2"/>'
         '<path d="M8.3 13.4 H15.7"/>'
     ),
+
+    # ── 글자 옆에 붙는 작은 표지 ──
+    # 🔁 ⚙ ⚠ ✕ 를 대신한다. 이모지는 OS가 제 색으로 칠해 화면의 색 규칙을 깨고,
+    # 글꼴에 없으면 다른 글꼴의 그림이 끼어들어 줄 높이까지 흔든다.
+    "repeat": (
+        '<path d="M4.5 11.2 V9.6 A3.6 3.6 0 0 1 8.1 6 H18.2"/>'
+        '<path d="M15.6 3.4 L18.2 6 L15.6 8.6"/>'
+        '<path d="M19.5 12.8 V14.4 A3.6 3.6 0 0 1 15.9 18 H5.8"/>'
+        '<path d="M8.4 20.6 L5.8 18 L8.4 15.4"/>'
+    ),
+    # 설정 — 손잡이 달린 조절 막대 셋. 톱니는 16px에서 뭉개진다.
+    "settings": (
+        '<path d="M4 7 H20"/><path d="M4 12 H20"/><path d="M4 17 H20"/>'
+        '<circle cx="9" cy="7" r="2.2" fill="{c}" stroke="none"/>'
+        '<circle cx="15.5" cy="12" r="2.2" fill="{c}" stroke="none"/>'
+        '<circle cx="7.5" cy="17" r="2.2" fill="{c}" stroke="none"/>'
+    ),
+    "warning": (
+        '<path d="M12 4.4 L20.4 19 H3.6 Z"/>'
+        '<path d="M12 10.2 V14"/>'
+        '<circle cx="12" cy="16.5" r="0.95" fill="{c}" stroke="none"/>'
+    ),
+    "close": '<path d="M6.5 6.5 L17.5 17.5"/><path d="M17.5 6.5 L6.5 17.5"/>',
+    "chevron-down": '<path d="M6.5 9.5 L12 15 L17.5 9.5"/>',
+    "check": '<path d="M5.5 12.6 L10.2 17 L18.5 7.6" stroke-width="2.4"/>',
 }
+
+# 제품 표지. 검은 띠 위에 올라가므로 바탕 없이 선만 그린다 — 흰 바탕째 줄인
+# 그림을 올리면 띠 위에 흰 네모가 뜬다. 서류(흰 선) 안에 자료를 잇는 점(청록).
+_BRAND_ACCENT = "#35C7AD"
+_BRAND = (
+    '<path d="M7 2.8 H14 L19 7.8 V19.6 a1.6 1.6 0 0 1 -1.6 1.6 H7 '
+    'a1.6 1.6 0 0 1 -1.6 -1.6 V4.4 A1.6 1.6 0 0 1 7 2.8 Z" stroke="{c}"/>'
+    '<path d="M13.6 3 V8.2 H18.8" stroke="{c}"/>'
+    '<g stroke="{a}" stroke-width="1.3">'
+    '<path d="M12.2 14.3 L9.3 11.8"/><path d="M12.2 14.3 L15.4 12.4"/>'
+    '<path d="M12.2 14.3 L10.2 17.6"/><path d="M12.2 14.3 L15.2 17.2"/>'
+    '</g>'
+    '<circle cx="12.2" cy="14.3" r="1.5" fill="{a}" stroke="none"/>'
+    '<circle cx="9.1" cy="11.6" r="1" fill="{a}" stroke="none"/>'
+    '<circle cx="15.6" cy="12.3" r="1" fill="{a}" stroke="none"/>'
+    '<circle cx="10.1" cy="17.8" r="1" fill="{a}" stroke="none"/>'
+    '<circle cx="15.4" cy="17.4" r="1" fill="{a}" stroke="none"/>'
+)
 
 _cache: dict[tuple[str, str, int], QPixmap] = {}
 
@@ -127,6 +170,67 @@ def pixmap(name: str, color: str, size: int = 20) -> QPixmap | None:
     """
     if QSvgRenderer is None or name not in _SHAPES:
         return None
+    return _render(name, color, size, _SHAPES[name].format(c=color))
+
+
+def brand(color: str, size: int = 24) -> QPixmap | None:
+    """제품 표지. 서류의 선은 주어진 색, 안의 점은 고정된 청록이다."""
+    if QSvgRenderer is None:
+        return None
+    return _render("brand", color, size, _BRAND.format(c=color, a=_BRAND_ACCENT))
+
+
+def icon(name: str, color: str, size: int = 16):
+    """버튼에 붙일 QIcon. 없으면 빈 아이콘 — 버튼은 글자만으로도 선다."""
+    from PySide6.QtGui import QIcon
+
+    art = pixmap(name, color, size)
+    return QIcon(art) if art is not None else QIcon()
+
+
+def label(name: str, color: str, size: int = 16):
+    """글자 옆에 세울 작은 표지 한 칸. 그릴 수 없으면 None."""
+    from PySide6.QtWidgets import QLabel
+
+    art = pixmap(name, color, size)
+    if art is None:
+        return None
+    mark = QLabel()
+    mark.setPixmap(art)
+    mark.setFixedSize(size, size)
+    return mark
+
+
+def png_path(name: str, color: str, size: int = 16) -> str:
+    """스타일시트의 image: url()에 넣을 파일 경로. 그릴 수 없으면 빈 문자열.
+
+    QSS는 그림을 파일로만 받는다. 색이 테마를 따라가야 하므로 그때그때 그려
+    임시 폴더에 두고 그 경로를 돌려준다. 같은 (이름, 색, 크기)는 한 번만 쓴다.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from PySide6.QtGui import QGuiApplication
+
+    # 앱이 서기 전에 QPixmap을 만들면 Qt가 프로세스를 죽인다(theme.font_family와
+    # 같은 사정). 그때는 그림 없이 간다.
+    if QGuiApplication.instance() is None:
+        return ""
+    art = pixmap(name, color, size)
+    if art is None:
+        return ""
+    folder = Path(tempfile.gettempdir()) / "nunchicoach-icons"
+    path = folder / f"{name}-{color.lstrip('#')}-{size}.png"
+    try:
+        if not path.exists():
+            folder.mkdir(parents=True, exist_ok=True)
+            art.save(str(path), "PNG")
+    except OSError:
+        return ""
+    return path.as_posix()
+
+
+def _render(name: str, color: str, size: int, body: str) -> QPixmap:
     key = (name, color, size)
     if key in _cache:
         return _cache[key]
@@ -135,7 +239,7 @@ def pixmap(name: str, color: str, size: int = 20) -> QPixmap | None:
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
         f'width="{size}" height="{size}" fill="none" stroke="{color}" '
         'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
-        f'{_SHAPES[name].format(c=color)}</svg>'
+        f'{body}</svg>'
     )
     ratio = 2
     canvas = QPixmap(size * ratio, size * ratio)

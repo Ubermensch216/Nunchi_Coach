@@ -126,6 +126,11 @@ def find_gaps(db, task_id: int, basis: date | None = None,
     return gaps
 
 
+# 공백마다 붙는 안내. 화면은 이 문장을 줄마다 되풀이하지 않고 한 번만 적기
+# 위해 이 이름으로 찾아낸다(ui/views/tasks.py) — 보고서·초안에는 그대로 나간다.
+ONNARA_HINT = "온나라에서 전임자 작성 문서를 수집하면 등록된 공문이 근거로 더해집니다."
+
+
 class _Context:
     """공백 문구를 만들 때 함께 보는 이 업무의 사정."""
 
@@ -143,8 +148,7 @@ class _Context:
     def onnara_hint(self) -> str:
         """온나라 수집을 한 번도 안 했을 때만 권한다. 이미 했으면 같은 말을 반복하지 않는다."""
         collected = self.db.con.execute("SELECT 1 FROM collection_runs LIMIT 1").fetchone()
-        return "" if collected else (
-            " 온나라에서 전임자 작성 문서를 수집하면 등록된 공문이 근거로 더해집니다.")
+        return "" if collected else f" {ONNARA_HINT}"
 
     def case_hint(self) -> str:
         if not self.cases:

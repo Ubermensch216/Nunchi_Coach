@@ -67,6 +67,8 @@ from ..widgets import (
     TabBar,
     UnknownBlock,
     clear_layout,
+    divider,
+    doc_icon,
     muted_label,
     open_original,
     section_title,
@@ -280,7 +282,11 @@ class AskView(QWidget):
             ((SOURCE, "근거 원문"), (VERSIONS, "버전 비교"), (TASK_DOCS, "이 업무의 문서"))
         )
         self.reader_tabs.switched.connect(self._switch_reader)
+        # 밑줄 탭은 판 안쪽으로 들여 세우고 아래에 줄을 긋는다 — 판의 모서리에
+        # 붙으면 밑줄이 테두리와 겹쳐 탭인지 테두리인지 읽히지 않는다.
+        self.reader_tabs.layout().setContentsMargins(theme.SP_LG, theme.SP_SM, theme.SP_LG, 0)
         column.addWidget(self.reader_tabs)
+        column.addWidget(divider())
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -634,7 +640,7 @@ class AskView(QWidget):
 
         # 피드백은 둘뿐이다. '부정확'과 '출처가 틀림'의 차이를 처음 쓰는
         # 사람이 판단할 수 없다 — 고를 수 없는 선택지는 답을 왜곡한다.
-        for label, rating in (("맞아요", "helpful"), ("사실과 달라요", "inaccurate")):
+        for label, rating in (("맞습니다", "helpful"), ("사실과 다릅니다", "inaccurate")):
             button = QPushButton(label)
             button.clicked.connect(lambda _=False, r=rating, b=button: self._rate(r, b))
             row.addWidget(button)
@@ -692,7 +698,7 @@ class AskView(QWidget):
         if answer.related_docs:
             card.body.addWidget(muted_label("대신 찾은 문서", small=True))
             for related in answer.related_docs:
-                open_btn = QPushButton(f"📄 {related.filename}")
+                open_btn = doc_icon(QPushButton(related.filename))
                 open_btn.setObjectName("Link")
                 open_btn.clicked.connect(lambda _=False, p=related.path: self._open(p))
                 card.body.addWidget(open_btn, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -1115,7 +1121,12 @@ def _linkify_citations(text: str) -> str:
     """
     escaped = html.escape(text or "")
     return _CITATION_MARK.sub(
-        lambda m: f'<a href="{m.group(1)}" style="text-decoration:none;">[{m.group(1)}]</a>',
+        # 색을 직접 준다. 맡겨 두면 QLabel은 팔레트의 링크 색을 쓰는데, 그 색이
+        # 흰 바탕에서 거의 안 보였다 — 근거 표시는 이 화면에서 가장 잘 보여야 한다.
+        lambda m: (
+            f'<a href="{m.group(1)}" style="color:{theme.PRIMARY}; font-weight:700; '
+            f'text-decoration:none;">[{m.group(1)}]</a>'
+        ),
         escaped,
     )
 

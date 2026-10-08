@@ -13,6 +13,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QListWidget,
     QListWidgetItem,
@@ -23,8 +24,11 @@ from PySide6.QtWidgets import (
 
 from ...db import Database
 from ...ingest.parsers import supported_extensions
-from .. import theme
-from ..widgets import Card, body_label, muted_label, view_title
+from .. import icons, theme
+from ..widgets import Card, SubPanel, body_label, center_column, muted_label, view_title
+
+# 이 화면의 기둥 폭. 할 일이 하나뿐인 화면이라 좁게 세운다.
+ONBOARDING_W = 760
 
 # 사전 점검에서 훑을 최대 항목 수. 네트워크 공유 폴더에서 멈추지 않도록 상한을 둔다.
 PRECHECK_CAP = 40_000
@@ -39,10 +43,19 @@ class OnboardingView(QWidget):
         self.db = db
         self._folders: list[Path] = []
 
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(theme.SP_XL * 2, theme.SP_XL, theme.SP_XL * 2, theme.SP_XL)
+        self.setObjectName("Canvas")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+        # 첫 화면은 할 일이 하나뿐이다 — 폴더를 고르고 분석을 시작한다. 그 하나를
+        # 화면 가운데의 좁은 기둥에 세운다. 예전에는 창 폭을 다 쓰는 빈 상자
+        # 안에 빈 목록 상자가 또 들어 있어 화면이 덜 그려진 것처럼 보였다.
+        frame = QVBoxLayout(self)
+        frame.setContentsMargins(theme.SP_XL, theme.SP_XL * 2, theme.SP_XL, theme.SP_XL)
+        row, outer = center_column(ONBOARDING_W)
         outer.setSpacing(theme.SP_LG)
         outer.setAlignment(Qt.AlignmentFlag.AlignTop)
+        frame.addLayout(row)
+        frame.addStretch(1)
 
         outer.addWidget(view_title("전임자 자료가 있는 폴더를 선택하세요"))
         outer.addWidget(
@@ -53,11 +66,21 @@ class OnboardingView(QWidget):
         )
 
         card = Card()
-        card.setMaximumWidth(theme.CONTENT_MAX_W)
+
+        # 고른 폴더가 없을 때는 빈 목록 대신 무엇을 하면 되는지를 적는다.
+        self.placeholder = SubPanel()
+        self.placeholder.body.setContentsMargins(
+            theme.SP_LG, theme.SP_XL, theme.SP_LG, theme.SP_XL)
+        hint = muted_label("‘폴더 추가’를 눌러 전임자 자료가 있는 폴더를 고르세요. "
+                           "정리되지 않은 폴더를 그대로 지정해도 됩니다.")
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.placeholder.body.addWidget(hint)
+        card.body.addWidget(self.placeholder)
 
         self.list = QListWidget()
         self.list.setFixedHeight(140)
         self.list.setAlternatingRowColors(True)
+        self.list.setVisible(False)
         card.body.addWidget(self.list)
 
         buttons = QHBoxLayout()
@@ -76,20 +99,32 @@ class OnboardingView(QWidget):
         self.summary = muted_label("아직 선택한 폴더가 없습니다.")
         card.body.addWidget(self.summary)
 
+        # 시작 버튼은 카드 안, 고른 폴더 바로 아래에 둔다. 카드 밖에 떨어져
+        # 있으면 무엇을 시작하는 버튼인지가 카드와 끊긴다.
+        foot = QFrame()
+        foot.setObjectName("ActionBar")
+        foot_row = QHBoxLayout(foot)
+        foot_row.setContentsMargins(0, theme.SP_MD, 0, 0)
+        foot_row.setSpacing(theme.SP_SM)
+        lock = icons.label("lock", theme.CONFIRMED, 16)
+        if lock is not None:
+            foot_row.addWidget(lock, 0, Qt.AlignmentFlag.AlignTop)
         notice = body_label(
-            "ⓘ 이 프로그램은 원본을 수정·이동·삭제·이름 변경하지 않습니다. "
+            "이 프로그램은 원본을 수정·이동·삭제·이름 변경하지 않습니다. "
             "읽기만 하고, 분석 결과는 따로 저장합니다."
         )
-        notice.setObjectName("Muted")
-        card.body.addWidget(notice)
-
-        outer.addWidget(card)
+        notice.setObjectName("Small")
+        foot_row.addWidget(notice, 1)
 
         self.start = QPushButton("분석 시작")
         self.start.setObjectName("Primary")
         self.start.setEnabled(False)
+        self.start.setToolTip("폴더를 하나 이상 고르면 시작할 수 있습니다")
         self.start.clicked.connect(self._start)
-        outer.addWidget(self.start, alignment=Qt.AlignmentFlag.AlignLeft)
+        foot_row.addWidget(self.start, 0, Qt.AlignmentFlag.AlignVCenter)
+        card.body.addWidget(foot)
+
+        outer.addWidget(card)
 
         self.list.itemSelectionChanged.connect(
             lambda: self.remove.setEnabled(bool(self.list.selectedItems()))
@@ -125,6 +160,8 @@ class OnboardingView(QWidget):
 
     def _precheck(self) -> None:
         """읽기 권한과 대략적인 규모를 실행 전에 보여준다 (PRJ-004)."""
+        self.list.setVisible(bool(self._folders))
+        self.placeholder.setVisible(not self._folders)
         if not self._folders:
             self.summary.setText("아직 선택한 폴더가 없습니다.")
             self.start.setEnabled(False)

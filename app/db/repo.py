@@ -1153,7 +1153,7 @@ class Database(WorkStore):
         self.audit("task.describe", str(task_id))
 
     def confirm_task(self, task_id: int) -> None:
-        """'이 업무 확인함'. 4단계 상태와 옛 status를 함께 올린다."""
+        """'이 업무가 맞습니다'. 4단계 상태와 옛 status를 함께 올린다."""
         self.con.execute(
             "UPDATE tasks SET status = 'approved', review_state = 'confirmed', "
             "reviewed_at = datetime('now') WHERE id = ?",

@@ -422,8 +422,8 @@ def test_task_detail_without_cycle_explains_insufficient_data(make_window, db):
 
     assert any("언제 하는 일인가" in t for t in _buttons(view))
     texts = _labels(view)
-    # 확정된 주기가 없으므로 '🔁 매년 ...' 반복 헤드라인은 뜨지 않아야 한다.
-    assert not any(t.startswith("🔁") for t in texts), texts
+    # 확정된 주기가 없으므로 '매년 … 반복' 헤드라인은 뜨지 않아야 한다.
+    assert not any(t.endswith(" 반복") for t in texts), texts
     assert not any("다음 예상 시점" in t for t in texts)
 
 
@@ -577,8 +577,8 @@ def test_ask_view_renders_answer_with_citations_and_feedback(make_window, db):
     assert view._selected == 1
     # 피드백은 둘뿐이다 — '부정확'과 '출처가 틀림'의 차이를 처음 쓰는 사람이
     # 판단할 수 없어 하나로 합쳤다(디자인 개선안 진단 7).
-    assert any("맞아요" in b.text() for b in buttons)
-    assert any("사실과 달라요" in b.text() for b in buttons)
+    assert any("맞습니다" in b.text() for b in buttons)
+    assert any("사실과 다릅니다" in b.text() for b in buttons)
     assert not any("출처가 틀림" in b.text() for b in buttons)
 
 
@@ -612,7 +612,7 @@ def test_ask_view_rating_persists_to_the_latest_question(make_window, db):
     view._render_answer(answer)
 
     for button in _button_widgets(view):
-        if button.text() == "맞아요":
+        if button.text() == "맞습니다":
             button.click()
             break
 

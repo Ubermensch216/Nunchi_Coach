@@ -32,10 +32,10 @@ FILLED_LOW = "○"      # 문서는 있으나 주기 신뢰도가 낮음(관측 
 EMPTY = "·"
 CURRENT = "◎"          # 진행 중인 이번 달
 
-YEAR_W = 64
-CELL_W = 36
-ROW_H = 30
-BAR_H = 20
+YEAR_W = 72
+CELL_W = 64
+ROW_H = 36
+BAR_H = 22
 
 
 class TimelineGrid(QWidget):

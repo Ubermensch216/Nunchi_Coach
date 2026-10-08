@@ -52,6 +52,7 @@ from ...search.documents import find_documents
 from .. import theme
 from ..widgets import (
     Badge,
+    ElidedLabel,
     EmptyState,
     InfoDot,
     UnknownBlock,
@@ -245,6 +246,11 @@ class DocumentsView(QWidget):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setShowGrid(False)
         header = self.table.horizontalHeader()
+        # 머리글은 칸의 내용과 같은 쪽에 선다. 가운데에 두면 왼쪽으로 붙은
+        # 내용과 어긋나 어느 열의 이름인지 눈이 한 번 더 찾는다.
+        header.setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for i in range(1, len(COLUMNS)):
             header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
@@ -270,24 +276,23 @@ class DocumentsView(QWidget):
         paging.addWidget(self.previous_page)
         paging.addWidget(self.next_page)
         column.addLayout(paging)
-
-        actions = QHBoxLayout()
-        actions.setSpacing(theme.SP_SM)
-        open_file = self.open_file = QPushButton("원본 열기")
-        open_file.clicked.connect(self._open_selected)
-        actions.addWidget(open_file)
-        open_folder = self.open_folder = QPushButton("폴더 열기")
-        open_folder.clicked.connect(self._reveal_selected)
-        actions.addWidget(open_folder)
-        actions.addStretch(1)
-        column.addLayout(actions)
         return column
 
     def _build_detail(self) -> QWidget:
+        # 판 하나에 '고른 문서의 내용'(스크롤)과 '그 문서로 할 일'(아래 고정)을
+        # 함께 둔다. 원본 열기는 고른 문서에 대한 조작이라 그 문서 곁에 있어야
+        # 한다 — 예전에는 표 아래 왼쪽 구석에 떨어져 있어 무엇을 여는지 멀었다.
+        frame = QFrame()
+        frame.setObjectName("DetailFrame")
+        frame.setMinimumWidth(300)
+        box = QVBoxLayout(frame)
+        box.setContentsMargins(1, 1, 1, 1)
+        box.setSpacing(0)
+
         panel = QScrollArea()
         panel.setObjectName("DetailPane")
         panel.setWidgetResizable(True)
-        panel.setMinimumWidth(260)
+        panel.setFrameShape(QFrame.Shape.NoFrame)
         # 긴 경로 때문에 가로 스크롤이 생기면 패널이 지저분해진다. 경로는
         # 가운데를 줄여 보여주고 전체는 툴팁으로 준다.
         panel.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -299,9 +304,26 @@ class DocumentsView(QWidget):
         self.detail.setSpacing(theme.SP_MD)
         self.detail.setAlignment(Qt.AlignmentFlag.AlignTop)
         panel.setWidget(inner)
+        box.addWidget(panel, 1)
+
+        bar = QFrame()
+        bar.setObjectName("ActionBar")
+        actions = QHBoxLayout(bar)
+        actions.setContentsMargins(theme.SP_LG, theme.SP_MD, theme.SP_LG, theme.SP_MD)
+        actions.setSpacing(theme.SP_SM)
+        open_file = self.open_file = QPushButton("원본 열기")
+        open_file.setObjectName("Primary")
+        open_file.setToolTip("고른 문서를 기본 프로그램으로 엽니다. 읽기만 하고 고치지 않습니다")
+        open_file.clicked.connect(self._open_selected)
+        actions.addWidget(open_file)
+        open_folder = self.open_folder = QPushButton("폴더 열기")
+        open_folder.clicked.connect(self._reveal_selected)
+        actions.addWidget(open_folder)
+        actions.addStretch(1)
+        box.addWidget(bar)
 
         self.detail_panel = panel
-        return panel
+        return frame
 
     # ── 목록 ────────────────────────────────────────────────────────
     def refresh(self) -> None:
@@ -420,9 +442,11 @@ class DocumentsView(QWidget):
         if row is None:
             return
 
-        title = section_title(row["filename"])
-        title.setWordWrap(True)
-        title.setToolTip(row["path"])
+        # 파일명에는 띄어쓰기가 없어 줄바꿈이 듣지 않는다. 그대로 두면 이름
+        # 하나가 판을 제 폭만큼 밀어내 오른쪽 내용이 통째로 잘린다.
+        title = ElidedLabel(row["filename"])
+        title.setObjectName("Answer")
+        title.setToolTip(f"{row['filename']}\n{row['path']}")
         self.detail.addWidget(title)
 
         folder = str(Path(row["path"]).parent)

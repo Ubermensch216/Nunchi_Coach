@@ -27,17 +27,22 @@ from PySide6.QtWidgets import (
 
 from .. import theme
 
-# 업무 구분용 팔레트. 채도를 낮춰 공직 문서 환경에 어울리게 하고, 서로
-# 충분히 떨어진 색상만 골라 인접 카드가 헷갈리지 않게 한다.
+# 업무 구분용 팔레트. 채도를 낮춰 공직 문서 환경에 어울리게 한다.
+#
+# **상태 색(빨강·주황·초록)과 겹치는 색은 쓰지 않는다.** 예전 팔레트에는
+# 오류의 빨강, 확인 필요의 주황, 확인됨의 초록이 그대로 들어 있어서, 띠가
+# 빨간 카드는 '문제 있는 업무'로 읽혔다. 색이 인덱스로만 읽히려면 이 화면에서
+# 뜻을 가진 색과 떨어져 있어야 한다 — 청·남·보라·청록·회청 계열만 쓴다.
+# 밝은 벌과 어두운 벌 양쪽에서 띠로 보이는 중간 밝기로 골랐다.
 TASK_COLORS = [
-    "#1B5FA8",  # 청
-    "#0F7B6C",  # 청록
-    "#B45309",  # 주황
-    "#7C3AED",  # 보라
-    "#B91C1C",  # 적
-    "#15803D",  # 녹
-    "#0369A1",  # 하늘
-    "#A16207",  # 황토
+    "#3F74B8",  # 청
+    "#5A62C4",  # 남보라
+    "#8259B8",  # 보라
+    "#2B8FA3",  # 청록
+    "#5F7F96",  # 회청
+    "#A0589A",  # 자주
+    "#3D8C8C",  # 옥색
+    "#7482A0",  # 청회
 ]
 
 STRIP_CELL_W = 14
@@ -153,17 +158,25 @@ class TaskCard(QFrame):
         self.setToolTip(f"{name} — 눌러서 자세히 보기")
 
         accent = color_for(name)
+        # 누를 수 있는 카드다. 마우스로는 테두리가 서고, 키보드로도 닿는다 —
+        # Tab으로 옮겨 Enter·Space로 연다(예전에는 마우스로만 열 수 있었다).
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(f"{name} 업무 열기")
         self.setStyleSheet(
             f"""
             QFrame#TaskCard {{
                 background: {theme.BG};
-                border: 1px solid {theme.BORDER_STRONG};
-                border-left: 5px solid {accent};
+                border: 1px solid {theme.BORDER};
+                border-left: 4px solid {accent};
                 border-radius: {theme.RADIUS}px;
             }}
             QFrame#TaskCard:hover {{
-                border-color: {accent};
-                border-left: 5px solid {accent};
+                border-color: {theme.BORDER_STRONG};
+                border-left: 4px solid {accent};
+            }}
+            QFrame#TaskCard:focus {{
+                border: 2px solid {theme.PRIMARY};
+                border-left: 4px solid {accent};
             }}
             """
         )
@@ -187,6 +200,12 @@ class TaskCard(QFrame):
             self.opened.emit(self._task_id)
         super().mouseReleaseEvent(event)
 
+    def keyPressEvent(self, event) -> None:  # noqa: N802 — Qt 규약
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.opened.emit(self._task_id)
+            return
+        super().keyPressEvent(event)
+
 
 # ── 구성 요소 ───────────────────────────────────────────────────────
 
@@ -199,9 +218,9 @@ def _title(name: str) -> QLabel:
     """
     label = QLabel(name)
     label.setWordWrap(True)
-    label.setStyleSheet(
-        f"color: {theme.TEXT}; font-size: {theme.FS_SECTION}px; font-weight: 700;"
-    )
+    # 크기는 전역 스타일시트가 정한다. 여기서 px를 못 박으면 '글자 크게'를
+    # 골라도 카드 제목만 그대로 남는다.
+    label.setObjectName("SectionTitle")
     return label
 
 
@@ -224,12 +243,24 @@ def _description(text: str) -> QLabel:
     return label
 
 
-def _cycle_line(cycle_text: str | None) -> QLabel:
-    label = QLabel(f"🔁 {cycle_text}" if cycle_text else "· 반복 주기 미확인")
+def _cycle_line(cycle_text: str | None) -> QWidget:
+    from .. import icons
+
+    box = QWidget()
+    row = QHBoxLayout(box)
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(theme.SP_XS)
+    label = QLabel(cycle_text or "반복 주기 미확인")
     label.setObjectName("Small")
-    if not cycle_text:
-        label.setStyleSheet(f"color: {theme.TEXT_DISABLED};")
-    return label
+    if cycle_text:
+        mark = icons.label("repeat", theme.TEXT_MUTED, 14)
+        if mark is not None:
+            row.addWidget(mark)
+    else:
+        label.setStyleSheet(f"color: {theme.TEXT_SUBTLE};")
+    row.addWidget(label)
+    row.addStretch(1)
+    return box
 
 
 def _footer(confidence: str, review_state: str, reading_count: int) -> QHBoxLayout:
@@ -239,21 +270,34 @@ def _footer(confidence: str, review_state: str, reading_count: int) -> QHBoxLayo
     row = QHBoxLayout()
     row.setSpacing(theme.SP_SM)
 
-    note, kind = _CONFIDENCE.get(confidence, _CONFIDENCE["low"])
-    row.addWidget(Badge(note, kind))
-
+    # 뱃지는 예외만 색으로 세운다. 처음에는 모든 카드가 '확인 필요'라서, 그것을
+    # 주황으로 칠하면 화면 전체가 주황이 되고 정작 조심할 카드가 묻힌다.
+    #   · 확인함        — 초록. 사람이 손댄 것이 눈에 띄어야 진도가 보인다.
+    #   · 확인 필요     — 회색. 기본 상태다. 말은 하되 소리치지 않는다.
+    #   · 느슨한 묶음   — 주황. 같은 업무가 아닐 수 있다는 진짜 경고다.
+    # 묶음이 단단한 것은 적지 않는다 — 문제가 없다는 말을 카드마다 읽게 하지 않는다.
     # 확인된 업무는 그렇다고 말해 준다. 인수인계 진행도(§18)에서 세는 것과
     # 카드에서 보이는 것이 같아야 사용자가 진도를 신뢰한다.
     if review_state == status.CONFIRMED:
         row.addWidget(Badge(f"{status.symbol(status.CONFIRMED)} 확인함", "ok"))
     else:
-        row.addWidget(Badge(f"{status.symbol(review_state)} 확인 필요", "attention"))
+        row.addWidget(Badge(f"{status.symbol(review_state)} 확인 필요", "neutral"))
+    if confidence != "high":
+        note, kind = _CONFIDENCE.get(confidence, _CONFIDENCE["low"])
+        row.addWidget(Badge(note, kind))
     row.addStretch(1)
 
     if reading_count:
-        count = QLabel(f"📄 {reading_count}")
+        from .. import icons
+
+        tip = f"먼저 읽을 문서 {reading_count}건"
+        mark = icons.label("documents", theme.TEXT_MUTED, 14)
+        if mark is not None:
+            mark.setToolTip(tip)
+            row.addWidget(mark)
+        count = QLabel(str(reading_count))
         count.setObjectName("Small")
-        count.setToolTip(f"먼저 읽을 문서 {reading_count}건")
+        count.setToolTip(tip)
         row.addWidget(count)
     return row
 
@@ -261,8 +305,8 @@ def _footer(confidence: str, review_state: str, reading_count: int) -> QHBoxLayo
 # 카드에서는 짧게 쓴다 — 목록에서 문장을 읽게 하면 조망이 안 된다.
 _CONFIDENCE = {
     "high": ("● 단단함", "ok"),
-    "medium": ("◐ 보통", "neutral"),
-    "low": ("○ 느슨함", "attention"),
+    "medium": ("묶음 보통", "neutral"),
+    "low": ("느슨한 묶음", "attention"),
 }
 
 

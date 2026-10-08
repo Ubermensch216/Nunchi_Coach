@@ -111,11 +111,11 @@ def test_menus_do_not_pile_up_on_the_view(view: TasksView):
 
 def test_confirming_a_task_updates_the_badge(view: TasksView):
     view.open_task(1)
-    assert "이 업무 확인함" in buttons(view)
+    assert "이 업무가 맞습니다" in buttons(view)
 
     view._approve(1)
     assert status.of_task(view.db.task(1)) == status.CONFIRMED
-    assert "이 업무 확인함" not in buttons(view)
+    assert "이 업무가 맞습니다" not in buttons(view)
     assert any(status.label(status.CONFIRMED) in t for t in texts(view))
 
 

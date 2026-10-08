@@ -11,10 +11,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -81,14 +79,12 @@ class TopBar(QWidget):
         row.setContentsMargins(theme.SP_LG, 0, theme.SP_LG, 0)
         row.setSpacing(theme.SP_SM)
 
-        logo_path = Path(__file__).parent / "assets" / "logo.png"
-        if logo_path.exists():
+        # 표지는 선으로 다시 그린 것을 쓴다. 흰 바탕째인 logo.png를 줄여 올리면
+        # 검은 띠 위에 흰 네모가 떠서 그림이 안 뜬 자리처럼 보인다.
+        art = icons.brand(theme.NAVBAR_TEXT, theme.TOPBAR_H - 24)
+        if art is not None:
             mark = QLabel()
-            mark.setPixmap(
-                QPixmap(str(logo_path)).scaledToHeight(
-                    theme.TOPBAR_H - 22, Qt.TransformationMode.SmoothTransformation
-                )
-            )
+            mark.setPixmap(art)
             row.addWidget(mark)
 
         name = QLabel("눈치코치")
@@ -156,10 +152,14 @@ class TopBar(QWidget):
         self.status.clicked.connect(self.status_clicked.emit)
         row.addWidget(self.status)
 
-        settings = QPushButton("⚙")
+        settings = QPushButton()
         settings.setObjectName("TopLink")
-        settings.setFixedWidth(30)
+        settings.setIcon(icons.icon("settings", theme.NAVBAR_MUTED, 18))
+        settings.setIconSize(QSize(18, 18))
+        settings.setFixedWidth(34)
+        settings.setCursor(Qt.CursorShape.PointingHandCursor)
         settings.setToolTip("설정")
+        settings.setAccessibleName("설정")
         settings.clicked.connect(self.settings_requested.emit)
         row.addWidget(settings)
 

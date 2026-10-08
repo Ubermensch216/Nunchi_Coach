@@ -227,7 +227,7 @@ def test_a_past_year_asks_to_confirm_in_its_own_words(db: Database, qapp):
     try:
         page = _how_page(view)
         labels = [b.text() for b in page.findChildren(QPushButton)]
-        assert f"{LAST_YEAR}년 순서 확인함" in labels
+        assert f"{LAST_YEAR}년 순서가 맞습니다" in labels
         assert "올해 처리 결과로 반영" not in labels
     finally:
         view.setParent(None)

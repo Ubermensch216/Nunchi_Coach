@@ -146,7 +146,9 @@ def test_task_opens_on_the_work_tab_with_the_next_action_first(view):
     assert view._tab == tasks_view.WORK
     assert view.stack.currentWidget() is view.pages[tasks_view.WORK]
     shown = texts(view.pages[tasks_view.WORK])
-    assert any(t.startswith("▶ 지금 할 수 있는 일 — '집계 자료 준비'") for t in shown)
+    # 할 수 있는 일이 '다음 행동'의 첫 줄이다 — 이름표 바로 아래에 값으로 선다.
+    assert shown.index("지금 할 수 있는 일") + 1 == next(
+        i for i, t in enumerate(shown) if t.startswith("'집계 자료 준비'"))
     assert "기획예산과" in shown
     assert any(t.startswith("문서에 적힌 절차입니다.") for t in shown)
     assert any("지난 회차에 이렇게 했다는 기록입니다" in t for t in shown)
@@ -172,7 +174,8 @@ def test_steps_are_recorded_only_by_the_user_and_the_next_action_moves_on(view):
     card = workcard.build(db, 1)
     assert card.stated_steps[0]["run_state"] == ws.DONE and card.progress["stated_done"] == 1
     shown = texts(view.pages[tasks_view.WORK])
-    assert any(t.startswith("▶ 지금 할 수 있는 일 — '실적표 작성'") for t in shown)
+    assert "지금 할 수 있는 일" in shown
+    assert any(t.startswith("'실적표 작성'") for t in shown)
     assert "3단계 중 1단계 완료 · 확인할 것 2건" in shown
     # 되돌릴 수 있다.
     button(view.pages[tasks_view.WORK], "완료 취소").click()

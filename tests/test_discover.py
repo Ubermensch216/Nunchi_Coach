@@ -239,7 +239,7 @@ def test_two_leftover_documents_are_still_not_a_task(project):
 # ── 재발견은 사람이 해 둔 일을 지우지 않는다 ────────────────────────
 # 실제 모델로 전체 분석을 다시 돌리다 발견했다. 업무 재발견이 '아직 확인하지
 # 않은 업무'를 지우고 새로 만들면서, 그 아래의 항목·단계·수행 기록까지 연쇄로
-# 지웠다. 후임자가 '이 업무 확인함'을 누르지 않고 일부터 시작하는 것은 흔하다.
+# 지웠다. 후임자가 '이 업무가 맞습니다'를 누르지 않고 일부터 시작하는 것은 흔하다.
 
 @pytest.mark.parametrize("work", ["step_run", "item_edit", "item_added", "step_added", "gap_closed"])
 def test_rediscovery_keeps_an_unconfirmed_task_that_someone_worked_on(project, work):

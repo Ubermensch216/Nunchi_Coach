@@ -259,8 +259,13 @@ def font_family() -> str:
 
 
 FONT_FAMILY = '"Pretendard", "Malgun Gothic", "맑은 고딕", sans-serif'
-FS_TITLE = 20
-FS_SECTION = 16
+# 다섯 단계. 예전에는 20·16·14·12 넷이었는데 이웃한 단계의 차가 2~4px뿐이라
+# 제목·구획·본문이 한 덩어리로 읽혔다. 화면 제목과 구획 제목을 벌리고, 본문과
+# 구획 사이에 '답'의 자리(FS_LEAD)를 따로 둔다 — 기한·제출처처럼 화면이 내놓는
+# 값이 그것을 둘러싼 표지·부기보다 커야 눈이 값부터 읽는다.
+FS_TITLE = 24
+FS_SECTION = 18
+FS_LEAD = 16
 FS_BODY = 14
 FS_SMALL = 12
 LINE_HEIGHT = 1.6            # 한글은 1.5 이하면 답답하다
@@ -314,17 +319,21 @@ TOPBAR_H = 52
 ROW_H = 36
 # 입력칸·드롭다운·버튼의 공통 높이. 한 줄에 서면 같은 키여야 한 벌로 보인다.
 CONTROL_H = 36
-DETAIL_PANEL_W = 360
+DETAIL_PANEL_W = 400
 # 근거 서랍(계획서 §28: 360~420px). 인용문이 서너 줄로 접히는 최소 폭이다.
 DRAWER_W = 380
-CONTENT_MAX_W = 1040
+# 읽는 화면(업무·일정)의 본문 기둥. 목록과 상세가 같은 폭을 써야 화면을
+# 오갈 때 제목이 제자리에 있다. 표와 대조가 일인 화면(문서·질문)은 묶지 않는다.
+CONTENT_MAX_W = 1120
+SCROLLBAR_W = 10             # 아래 스타일시트의 QScrollBar:vertical 폭과 같아야 한다
 WINDOW_MIN = (1120, 720)
 
-# 연간 패턴 격자 (일정 화면)
-GRID_NAME_W = 224            # 업무 이름 칸. 이보다 좁으면 이름이 자주 잘린다.
-GRID_CELL_W = 46
-GRID_ROW_H = 34
-GRID_BAR_H = 22              # 막대 높이. 줄 높이보다 낮아야 행이 분리되어 보인다.
+# 연간 패턴 격자 (일정 화면). 가장 좁은 창(WINDOW_MIN)의 본문 기둥 1062px에
+# 들어가야 한다: 200 + 68×12 + 여백 24 = 1040.
+GRID_NAME_W = 200            # 업무 이름 칸. 이보다 좁으면 이름이 자주 잘린다.
+GRID_CELL_W = 68
+GRID_ROW_H = 40
+GRID_BAR_H = 24              # 막대 높이. 줄 높이보다 낮아야 행이 분리되어 보인다.
 
 # 설정 창 왼쪽 갈래 목록
 SETTINGS_NAV_W = 168
@@ -350,6 +359,70 @@ def apply(app, text_size: str = "medium", mode: str = "system") -> str:
     return resolved
 
 
+def _combo_arrow() -> str:
+    """드롭다운 화살표를 직접 그린 그림으로 바꾼다.
+
+    기본 화살표를 그대로 두면 Qt가 플랫폼의 버튼 틀까지 함께 그려, 둥근
+    테두리 오른쪽에 각진 선이 겹쳐 깨진 것처럼 보였다. QSS로 drop-down을
+    건드리면 Qt가 플랫폼 화살표를 그리지 않으므로 그림을 꼭 대 줘야 한다 —
+    border 삼각형 기법은 Qt에서 회색 네모로 나오고, image를 비우면 화살표가
+    아예 사라진다. 그림을 만들 수 없는 환경(앱이 서기 전, QtSvg 없음)에서는
+    손대지 않고 기본 화살표로 물러선다.
+    """
+    from . import icons
+
+    arrow = icons.png_path("chevron-down", TEXT_MUTED, 14)
+    if not arrow:
+        return ""
+    return f"""
+    QComboBox {{ padding-right: {SP_XL}px; }}
+    QComboBox::drop-down {{
+        subcontrol-origin: padding;
+        subcontrol-position: center right;
+        width: {SP_XL}px;
+        border: none;
+        background: transparent;
+    }}
+    QComboBox::down-arrow {{
+        image: url({arrow});
+        width: 14px;
+        height: 14px;
+        margin-right: {SP_SM}px;
+    }}
+    """
+
+
+def _check_marks() -> str:
+    """체크 상자를 강조색으로 맞춘다.
+
+    맡겨 두면 윈도우의 강조색(사용자마다 다르다 — 노랑일 수도 청록일 수도)으로
+    칠해져, 화면에서 이것만 다른 색으로 튄다. 그림을 만들 수 없는 환경에서는
+    손대지 않는다 — 테두리만 바꾸고 체크 표시를 못 그리면 켠 것과 끈 것이
+    구분되지 않는다.
+    """
+    from . import icons
+
+    mark = icons.png_path("check", TEXT_ON_PRIMARY, 14)
+    if not mark:
+        return ""
+    return f"""
+    QCheckBox::indicator {{
+        width: 16px;
+        height: 16px;
+        border: 1px solid {TEXT_SUBTLE};
+        border-radius: {RADIUS_SM}px;
+        background: {BG};
+    }}
+    QCheckBox::indicator:hover {{ border-color: {PRIMARY}; }}
+    QCheckBox::indicator:checked {{
+        background: {PRIMARY};
+        border-color: {PRIMARY};
+        image: url({mark});
+    }}
+    QCheckBox::indicator:disabled {{ border-color: {BORDER}; background: {SURFACE}; }}
+    """
+
+
 def stylesheet(text_size: str = "medium") -> str:
     """지금 칠해져 있는 색 벌로 전역 스타일시트를 짓는다.
 
@@ -362,6 +435,7 @@ def stylesheet(text_size: str = "medium") -> str:
     body = _scaled(FS_BODY, scale)
     small = _scaled(FS_SMALL, scale)
     section = _scaled(FS_SECTION, scale)
+    lead = _scaled(FS_LEAD, scale)
     title = _scaled(FS_TITLE, scale)
     return f"""
     * {{
@@ -456,36 +530,33 @@ def stylesheet(text_size: str = "medium") -> str:
        탭은 머리 띠 아래를 무는 밑줄 — "지금 어느 메뉴 안에 있는가"를
        잃지 않으면서도, 본문 글자와는 확실히 구분되어야 한다. */
     QPushButton#Tab {{
-        background: {SURFACE};
-        border: 1px solid {BORDER};
-        border-bottom: 3px solid {BORDER};
-        border-top-left-radius: {RADIUS_SM}px;
-        border-top-right-radius: {RADIUS_SM}px;
-        border-bottom-left-radius: 0;
-        border-bottom-right-radius: 0;
-        padding: {SP_SM}px {SP_LG}px;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        padding: {SP_SM}px 2px {SP_SM + 2}px 2px;
         color: {TEXT_MUTED};
         font-weight: 600;
-        min-height: 26px;
+        min-height: 24px;
     }}
     QPushButton#Tab:hover {{
-        background: {SURFACE_ALT};
         color: {TEXT};
         border-bottom-color: {BORDER_STRONG};
     }}
+    /* 고른 탭은 색과 밑줄이 함께 선다. 굵기는 바꾸지 않는다 — 굵기가 바뀌면
+       탭 폭이 달라져 누를 때마다 옆 탭이 밀린다. */
     QPushButton#Tab:checked {{
-        background: {BG};
         color: {PRIMARY};
-        border-color: {BORDER_STRONG};
-        border-bottom: 3px solid {PRIMARY};
+        border-bottom: 2px solid {PRIMARY};
     }}
+    QPushButton#Tab:focus {{ color: {PRIMARY}; }}
     QWidget#TabBar {{ background: transparent; }}
 
     /* ── 근거 서랍 ──
        본문에서 떼어 낸 판이라는 것이 보여야 한다. 왼쪽 테두리로 경계를
        긋고 바탕을 한 단계 낮춘다. */
     QFrame#EvidenceDrawer {{
-        background: {SURFACE};
+        background: {BG};
         border-left: 1px solid {BORDER_STRONG};
     }}
     /* 근거 한 건. [n]을 누르면 그 항목만 짚어 준다 — 패널에 근거가
@@ -560,11 +631,12 @@ def stylesheet(text_size: str = "medium") -> str:
         background: transparent;
     }}
     /* 문서 화면 오른쪽 상세. 표와 나란히 서는 흰 판이라 같은 테두리를 쓴다. */
-    QScrollArea#DetailPane {{
+    QFrame#DetailFrame {{
         background: {BG};
         border: 1px solid {BORDER};
         border-radius: {RADIUS}px;
     }}
+    QScrollArea#DetailPane {{ background: transparent; border: none; }}
     QLabel#ParaNumber {{ color: {TEXT_DISABLED}; font-size: {small}px; }}
     QLabel#ParaText {{ color: {TEXT_MUTED}; line-height: 180%; }}
     /* 인용된 대목. 답에서 이 문장을 가져왔다는 뜻이라 본문 색으로 세우고
@@ -597,7 +669,7 @@ def stylesheet(text_size: str = "medium") -> str:
        스스로 정해야 한다. 보조 정보는 small로 물러선다. */
     QLabel#AnswerBody {{
         color: {TEXT};
-        font-size: {section}px;
+        font-size: {lead}px;
         line-height: 175%;
     }}
 
@@ -618,7 +690,7 @@ def stylesheet(text_size: str = "medium") -> str:
     /* 인용문은 '이 앱이 쓴 말'이 아니라 '문서에 있던 말'이다 — 따옴표만으로는
        약해서 옅은 판에 얹고 왼쪽에 띠를 둔다. */
     QLabel#EvidenceQuote {{
-        background: {BG};
+        background: {SURFACE};
         border-left: 3px solid {BORDER_STRONG};
         border-radius: {RADIUS_SM}px;
         padding: {SP_SM}px {SP_MD}px;
@@ -628,7 +700,21 @@ def stylesheet(text_size: str = "medium") -> str:
     /* ── 공통 ── */
     QLabel#ViewTitle {{
         font-size: {title}px;
+        font-weight: 700;
+    }}
+    /* 화면이 내놓는 값(기한·제출처·서식). 표지와 부기는 small로 물러서고
+       값만 한 단계 크게 선다 — 한 줄에서 눈이 먼저 닿아야 하는 것이 이것이다. */
+    QLabel#Value {{
+        font-size: {lead}px;
         font-weight: 600;
+        color: {TEXT};
+    }}
+    /* 값 위에 붙는 표지("기한 · 제출기한"). 부기와 같은 크기지만 굵게 세워
+       '이름표'로 읽히게 한다. */
+    QLabel#FieldName {{
+        color: {TEXT_MUTED};
+        font-size: {small}px;
+        font-weight: 700;
     }}
     QLabel#ViewLead {{
         color: {TEXT_MUTED};
@@ -648,7 +734,7 @@ def stylesheet(text_size: str = "medium") -> str:
         font-weight: 700;
     }}
     /* 화면이 내놓는 답 한 줄. 근거·부연과 같은 크기로 두면 답이 묻힌다. */
-    QLabel#Answer {{ font-size: {section}px; font-weight: 700; color: {TEXT}; }}
+    QLabel#Answer {{ font-size: {lead}px; font-weight: 700; color: {TEXT}; }}
     QLabel#Muted {{ color: {TEXT_MUTED}; }}
     QLabel#Small {{ color: {TEXT_MUTED}; font-size: {small}px; }}
     QLabel#Mono {{ font-family: "Consolas", "D2Coding", monospace; color: {TEXT_MUTED}; }}
@@ -699,7 +785,7 @@ def stylesheet(text_size: str = "medium") -> str:
         font-weight: 700;
         font-style: italic;
     }}
-    QLabel#InfoDot:hover {{
+    QLabel#InfoDot:hover, QLabel#InfoDot:focus {{
         background: {PRIMARY_SOFT};
         border-color: {PRIMARY};
         color: {PRIMARY};
@@ -715,32 +801,26 @@ def stylesheet(text_size: str = "medium") -> str:
         font-size: {small}px;
     }}
 
-    QFrame#Card {{
+    /* 카드는 회색 바탕 위의 흰 판이다. 바탕과 색이 이미 갈리므로 테두리는
+       옅게만 둔다 — 짙은 테두리를 판마다 두르면 화면이 양식 문서의 칸처럼
+       보인다. 마우스가 스친다고 테두리가 파래지지도 않는다: 카드 대부분은
+       누르는 것이 아니라 읽는 것이고, 누를 수 있는 카드는 제가 따로 말한다. */
+    QFrame#Card, QFrame#CardStatic {{
         background: {BG};
-        border: 1px solid {BORDER_STRONG};
+        border: 1px solid {BORDER};
         border-radius: {RADIUS}px;
     }}
-    QFrame#Card:hover {{ border-color: {PRIMARY}; }}
     /* 왼쪽 굵은 띠로 급한 것을 표시한다 — 뱃지 하나보다 멀리서 보인다. */
     QFrame#CardAttention {{
         background: {BG};
-        border: 1px solid {BORDER_STRONG};
+        border: 1px solid {BORDER};
         border-left: 4px solid {ATTENTION};
         border-radius: {RADIUS}px;
     }}
-    QFrame#CardAttention:hover {{ border-color: {ATTENTION}; }}
     QFrame#CardPrimary {{
         background: {BG};
-        border: 1px solid {BORDER_STRONG};
+        border: 1px solid {BORDER};
         border-left: 4px solid {PRIMARY};
-        border-radius: {RADIUS}px;
-    }}
-    QFrame#CardPrimary:hover {{ border-color: {PRIMARY}; }}
-    /* 설정 창의 카드는 목록이 아니라 설명 판이다. 마우스만 스쳐도 테두리가
-       파래지면 "눌러야 하나?" 싶어진다 — 조용히 둔다. */
-    QFrame#CardStatic {{
-        background: {BG};
-        border: 1px solid {BORDER_STRONG};
         border-radius: {RADIUS}px;
     }}
 
@@ -750,18 +830,19 @@ def stylesheet(text_size: str = "medium") -> str:
         border: none;
         padding: 0;
         text-align: left;
-        font-size: {section}px;
+        font-size: {lead}px;
         font-weight: 700;
         color: {TEXT};
     }}
     QPushButton#CardTitle:hover {{ color: {PRIMARY}; text-decoration: underline; }}
 
     /* 카드 안의 근거 묶음. 본문과 같은 흰 바탕에 두면 어디까지가 근거인지
-       경계가 사라진다. */
+       경계가 사라진다. 경계는 바탕 톤만으로 만든다 — 카드 안에 테두리 상자를
+       또 두면 상자 속 상자가 되어, 줄마다 칸을 친 서식처럼 보인다. */
     QFrame#SubPanel {{
         background: {SURFACE};
-        border: 1px solid {BORDER};
-        border-radius: {RADIUS_SM}px;
+        border: 1px solid {SURFACE};
+        border-radius: 6px;
     }}
 
     /* ── 목록 한 줄 ──
@@ -857,7 +938,7 @@ def stylesheet(text_size: str = "medium") -> str:
     QLabel#StepMark {{
         color: {PRIMARY};
         font-weight: 700;
-        font-size: {section}px;
+        font-size: {lead}px;
     }}
     QLabel#StepWhen {{
         background: {SURFACE_ALT};
@@ -927,6 +1008,32 @@ def stylesheet(text_size: str = "medium") -> str:
         font-weight: 600;
     }}
     QPushButton#Primary:hover {{ background: {PRIMARY_HOVER}; }}
+    /* 못 누르는 주 버튼은 못 누르게 보여야 한다. 이 규칙이 없으면 파란 채움이
+       그대로 남아, 자료 폴더를 고르기 전의 '분석 시작'이 눌릴 것처럼 보였다. */
+    QPushButton#Primary:disabled {{
+        background: {SURFACE_ALT};
+        border: 1px solid {BORDER};
+        color: {TEXT_DISABLED};
+    }}
+    /* 키보드로 옮겨 다닐 때 지금 어디에 있는지 보여야 한다. 버튼에는 포커스
+       표시가 아예 없어서 Tab을 눌러도 화면에 아무 변화가 없었다. */
+    QPushButton:focus {{ border: 1px solid {PRIMARY}; }}
+    QPushButton#Primary:focus {{ border: 2px solid {TEXT}; }}
+    QPushButton#Link:focus, QPushButton#BackLink:focus, QPushButton#RowTitle:focus,
+    QPushButton#CardTitle:focus, QPushButton#GridName:focus {{
+        border: none;
+        color: {PRIMARY};
+        text-decoration: underline;
+    }}
+    QPushButton#Quiet:focus, QPushButton#IconButton:focus, QPushButton#Chip:focus,
+    QPushButton#Destructive:focus, QPushButton#MenuButton:focus,
+    QPushButton#ChoiceItem:focus {{ border: 1px solid {PRIMARY}; }}
+    QPushButton#Confirm:focus {{ border: 2px solid {PRIMARY}; }}
+    QPushButton#SettingsNavItem:focus {{ color: {PRIMARY}; }}
+    QPushButton#NavTab:focus {{ border: 1px solid {NAVBAR_MUTED}; }}
+    QPushButton#TopLink:focus {{ border: none; color: {NAVBAR_TEXT}; }}
+    QPushButton#TopHandover:focus {{ border: 1px solid {NAVBAR_MUTED}; }}
+    QPushButton#Tab:focus {{ border: none; border-bottom: 2px solid {PRIMARY}; }}
     QPushButton#Link {{
         background: transparent;
         border: none;
@@ -995,7 +1102,7 @@ def stylesheet(text_size: str = "medium") -> str:
         border: none;
         border-top: 1px solid {BORDER};
     }}
-    QLabel#SettingsHeading {{ font-size: {title}px; font-weight: 700; }}
+    QLabel#SettingsHeading {{ font-size: {round(title * 0.84)}px; font-weight: 700; }}
     QLabel#SettingsLead {{ color: {TEXT_MUTED}; font-size: {small}px; }}
     /* 설정 항목 하나의 이름. 카드 제목(SectionTitle)보다 한 단계 작다 —
        카드 안에 항목이 둘 이상 들어가므로 위계가 한 층 더 필요하다. */
@@ -1055,10 +1162,7 @@ def stylesheet(text_size: str = "medium") -> str:
         color: {TEXT_DISABLED};
         border-color: {BORDER};
     }}
-    /* 화살표는 손대지 않는다. QSS로 drop-down·down-arrow를 건드리는 순간
-       Qt가 플랫폼 화살표 그리기를 멈추는데, 웹에서 쓰는 border 삼각형 기법은
-       Qt에서 회색 네모로 나오고 image를 비우면 화살표가 아예 사라진다.
-       실제로 둘 다 그려 보고 확인했다 — 기본 화살표가 가장 낫다. */
+    {_combo_arrow()}
     QComboBox QAbstractItemView {{
         background: {BG};
         border: 1px solid {BORDER_STRONG};
@@ -1074,6 +1178,7 @@ def stylesheet(text_size: str = "medium") -> str:
         border-radius: {RADIUS_SM}px;
     }}
     QCheckBox {{ spacing: {SP_SM}px; }}
+    {_check_marks()}
 
     QTreeView, QTableView, QListView {{
         background: {BG};
@@ -1109,11 +1214,16 @@ def stylesheet(text_size: str = "medium") -> str:
     QScrollArea#PageScroll {{ background: {CANVAS}; }}
     QScrollArea#PageScroll::viewport {{ background: {CANVAS}; }}
     QScrollBar:vertical {{
-        background: transparent; width: 10px; margin: 0;
+        background: transparent; width: {SCROLLBAR_W}px; margin: 0;
     }}
     QScrollBar::handle:vertical {{
         background: {BORDER_STRONG}; border-radius: 5px; min-height: 32px;
     }}
+    /* 나눔 손잡이. 손대지 않으면 플랫폼이 짙은 띠를 그려, 표와 상세 사이에
+       굵은 검은 선이 선 것처럼 보였다. 평소엔 비워 두고 올렸을 때만 보인다. */
+    QSplitter::handle {{ background: transparent; }}
+    QSplitter::handle:horizontal {{ width: {SP_MD}px; }}
+    QSplitter::handle:horizontal:hover {{ background: {BORDER}; border-radius: 3px; }}
     QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
     QScrollBar::add-page, QScrollBar::sub-page {{ background: none; }}
 

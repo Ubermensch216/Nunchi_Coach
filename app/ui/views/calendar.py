@@ -53,6 +53,9 @@ from ..widgets import (
     SubPanel,
     TabBar,
     UnknownBlock,
+    center_column,
+    doc_icon,
+    header_margins,
     hint_row,
     muted_label,
     open_original,
@@ -103,9 +106,11 @@ class CalendarView(QWidget):
         header = QWidget()
         header.setObjectName("ViewHeader")
         header.setAutoFillBackground(True)
-        head_column = QVBoxLayout(header)
-        head_column.setContentsMargins(theme.SP_XL, theme.SP_XL, theme.SP_XL, 0)
+        head_row, head_column = center_column(theme.CONTENT_MAX_W)
         head_column.setSpacing(theme.SP_SM)
+        frame = QVBoxLayout(header)
+        frame.setContentsMargins(*header_margins(theme.SP_XL))
+        frame.addLayout(head_row)
 
         # 여기만 ⓘ로 접지 않는다. "직접 입력한 달력이 아니다"는 화면 설명이
         # 아니라 이 제품의 정체성이고, 어느 탭에 있든 보여야 한다(계획서 §12).
@@ -138,13 +143,13 @@ class CalendarView(QWidget):
         self.stack = QStackedWidget()
         self.pages: dict[str, Page] = {}
         for key, _label in TABS:
-            page = Page()
+            page = Page(max_width=theme.CONTENT_MAX_W)
             self.pages[key] = page
             self.stack.addWidget(page)
         outer.addWidget(self.stack, 1)
 
         # 주기가 하나도 없을 때는 탭이 의미가 없다. 그때만 쓰는 자리.
-        self.blank = Page()
+        self.blank = Page(max_width=theme.CONTENT_MAX_W)
         outer.addWidget(self.blank, 1)
 
         self.refresh()
@@ -320,7 +325,7 @@ class CalendarView(QWidget):
         name.clicked.connect(lambda _=False, t=entry.task_id: self.open_task.emit(t))
         head.addWidget(name)
         head.addStretch(1)
-        head.addWidget(Badge.state(status.of_cycle(entry.row)))
+        _add_state(head, entry.row)
         card.body.addLayout(head)
 
         card.body.addWidget(
@@ -362,7 +367,7 @@ class CalendarView(QWidget):
             row = QHBoxLayout()
             row.setSpacing(theme.SP_SM)
             row.addWidget(muted_label(f"{doc['eff_year']}년", small=True, wrap=False))
-            link = QPushButton(f"📄 {doc['filename']}")
+            link = doc_icon(QPushButton(doc["filename"]))
             link.setObjectName("Link")
             link.setCursor(Qt.CursorShape.PointingHandCursor)
             link.setToolTip(f"{doc['path']}\n클릭하면 원본을 엽니다")
@@ -406,7 +411,7 @@ class CalendarView(QWidget):
                 muted_label(cycle_headline(entry.row), small=True, wrap=False)
             )
             line.row.addStretch(1)
-            line.row.addWidget(Badge.state(status.of_cycle(entry.row)))
+            _add_state(line.row, entry.row)
             column.addWidget(line)
 
         if len(later) > MAX_UPCOMING:
@@ -448,7 +453,7 @@ class CalendarView(QWidget):
             line = ListRow()
             line.setMaximumWidth(theme.CONTENT_MAX_W)
             line.row.setSpacing(theme.SP_SM)
-            line.row.addWidget(Badge.state(status.of_cycle(row)))
+            _add_state(line.row, row)
 
             name = QPushButton(row["task_name"])
             name.setObjectName("RowTitle")
@@ -536,6 +541,19 @@ class CalendarView(QWidget):
 
 
 # ── 계산 ────────────────────────────────────────────────────────────
+
+def _add_state(row_layout, cycle) -> None:
+    """상태 뱃지를 단다. 다만 '자료에서 추정'은 달지 않는다.
+
+    이 화면의 일정은 처음에 모두 추정이다 — 머리말이 이미 그렇게 말한다. 줄마다
+    같은 회색 뱃지를 달면 아홉 줄이 아홉 번 같은 말을 하고, 정작 사람이 확인한
+    줄이나 자료가 부족한 줄이 그 사이에서 눈에 띄지 않는다. 기본에서 벗어난
+    것만 표시한다.
+    """
+    state = status.of_cycle(cycle)
+    if state != status.INFERRED:
+        row_layout.addWidget(Badge.state(state))
+
 
 def _urgency(entry: Upcoming) -> QLabel:
     """언제인지를 한눈에. 숫자보다 말이 먼저 읽힌다."""

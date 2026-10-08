@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import theme
+from .. import icons, theme
 from .common import ElidedLabel, clear_layout, muted_label, section_title
 
 
@@ -67,10 +67,13 @@ class EvidenceDrawer(QFrame):
         self._title = section_title("근거")
         head.addWidget(self._title)
         head.addStretch(1)
-        close = QPushButton("✕")
-        close.setObjectName("Link")
-        close.setFixedWidth(24)
+        close = QPushButton()
+        close.setObjectName("IconButton")
+        close.setIcon(icons.icon("close", theme.TEXT_MUTED, 16))
+        close.setFixedSize(28, 28)
+        close.setCursor(Qt.CursorShape.PointingHandCursor)
         close.setToolTip("닫기")
+        close.setAccessibleName("근거 닫기")
         close.clicked.connect(self.dismiss)
         head.addWidget(close)
         outer.addLayout(head)

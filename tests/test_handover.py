@@ -203,8 +203,10 @@ def test_start_here_lists_what_to_check_first(db: Database, qapp):
     try:
         texts = [w.text() for w in view.findChildren(QLabel) if w.text()]
         assert any("지금 먼저 확인할 것" in t for t in texts)
-        assert any("아직 확인하지 않은 업무 2개" in t for t in texts)
-        assert any("아직 읽지 않은 핵심 문서 2건" in t for t in texts)
+        # 체크리스트의 줄이 곧 누를 자리다 — 같은 수를 두 번 적지 않는다.
+        assert any("업무 2개 확인 필요" in t for t in texts)
+        assert any("핵심문서 2건 확인 필요" in t for t in texts)
+        assert sum("확인하지 않은 업무" in t for t in texts) == 0
         assert any("인수인계 진행도" in t for t in texts)
     finally:
         view.setParent(None)
@@ -252,7 +254,7 @@ def test_upcoming_tasks_show_up_in_start_here(db: Database, qapp, monkeypatch):
     view = TasksView(db)
     try:
         texts = [w.text() for w in view.findChildren(QLabel) if w.text()]
-        assert any("이번 달 안에 시작될 업무 1개" in t for t in texts)
+        assert any("이번 달" in t and "업무 1개" in t for t in texts)
         assert any("행정사무감사" in t for t in texts)
     finally:
         view.setParent(None)

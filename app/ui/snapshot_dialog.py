@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -31,6 +31,22 @@ from . import theme
 from .widgets import muted_label, section_title
 
 
+def _local(stamp: str) -> str:
+    """DB가 적은 저장 시각(세계 표준시)을 이 PC의 시각으로 바꿔 적는다.
+
+    위 목록은 이 PC의 시각으로 적는데 아래 요약만 표준시로 적혀, 같은 판이
+    목록에서는 23:16, 요약에서는 14:16으로 아홉 시간 어긋나 보였다. 읽을 수
+    없는 값이면 고치지 않고 그대로 돌려준다.
+    """
+    try:
+        moment = datetime.fromisoformat(stamp.replace(" ", "T"))
+    except (TypeError, ValueError, AttributeError):
+        return stamp
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone().strftime("%Y-%m-%d %H:%M")
+
+
 class SnapshotDialog(QDialog):
     def __init__(self, db, parent: QWidget | None = None):
         super().__init__(parent)
@@ -48,6 +64,12 @@ class SnapshotDialog(QDialog):
             "있습니다. 저장한 판은 바뀌지 않습니다.", small=True))
 
         self.list = QListWidget()
+        # 한 줄이 길다(종류·시각·업무 수·확인 수·남은 것). 잘라 내거나 옆으로
+        # 밀지 않고 접어서 다 보인다 — 예전에는 뒷부분이 창 밖으로 잘렸다.
+        self.list.setWordWrap(True)
+        self.list.setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.list.setSpacing(2)
         self.list.currentItemChanged.connect(lambda *_: self._show_selected())
         outer.addWidget(self.list, 1)
 
@@ -122,7 +144,8 @@ class SnapshotDialog(QDialog):
         summary = json.loads(row["summary"])
         unconfirmed = summary["items"] - summary["items_confirmed"]
         lines = [
-            f"{workstate.SNAPSHOT_LABEL.get(row['kind'], row['kind'])} · 저장 {row['created_at']}",
+            f"{workstate.SNAPSHOT_LABEL.get(row['kind'], row['kind'])} · "
+            f"저장 {_local(row['created_at'])}",
             f"업무 {summary['tasks']}개 · 항목 {summary['items']}개 · 문서에 적힌 절차 "
             f"{summary['steps']}단계 중 {summary['steps_done']}단계 완료 기록 · "
             f"근거 문서 {summary['documents']}건",
