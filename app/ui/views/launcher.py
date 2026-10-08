@@ -91,7 +91,10 @@ class LauncherDialog(QDialog):
         buttons.addWidget(new)
 
         existing = QPushButton("폴더에서 열기…")
-        existing.setToolTip("USB나 공유 폴더에 있는 프로젝트 폴더를 직접 고릅니다")
+        existing.setToolTip(
+            "USB나 공유 폴더에 있는 프로젝트 폴더를 직접 고릅니다. "
+            "전임자 자료 폴더를 고르면 그 자료로 새 인수인계를 시작합니다"
+        )
         existing.clicked.connect(self._open_folder)
         buttons.addWidget(existing)
         buttons.addStretch(1)
@@ -156,16 +159,25 @@ class LauncherDialog(QDialog):
             return
         folder = Path(chosen)
         if not (folder / registry.DB_NAME).exists():
+            # 분석 결과가 없는 폴더를 골랐다면 그것은 프로젝트가 아니라
+            # 전임자 자료 폴더다. 그 자리에 DB를 만들면 원본 폴더에 파일을
+            # 쓰게 되고, 정작 자료원으로는 등록되지 않아 다음 화면에서 같은
+            # 폴더를 또 묻게 된다. 프로젝트는 저장 위치에 만들고 이 폴더는
+            # 자료원 후보로 넘긴다.
             answer = QMessageBox.question(
                 self,
                 "새 인수인계",
                 f"{folder}\n\n이 폴더에는 분석 결과가 없습니다. "
-                "여기에 새 인수인계를 만들까요?",
+                "이 폴더를 전임자 자료로 하는 새 인수인계를 만들까요?\n\n"
+                "분석 결과는 따로 저장하며, 이 폴더에는 아무것도 쓰지 않습니다.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return
+            self.chosen = registry.create_project(folder.name, self.root, seed=folder)
+            self.accept()
+            return
         self.chosen = registry.register(folder, root=self.root)
         self.accept()
 

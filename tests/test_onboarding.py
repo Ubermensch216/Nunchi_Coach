@@ -77,6 +77,24 @@ def test_unreadable_files_are_counted_not_silently_skipped(view, tmp_path: Path,
     assert view.start.isEnabled()          # 나머지는 그대로 분석한다
 
 
+def test_folder_chosen_on_the_launcher_is_not_asked_again(qapp, tmp_path: Path):
+    """시작 화면에서 고른 자료 폴더가 빈 목록으로 돌아오면, 사용자는 방금 한
+    선택이 사라진 것으로 본다."""
+    folder = _folder(tmp_path)
+    db = Database(tmp_path / "p.db")
+    db.init()
+    db.set_meta("seed_source", str(folder))
+
+    widget = OnboardingView(db)
+    try:
+        assert widget._folders == [folder]
+        assert widget.list.item(0).text() == str(folder)
+        assert widget.start.isEnabled()
+    finally:
+        widget.deleteLater()
+        db.close()
+
+
 def test_no_analysable_document_blocks_the_start_button(view, tmp_path: Path):
     folder = tmp_path / "빈자료"
     folder.mkdir()

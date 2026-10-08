@@ -95,12 +95,21 @@ class OnboardingView(QWidget):
             lambda: self.remove.setEnabled(bool(self.list.selectedItems()))
         )
 
+        # 시작 화면에서 자료 폴더를 이미 골랐다면 여기서 또 묻지 않는다.
+        # 바로 분석을 돌리지 않고 목록에 올려만 두는 것은, 규모와 읽기 전용
+        # 안내를 보고 '분석 시작'을 누르는 단계는 그대로 두기 위해서다.
+        seed = self.db.get_meta("seed_source")
+        if seed and not self.db.sources():
+            self._append(Path(seed))
+
     # ── 폴더 ────────────────────────────────────────────────────────
     def _add_folder(self) -> None:
         chosen = QFileDialog.getExistingDirectory(self, "전임자 자료 폴더 선택")
         if not chosen:
             return
-        path = Path(chosen)
+        self._append(Path(chosen))
+
+    def _append(self, path: Path) -> None:
         if path in self._folders:
             return
         self._folders.append(path)

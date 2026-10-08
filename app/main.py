@@ -63,6 +63,10 @@ def _run(app: QApplication, entry: ProjectEntry, root: Path | None) -> ProjectEn
     sys.excepthook = diagnostics.exception_hook
     diagnostics.record("app.start", version=__version__)
     db.set_meta("project_name", entry.name)
+    if entry.seed is not None:
+        # 시작 화면에서 이미 고른 자료 폴더. DB에 적어 두어야 분석을 시작하기
+        # 전에 앱을 껐다 켜도 같은 폴더를 다시 묻지 않는다.
+        db.set_meta("seed_source", str(entry.seed))
     registry.touch(entry.path, root)
     db.audit("app.start", detail=f"project={entry.name}")
     theme.apply(app, _text_size(db), theme.normalize_mode(db.get_meta("theme_mode")))

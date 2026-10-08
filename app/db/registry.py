@@ -36,6 +36,9 @@ class ProjectEntry:
     created_at: str = ""
     opened_at: str = ""
     external: bool = False   # 기본 저장 위치 바깥에 있는 폴더인가
+    # 만들면서 함께 지정한 전임자 자료 폴더. 처음 열 때 한 번 DB로 넘기고
+    # 끝이라 레지스트리 파일에는 적지 않는다.
+    seed: Path | None = None
 
     @property
     def db_path(self) -> Path:
@@ -90,8 +93,13 @@ def list_projects(root: Path | None = None) -> list[ProjectEntry]:
     return alive
 
 
-def create_project(name: str, root: Path | None = None) -> ProjectEntry:
-    """새 인수인계를 만든다. 폴더까지 만들고 레지스트리에 적는다."""
+def create_project(name: str, root: Path | None = None,
+                   seed: Path | None = None) -> ProjectEntry:
+    """새 인수인계를 만든다. 폴더까지 만들고 레지스트리에 적는다.
+
+    `seed`는 전임자 자료 폴더를 먼저 고르고 들어온 경우다. 분석 결과는 그
+    폴더가 아니라 저장 위치에 둔다 — 원본 폴더에는 아무것도 쓰지 않는다.
+    """
     base = root or default_project_dir()
     label = name.strip() or "새 인수인계"
     folder = base / _unique_slug(label, base)
@@ -100,7 +108,7 @@ def create_project(name: str, root: Path | None = None) -> ProjectEntry:
     now = _now()
     entry = ProjectEntry(name=label, path=folder, created_at=now, opened_at=now)
     _save(base, _replace_entry(_load(base), entry))
-    return entry
+    return replace(entry, seed=Path(seed)) if seed else entry
 
 
 def register(path: Path, name: str = "", root: Path | None = None) -> ProjectEntry:

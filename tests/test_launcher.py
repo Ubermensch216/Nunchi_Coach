@@ -105,6 +105,36 @@ def test_cancelling_the_name_prompt_creates_nothing(make_dialog, tmp_path: Path,
     assert not registry.list_projects(tmp_path)
 
 
+def test_opening_a_data_folder_starts_a_project_elsewhere(make_dialog, tmp_path: Path,
+                                                          monkeypatch):
+    """분석 결과가 없는 폴더는 전임자 자료 폴더다. 그 안에 DB를 만들지 않고,
+    고른 폴더는 자료원 후보로 넘어가야 한다."""
+    base = tmp_path / "projects"
+    data = tmp_path / "전임자자료"
+    data.mkdir()
+    (data / "계획.docx").write_text("x", encoding="utf-8")
+
+    class FakeFiles:
+        @staticmethod
+        def getExistingDirectory(*_args, **_kwargs):
+            return str(data)
+
+    monkeypatch.setattr(launcher_view, "QFileDialog", FakeFiles)
+    monkeypatch.setattr(
+        launcher_view.QMessageBox, "question",
+        lambda *args, **kwargs: launcher_view.QMessageBox.StandardButton.Yes,
+    )
+
+    dialog = make_dialog(base)
+    dialog._open_folder()
+
+    assert dialog.chosen is not None
+    assert dialog.chosen.seed == data
+    assert dialog.chosen.name == "전임자자료"
+    assert dialog.chosen.path.parent == base
+    assert [p.name for p in data.iterdir()] == ["계획.docx"]
+
+
 def test_unreachable_project_is_not_opened(make_dialog, tmp_path: Path, monkeypatch):
     """USB가 빠진 프로젝트를 열면 빈 DB가 새로 생겨 '자료가 사라진' 것처럼 보인다."""
     base = tmp_path / "projects"
