@@ -1015,6 +1015,23 @@ def stylesheet(text_size: str = "medium") -> str:
         border: 1px solid {BORDER};
         color: {TEXT_DISABLED};
     }}
+    /* ── 확인 창·입력 창 ──
+       Qt가 지어 주는 창이라 배치는 못 바꾼다. 입력 창에는 최소 폭을 주고,
+       기본으로 눌리는 버튼(Enter를 치면 눌리는 것)을 채운 버튼으로 세워 어느
+       쪽이 기본인지 보이게 한다. 지우기처럼 되돌릴 수 없는 물음은 기본이
+       '아니요'라서 안전한 쪽이 강조된다. 확인 창의 글에는 폭을 주지 않는다 —
+       최소 폭을 주면 Qt가 줄바꿈을 다시 재지 않아 긴 문장이 잘린다. */
+    QInputDialog {{ min-width: 440px; }}
+    QMessageBox QPushButton, QInputDialog QPushButton {{ min-width: 72px; }}
+    QMessageBox QPushButton:default, QInputDialog QPushButton:default {{
+        background: {PRIMARY};
+        border: 1px solid {PRIMARY};
+        color: {TEXT_ON_PRIMARY};
+        font-weight: 600;
+    }}
+    QMessageBox QPushButton:default:hover, QInputDialog QPushButton:default:hover {{
+        background: {PRIMARY_HOVER};
+    }}
     /* 키보드로 옮겨 다닐 때 지금 어디에 있는지 보여야 한다. 버튼에는 포커스
        표시가 아예 없어서 Tab을 눌러도 화면에 아무 변화가 없었다. */
     QPushButton:focus {{ border: 1px solid {PRIMARY}; }}

@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import icons, theme
-from .common import ElidedLabel, clear_layout, muted_label, section_title
+from .common import ElidedLabel, clear_layout, friendly_locator, muted_label, section_title
 
 
 @dataclass(slots=True)
@@ -153,7 +153,7 @@ class EvidenceDrawer(QFrame):
         column.addWidget(name)
 
         if item.locator:
-            column.addWidget(muted_label(item.locator, small=True))
+            column.addWidget(muted_label(friendly_locator(item.locator), small=True))
         if item.note:
             column.addWidget(muted_label(item.note, small=True))
 

@@ -75,6 +75,8 @@ from ..widgets import (
     view_title,
 )
 
+from ..widgets.common import friendly_locator  # noqa: E402 — 위 묶음과 같은 꾸러미
+
 EXAMPLES = [
     "이번 달에 내가 해야 할 일이 뭐야?",
     "예산 요구자료는 어떤 순서로 만들어?",
@@ -1017,7 +1019,7 @@ def _meta_strip(db: Database, citation, info: dict, sections: int) -> QWidget:
     if sections:
         parts.append(f"{sections}문단")
     if citation.locator:
-        parts.append(f"인용 {citation.locator}")
+        parts.append(f"인용 {friendly_locator(citation.locator)}")
     official = provenance.describe(info.get("official"))
     if official:
         parts.append(official)

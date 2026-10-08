@@ -39,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     if _LOGO_PATH.exists():
         app.setWindowIcon(QIcon(str(_LOGO_PATH)))
 
+    _speak_korean(app)
     root = Path(args.data) if args.data else None
     theme.apply(app, "medium", "system")   # 시작 화면에도 같은 옷을 입힌다
     target = _from_args(args, root)
@@ -54,6 +55,22 @@ def main(argv: list[str] | None = None) -> int:
         target = _run(app, target, root)
         if target is None:
             return 0
+
+
+def _speak_korean(app: QApplication) -> bool:
+    """Qt가 스스로 그리는 버튼(확인·취소·예·아니요)을 우리말로 바꾼다.
+
+    번역을 싣지 않으면 확인 창과 입력 창의 버튼이 OK/Cancel/Yes/No로 나온다 —
+    본문은 전부 우리말인데 정작 누르는 자리만 영어였다. Qt에 딸려 오는 번역
+    파일을 읽을 뿐이며, 못 찾으면 영어 그대로 두고 넘어간다.
+    """
+    from PySide6.QtCore import QLibraryInfo, QLocale, QTranslator
+
+    folder = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
+    translator = QTranslator(app)          # 앱이 붙들어야 번역이 살아 있다
+    if not translator.load(QLocale(QLocale.Language.Korean), "qtbase", "_", folder):
+        return False
+    return app.installTranslator(translator)
 
 
 def _run(app: QApplication, entry: ProjectEntry, root: Path | None) -> ProjectEntry | None:

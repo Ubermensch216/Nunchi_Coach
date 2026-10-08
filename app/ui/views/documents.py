@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -69,15 +70,18 @@ COLUMNS = ["파일명", "업무", "시점", "형식", "크기", "상태"]
 # 열 너비가 바뀔 때 위젯 위치가 어긋난다.
 # 색은 값이 아니라 이름으로 담는다 — 테마를 바꾸면 theme의 색이 갈리는데,
 # 값을 import 시점에 복사해 두면 이 표만 옛 색으로 남는다.
+#
+# 잘 읽힌 문서는 **비워 둔다.** 줄마다 초록 '정상'을 찍으면 수백 줄이 같은 말을
+# 하고, 정작 못 읽은 한 줄이 그 사이에 묻힌다. 이 열은 문제가 있는 줄만 말한다.
 PARSE_LABEL = {
-    "ok": ("● 정상", "CONFIRMED"),
-    "partial": ("◐ 부분", "ATTENTION"),
+    "ok": ("", "TEXT_MUTED"),
+    "partial": ("◐ 일부만 읽음", "ATTENTION"),
     "empty": ("○ 빈 문서", "TEXT_MUTED"),
     "failed": ("✕ 읽기 실패", "DANGER"),
     "unsupported": ("— 미지원 형식", "TEXT_MUTED"),
-    "encrypted": ("🔒 암호", "ATTENTION"),
+    "encrypted": ("△ 암호 걸림", "ATTENTION"),
     "too_large": ("△ 크기 초과", "ATTENTION"),
-    "locked": ("🔓 열려 있음", "ATTENTION"),
+    "locked": ("△ 다른 곳에서 열려 있음", "ATTENTION"),
     "pending": ("… 대기", "TEXT_MUTED"),
     "skipped": ("· 대상 아님", "TEXT_DISABLED"),
 }
@@ -538,10 +542,16 @@ class DocumentsView(QWidget):
             return
 
         kind = row["eff_date_kind"]
+        # 날짜가 이 구획의 답이다. 값으로 세우고, 어디서 읽었는지는 아래로 물린다.
+        when = QLabel(_when(row))
+        when.setObjectName("Value")
+        when.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.detail.addWidget(when)
         self.detail.addWidget(
             muted_label(
-                f"{_when(row)}   ·   {PRECISION_LABEL.get(row['eff_precision'], '')}\n"
                 f"{KIND_LABEL.get(kind, kind or '근거 미상')}에서 판정"
+                f"   ·   {PRECISION_LABEL.get(row['eff_precision'], '')}",
+                small=True,
             )
         )
         if kind == "fs":
@@ -556,7 +566,7 @@ class DocumentsView(QWidget):
         chosen = [c for c in candidates if c["kind"] == kind]
         if chosen and chosen[0]["raw"]:
             evidence = chosen[0]
-            text = f"근거:  “{evidence['raw']}”"
+            text = f"근거:  “{_plain_stamp(evidence['raw'])}”"
             if evidence["locator"]:
                 text += f"   ·   {evidence['locator']}"
             self.detail.addWidget(muted_label(text, small=True))
@@ -568,7 +578,8 @@ class DocumentsView(QWidget):
                 label = KIND_LABEL.get(candidate["kind"], candidate["kind"])
                 self.detail.addWidget(
                     muted_label(
-                        f"   {label}   {candidate['value'][:7]}   “{candidate['raw'][:24]}”",
+                        f"   {label}   {candidate['value'][:7]}   "
+                        f"“{_plain_stamp(candidate['raw'])[:24]}”",
                         small=True,
                     )
                 )
@@ -957,6 +968,20 @@ def _elide_middle(text: str, limit: int = 46) -> str:
         return text
     head = (limit - 3) // 2
     return f"{text[:head]}…{text[-(limit - 3 - head):]}"
+
+
+_MACHINE_STAMP = re.compile(r"^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$")
+
+
+def _plain_stamp(raw: str) -> str:
+    """'2026-10-08T11:30:19.1522' → '2026-10-08 11:30'.
+
+    문서 속성과 파일 수정일은 기계가 적은 시각이라 초 아래 자리와 T가 붙어 온다.
+    근거로 보여 주되 사람이 읽는 꼴로 줄인다. 본문·파일명에서 읽은 글자
+    (“작성일: 2025. 12. 12”)는 문서에 적힌 그대로가 근거이므로 손대지 않는다.
+    """
+    found = _MACHINE_STAMP.match((raw or "").strip())
+    return f"{found.group(1)} {found.group(2)}" if found else (raw or "")
 
 
 def _kind_order(kind: str) -> int:

@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 
 from ...db import registry
 from ...db.registry import ProjectEntry
-from .. import theme
+from .. import icons, theme
 from ..widgets import (
     Badge,
     ElidedLabel,
@@ -62,6 +62,24 @@ class LauncherDialog(QDialog):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(theme.SP_XL, theme.SP_XL, theme.SP_XL, theme.SP_LG)
         outer.setSpacing(theme.SP_MD)
+
+        # 이 창이 무엇의 창인지부터 말한다. 앱에서 가장 먼저 뜨는 화면인데
+        # 이름도 표지도 없어, 처음 켠 사람에게는 어느 프로그램의 창인지 보이지
+        # 않았다.
+        brand = QHBoxLayout()
+        brand.setSpacing(theme.SP_SM)
+        art = icons.brand(theme.TEXT, 28)
+        if art is not None:
+            mark = QLabel()
+            mark.setPixmap(art)
+            brand.addWidget(mark)
+        name = QLabel("눈치코치")
+        name.setObjectName("SectionTitle")
+        brand.addWidget(name)
+        brand.addWidget(muted_label("전임자 자료로 업무를 이어받는 도구", small=True, wrap=False))
+        brand.addStretch(1)
+        outer.addLayout(brand)
+        outer.addSpacing(theme.SP_SM)
 
         outer.addWidget(view_title("어떤 인수인계를 여시겠습니까?"))
         outer.addWidget(
@@ -102,6 +120,19 @@ class LauncherDialog(QDialog):
         close = QPushButton("닫기")
         close.clicked.connect(self.reject)
         buttons.addWidget(close)
+
+        # 이 도구를 믿고 자료 폴더를 맡길 수 있는 까닭 두 가지. 폴더를 고르기
+        # 전에 보여야 한다 — 고른 뒤에 알려 주면 이미 늦다.
+        promise = QHBoxLayout()
+        promise.setSpacing(theme.SP_XS)
+        lock = icons.label("lock", theme.CONFIRMED, 14)
+        if lock is not None:
+            promise.addWidget(lock)
+        promise.addWidget(muted_label(
+            "원본 자료는 읽기만 합니다 · 자료가 이 PC 밖으로 나가지 않습니다",
+            small=True, wrap=False))
+        promise.addStretch(1)
+        outer.addLayout(promise)
         outer.addLayout(buttons)
 
         self.refresh()
@@ -292,7 +323,9 @@ class _ProjectRow(QFrame):
         # 손은 한 칸 옆을 짚는다. 되돌릴 수 없는 것은 한 번 더 열게 한다.
         more = QPushButton("⋯")
         more.setObjectName("IconButton")
-        more.setFixedWidth(26)
+        more.setFixedWidth(36)
+        more.setCursor(Qt.CursorShape.PointingHandCursor)
+        more.setAccessibleName(f"{entry.name} — 이름 바꾸기·목록에서 빼기·완전 삭제")
         more.setToolTip("이름 바꾸기 · 목록에서 빼기 · 완전 삭제")
         menu = QMenu(more)          # 메뉴의 부모는 언제나 그 메뉴를 여는 버튼이다
         menu.addAction("이름 바꾸기", lambda: on_rename(entry))

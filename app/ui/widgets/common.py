@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Callable
@@ -49,6 +50,18 @@ def open_original(parent: QWidget, db, path: str) -> None:
         subprocess.Popen(["open", path])
     else:
         subprocess.Popen(["xdg-open", path])
+
+
+_HWPX_SECTION = re.compile(r"Contents/section(\d+)\.xml")
+
+
+def friendly_locator(locator: str) -> str:
+    """근거 위치를 사람이 읽는 말로 적는다. 'Contents/section0.xml · 5문단' → '1구역 · 5문단'.
+
+    HWPX 파서는 위치를 꾸러미 안의 파일 이름으로 적는다. 저장된 값은 근거를
+    다시 찾는 열쇠라 바꾸지 않고, **보여 줄 때만** 한글의 말(구역)로 옮긴다.
+    """
+    return _HWPX_SECTION.sub(lambda m: f"{int(m.group(1)) + 1}구역", locator or "")
 
 
 def doc_icon(button: QPushButton, size: int = 16) -> QPushButton:
