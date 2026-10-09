@@ -27,3 +27,7 @@
 2026-10-09 19:38:21,054 {"event": "pipeline.start"}
 2026-10-09 19:39:03,084 {"event": "pipeline.stop"}
 2026-10-09 19:55:48,059 {"event": "app.stop"}
+2026-10-09 19:56:35,198 {"event": "app.start", "version": "0.1.0"}
+2026-10-09 19:56:35,910 {"event": "pipeline.start"}
+2026-10-09 19:56:55,332 {"event": "pipeline.stop"}
+2026-10-09 19:56:59,642 {"event": "app.stop"}
