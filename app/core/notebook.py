@@ -324,6 +324,23 @@ def edit_note(db, note_id, body, reason):
         db.audit("notebook.note.edit", str(note_id))
 
 
+def published_cards(db, note_id):
+    """이 메모에서 승격해 업무 가이드에 올린 지식 카드 수."""
+    return db.con.execute("SELECT COUNT(*) FROM knowledge_cards WHERE note_id=? AND published_at IS NOT NULL "
+                          "AND state!='revoked'", (note_id,)).fetchone()[0]
+
+
+def delete_note(db, note_id):
+    """메모를 지운다. 고친 이력과, 이 메모에서 승격한 지식 카드도 함께 사라진다."""
+    row = db.con.execute("SELECT notebook_id FROM notebook_notes WHERE id=?", (note_id,)).fetchone()
+    if row is None:
+        raise ValueError("메모를 선택하세요.")
+    require(db, row["notebook_id"])
+    with db.transaction():
+        db.con.execute("DELETE FROM notebook_notes WHERE id=?", (note_id,))
+        db.audit("notebook.note.delete", str(note_id))
+
+
 def evidence_current(db, notebook_id, evidence, check_file=False):
     if not evidence:
         return False

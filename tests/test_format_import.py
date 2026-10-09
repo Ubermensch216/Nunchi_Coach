@@ -256,3 +256,28 @@ def test_each_output_row_has_a_delete_icon(studio, monkeypatch):
     # 보관한 노트북에서는 지울 수 없다 — 휴지통이 없다.
     panel.set_notebook(1, False)
     assert panel.outputs.itemWidget(panel.outputs.item(0)).findChild(QPushButton) is None
+
+
+def test_each_memo_row_has_a_delete_icon(studio, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox, QPushButton
+
+    from app.core import notebook
+
+    panel, db, _keys = studio
+    notebook.add_memo(db, 1, "남길 메모", "내용")
+    notebook.add_memo(db, 1, "지울 메모", "내용")
+    panel.refresh(force=True)
+    trash = panel.notes.itemWidget(panel.notes.item(0)).findChild(QPushButton)
+    asked = []
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda _parent, _title, text, *a, **k: asked.append(text) or QMessageBox.StandardButton.Yes)
+    trash.click()
+    assert "지울 메모" in asked[0] and "지식 카드" not in asked[0]
+    assert [row["title"] for row in panel.note_rows()] == ["남길 메모"] and panel.notes.count() == 1
+    # 업무 가이드에 게시한 지식이 딸려 있으면 지우기 전에 그 사실을 알린다.
+    note = panel.note_rows()[0]["id"]
+    db.con.execute("INSERT INTO knowledge_cards(note_id,note_revision,body,evidence,reviewer,applicability,"
+                   "published_at) VALUES (?,1,'b','[]','r','a',datetime('now'))", (note,))
+    panel.notes.itemWidget(panel.notes.item(0)).findChild(QPushButton).click()
+    assert "지식 카드 1건" in asked[1] and panel.notes.count() == 0
+    assert db.con.execute("SELECT COUNT(*) FROM knowledge_cards").fetchone()[0] == 0

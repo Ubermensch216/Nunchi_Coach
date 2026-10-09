@@ -208,7 +208,7 @@ class StudioPanel(Panel):
         row.addWidget(self.memo_button)
         column.addLayout(row)
         self.notes = QListWidget()
-        self.notes.setObjectName("SourceList")
+        self.notes.setObjectName("OutputList")
         self.notes.setMaximumHeight(140)
         self.notes.currentItemChanged.connect(self._show_note)
         column.addWidget(self.notes)
@@ -294,12 +294,13 @@ class StudioPanel(Panel):
         self._build_tiles()
         self._fill(self.outputs, made, lambda r: f"{r['title']}  ·  {r['doc_type']} · "
                                                  f"{outputs.STATE_LABELS.get(r['state'], r['state'])}")
-        self._dress_outputs()
+        self._dress(self.outputs, "이 산출물 삭제 — 이미 내보낸 파일은 지우지 않습니다", self._delete_output)
         self.format_menu.clear()
         for template in templates.all_templates(self.db):
             self.format_menu.addAction(template.title,
                                        lambda t=template: self._safe(lambda: self._apply_format(t)))
         self._fill(self.notes, notes, lambda r: f"{r['title']}  ·  {NOTE_STATES.get(r['state'], r['state'])}")
+        self._dress(self.notes, "이 메모 삭제", self._delete_note)
         self.tabs.set_count(OUTPUTS, "산출물", len(made))
         self.tabs.set_count(MEMOS, "메모", len(notes))
         self.hint.setVisible(not notes)
@@ -322,10 +323,10 @@ class StudioPanel(Panel):
                 widget.setCurrentItem(item)
         widget.blockSignals(False)
 
-    def _dress_outputs(self) -> None:
-        """산출물 줄마다 휴지통을 단다 — 지우려는 것 옆에서 바로 지운다."""
-        for index in range(self.outputs.count()):
-            item = self.outputs.item(index)
+    def _dress(self, widget: QListWidget, tooltip: str, delete) -> None:
+        """산출물·메모 줄마다 휴지통을 단다 — 지우려는 것 옆에서 바로 지운다."""
+        for index in range(widget.count()):
+            item = widget.item(index)
             row = QWidget()
             row.setObjectName("OutputRow")
             box = QHBoxLayout(row)
@@ -337,15 +338,15 @@ class StudioPanel(Panel):
             name.setMinimumWidth(0)
             box.addWidget(name, 1)
             if self.editable:
-                trash = icon_button("trash", "이 산출물 삭제 — 이미 내보낸 파일은 지우지 않습니다", "삭제")
+                trash = icon_button("trash", tooltip, "삭제")
                 trash.clicked.connect(lambda _=False, key=item.data(Qt.ItemDataRole.UserRole):
-                                      self._safe(lambda: self._delete_output(key)))
+                                      self._safe(lambda: delete(key)))
                 box.addWidget(trash)
             # 글은 줄 위젯이 그린다. 항목의 글자를 남겨 두면 두 번 겹쳐 보인다.
             item.setData(Qt.ItemDataRole.AccessibleTextRole, item.text())
             item.setText("")
             item.setSizeHint(QSize(0, max(OUTPUT_ROW_H, row.sizeHint().height())))
-            self.outputs.setItemWidget(item, row)
+            widget.setItemWidget(item, row)
 
     def _sync_tiles(self) -> None:
         ready = self.editable and not self._studio.running
@@ -539,6 +540,23 @@ class StudioPanel(Panel):
         self.editor.setPlainText(row["body"] if valid
                                  else "근거 연결 또는 원문 판본이 달라졌습니다. 다시 검토하세요.")
         self.editor.setReadOnly(not valid or not self.editable)
+
+    def _delete_note(self, note_id: int) -> None:
+        row = self.db.con.execute("SELECT title FROM notebook_notes WHERE id=?", (note_id,)).fetchone()
+        if row is None:
+            raise ValueError("메모를 선택하세요.")
+        question = f"‘{row['title']}’ 메모를 지울까요? 고친 이력도 함께 지워집니다."
+        published = notebook.published_cards(self.db, note_id)
+        if published:
+            # 조용히 사라지면 안 되는 것 — 업무의 ‘지금 할 일’에 올라 있는 지식이다.
+            question += f"\n\n이 메모에서 업무 가이드에 게시한 지식 카드 {published}건도 함께 사라집니다."
+        answer = QMessageBox.question(
+            self, "메모 삭제", question,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            notebook.delete_note(self.db, note_id)
+            self.refresh(force=True)
+            self.changed.emit()
 
     def select_latest(self) -> None:
         """방금 저장한 메모를 편다 — 저장이 됐는지 눈으로 확인할 수 있어야 한다."""
