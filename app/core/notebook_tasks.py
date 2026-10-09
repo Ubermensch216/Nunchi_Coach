@@ -1,0 +1,322 @@
+"""눈치코치가 파악한 업무를 노트북의 자료로 넣는다.
+
+업무 하나에서 넣을 수 있는 것은 두 가지다.
+
+    업무 정리본   눈치코치가 자료에서 읽어 정리한 내용 — 설명·주기·항목·처리 순서·
+                  확인할 것. 글 한 편으로 엮어 올린 파일과 같은 보관소에 둔다.
+    업무의 문서   그 업무에 묶인 전임자 원문. 이미 분석한 문서를 연결만 한다.
+
+정리본은 원문이 아니다. 그래서 글 머리와 항목마다 근거 문서·사람 확인 여부를
+적고, 출처 목록에서도 '업무 정리본'으로 따로 보인다. 원문과 함께 넣어 두면
+답의 근거 번호로 둘을 가려 볼 수 있다.
+
+정리본은 넣은 때의 판이다. 같은 내용이면 같은 글이 나오도록 날짜·시각을 적지
+않는다 — 그래야 업무가 그대로일 때 해시가 같고, 달라졌을 때만 '업무 내용 변경'
+으로 알릴 수 있다(outdated). 보관소 문서는 업무 파악의 재료가 아니므로
+(Database.work_sources) 정리본이 다시 업무로 묶여 돌아오는 일은 없다.
+"""
+
+from __future__ import annotations
+
+import hashlib
+from collections.abc import Callable
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from ..db import representative_predicate
+from . import notebook, notebook_ingest, reconstruction as rc, status, workcard, workstate as ws
+
+ORIGIN = "task"
+BRIEF_PREFIX = "업무 정리본"
+QUOTE_CHARS = 120
+READING_LIMIT = 10
+_CYCLE_CONFIDENCE = {"high": "높음", "medium": "보통", "low": "낮음"}
+_LINKABLE = ("d.hash IS NOT NULL AND d.missing_since IS NULL "
+             "AND d.parse_status IN ('ok','partial')")
+
+
+def _task(db, task_id: int):
+    row = db.task(task_id)
+    if row is None or row["not_a_task"] or row["merged_into"]:
+        raise ValueError("사용 중인 업무를 선택하세요.")
+    return row
+
+
+def brief_filename(name: str) -> str:
+    safe = "".join("_" if ch in '<>:"/\\|?*' else ch for ch in name).strip() or "업무"
+    return f"{BRIEF_PREFIX} - {safe}.md"
+
+
+def choices(db) -> list[dict]:
+    """고르는 화면의 재료 — 업무마다 연결할 수 있는 문서."""
+    out = []
+    for task in db.tasks():
+        documents = db.con.execute(
+            "SELECT d.id, d.filename, d.eff_year FROM task_docs td "
+            "JOIN documents d ON d.id = td.doc_id "
+            f"WHERE td.task_id = ? AND {_LINKABLE} AND {representative_predicate('d')} "
+            "ORDER BY d.eff_date DESC NULLS LAST, d.filename", (task["id"],)).fetchall()
+        out.append({"id": task["id"], "name": task["name"],
+                    "description": task["description"] or "",
+                    "state": status.label(status.of_task(task)), "documents": documents})
+    return out
+
+
+# ── 업무 정리본 ─────────────────────────────────────────────────────
+
+def _months(raw: str | None) -> str:
+    """'9,10,11' → '9~11월'. 떨어진 달은 '3월·12월'."""
+    months = sorted(int(m) for m in (raw or "").split(",") if m.strip())
+    if not months:
+        return ""
+    spans = [[months[0], months[0]]]
+    for month in months[1:]:
+        if month == spans[-1][1] + 1:
+            spans[-1][1] = month
+        else:
+            spans.append([month, month])
+    return "·".join(f"{a}월" if a == b else f"{a}~{b}월" for a, b in spans)
+
+
+def _cycle_line(row) -> str:
+    if row is None:
+        return "자료에서 반복 주기를 찾지 못했습니다."
+    by = "사람이 확정" if row["decided_by"] == "user" else "자료에서 추정"
+    if row["kind"] == "none":
+        return f"반복하지 않는 업무입니다 ({by})."
+    text = "매월" if row["kind"] == "monthly" else f"매년 {_months(row['months'])}"
+    if row["day_hint"]:
+        text += f" {row['day_hint']}"
+    if row["decided_by"] == "user":
+        return f"{text} ({by})"
+    confidence = _CYCLE_CONFIDENCE.get(row["confidence"], row["confidence"])
+    return f"{text} ({by} · {row['years_observed']}년 확인 · 신뢰도 {confidence})"
+
+
+def _flat(text: str | None) -> str:
+    return " ".join((text or "").split())
+
+
+def _cite(row: dict) -> str:
+    """' — 근거: 요청.hwpx · 표 1 “제출기한 9월 30일”'. 근거가 없으면 빈 문자열."""
+    marks = []
+    for evidence in row.get("evidence") or []:
+        parts = [evidence.get("filename") or "원본 없음"]
+        if evidence.get("locator"):
+            parts.append(evidence["locator"])
+        if not evidence.get("current"):
+            parts.append("원문이 바뀌었거나 없음")
+        mark = " · ".join(parts)
+        quote = _flat(evidence.get("quote"))
+        if quote:
+            mark += f" “{quote[:QUOTE_CHARS]}”"
+        if mark not in marks:
+            marks.append(mark)
+    return " — 근거: " + " / ".join(marks) if marks else ""
+
+
+def _state_text(task) -> str:
+    """'자료에서 추정'. 화면의 뱃지 기호(◐)는 글에 싣지 않는다."""
+    state = status.of_task(task)
+    return status.label(state).removeprefix(status.symbol(state)).strip()
+
+
+def _item_line(item: dict) -> str:
+    value = _flat(item["content"])
+    if item["basis_state"] == ws.CONFLICT and item["human_state"] not in ws.CONFIRMED_BY:
+        value = f"(자료끼리 엇갈림) {value}"
+    return f"{workcard.item_label(item)}: {value} ({workcard.state_line(item)}){_cite(item)}"
+
+
+def _step_line(kind: str, number: int, step: dict) -> str:
+    label = _flat(step["label"])
+    if step["procedure_kind"] == ws.PROCEDURE_TOLD:
+        label += f" ({ws.procedure_label(ws.PROCEDURE_TOLD)})"
+    extras = [f"{name}: {_flat(step[key])}" for name, key in (
+        ("준비 자료", "inputs"), ("서식", "forms"), ("산출물", "output"),
+        ("완료 확인", "done_criteria")) if _flat(step[key])]
+    run = ws.run_label(step["run_state"])
+    if step["blocked"]:
+        run += " · 확인할 것 있음"
+    line = f"{kind} {number}단계: {label}"
+    if extras:
+        line += " — " + " / ".join(extras)
+    return f"{line} ({workcard.state_line(step)} · 수행 {run}){_cite(step)}"
+
+
+def _past_year(db, task_id: int) -> tuple[int | None, list]:
+    """처리 순서가 남아 있는 가장 최근 연도."""
+    for row in db.con.execute(
+            "SELECT DISTINCT year FROM task_steps WHERE task_id = ? ORDER BY year DESC", (task_id,)):
+        steps = db.task_steps(task_id, row["year"])
+        if steps:
+            return row["year"], steps
+    return None, []
+
+
+def brief_markdown(db, task_id: int) -> str:
+    """업무 하나를 눈치코치가 정리한 대로 적은 글.
+
+    한 줄이 한 문단이고, 줄마다 업무 이름을 다시 적는다. 검색은 대목 몇 줄만
+    떼어 보므로 이름이 머리에만 있으면 그 기한이 어느 업무의 것인지 알 수 없다.
+    줄을 문단으로 끊어 두면 답이 인용한 바로 그 줄이 원문 보기에서 칠해진다.
+    """
+    task = _task(db, task_id)
+    name = task["name"]
+    head = f"「{name}」"
+    items = db.task_items(task_id)
+    steps = db.work_steps(task_id)
+    documents = db.task_documents(task_id)
+    present = [d for d in documents if not d["missing_since"]]
+    years = sorted({d["eff_year"] for d in present if d["eff_year"]})
+
+    def group(*kinds):
+        chosen = [item for item in items if item["kind"] in kinds]
+        return sorted(chosen, key=lambda item: (kinds.index(item["kind"]), item["slot"] or ""))
+
+    lines = [
+        f"# {BRIEF_PREFIX} — {name}",
+        f"이 글은 눈치코치가 전임자 자료를 분석해 정리한 업무 {head}의 내용입니다. "
+        "원문 문서가 아니라 자료에서 읽어 정리한 것이며, 항목마다 근거 문서와 사람 확인 여부를 "
+        "적었습니다. 사람이 확인하지 않은 값은 틀릴 수 있으니 근거 문서를 함께 확인하세요.",
+    ]
+
+    def section(title: str, entries: list[str], note: str = "") -> None:
+        if entries:
+            lines.append(f"## {head} {title}" + (f" — {note}" if note else ""))
+            lines.extend(f"- {name} · {entry}" for entry in entries)
+
+    span = f" · {years[0]}~{years[-1]}년" if len(years) > 1 else (f" · {years[0]}년" if years else "")
+    overview = [f"업무 이름: {name} ({_state_text(task)})"]
+    if _flat(task["description"]):
+        overview.append(f"업무 설명: {_flat(task['description'])}")
+    overview += [f"관련 문서: {len(present)}건{span}",
+                 f"반복 주기: {_cycle_line(db.task_cycle(task_id))}"]
+    section("개요", overview)
+
+    section("해야 할 일", [_item_line(i) for i in group(rc.PURPOSE, rc.DEADLINE, rc.RECIPIENT, rc.AMOUNT)],
+            "목적·기한·제출처·금액")
+    section("시작 준비", [_item_line(i) for i in group(rc.INPUT, rc.FORM, rc.CONTACT)],
+            "준비 자료·서식·담당")
+    records = sorted(group(rc.RECORD), key=lambda item: item["slot"] != rc.SLOT_LAST_RECORD)
+    section("현재까지의 기록", [_item_line(i) for i in records])
+    section("문장에서 찾은 내용", [_item_line(i) for i in group(rc.STATEMENT)], workcard.FOUND_NOTE)
+    section("보충 설명", [_item_line(i) for i in group(rc.NOTE)], "문서에는 없고 사람이 보탠 내용")
+
+    stated = [s for s in steps if s["procedure_kind"] != ws.PROCEDURE_PRECEDENT]
+    cases = [s for s in steps if s["procedure_kind"] == ws.PROCEDURE_PRECEDENT]
+    conflict = next((i for i in items if i["kind"] == rc.PROCEDURE
+                     and i["basis_state"] == ws.CONFLICT), None)
+    if stated:
+        section("처리 순서", [_step_line("처리 순서", n, s) for n, s in enumerate(stated, start=1)],
+                "문서에 적힌 절차")
+    elif conflict:
+        section("처리 순서", ["처리 순서: 자료가 서로 다른 절차를 적고 있어 순서를 세우지 않았습니다 — "
+                              f"{_flat(conflict['content'])}{_cite(conflict)}"])
+    section("과거 수행 사례", [_step_line("과거 수행 사례", n, s) for n, s in enumerate(cases, start=1)],
+            "그렇게 했다는 기록이며, 반드시 이 순서로 해야 한다는 뜻이 아닙니다")
+
+    year, timeline = _past_year(db, task_id)
+    entries = []
+    for number, step in enumerate(timeline, start=1):
+        when = step["day_hint"] or (f"{step['month']}월" if step["month"] else "")
+        entry = f"{year}년 {number}번째: " + (f"{when} — " if when else "") + _flat(step["label"])
+        if step["filename"]:
+            entry += f" (문서: {step['filename']})"
+        if step["is_inferred"]:
+            entry += " (근거 없는 추정)"
+        if step["gap_note"]:
+            entry += f" · {_flat(step['gap_note'])}"
+        entries.append(entry)
+    section(f"{year}년에 문서가 오간 순서", entries,
+            "문서 날짜로 되짚은 순서이며 문서에 적힌 절차가 아닙니다")
+
+    entries = []
+    for gap in db.info_gaps(task_id):
+        entry = f"확인 필요 · {gap['field']}: {_flat(gap['detail'])}"
+        if _flat(gap["research"]):
+            entry += f" · 다시 찾아본 결과: {_flat(gap['research'])}"
+        if _flat(gap["next_action"]):
+            entry += f" · 다음 행동: {_flat(gap['next_action'])}"
+        entries.append(entry)
+    section("확인이 필요한 정보", entries)
+
+    section("먼저 읽을 문서", [
+        f"먼저 읽을 문서 {n}: {row['filename']} — {_flat(row['reason'])}"
+        for n, row in enumerate(db.task_reading(task_id)[:READING_LIMIT], start=1)])
+
+    return "\n\n".join(lines) + "\n"
+
+
+def brief_digest(db, task_id: int) -> str:
+    return hashlib.sha256(brief_markdown(db, task_id).encode("utf-8")).hexdigest()
+
+
+# ── 노트북에 넣기 ───────────────────────────────────────────────────
+
+def add_brief(db, notebook_id: int, task_id: int, client=None,
+              on_phase: Callable[[str], None] = lambda phase: None,
+              should_stop: Callable[[], bool] = lambda: False) -> notebook_ingest.Ingested:
+    """업무 정리본을 지금 내용으로 만들어 노트북 자료로 넣는다.
+
+    이 노트북에 같은 업무의 옛 정리본이 있으면 새 판으로 바꾼다. 옛 글은
+    보관소에 남는다 — 그 글을 근거로 받은 지난 답을 다시 확인할 수 있어야 한다.
+    """
+    task = _task(db, task_id)
+    filename = brief_filename(task["name"])
+    with TemporaryDirectory() as folder:
+        path = Path(folder) / filename
+        path.write_bytes(brief_markdown(db, task_id).encode("utf-8"))
+        outcome = notebook_ingest.ingest_file(db, notebook_id, path, client, on_phase, should_stop,
+                                              origin=ORIGIN)
+    if outcome.doc_id is None or not outcome.usable:
+        return outcome
+    with db.transaction():
+        old = db.con.execute(
+            "SELECT doc_id, selected FROM notebook_sources "
+            "WHERE notebook_id=? AND task_id=? AND doc_id!=?",
+            (notebook_id, task_id, outcome.doc_id)).fetchall()
+        db.con.execute("UPDATE notebook_sources SET origin=?, task_id=? WHERE notebook_id=? AND doc_id=?",
+                       (ORIGIN, task_id, notebook_id, outcome.doc_id))
+        if old:
+            # 쓰지 않던 정리본을 새 판으로 바꿨다고 근거에 다시 넣지 않는다.
+            db.con.execute("UPDATE notebook_sources SET selected=? WHERE notebook_id=? AND doc_id=?",
+                           (int(any(row["selected"] for row in old)), notebook_id, outcome.doc_id))
+            db.con.executemany("DELETE FROM notebook_sources WHERE notebook_id=? AND doc_id=?",
+                               [(notebook_id, row["doc_id"]) for row in old])
+        db.audit("notebook.task.add", f"{notebook_id}/{task_id}", result=outcome.status)
+    if old:
+        notebook.refresh_states(db)
+    return outcome
+
+
+def add_documents(db, notebook_id: int, doc_ids) -> int:
+    """업무에 묶인 원문을 연결한다. 이미 연결한 것은 그대로 둔다."""
+    linked = {row["doc_id"] for row in notebook.sources(db, notebook_id)}
+    fresh = set(doc_ids) - linked
+    if fresh:
+        notebook.add_sources(db, notebook_id, fresh)
+    return len(fresh)
+
+
+def linked_tasks(db, notebook_id: int) -> set[int]:
+    """정리본을 이미 넣은 업무."""
+    return {row[0] for row in db.con.execute(
+        "SELECT task_id FROM notebook_sources WHERE notebook_id=? AND task_id IS NOT NULL",
+        (notebook_id,))}
+
+
+def outdated(db, notebook_id: int) -> dict[int, int]:
+    """넣은 뒤 업무 내용이 달라진 정리본 — {문서: 업무}.
+
+    업무가 없어졌거나 합쳐졌으면 견줄 것이 없다. 그 정리본은 넣은 때의 판으로 남는다.
+    """
+    stale = {}
+    for row in db.con.execute(
+            "SELECT ns.doc_id, ns.task_id, d.hash FROM notebook_sources ns "
+            "JOIN documents d ON d.id = ns.doc_id JOIN tasks t ON t.id = ns.task_id "
+            "WHERE ns.notebook_id=? AND t.not_a_task=0 AND t.merged_into IS NULL",
+            (notebook_id,)).fetchall():
+        if brief_digest(db, row["task_id"]) != row["hash"]:
+            stale[row["doc_id"]] = row["task_id"]
+    return stale

@@ -1,5 +1,10 @@
 """질문 화면 — 자유 탐색.
 
+**지금은 메뉴에 걸려 있지 않다.** 묻는 일은 노트북으로 들어갔다(ui/shell.py NAV,
+core/notebook_tasks.py). 이 파일은 노트북의 출처·대화 판이 가져다 쓰는 조각
+(_paragraph · _meta_strip · _cited_ordinals · OPEN_SECTIONS · ASK_INPUT_H)의 자리로
+남아 있고, AskView 자체는 시험에서만 선다.
+
 대화가 아니라 단발 질의로 설계한다. 멀티턴 문맥 유지·지시대명사 해석·대화
 기억을 만들지 않는다. 챗봇으로 흐르지 않으면서 정형 화면이 못 덮는 질문을
 처리하는 방법이다(doc/00 §6.4).

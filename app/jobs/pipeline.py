@@ -25,6 +25,7 @@ from ..core import dating, handover_release, reconstruction, timeline, transfer
 from ..core import diagnostics
 from ..core.chunking import build_chunks
 from ..core.labeling import label_document
+from ..core.workcard import OUTPUT_DIR
 from ..db import Database
 from ..ingest import scanner
 from ..search import pack
@@ -692,7 +693,9 @@ class Pipeline(QObject):
 def _own_paths(db: Database) -> list[Path]:
     """이 프로그램이 프로젝트 폴더에 만든 것들 — 자료로 훑으면 안 된다."""
     folder = db.path.parent
-    own = [folder / "logs", *folder.glob(db.path.name + "*")]
+    # outputs는 내보낸 보고서·산출물의 기본 저장 폴더다. 이 프로그램이 쓴 글이
+    # 전임자 문서로 되돌아오면 자기가 쓴 문장을 근거로 삼게 된다.
+    own = [folder / "logs", folder / OUTPUT_DIR, *folder.glob(db.path.name + "*")]
     own += [Path(s["path"]) for s in db.sources() if s["kind"] == "upload"]
     return own
 

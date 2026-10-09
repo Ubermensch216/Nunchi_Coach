@@ -94,8 +94,8 @@ def duplicate(db, notebook_id):
         key = db.con.execute("INSERT INTO notebooks(title,purpose,task_id,icon,updated_at) "
                              "VALUES (?,?,?,?,datetime('now'))",
                              (row["title"] + " 사본", row["purpose"], row["task_id"], row["icon"])).lastrowid
-        db.con.execute("INSERT INTO notebook_sources(notebook_id,doc_id,version_hash,selected,allowed,origin,added_at) "
-                       "SELECT ?,doc_id,version_hash,selected,allowed,origin,datetime('now') "
+        db.con.execute("INSERT INTO notebook_sources(notebook_id,doc_id,version_hash,selected,allowed,origin,added_at,task_id) "
+                       "SELECT ?,doc_id,version_hash,selected,allowed,origin,datetime('now'),task_id "
                        "FROM notebook_sources WHERE notebook_id=?", (key, notebook_id))
         db.audit("notebook.duplicate", f"{notebook_id}/{key}")
     return key

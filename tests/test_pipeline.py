@@ -332,11 +332,13 @@ def test_scanner_leaves_the_programs_own_files_alone(project, tmp_path: Path):
     (root / "보고서.txt").write_text("내용", encoding="utf-8")
     (root / "logs" / "diagnostic.log").write_text("x", encoding="utf-8")
     (root / "project.db.bak-v6").write_bytes(b"db")
+    (root / "outputs").mkdir()
+    (root / "outputs" / "업무보고.md").write_text("내보낸 글", encoding="utf-8")
     source_id = project.add_source(root)
 
     # 예전 판은 이것들을 문서로 올려 뒀다 — 다음 훑기에서 걷어내야 한다.
     scanner.scan_source(project, source_id, root)
-    own = [root / "logs", root / "project.db.bak-v6"]
+    own = [root / "logs", root / "outputs", root / "project.db.bak-v6"]
     stats = scanner.scan_source(project, source_id, root, skip=own)
 
     rows = project.con.execute("SELECT filename, missing_since FROM documents").fetchall()
@@ -359,3 +361,16 @@ def test_reading_an_upload_does_not_reopen_task_analysis(project, tmp_path: Path
 
     project.invalidate_document_analysis(changed)
     assert all(project.get_meta(key) is None for key in flags)
+
+
+def test_pipeline_treats_exported_outputs_as_its_own(tmp_path: Path):
+    """내보낸 산출물(outputs)이 전임자 문서로 되돌아오지 않는다."""
+    from app.jobs.pipeline import _own_paths
+
+    db = Database(tmp_path / "project.db")
+    db.init()
+    try:
+        own = {path.name for path in _own_paths(db)}
+    finally:
+        db.close()
+    assert {"logs", "outputs", "project.db"} <= own

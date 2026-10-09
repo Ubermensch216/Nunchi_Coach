@@ -213,8 +213,12 @@ def summarize_source(db, notebook_id: int, doc_id: int, client) -> bool:
 
 def ingest_file(db, notebook_id: int, path: str | Path, client=None,
                 on_phase: Callable[[str], None] = lambda phase: None,
-                should_stop: Callable[[], bool] = lambda: False) -> Ingested:
-    """파일 하나를 노트북의 자료로 만든다. 실패는 값으로 돌려준다."""
+                should_stop: Callable[[], bool] = lambda: False, origin: str = "upload") -> Ingested:
+    """파일 하나를 노트북의 자료로 만든다. 실패는 값으로 돌려준다.
+
+    origin은 출처 목록에 적는 갈래다. 눈치코치가 만든 업무 정리본도 이 길로
+    들어온다(core/notebook_tasks.py).
+    """
     path = Path(path)
     outcome = Ingested(str(path), path.name)
     notebook.require(db, notebook_id)
@@ -235,7 +239,8 @@ def ingest_file(db, notebook_id: int, path: str | Path, client=None,
 
         known = _existing(db, digest)
         if known is not None:
-            origin = "upload" if Path(known["path"]).is_relative_to(upload_root(db)) else "project"
+            if origin == "upload" and not Path(known["path"]).is_relative_to(upload_root(db)):
+                origin = "project"
             notebook.add_sources(db, notebook_id, [known["id"]], origin=origin)
             outcome.doc_id, outcome.status = known["id"], "reused"
             outcome.note = "같은 내용의 문서를 이미 읽어 두어 그 문서를 연결했습니다."
@@ -253,7 +258,7 @@ def ingest_file(db, notebook_id: int, path: str | Path, client=None,
         write_parse(db, doc_id, path.name, str(stored), result)
         outcome.status, outcome.note, outcome.error = result.status, result.note or "", result.error or ""
         # 읽지 못한 파일도 목록에 남긴다. 사라지면 올렸는지조차 알 수 없다.
-        notebook.add_sources(db, notebook_id, [doc_id], origin="upload")
+        notebook.add_sources(db, notebook_id, [doc_id], origin=origin)
         if not result.ok:
             if not outcome.error:
                 outcome.error = outcome.note or "본문을 읽지 못했습니다."

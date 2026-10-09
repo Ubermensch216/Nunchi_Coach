@@ -13,7 +13,7 @@ from PySide6.QtCore import QCoreApplication, QObject, QThread, Qt, Signal
 
 from ..ai.client import OllamaClient
 from ..ai.settings import project_client
-from ..core import diagnostics, notebook_ingest, onnara_import
+from ..core import diagnostics, notebook_ingest, notebook_tasks, onnara_import
 from ..db import Database
 
 
@@ -23,13 +23,14 @@ class IngestWorker(QObject):
     done = Signal(object)                   # list[Ingested]
 
     def __init__(self, db_path: Path | str, notebook_id: int, paths: list[str], doc_ids: list[int],
-                 collection: str = ""):
+                 collection: str = "", tasks: list[int] | None = None):
         super().__init__()
         self._db_path = Path(db_path)
         self._notebook_id = notebook_id
         self._paths = list(paths)
         self._doc_ids = list(doc_ids)
         self._collection = collection      # 온나라 수집본 폴더
+        self._tasks = list(tasks or [])    # 정리본을 만들어 넣을 업무
         self.cancelled = False
         self._client = None
 
@@ -43,11 +44,19 @@ class IngestWorker(QObject):
         db = Database(self._db_path)
         try:
             self._client = client = project_client(db, OllamaClient)
-            jobs = [("file", path) for path in self._paths] + [("doc", key) for key in self._doc_ids]
+            jobs = ([("task", key) for key in self._tasks] + [("file", path) for path in self._paths]
+                    + [("doc", key) for key in self._doc_ids])
+            briefs = set()
             for index, (kind, target) in enumerate(jobs, start=1):
                 if self.cancelled:
                     break
-                name = Path(target).name if kind == "file" else (db.document(target)["filename"])
+                if kind == "file":
+                    name = Path(target).name
+                elif kind == "task":
+                    task = db.task(target)
+                    name = notebook_tasks.brief_filename(task["name"] if task else "")
+                else:
+                    name = db.document(target)["filename"]
 
                 def phase(text, i=index, n=name):
                     self.progress.emit(i, len(jobs), n, text)
@@ -56,8 +65,14 @@ class IngestWorker(QObject):
                     if kind == "file":
                         outcome = notebook_ingest.ingest_file(
                             db, self._notebook_id, target, client, phase, lambda: self.cancelled)
+                    elif kind == "task":
+                        outcome = notebook_tasks.add_brief(
+                            db, self._notebook_id, target, client, phase, lambda: self.cancelled)
+                        briefs.add(outcome.doc_id)
                     else:
                         outcome = notebook_ingest.reprocess(db, target, client, phase, lambda: self.cancelled)
+                except ValueError as exc:  # 그사이 업무가 없어졌거나 노트북을 보관했다
+                    outcome = notebook_ingest.Ingested(str(target), name, status="rejected", error=str(exc))
                 except Exception as exc:   # 파일 하나가 묶음 전체를 멈추면 안 된다
                     diagnostics.record("notebook.ingest.error", exc)
                     outcome = notebook_ingest.Ingested(str(target), name, status="rejected",
@@ -81,7 +96,9 @@ class IngestWorker(QObject):
             for index, outcome in enumerate(results[:summarized], start=1):
                 if self.cancelled:
                     break
-                if outcome.doc_id is None or outcome.status not in ("ok", "partial"):
+                # 정리본은 그 자체가 정리한 글이다. 다시 요약하지 않는다.
+                if (outcome.doc_id is None or outcome.status not in ("ok", "partial")
+                        or outcome.doc_id in briefs):
                     continue
                 self.progress.emit(index, summarized, outcome.filename, notebook_ingest.PHASE_SUMMARY)
                 try:
@@ -115,11 +132,11 @@ class NotebookIngestRunner(QObject):
         return self._thread is not None and self._thread.isRunning()
 
     def start(self, notebook_id: int, paths: list[str], doc_ids: list[int] | None = None,
-              collection: str = "") -> bool:
-        if self._thread is not None or not (paths or doc_ids or collection):
+              collection: str = "", tasks: list[int] | None = None) -> bool:
+        if self._thread is not None or not (paths or doc_ids or collection or tasks):
             return False
         self._thread = QThread()
-        self._worker = IngestWorker(self._db_path, notebook_id, paths, doc_ids or [], collection)
+        self._worker = IngestWorker(self._db_path, notebook_id, paths, doc_ids or [], collection, tasks)
         self._worker.moveToThread(self._thread)
         self._worker.progress.connect(self.progress)
         self._worker.file_done.connect(self.file_done)

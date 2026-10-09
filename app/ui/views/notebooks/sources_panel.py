@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ....core import notebook, notebook_ingest, onnara_import
+from ....core import notebook, notebook_ingest, notebook_tasks, onnara_import
 from ....db import representative_predicate
 from ....jobs import NotebookIngestRunner
 from ....search.rag import Citation
@@ -48,8 +48,14 @@ from ...widgets import (
 )
 from ..ask import OPEN_SECTIONS, _cited_ordinals, _meta_strip, _paragraph
 from .panel import Panel
+from .task_picker import TaskSourceDialog
 
-ORIGIN_LABELS = {"project": "전임자 자료", "upload": "올린 파일", "onnara": "온나라 수집본"}
+ORIGIN_LABELS = {"project": "전임자 자료", "upload": "올린 파일", "onnara": "온나라 수집본",
+                 notebook_tasks.ORIGIN: "눈치코치가 정리한 업무"}
+# 넣은 뒤 업무의 내용이 달라진 정리본. 원문이 바뀐 것과는 다른 일이라 말을 따로 둔다.
+STALE_BRIEF = "업무 내용 변경"
+BRIEF_NOTE = ("눈치코치가 전임자 자료를 분석해 정리한 글입니다. 원문이 아닙니다 — "
+              "항목마다 적힌 근거 문서를 함께 확인하세요.")
 
 
 def source_state(row) -> str:
@@ -96,6 +102,7 @@ class SourcesPanel(Panel):
         self._signature = None
         self._expanded: set[int] = set()
         self._citation: Citation | None = None
+        self._stale_briefs: dict[int, int] = {}   # 문서 → 업무. 노트북을 열 때와 자료가 바뀔 때만 다시 잰다
         self._ingest = NotebookIngestRunner(db.path, self)
         self._ingest.progress.connect(self._on_progress)
         self._ingest.file_done.connect(self._on_file_done)
@@ -119,6 +126,7 @@ class SourcesPanel(Panel):
         self.add_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.add_menu = QMenu(self.add_button)
         self.add_menu.addAction("파일 올리기…", lambda: self._safe(self._pick_files))
+        self.add_menu.addAction("눈치코치가 파악한 업무에서 고르기…", lambda: self._safe(self._pick_tasks))
         self.add_menu.addAction("분석한 전임자 자료에서 고르기…", lambda: self._safe(self._link_documents))
         self.add_menu.addAction("온나라 수집본 가져오기…", lambda: self._safe(self._pick_collection))
         self.add_button.setMenu(self.add_menu)
@@ -199,6 +207,7 @@ class SourcesPanel(Panel):
         self.notebook_id = notebook_id
         self.editable = editable
         self._signature = None
+        self._check_briefs()
         self.show_list()
         self.refresh()
         if notebook_id is not None and editable:
@@ -216,7 +225,7 @@ class SourcesPanel(Panel):
         rows = self.rows()
         signature = (self.notebook_id, self.editable, tuple(
             (r["doc_id"], r["hash"], r["version_hash"], r["selected"], r["allowed"],
-             r["missing_since"], r["parse_status"]) for r in rows))
+             r["missing_since"], r["parse_status"]) for r in rows), tuple(sorted(self._stale_briefs)))
         if not force and signature == self._signature:
             return
         self._signature = signature
@@ -225,6 +234,8 @@ class SourcesPanel(Panel):
         self.source_list.clear()
         for row in rows:
             state = source_state(row)
+            if not state and row["doc_id"] in self._stale_briefs:
+                state = STALE_BRIEF
             item = QListWidgetItem(row["filename"] + (f"  ·  {state}" if state else ""))
             item.setData(Qt.ItemDataRole.UserRole, row["doc_id"])
             item.setData(Qt.ItemDataRole.UserRole + 1, state)
@@ -253,7 +264,8 @@ class SourcesPanel(Panel):
         self.all_box.setChecked(bool(rows) and chosen == len(rows))
         self.all_box.blockSignals(False)
         if not rows and not self._report:
-            self.hint.setText("파일을 올리거나 끌어다 놓으세요. 추가한 자료만 근거로 묻고 정리합니다."
+            self.hint.setText("‘+ 자료 추가’에서 눈치코치가 파악한 업무를 고르거나, 파일을 올리거나 끌어다 "
+                              "놓으세요. 추가한 자료만 근거로 묻고 정리합니다."
                               if self.editable else "")
         elif self._report:
             self.hint.setText(self._report)
@@ -264,8 +276,14 @@ class SourcesPanel(Panel):
         state = item.data(Qt.ItemDataRole.UserRole + 1) if item else ""
         self.read_button.setEnabled(item is not None)
         self.detach_button.setEnabled(item is not None and self.editable)
-        self.accept_button.setVisible(bool(state) and state.startswith("원문 변경"))
-        self.accept_button.setEnabled(self.editable and state == "원문 변경")
+        brief = state == STALE_BRIEF
+        self.accept_button.setText("새 정리본 사용" if brief else "새 판본 사용")
+        self.accept_button.setToolTip(
+            "업무 화면에서 달라진 내용으로 정리본을 다시 만듭니다. 지난 답은 가려집니다" if brief
+            else "원문이 바뀐 자료를 다시 분석한 판본으로 근거를 바꿉니다")
+        self.accept_button.setVisible(brief or (bool(state) and state.startswith("원문 변경")))
+        self.accept_button.setEnabled(self.editable and not self._ingest.running
+                                      and (brief or state == "원문 변경"))
 
     def _current_doc(self) -> int | None:
         item = self.source_list.currentItem()
@@ -290,12 +308,17 @@ class SourcesPanel(Panel):
         self.selection_changed.emit()
 
     def _accept(self) -> None:
+        task_id = self._stale_briefs.get(self._current_doc())
+        if task_id is not None:
+            self.add_tasks([task_id])
+            return
         notebook.accept_version(self.db, self.notebook_id, self._current_doc())
         self.refresh(force=True)
         self.selection_changed.emit()
 
     def _detach(self) -> None:
         notebook.detach(self.db, self.notebook_id, self._current_doc())
+        self._check_briefs()
         self.refresh(force=True)
         self.selection_changed.emit()
 
@@ -345,6 +368,44 @@ class SourcesPanel(Panel):
         if self._ingest.start(self.notebook_id, [], collection=folder):
             self._show_progress("온나라 수집본을 읽는 중")
 
+    # ── 눈치코치가 파악한 업무 ──────────────────────────────────────
+    def showEvent(self, event) -> None:  # noqa: N802 — Qt 규약
+        super().showEvent(event)
+        # 업무 화면에서 내용을 고치고 돌아왔을 수 있다. 화면에 다시 설 때만 잰다 —
+        # 분석이 도는 동안 셸이 1.5초마다 부르는 refresh에서는 재지 않는다.
+        if self.notebook_id is not None:
+            self._check_briefs()
+            self.refresh()
+
+    def _check_briefs(self) -> None:
+        """넣은 뒤 업무 내용이 달라진 정리본을 찾는다. 보관한 노트북은 고칠 수 없으니 재지 않는다."""
+        self._stale_briefs = (notebook_tasks.outdated(self.db, self.notebook_id)
+                              if self.notebook_id is not None and self.editable else {})
+
+    def _pick_tasks(self) -> None:
+        notebook.require(self.db, self.notebook_id)
+        if self._ingest.running:
+            QMessageBox.information(self, "업무에서 고르기", "앞서 넣은 자료를 읽고 있습니다. 끝난 뒤에 다시 시도하세요.")
+            return
+        dialog = TaskSourceDialog(self.db, {row["doc_id"] for row in self.rows()},
+                                  notebook_tasks.linked_tasks(self.db, self.notebook_id), self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.add_tasks(*dialog.picked())
+
+    def add_tasks(self, task_ids: list[int], doc_ids: list[int] | None = None) -> None:
+        """업무 정리본을 만들어 넣고, 그 업무의 문서를 연결한다."""
+        if self.notebook_id is None or not self.editable or not (task_ids or doc_ids):
+            return
+        self._report = ""
+        linked = notebook_tasks.add_documents(self.db, self.notebook_id, doc_ids or [])
+        if linked:
+            self._report = f"업무의 문서 {linked}건을 연결했습니다."
+        # 정리본은 글을 만들고 조각내고 임베딩해야 한다. 올린 파일과 같은 길로 뒤에서 한다.
+        if task_ids and self._ingest.start(self.notebook_id, [], tasks=list(task_ids)):
+            self._show_progress(f"업무 정리본 {len(task_ids)}건을 만드는 중")
+        self.refresh(force=True)
+        self.selection_changed.emit()
+
     def _resume_uploads(self) -> None:
         """읽다 멈췄거나 파서가 바뀐 올린 파일을 이어서 읽는다."""
         linked = {row["doc_id"] for row in self.rows()}
@@ -370,8 +431,8 @@ class SourcesPanel(Panel):
         self.progress_box.hide()
         failed = [r for r in results if not r.usable]
         reused = sum(1 for r in results if r.status == "reused")
-        parts = []
         done = len(results) - len(failed)
+        parts = [self._report] if self._report else []
         if done:
             parts.append(f"{done}건을 추가했습니다.")
         if reused:
@@ -381,6 +442,7 @@ class SourcesPanel(Panel):
         if len(failed) > 3:
             parts.append(f"그 밖에 {len(failed) - 3}건을 읽지 못했습니다. 목록의 상태를 확인하세요.")
         self._report = "\n".join(parts)
+        self._check_briefs()
         self.refresh(force=True)
         self.selection_changed.emit()
 
@@ -552,6 +614,8 @@ class SourcesPanel(Panel):
         row = next((r for r in self.rows() if r["doc_id"] == doc_id), None)
         if row is None:
             return
+        if row["origin"] == notebook_tasks.ORIGIN:
+            self.reader_column.addWidget(UnknownBlock(BRIEF_NOTE))
         if document["parse_note"]:
             self.reader_column.addWidget(UnknownBlock(document["parse_note"]))
         topics = [t for t in json.loads(row["topics"] or "[]") if isinstance(t, str)]

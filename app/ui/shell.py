@@ -4,7 +4,12 @@
   업무  What + How   내 업무는 뭐고, 뭐부터 읽고, 어떻게 처리하나
   일정  When         이번 달엔 뭘 해야 하나
   문서  검증         이 파일이 뭐지, 최신본 맞나
-  질문  자유 탐색    위 화면에 없는 걸 물어본다
+  노트북 자유 탐색   위 화면에 없는 걸 묻고, 정리해 문서로 남긴다
+
+묻는 일은 노트북이 한다. 예전의 '질문' 메뉴는 자료 전체에 한 번 묻고 끝나는
+화면이었다 — 지금은 눈치코치가 파악한 업무와 그 문서를 노트북의 자료로 넣고
+(core/notebook_tasks.py) 거기서 묻는다. 묻는 자리가 둘이면 어디서 물어야 할지부터
+물어야 한다.
 
 분석 진행률은 메뉴가 아니라 상단 바에 상주한다. 상태는 화면이 아니다.
 """
@@ -30,7 +35,6 @@ from ..core import handover
 from ..db import Database
 from ..jobs import PipelineRunner
 from . import icons, stages, theme
-from .views.ask import AskView
 from .views.calendar import CalendarView
 from .views.documents import DocumentsView
 from .views.onboarding import OnboardingView
@@ -44,8 +48,7 @@ NAV = [
     ("tasks", "tasks", "업무", "내 업무는 무엇인가"),
     ("calendar", "calendar", "일정", "언제 무엇을 하나"),
     ("documents", "documents", "문서", "이 파일이 최신본인가"),
-    ("ask", "ask", "질문", "자료에 직접 물어본다"),
-    ("notebooks", "documents", "노트북", "선택한 자료로 탐구하고 지식으로 남긴다"),
+    ("notebooks", "ask", "노트북", "파악한 업무와 자료에 묻고, 정리해 남긴다"),
 ]
 
 # 가로 띠에서는 메뉴가 글자만으로 선다. 아이콘 체계(icons.py)는 설정 창처럼
@@ -56,8 +59,8 @@ class TopBar(QWidget):
     """흰 띠 하나에 길과 상태를 담는다.
 
     왼쪽부터 제품·프로젝트 → 메뉴 넷 → 오른쪽에 지금 상태. 세로 사이드바 대신
-    가로 띠를 쓰는 이유는 본문이다 — 질문 화면이 '답변 | 근거 원문' 두 칸을
-    쓰는데 왼쪽에 메뉴 기둥까지 서면 원문 칸이 대조하기 어려운 폭이 된다.
+    가로 띠를 쓰는 이유는 본문이다 — 노트북이 '출처 | 대화 | 스튜디오' 세 판을
+    쓰는데 왼쪽에 메뉴 기둥까지 서면 원문을 대조하기 어려운 폭이 된다.
     메뉴는 하루에 몇 번 누르고 본문은 내내 읽는다.
 
     띠는 조용해야 한다. 오른쪽 상태 문구들은 모두 회색 작은 글자로 물러서
@@ -262,7 +265,6 @@ class MainWindow(QMainWindow):
             "notebooks": NotebooksView(self.db),
             "calendar": CalendarView(self.db),
             "documents": DocumentsView(self.db),
-            "ask": AskView(self.db),
         }
         for view in self.views.values():
             self.stack.addWidget(view)
@@ -271,7 +273,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
         self.views["onboarding"].started.connect(self._on_scan_started)
-        for key in ("tasks", "calendar", "ask"):
+        for key in ("tasks", "calendar"):
             view = self.views[key]
             if hasattr(view, "go_documents"):
                 view.go_documents.connect(lambda: self.go("documents"))
@@ -283,9 +285,6 @@ class MainWindow(QMainWindow):
         self.views["tasks"].state_changed.connect(self._sync_handover)
         self.views["calendar"].open_task.connect(self._open_task_from_calendar)
         self.views["calendar"].go_tasks.connect(lambda: self.go("tasks"))
-        # 답변의 근거 문서가 어느 업무의 것인지 눌러서 갈 수 있어야 한다.
-        # 텍스트로만 적혀 있으면 "그래서 그 업무가 어디 있는데?"로 끝난다.
-        self.views["ask"].open_task.connect(self._open_task_from_calendar)
 
         # 처리는 백그라운드에서 돈다. UI는 완료를 기다리지 않고 이미 처리된
         # 결과부터 보여준다.

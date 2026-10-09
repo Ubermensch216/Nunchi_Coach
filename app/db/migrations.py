@@ -404,6 +404,8 @@ NOTEBOOK_COLUMNS = (
     ("notebook_sources", "added_at", "added_at TEXT"),
     ("notebook_sources", "summary", "summary TEXT NOT NULL DEFAULT ''"),
     ("notebook_sources", "topics", "topics TEXT NOT NULL DEFAULT '[]'"),
+    # 업무 정리본이 어느 업무의 것인가(core/notebook_tasks.py). 버전을 올리지 않고 붙는 열이다.
+    ("notebook_sources", "task_id", "task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL"),
     ("notebook_messages", "thread_id", "thread_id INTEGER NOT NULL DEFAULT 1"),
     ("notebook_messages", "standalone_question", "standalone_question TEXT NOT NULL DEFAULT ''"),
     ("notebook_messages", "law_citations", "law_citations TEXT NOT NULL DEFAULT '[]'"),

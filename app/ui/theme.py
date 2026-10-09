@@ -725,6 +725,18 @@ def stylesheet(text_size: str = "medium") -> str:
         color: {TEXT};
     }}
     QListWidget#SourceList::item:hover {{ background: {BAND}; }}
+    /* 산출물 줄 — 이름과 휴지통. 줄 위젯은 비워 두어 고른 줄의 바탕이 비쳐 보이게 한다. */
+    QListWidget#OutputList {{ background: transparent; border: none; outline: none; }}
+    QListWidget#OutputList::item {{ padding: 0; border-radius: {RADIUS_SM}px; }}
+    QListWidget#OutputList::item:hover {{ background: {BAND}; }}
+    QListWidget#OutputList::item:selected {{ background: {PRIMARY_SOFT}; }}
+    QWidget#OutputRow {{ background: transparent; }}
+    /* 표의 왼쪽 위 모서리. 맡겨 두면 검게 칠해진다. */
+    QTableCornerButton::section {{ background: {SURFACE}; border: none; }}
+    QLabel#OutputRowText {{ color: {TEXT}; background: transparent; }}
+    /* 문서 모양으로 보는 판. 종이처럼 안쪽 여백을 넉넉히 둔다. */
+    QTextBrowser#DocPreview {{ padding: {SP_MD}px; }}
+    QTextBrowser#DocPage {{ padding: {SP_XL}px {SP_XL}px; }}
     QListWidget#SourceList::item:selected {{ background: {PRIMARY_SOFT}; color: {TEXT}; }}
     /* 여러 줄 입력칸. 맡겨 두면 윈도우의 어두운 모드 바탕을 그대로 써서, 밝은 벌에서
        검은 판에 검은 글자가 된다. */

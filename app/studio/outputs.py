@@ -69,6 +69,17 @@ def update(db, output_id: int, markdown: str) -> None:
     db.audit("studio.output.edit", str(output_id))
 
 
+def apply_format(db, output_id: int, template: Template) -> None:
+    """이미 엮은 산출물에 다른 서식의 모양(글꼴·크기·기호)을 입힌다. 본문의 글은 건드리지 않는다."""
+    row = get(db, output_id)
+    notebook.require(db, row["notebook_id"])
+    value = payload(row)
+    value["format"] = template.format
+    db.con.execute("UPDATE notebook_outputs SET model=?, template_id=?, revision=revision+1, "
+                   "updated_at=datetime('now') WHERE id=?", (notebook.dumps(value), template.id, output_id))
+    db.audit("studio.output.format", str(output_id), detail=template.title)
+
+
 def delete(db, output_id: int) -> None:
     row = get(db, output_id)
     notebook.require(db, row["notebook_id"])

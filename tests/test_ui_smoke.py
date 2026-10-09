@@ -100,6 +100,32 @@ def _add_docs(db: Database, count: int = 4, parsed: int = 2) -> int:
     return source_id
 
 
+def _ask_view(window: MainWindow):
+    """예전 질문 화면을 창 안에 세운다.
+
+    '질문'은 메뉴에서 빠지고 노트북으로 들어갔다. 다만 그 화면의 조각(원문 칸·
+    근거 목록·준비 상태 판정)은 노트북이 그대로 쓰므로 아래 시험들은 남긴다.
+    창에 얹는 이유는 폭 시험이 창 크기를 기준으로 재기 때문이다.
+    """
+    if "ask" not in window.views:
+        from app.ui.views.ask import AskView
+
+        window.views["ask"] = AskView(window.db)
+        window.stack.addWidget(window.views["ask"])
+    return window.views["ask"]
+
+
+def test_asking_lives_in_the_notebook_not_in_its_own_menu(make_window, db):
+    """묻는 자리는 노트북 하나다. 메뉴는 넷이고 넷째가 노트북이다."""
+    from app.ui.shell import NAV
+
+    _add_docs(db)
+    window = make_window(db)
+    assert [key for key, *_ in NAV] == ["tasks", "calendar", "documents", "notebooks"]
+    assert "ask" not in window.views and "ask" not in window.topbar._buttons
+    assert "Ctrl+4" in window.topbar._buttons["notebooks"].toolTip()
+
+
 def test_window_starts_on_onboarding_when_no_source(make_window, db):
     window = make_window(db)
     assert window.stack.currentWidget() is window.views["onboarding"]
@@ -114,7 +140,7 @@ def test_window_switches_to_tasks_once_source_exists(make_window, db):
     assert window.topbar._buttons["tasks"].isEnabled()
 
 
-@pytest.mark.parametrize("key", ["tasks", "calendar", "documents", "ask"])
+@pytest.mark.parametrize("key", ["tasks", "calendar", "documents", "notebooks"])
 def test_every_view_navigates_and_refreshes(make_window, db, key):
     _add_docs(db)
     window = make_window(db)
@@ -168,7 +194,7 @@ def test_calendar_refuses_to_claim_cycles_without_enough_years(make_window, db):
 def test_ask_view_withholds_until_analysis_done(make_window, db):
     """분석 전에는 질문 입력을 막는다. 근거 없이 답하지 않기 위해서다."""
     _add_docs(db)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     view.refresh()
     assert not view.send.isEnabled()
     assert view.notice.label.text()
@@ -525,7 +551,7 @@ def test_ask_view_blocks_input_without_chunks(make_window, db):
         "path": r"D:\자료\a.hwp", "filename": "a.hwp", "ext": ".hwp",
         "parse_status": "ok", "hash": "a",
     })
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     view.refresh()
     assert not view.send.isEnabled()
     assert "색인" in view.notice.label.text() or "준비" in view.notice.label.text()
@@ -534,7 +560,7 @@ def test_ask_view_blocks_input_without_chunks(make_window, db):
 def test_ask_view_enables_input_once_chunks_exist(make_window, db):
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     view.refresh()
     assert view.send.isEnabled()
     assert not view.notice.isVisible()
@@ -546,7 +572,7 @@ def test_ask_view_renders_withheld_answer_with_related_docs(make_window, db):
 
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
 
     answer = Answer(
         question="질문", text="확인 가능한 자료가 부족합니다.", withheld=True,
@@ -567,7 +593,7 @@ def test_ask_view_renders_answer_with_citations_and_feedback(make_window, db):
 
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
 
     answer = Answer(
         question="질문", text="2024년 수질 관련 자료 6건이 확인됩니다.[1]", withheld=False,
@@ -595,7 +621,7 @@ def test_ask_view_shows_error_when_generation_fails(make_window, db):
 
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
 
     answer = Answer(question="질문", text="", withheld=True, error="로컬 AI에 연결할 수 없습니다")
     view._render_answer(answer)
@@ -607,7 +633,7 @@ def test_ask_view_shows_error_when_generation_fails(make_window, db):
 def test_ask_view_rating_persists_to_the_latest_question(make_window, db):
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
 
     qid = db.save_question("질문", "답변", "[]", False, "gemma4:e2b")
 
@@ -632,7 +658,7 @@ def test_ask_view_asking_shows_a_waiting_state(make_window, db, monkeypatch):
     """질문을 보내면 즉시 '찾아보는 중' 상태로 바뀌어야 한다."""
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
 
     monkeypatch.setattr(view._runner, "start", lambda q, scope=None: True)
     view.input.setText("질문 있음")
@@ -1018,7 +1044,7 @@ def test_ask_view_warms_up_the_model_once_when_ready(make_window, db, monkeypatc
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
     window = make_window(db)
-    view = window.views["ask"]
+    view = _ask_view(window)
 
     view.refresh()
     view.refresh()
@@ -1037,7 +1063,7 @@ def test_ask_view_does_not_warm_up_before_the_index_is_ready(make_window, db, mo
 
     _add_docs(db, count=2, parsed=0)
     window = make_window(db)
-    window.views["ask"].refresh()
+    _ask_view(window).refresh()
     assert calls == []
 
 
@@ -1076,7 +1102,7 @@ def test_ask_answer_renders_citation_marks_as_links(make_window, db):
     """[1]을 눌러 근거로 갈 수 있어야 한다 — 목록을 따로 읽고 짝을 맞추게 하지 않는다."""
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     view._render_answer(_answered())
 
     labels = [l.text() for l in view.findChildren(QLabel) if l.text()]
@@ -1087,7 +1113,7 @@ def test_evidence_list_shows_every_citation_beside_the_answer(make_window, db):
     """근거는 답 옆에 상주한다 — 열고 닫게 하면 결국 아무도 안 누른다."""
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     view._render_answer(_answered())
 
     body = chr(10).join(_labels(view))
@@ -1099,7 +1125,7 @@ def test_clicking_a_citation_opens_that_document_on_the_right(make_window, db):
     """[n]은 '열기'가 아니라 '이 문서의 원문을 오른쪽에 펴라'는 뜻이다."""
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     view._render_answer(_answered())
 
     view._show_citation("2")
@@ -1118,7 +1144,7 @@ def test_answer_text_with_angle_brackets_is_not_swallowed_as_markup(make_window,
     """문서에서 온 문장에 <, & 가 섞여도 답이 깨지면 안 된다."""
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     view._render_answer(_answered(text="A<B 그리고 C&D 였다.[1]"))
 
     labels = [l.text() for l in view.findChildren(QLabel) if l.text()]
@@ -1129,7 +1155,7 @@ def test_new_question_clears_the_previous_evidence(make_window, db, monkeypatch)
     """지난 답의 근거가 남아 있으면 새 답의 근거로 오해한다."""
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     monkeypatch.setattr(view._runner, "start", lambda q, scope=None: True)
 
     view._render_answer(_answered())
@@ -1179,7 +1205,7 @@ def test_scope_dropdowns_default_to_everything(make_window, db):
     """기본은 전체다 — 사용자가 고르기 전에 몰래 좁히지 않는다."""
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
 
     assert view.task_scope.currentData() is None
     assert view.year_scope.currentData() is None
@@ -1189,7 +1215,7 @@ def test_scope_dropdowns_default_to_everything(make_window, db):
 
 def test_scope_dropdowns_list_tasks_and_years(make_window, db):
     task_id = _seed_task(db)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     view.refresh()
 
     tasks = [view.task_scope.itemData(i) for i in range(view.task_scope.count())]
@@ -1200,7 +1226,7 @@ def test_scope_dropdowns_list_tasks_and_years(make_window, db):
 
 def test_choosing_a_scope_is_passed_to_the_engine(make_window, db, monkeypatch):
     task_id = _seed_task(db)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     view.refresh()
 
     captured = {}
@@ -1220,7 +1246,7 @@ def test_choosing_a_scope_is_passed_to_the_engine(make_window, db, monkeypatch):
 def test_scope_selection_survives_a_refresh(make_window, db):
     """분석이 진행되며 목록이 자란다 — 그때마다 선택이 풀리면 안 된다."""
     task_id = _seed_task(db)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     view.refresh()
 
     view.task_scope.setCurrentIndex(view.task_scope.findData(task_id))
@@ -1244,8 +1270,8 @@ def test_ask_screen_puts_the_source_text_next_to_the_answer(make_window, db, qap
     window.resize(1400, 860)
     window.show()
     qapp.processEvents()
+    view = _ask_view(window)
     window.go("ask")
-    view = window.views["ask"]
 
     view._render_answer(Answer(
         question="질문", text="답변입니다.[1]", withheld=False,
@@ -1270,8 +1296,8 @@ def test_reader_still_fits_at_the_smallest_window(make_window, db, qapp):
     window.show()
     window.resize(*theme.WINDOW_MIN)
     qapp.processEvents()
+    view = _ask_view(window)
     window.go("ask")
-    view = window.views["ask"]
     qapp.processEvents()
 
     assert not view.reader.isHidden()
@@ -1281,8 +1307,8 @@ def test_reader_still_fits_at_the_smallest_window(make_window, db, qapp):
 def test_navigation_lives_in_the_top_bar(make_window, db, qapp):
     """세로 사이드바를 걷어 내고 메뉴를 상단 띠로 옮겼다 (디자인 개선안 1c).
 
-    본문이 폭을 다 받는 것이 이 변경의 목적이다 — 질문 화면이 '답변 | 원문'
-    두 칸을 쓰는데 왼쪽에 216px 메뉴까지 서면 원문 칸이 대조하기 어려워진다.
+    본문이 폭을 다 받는 것이 이 변경의 목적이다 — 노트북이 '출처 | 대화 |
+    스튜디오' 세 판을 쓰는데 왼쪽에 216px 메뉴까지 서면 원문을 대조하기 어려워진다.
     """
     _add_docs(db)
     window = make_window(db)
@@ -1291,7 +1317,7 @@ def test_navigation_lives_in_the_top_bar(make_window, db, qapp):
     qapp.processEvents()
 
     assert [b.text() for b in window.topbar._buttons.values()] == [
-        "업무", "일정", "문서", "질문", "노트북"
+        "업무", "일정", "문서", "노트북"
     ]
     assert not hasattr(window, "sidebar")
     # 메뉴가 답하는 질문은 버리지 않고 툴팁으로 옮겼다.
@@ -1329,7 +1355,7 @@ def test_question_chips_sit_in_one_row(make_window, db):
 
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
 
     chips = [b for b in view.findChildren(QPushButton) if b.objectName() == "Chip"]
     assert len(chips) == len(ask_view.EXAMPLES)
@@ -1340,7 +1366,7 @@ def test_past_questions_live_in_the_history_menu(make_window, db):
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
     db.save_question("작년 행감 자료 뭐야?", "답", "[]", False, "m")
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
     view.refresh()
 
     assert "내 질문 기록 1건" in view.history.text()
@@ -1352,7 +1378,7 @@ def test_clicking_a_chip_asks_that_question(make_window, db, monkeypatch):
 
     source_id = db.add_source(r"D:\자료")
     _seed_chunked_doc(db, source_id)
-    view = make_window(db).views["ask"]
+    view = _ask_view(make_window(db))
 
     captured = {}
     monkeypatch.setattr(view._runner, "start",
@@ -1444,7 +1470,7 @@ def test_every_screen_separates_controls_from_results(make_window, db, qapp):
 
     _add_docs(db)
     window = make_window(db)
-    for key in ("tasks", "documents", "ask"):
+    for key in ("tasks", "documents"):
         window.go(key)
         view = window.views[key]
         headers = [

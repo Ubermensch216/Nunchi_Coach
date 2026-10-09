@@ -205,8 +205,15 @@ def test_studio_makes_a_document_from_a_template_and_exports_it(workspace,tmp_pa
     body=studio.output_editor.toPlainText()
     assert body.startswith("# 첫 업무 브리핑") and "- 제출기한: 9월 30일[1]" in body and "확인 필요" in body
     assert "‘확인 필요’로 남겼습니다" in studio.output_state.text()
+    # 산출물은 표기가 아니라 문서 모양으로 보인다. 표기는 [고치기]를 눌러야 나온다.
+    shown=studio.output_view.toPlainText()
+    assert studio.output_stack.currentIndex()==0 and "#" not in shown and "첫 업무 브리핑" in shown
+    assert "○ 제출기한: 9월 30일" in shown and studio.output_save.isHidden()
+    studio.output_edit.click()
+    assert studio.output_stack.currentIndex()==1
     studio.output_editor.setPlainText(body.replace("# 첫 업무 브리핑","# 고친 제목"))
     studio.output_save.click()
+    assert studio.output_stack.currentIndex()==0 and "고친 제목" in studio.output_view.toPlainText()
     row=outputs.outputs(db,book)[0]
     assert row["title"]=="고친 제목" and row["state"]=="edited"
     monkeypatch.setattr("app.ui.views.notebooks.studio_panel.QFileDialog.getSaveFileName",
@@ -244,3 +251,9 @@ def test_answer_renders_tables_lists_and_escapes_source_text():
     facts=answer_html("- 계획.hwpx · 2026 · 총사업비: 12,000천원 [1]\n- 최종.hwpx · 2026 · 총사업비: 13,500천원 [2]")
     assert facts.count("<tr>")==3 and "총사업비" in facts
     assert "<li" not in answer_html("9. 30.까지 제출합니다.")
+    # 근거 달린 문장이 한 문단으로 이어져 오면 문장마다 끊어 세운다. 글자는 바꾸지 않는다.
+    run=answer_html("핵심 주장입니다.[1] 둘째 근거입니다.[1] 셋째는 9. 30.까지입니다.[2][3] 넷째입니다.[3]")
+    assert run.count("<p")==1 and run.count("<li")==3 and "셋째는 9. 30.까지입니다." in run
+    assert answer_html("하나입니다.[1] 둘입니다.[2]").count("<p")==2
+    plain=answer_html("근거 없는 문장입니다. 이어지는 문장입니다.[1]")
+    assert plain.count("<p")==1 and "<li" not in plain

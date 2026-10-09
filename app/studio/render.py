@@ -17,27 +17,14 @@ import zipfile
 from html import escape
 from pathlib import Path
 
-from . import model
-from .model import BULLET, HEADING, NOTE, PARAGRAPH, TABLE, TITLE
+from . import markers, model
+from .layout import Line, lay_out, style_of, styles
+from .model import HEADING, PARAGRAPH, TABLE, TITLE
 
-RENDERER_VERSION = "1"
+RENDERER_VERSION = "2"      # 2: 서식의 기호·번호·자간·장평·문단 위 간격을 입힌다(studio/layout.py)
 _FONT_DIR = Path(__file__).resolve().parents[1] / "ui" / "assets" / "fonts"
 # 한글의 줄간격 160%는 워드의 '배수 1.15'쯤과 비슷한 높이다(글꼴 높이 기준이 다르다).
 _WORD_LINE_PER_HWP = 1.15 / 160
-
-
-def _style(fmt: dict, key: str) -> dict:
-    return {**fmt.get("body", {}), **fmt.get(key, {})}
-
-
-def _level(fmt: dict, level: int) -> dict:
-    levels = fmt.get("levels") or [{"glyph": "-", "lead": 1}]
-    return {**fmt.get("body", {}), **levels[min(level, len(levels) - 1)]}
-
-
-def _bullet_text(fmt: dict, block) -> str:
-    style = _level(fmt, block.level)
-    return " " * int(style.get("lead", 0)) + f"{style.get('glyph', '-')} {block.text}"
 
 
 # ── Markdown ────────────────────────────────────────────────────────
@@ -71,29 +58,31 @@ def to_docx(markdown: str, fmt: dict, title: str) -> bytes:
         paragraph.alignment = align.get(style.get("align", "left"), WD_ALIGN_PARAGRAPH.LEFT)
         paragraph.paragraph_format.line_spacing = round(style.get("line", 160) * _WORD_LINE_PER_HWP, 2)
         paragraph.paragraph_format.space_after = Pt(2)
+        if style.get("before"):
+            paragraph.paragraph_format.space_before = Pt(style["before"])
+        # 자간은 글자 크기에 대한 %를 1/20pt로, 장평은 글자 폭 %로 옮긴다.
+        properties = run._element.get_or_add_rPr()
+        if style.get("spacing"):
+            properties.append(properties.makeelement(
+                qn("w:spacing"), {qn("w:val"): str(round(style["spacing"] / 100 * style.get("size", 12) * 20))}))
+        if style.get("ratio", 100) != 100:
+            properties.append(properties.makeelement(qn("w:w"), {qn("w:val"): str(int(style["ratio"]))}))
 
-    for block in model.parse(markdown):
-        if block.kind == TABLE:
-            table = document.add_table(rows=len(block.rows), cols=len(block.rows[0]))
+    for line in lay_out(markdown, fmt):
+        if line.kind == TABLE:
+            table = document.add_table(rows=len(line.rows), cols=len(line.rows[0]))
             table.style = "Table Grid"
-            for r, row in enumerate(block.rows):
+            for r, row in enumerate(line.rows):
                 for c, cell in enumerate(row):
                     paragraph = table.cell(r, c).paragraphs[0]
-                    write(paragraph, cell, {**_style(fmt, "body"), "align": "left", "bold": r == 0})
+                    write(paragraph, cell, {**style_of(fmt, "body"), "align": "left", "bold": r == 0,
+                                            "before": 0})
             document.add_paragraph()
             continue
         paragraph = document.add_paragraph()
-        if block.kind == TITLE:
-            write(paragraph, block.text, _style(fmt, "title"))
-        elif block.kind == HEADING:
+        write(paragraph, line.text, line.style)
+        if line.kind == HEADING and not line.style.get("before"):
             paragraph.paragraph_format.space_before = Pt(10)
-            write(paragraph, block.text, _style(fmt, "heading"))
-        elif block.kind == BULLET:
-            write(paragraph, _bullet_text(fmt, block), {**_level(fmt, block.level), "align": "left"})
-        elif block.kind == NOTE:
-            write(paragraph, "※ " + block.text, _style(fmt, "note"))
-        else:
-            write(paragraph, block.text, _style(fmt, "body"))
     buffer = io.BytesIO()
     document.save(buffer)
     return buffer.getvalue()
@@ -111,7 +100,7 @@ def to_xlsx(markdown: str, fmt: dict, title: str) -> bytes:
     body.column_dimensions["A"].width = 100
     tables = 0
     heading = ""
-    for block in model.parse(markdown):
+    for block in lay_out(markdown, fmt):
         if block.kind == TABLE:
             tables += 1
             name = (heading or f"표{tables}")[:25].translate(str.maketrans("", "", "[]:*?/\\")) or f"표{tables}"
@@ -123,9 +112,8 @@ def to_xlsx(markdown: str, fmt: dict, title: str) -> bytes:
             body.append([f"(표 {tables} — ‘{sheet.title}’ 시트)"])
             continue
         if block.kind == HEADING:
-            heading = block.text
-        text = _bullet_text(fmt, block) if block.kind == BULLET else block.text
-        body.append([text])
+            heading = block.body
+        body.append([block.text])
         if block.kind in (TITLE, HEADING):
             body.cell(row=body.max_row, column=1).font = Font(bold=True, size=14 if block.kind == TITLE else 12)
     buffer = io.BytesIO()
@@ -147,6 +135,11 @@ def _pdf_fonts() -> tuple[Path, str, str]:
     return _FONT_DIR, "Pretendard-Regular.ttf", "Pretendard-Bold.ttf"
 
 
+def _shown(glyph: str) -> str:
+    """한컴 전용 글자(사용자 영역)는 한컴 글꼴에만 있다. PDF에는 비슷한 모양을 넣는다."""
+    return "□" if markers.is_private(glyph) else glyph
+
+
 def to_pdf(markdown: str, fmt: dict, title: str) -> bytes:
     """크기·굵기·줄간격·여백은 서식을 따른다. 글꼴은 _pdf_fonts가 고른 한 벌로 통일한다."""
     import pymupdf
@@ -162,29 +155,24 @@ def to_pdf(markdown: str, fmt: dict, title: str) -> bytes:
     rules = [
         f"@font-face {{ font-family: doc; src: url({regular}); }}",
         f"@font-face {{ font-family: doc; font-weight: bold; src: url({bold}); }}",
-        css("title", _style(fmt, "title")), css("heading", _style(fmt, "heading")),
-        css("body", _style(fmt, "body")), css("note", _style(fmt, "note")),
-        ".heading { margin-top: 10pt; } table { border-collapse: collapse; width: 100%; margin: 4pt 0 8pt 0; }",
-        f"td {{ font-family: doc; font-size: {_style(fmt, 'body').get('size', 12) - 1}pt; "
+    ] + [css(slot, style) for slot, style in styles(fmt).items()] + [
+        "table { border-collapse: collapse; width: 100%; margin: 4pt 0 8pt 0; }",
+        f"td {{ font-family: doc; font-size: {style_of(fmt, 'body').get('size', 12) - 1}pt; "
         "border: 0.5pt solid #666; padding: 3pt 5pt; }",
-    ] + [css(f"level{i}", _level(fmt, i)) for i in range(3)]
+    ]
     parts = []
-    for block in model.parse(markdown):
-        if block.kind == TABLE:
+    for line in lay_out(markdown, fmt):
+        if line.kind == TABLE:
             rows = "".join("<tr>" + "".join(
                 f"<td>{'<b>' if r == 0 else ''}{escape(cell)}{'</b>' if r == 0 else ''}</td>" for cell in row)
-                + "</tr>" for r, row in enumerate(block.rows))
+                + "</tr>" for r, row in enumerate(line.rows))
             parts.append(f"<table>{rows}</table>")
-        elif block.kind == BULLET:
-            # 앞 칸은 공백 대신 여백으로 준다. HTML은 줄 앞 공백을 지운다.
-            style = _level(fmt, block.level)
-            indent = int(style.get("lead", 0)) * style.get("size", 12) * 0.5
-            parts.append(f'<p class="level{min(block.level, 2)}" style="margin-left: {indent:.0f}pt">'
-                         f"{escape(str(style.get('glyph', '-')))} {escape(block.text)}</p>")
-        else:
-            name = {TITLE: "title", HEADING: "heading", NOTE: "note", PARAGRAPH: "body"}[block.kind]
-            text = ("※ " if block.kind == NOTE else "") + block.text
-            parts.append(f'<p class="{name}">{escape(text)}</p>')
+            continue
+        # 앞 칸은 공백 대신 여백으로 준다. HTML은 줄 앞 공백을 지운다.
+        indent = line.lead * line.style.get("size", 12) * 0.5
+        above = line.style.get("before") or (10 if line.kind == HEADING else 0)
+        parts.append(f'<p class="{line.slot}" style="margin-left: {indent:.0f}pt; margin-top: {above:g}pt">'
+                     f"{escape(_shown(line.glyph) + ' ' if line.glyph else '')}{escape(line.body)}</p>")
     page = fmt.get("page", {})
     margin = page.get("margin_mm", {})
     mm = 72 / 25.4
@@ -220,12 +208,10 @@ def _hwpunit(mm: float) -> int:
 
 
 def _hwpx_header(fmt: dict) -> str:
-    styles = {"body": _style(fmt, "body"), "title": _style(fmt, "title"), "heading": _style(fmt, "heading"),
-              "level0": {**_level(fmt, 0), "align": "left"}, "level1": {**_level(fmt, 1), "align": "left"},
-              "level2": {**_level(fmt, 2), "align": "left"}, "note": _style(fmt, "note"),
-              "cell_head": {**_style(fmt, "body"), "bold": True, "align": "center"}}
+    looks = {**styles(fmt), "cell_head": {**style_of(fmt, "body"), "bold": True, "align": "center",
+                                          "before": 0, "hanging": 0}}
     fonts: list[str] = []
-    for style in styles.values():
+    for style in looks.values():
         if style.get("font", "맑은 고딕") not in fonts:
             fonts.append(style.get("font", "맑은 고딕"))
     faces = "".join(
@@ -238,12 +224,13 @@ def _hwpx_header(fmt: dict) -> str:
 
     char_props, para_props, named = [], [], []
     for name, key in _ID.items():
-        style = styles[name]
+        style = looks[name]
         font = fonts.index(style.get("font", "맑은 고딕"))
         char_props.append(
             f'<hh:charPr id="{key}" height="{round(style.get("size", 12) * 100)}" textColor="#000000" '
             f'shadeColor="none" useFontSpace="0" useKerning="0" symMark="NONE" borderFillIDRef="1">'
-            f"<hh:fontRef {spread(font)}/><hh:ratio {spread(100)}/><hh:spacing {spread(0)}/>"
+            f"<hh:fontRef {spread(font)}/><hh:ratio {spread(int(style.get('ratio', 100)))}/>"
+            f"<hh:spacing {spread(int(style.get('spacing', 0)))}/>"
             f"<hh:relSz {spread(100)}/><hh:offset {spread(0)}/>"
             + ("<hh:bold/>" if style.get("bold") else "") + "</hh:charPr>")
         para_props.append(
@@ -254,8 +241,10 @@ def _hwpx_header(fmt: dict) -> str:
             '<hh:breakSetting breakLatinWord="KEEP_WORD" breakNonLatinWord="KEEP_WORD" widowOrphan="0" '
             'keepWithNext="0" keepLines="0" pageBreakBefore="0" lineWrap="BREAK"/>'
             '<hh:autoSpacing eAsianEng="0" eAsianNum="0"/>'
-            '<hh:margin><hc:intent value="0" unit="HWPUNIT"/><hc:left value="0" unit="HWPUNIT"/>'
-            '<hc:right value="0" unit="HWPUNIT"/><hc:prev value="0" unit="HWPUNIT"/>'
+            # 내어쓰기는 음수 intent다 — 둘째 줄부터 기호 뒤에 맞는다. 문단 위 간격은 pt × 100.
+            f'<hh:margin><hc:intent value="{-round(style.get("hanging", 0) * 100)}" unit="HWPUNIT"/>'
+            '<hc:left value="0" unit="HWPUNIT"/><hc:right value="0" unit="HWPUNIT"/>'
+            f'<hc:prev value="{round(style.get("before", 0) * 100)}" unit="HWPUNIT"/>'
             '<hc:next value="0" unit="HWPUNIT"/></hh:margin>'
             f'<hh:lineSpacing type="PERCENT" value="{int(style.get("line", 160))}" unit="HWPUNIT"/>'
             '<hh:border borderFillIDRef="1" offsetLeft="0" offsetRight="0" offsetTop="0" offsetBottom="0" '
@@ -350,20 +339,15 @@ def _hwpx_table(index: int, rows: list[list[str]], width: int, extra: str = "") 
 def to_hwpx(markdown: str, fmt: dict, title: str) -> bytes:
     margin = fmt.get("page", {}).get("margin_mm", {})
     width = _hwpunit(fmt.get("page", {}).get("width_mm", 210) - margin.get("left", 20) - margin.get("right", 20))
-    blocks = model.parse(markdown) or [model.Block(PARAGRAPH, "")]
+    lines = lay_out(markdown, fmt) or [Line(PARAGRAPH, "body", style_of(fmt, "body"))]
     paragraphs = []
-    for index, block in enumerate(blocks):
+    for index, line in enumerate(lines):
         # 구역 설정(용지·여백)은 첫 문단의 첫 글자 묶음 안에 둔다.
         extra = _hwpx_section_properties(fmt) if index == 0 else ""
-        if block.kind == TABLE:
-            paragraphs.append(_hwpx_table(index, block.rows, width, extra))
-        elif block.kind == BULLET:
-            paragraphs.append(_hwpx_paragraph(index, _ID[f"level{min(block.level, 2)}"],
-                                              _bullet_text(fmt, block), extra))
+        if line.kind == TABLE:
+            paragraphs.append(_hwpx_table(index, line.rows, width, extra))
         else:
-            key = {TITLE: "title", HEADING: "heading", NOTE: "note", PARAGRAPH: "body"}[block.kind]
-            text = ("※ " if block.kind == NOTE else "") + block.text
-            paragraphs.append(_hwpx_paragraph(index, _ID[key], text, extra))
+            paragraphs.append(_hwpx_paragraph(index, _ID[line.slot], line.text, extra))
     section = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
                '<hs:sec xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section" '
                'xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" '
