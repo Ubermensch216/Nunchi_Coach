@@ -31,7 +31,7 @@ from ..ingest import scanner
 from ..search import pack
 from ..ingest.hasher import sha256
 from ..ingest.parsers import parse
-from ..ingest.parsers.base import LOCKED, PARSER_VERSION, ParseResult
+from ..ingest.parsers.base import LOCKED, PARSER_VERSION, ParseResult, outdated_clause
 
 MAX_ATTEMPTS = 3
 
@@ -199,11 +199,11 @@ class Pipeline(QObject):
             LEFT JOIN jobs j ON j.doc_id = d.id AND j.kind = 'parse'
             WHERE d.missing_since IS NULL
               AND (d.parse_status = 'pending'
-                   OR (d.parse_status IN ('ok','partial') AND d.parser_version != ?))
+                   OR (d.parse_status IN ('ok','partial') AND """ + outdated_clause("d") + """))
               AND COALESCE(j.attempts, 0) < ?
             ORDER BY d.id
             """,
-            (PARSER_VERSION, MAX_ATTEMPTS),
+            (MAX_ATTEMPTS,),
         ).fetchall()
         report = StageReport(STAGE_PARSE, total=len(rows))
         failures = 0

@@ -25,6 +25,7 @@ from app.ingest.parsers.base import (
     TOO_LARGE,
     UNSUPPORTED,
 )
+from app.tools.console import force_utf8
 
 # 스캔에서 제외할 것들 (PRJ-003)
 SKIP_DIRS = {
@@ -46,7 +47,7 @@ STATUS_LABEL = {
 
 
 def main(argv: list[str] | None = None) -> int:
-    _force_utf8()
+    force_utf8()
     args = _parse_args(argv)
     root = Path(args.folder)
     if not root.is_dir():
@@ -191,14 +192,6 @@ def _sample(files: dict[str, list[Path]], limit: int | None) -> dict[str, list[P
 def _short(text: str, width: int = 72) -> str:
     text = " ".join(text.split())
     return text if len(text) <= width else text[: width - 1] + "…"
-
-
-def _force_utf8() -> None:
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError):
-            pass
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

@@ -56,7 +56,9 @@ def test_card_shows_name_span_and_cycle(qapp):
     texts = [l.text() for l in card.findChildren(QLabel) if l.text()]
     assert any("행정사무감사" in t for t in texts)
     assert any("17건" in t for t in texts)
-    assert any("매년 9~11월" in t for t in texts)
+    # 주기는 글로 다시 적지 않는다 — 띠가 말하고, 풍선말이 받친다.
+    assert not any("매년 9~11월" in t for t in texts)
+    assert "매년 9~11월" in card.findChild(MonthStrip).toolTip()
 
 
 def test_card_month_strip_marks_only_active_months(qapp):
@@ -65,7 +67,10 @@ def test_card_month_strip_marks_only_active_months(qapp):
     assert strip is not None
     assert strip.months == [9, 10, 11]
     # 틀은 언제나 열두 칸이다 — 채워진 칸이 몇 월인지 눈으로 셀 수 있어야 한다.
-    assert len(strip.findChildren(QLabel)) == 12
+    cells = strip.findChildren(QLabel)
+    assert len(cells) == 12
+    # 하는 달에만 그 달의 숫자를 적는다.
+    assert [c.text() for c in cells if c.text()] == ["9", "10", "11"]
 
 
 def test_card_without_cycle_shows_empty_strip_and_says_so(qapp):
@@ -193,22 +198,11 @@ def test_grid_places_all_cards(qapp):
 
 # ── 월 스트립 범례 ──────────────────────────────────────────────────
 
-def test_the_month_strip_has_a_legend_like_the_calendar_grid(qapp):
-    """같은 뜻의 그림이 한 화면에서는 설명되고 다른 화면에서는 설명되지
-    않으면, 사용자는 두 그림이 다른 것이라고 생각하거나 둘 다 안 믿는다."""
-    from app.ui.widgets import month_legend
-
-    legend = month_legend()
-    assert "1월부터 12월까지" in legend
-    # 색만으로 뜻을 전하지 않는다(PRD §18.4) — 기호와 글자가 함께 있어야 한다.
-    assert "■" in legend and "하는 달" in legend
-
-
-def test_the_task_home_shows_the_month_legend_once(qapp, tmp_path):
-    """카드가 여덟 장이면 같은 설명이 여덟 번 붙어서는 안 된다."""
+def test_the_task_home_needs_no_legend_under_the_cards(qapp, tmp_path):
+    """띠가 달 숫자와 달력 아이콘으로 스스로 설명하므로 범례 줄을 따로 두지
+    않는다. 머리의 '어디서 찾았나'도 한 번만 말한다."""
     from app.db import Database
     from app.ui.views.tasks import TasksView
-    from app.ui.widgets import month_legend
 
     db = Database(tmp_path / "project.db")
     db.init()
@@ -216,8 +210,9 @@ def test_the_task_home_shows_the_month_legend_once(qapp, tmp_path):
     db.con.execute("INSERT INTO tasks(id, name) VALUES (2, '예산관리')")
     view = TasksView(db)
     try:
-        shown = [w.text() for w in view.findChildren(QLabel) if w.text() == month_legend()]
-        assert len(shown) == 1
+        texts = [w.text() for w in view.findChildren(QLabel)]
+        assert not any("열두 칸" in t for t in texts)
+        assert sum("에서 찾았습니다" in t for t in texts) == 1
     finally:
         view.setParent(None)
         db.close()

@@ -14,7 +14,7 @@ import json
 import time
 from dataclasses import fields
 
-from PySide6.QtCore import Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -58,6 +58,8 @@ from .panel import ICON_PX, icon_button, set_icon
 
 # 한 번에 그리는 대화 수. 긴 노트북을 열 때마다 수백 장의 카드를 짓지 않는다.
 THREAD_PAGE = 20
+# 보내기·멈춤 단추 한 변. 입력칸(ASK_INPUT_H)보다 조금 작아 테두리 안에 여백이 남는다.
+SEND_PX = 36
 # 이보다 짧은 질문은 글자 폭만큼만 차지하는 한 줄 말풍선이 된다. 가장 좁은 대화 판
 # (workspace.CHAT_MIN_W)에도 들어가는 폭이다.
 BUBBLE_ONE_LINE_W = 320
@@ -137,7 +139,8 @@ class ChatPanel(QWidget):
         self.overview = QCheckBox("전체 정리")
         self.overview.setToolTip(
             "선택한 자료 전체를 훑어 요약·정리합니다. 보통 질문보다 훨씬 오래 걸립니다(자료가 많으면 몇 분).\n"
-            "꺼 두면 질문과 가장 관련 있는 대목만 찾아 답합니다.")
+            "꺼 두면 질문과 가장 관련 있는 대목만 찾아 답합니다.\n"
+            "'요약해 줘'처럼 주제 없이 전체를 묻는 요청은, 자료가 적으면 켜지 않아도 이렇게 답합니다.")
         row.addWidget(self.overview)
         self.law = QCheckBox("법령")
         self.law.setToolTip(
@@ -147,17 +150,17 @@ class ChatPanel(QWidget):
         row.addWidget(self.law)
         self.scope = muted_label("", small=True, wrap=False)
         row.addWidget(self.scope)
-        self.send = QPushButton("질문")
-        self.send.setObjectName("Primary")
-        self.send.setMinimumHeight(ASK_INPUT_H)
-        self.send.setMinimumWidth(80)
-        self.send.clicked.connect(self._ask)
+        # 보내기와 멈춤은 한 단추다. 답을 만드는 동안에는 보낼 수 없으므로 같은 자리가
+        # 멈춤이 된다 — 단추 둘이 번갈아 나타나면 입력칸의 폭이 그때마다 흔들린다.
+        self.send = QPushButton()
+        self.send.setObjectName("ChatSend")
+        self.send.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.send.setFixedSize(SEND_PX, SEND_PX)
+        self.send.setIconSize(QSize(ICON_PX + 2, ICON_PX + 2))
+        self.send.clicked.connect(self._send_or_stop)
+        self.input.textChanged.connect(lambda *_: self._sync_send())
+        self._stopping = False
         row.addWidget(self.send)
-        self.cancel_question = QPushButton("질문 취소")
-        self.cancel_question.setMinimumHeight(ASK_INPUT_H)
-        self.cancel_question.clicked.connect(self._cancel_question)
-        self.cancel_question.hide()
-        row.addWidget(self.cancel_question)
         root.addWidget(composer)
 
         self.notice = muted_label("", small=True)
@@ -190,7 +193,7 @@ class ChatPanel(QWidget):
             self._warmup.start()   # 한 번만 돈다
         busy = self._runner.running
         self.input.setEnabled(ready and not busy)
-        self.send.setEnabled(ready and not busy)
+        self._sync_send(ready)
         self.overview.setEnabled(ready and not busy)
         # 설정에서 켜고 인증키를 넣은 인수인계에서만 보인다. 꺼져 있으면 자리도 차지하지 않는다.
         self.law.setVisible(law_service.available(self.db))
@@ -473,6 +476,41 @@ class ChatPanel(QWidget):
         self.refresh()
 
     # ── 질문 ────────────────────────────────────────────────────────
+    def _sync_send(self, ready: bool | None = None) -> None:
+        """단추의 그림과 하는 일을 지금 상태에 맞춘다.
+
+        idle  보낼 글을 기다린다 — 옅은 Enter 그림
+        ready 보낼 글이 있다 — 강조색 Enter 그림
+        busy  답을 만드는 중 — 멈춤 그림. 누르면 질문을 멈춘다
+        """
+        if ready is None:
+            ready = bool(self.snapshot())
+        busy = self._runner.running
+        if busy:
+            state, name, color = "busy", "stop", theme.BG
+            label = "멈추는 중" if self._stopping else "질문 멈춤"
+            self.send.setEnabled(not self._stopping)
+        else:
+            self._stopping = False
+            typed = ready and bool(self.input.text().strip())
+            state, name = ("ready", "enter") if typed else ("idle", "enter")
+            color = theme.TEXT_ON_PRIMARY if typed else theme.TEXT_MUTED
+            label = "질문 보내기 (Enter)"
+            self.send.setEnabled(ready)
+        self.send.setAccessibleName(label)
+        self.send.setToolTip(label)
+        set_icon(self.send, name, color if self.send.isEnabled() else theme.TEXT_DISABLED)
+        if self.send.property("state") != state:
+            self.send.setProperty("state", state)
+            self.send.style().unpolish(self.send)
+            self.send.style().polish(self.send)
+
+    def _send_or_stop(self) -> None:
+        if self._runner.running:
+            self._cancel_question()
+        else:
+            self._ask()
+
     def _ask(self) -> None:
         question = self.input.text().strip()
         if not question or self._runner.running or self.notebook_id is None:
@@ -482,15 +520,14 @@ class ChatPanel(QWidget):
         if not self._runner.start(question, QueryScope(
                 notebook_id=self.notebook_id, mode="overview" if whole else "", law=statutes)):
             return
-        self._whole = whole
+        # 주제 없는 요약 요청은 켜지 않아도 전체 정리로 받는다(core/notebook.py). 기다리는 말을 맞춘다.
+        self._whole = whole or notebook.effective_mode(self.db, self.notebook_id, question) == "overview"
         self.overview.setChecked(False)   # 한 번 쓰고 끈다 — 켜 둔 채 잊으면 질문마다 몇 분이 걸린다
         self.law.setChecked(False)        # 밖으로 나가는 조회는 질문마다 다시 고르게 한다
         self._pending = question
         self._answer = None
         self._started_at = time.monotonic()
         self.input.clear()
-        self.cancel_question.show()
-        self.cancel_question.setEnabled(True)
         self.waiting.show()
         self._update_waiting()
         self._elapsed.start()
@@ -507,13 +544,14 @@ class ChatPanel(QWidget):
 
     def _cancel_question(self) -> None:
         self._elapsed.stop()
-        self.waiting.setText("질문을 취소하고 있습니다…")
-        self.cancel_question.setEnabled(False)
+        self.waiting.setText("질문을 멈추고 있습니다…")
+        self._stopping = True
+        self._sync_send()
         self._runner.cancel()
 
     def _finish_waiting(self) -> None:
         self._elapsed.stop()
-        self.cancel_question.hide()
+        self._stopping = False
         self.waiting.hide()
 
     def _on_answer(self, answer: Answer) -> None:

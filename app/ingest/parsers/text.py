@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .base import EMPTY, MAX_CHARS, OK, DocMeta, ParseResult, Section, clip, failed
+from .base import EMPTY, MAX_CHARS, OK, DocMeta, ParseResult, Section, clip
 
 PARSER = "text"
 ENCODINGS = ("utf-8-sig", "utf-8", "cp949", "euc-kr")

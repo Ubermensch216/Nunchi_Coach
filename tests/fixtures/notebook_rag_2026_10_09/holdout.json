@@ -1,0 +1,1307 @@
+{
+  "reference_date": "2026-10-09",
+  "documents": [
+    {
+      "filename": "도서정리_원문.txt",
+      "text": "업무명: 도서정리\n기준연도: 2026\n제출기한: 2026. 10. 12.\n계약금액: 2800만원\n제출처: 총무과",
+      "year": 2026
+    },
+    {
+      "filename": "도서정리_산문.txt",
+      "text": "2026년 도서정리 업무를 준비하였다. 도서정리 담당 인원은 37명이다. 제출처는 총무과이다.",
+      "year": 2026
+    },
+    {
+      "filename": "도서정리_부재.txt",
+      "text": "2026년 도서정리 업무를 준비하였다. 담당 인원은 추후 결정한다. 수량 정보를 확정하지 않았다.",
+      "year": 2026
+    },
+    {
+      "filename": "도서정리_잡음.txt",
+      "text": "2026년 지역상담 업무를 처리하였다. 방문상담 인원은 56명이다. 자료 수는 4건이다.",
+      "year": 2026
+    },
+    {
+      "filename": "도서정리_변경.txt",
+      "text": "업무명: 도서정리\n기준연도: 2026\n제출기한: 2026. 10. 15.\n계약금액: 2800만원",
+      "year": 2026
+    },
+    {
+      "filename": "도서정리_전년.txt",
+      "text": "업무명: 도서정리\n기준연도: 2025\n제출기한: 2025. 10. 12.\n계약금액: 2700만원",
+      "year": 2025
+    },
+    {
+      "filename": "차량검사_원문.txt",
+      "text": "업무명: 차량검사\n기준연도: 2026\n제출기한: 2026. 10. 13.\n계약금액: 2900만원\n제출처: 총무과",
+      "year": 2026
+    },
+    {
+      "filename": "차량검사_산문.txt",
+      "text": "2026년 차량검사 업무를 준비하였다. 차량검사 담당 인원은 39명이다. 제출처는 총무과이다.",
+      "year": 2026
+    },
+    {
+      "filename": "차량검사_부재.txt",
+      "text": "2026년 차량검사 업무를 준비하였다. 담당 인원은 추후 결정한다. 수량 정보를 확정하지 않았다.",
+      "year": 2026
+    },
+    {
+      "filename": "차량검사_잡음.txt",
+      "text": "2026년 지역상담 업무를 처리하였다. 방문상담 인원은 58명이다. 자료 수는 4건이다.",
+      "year": 2026
+    },
+    {
+      "filename": "차량검사_변경.txt",
+      "text": "업무명: 차량검사\n기준연도: 2026\n제출기한: 2026. 10. 16.\n계약금액: 2900만원",
+      "year": 2026
+    },
+    {
+      "filename": "차량검사_전년.txt",
+      "text": "업무명: 차량검사\n기준연도: 2025\n제출기한: 2025. 10. 13.\n계약금액: 2800만원",
+      "year": 2025
+    },
+    {
+      "filename": "장비대여_원문.txt",
+      "text": "업무명: 장비대여\n기준연도: 2026\n제출기한: 2026. 10. 14.\n계약금액: 3000만원\n제출처: 총무과",
+      "year": 2026
+    },
+    {
+      "filename": "장비대여_산문.txt",
+      "text": "2026년 장비대여 업무를 준비하였다. 장비대여 담당 인원은 41명이다. 제출처는 총무과이다.",
+      "year": 2026
+    },
+    {
+      "filename": "장비대여_부재.txt",
+      "text": "2026년 장비대여 업무를 준비하였다. 담당 인원은 추후 결정한다. 수량 정보를 확정하지 않았다.",
+      "year": 2026
+    },
+    {
+      "filename": "장비대여_잡음.txt",
+      "text": "2026년 지역상담 업무를 처리하였다. 방문상담 인원은 60명이다. 자료 수는 4건이다.",
+      "year": 2026
+    },
+    {
+      "filename": "장비대여_변경.txt",
+      "text": "업무명: 장비대여\n기준연도: 2026\n제출기한: 2026. 10. 17.\n계약금액: 3000만원",
+      "year": 2026
+    },
+    {
+      "filename": "장비대여_전년.txt",
+      "text": "업무명: 장비대여\n기준연도: 2025\n제출기한: 2025. 10. 14.\n계약금액: 2900만원",
+      "year": 2025
+    },
+    {
+      "filename": "문화행사_원문.txt",
+      "text": "업무명: 문화행사\n기준연도: 2026\n제출기한: 2026. 10. 15.\n계약금액: 3100만원\n제출처: 총무과",
+      "year": 2026
+    },
+    {
+      "filename": "문화행사_산문.txt",
+      "text": "2026년 문화행사 업무를 준비하였다. 문화행사 담당 인원은 43명이다. 제출처는 총무과이다.",
+      "year": 2026
+    },
+    {
+      "filename": "문화행사_부재.txt",
+      "text": "2026년 문화행사 업무를 준비하였다. 담당 인원은 추후 결정한다. 수량 정보를 확정하지 않았다.",
+      "year": 2026
+    },
+    {
+      "filename": "문화행사_잡음.txt",
+      "text": "2026년 지역상담 업무를 처리하였다. 방문상담 인원은 62명이다. 자료 수는 4건이다.",
+      "year": 2026
+    },
+    {
+      "filename": "문화행사_변경.txt",
+      "text": "업무명: 문화행사\n기준연도: 2026\n제출기한: 2026. 10. 18.\n계약금액: 3100만원",
+      "year": 2026
+    },
+    {
+      "filename": "문화행사_전년.txt",
+      "text": "업무명: 문화행사\n기준연도: 2025\n제출기한: 2025. 10. 15.\n계약금액: 3000만원",
+      "year": 2025
+    },
+    {
+      "filename": "공원관리_원문.txt",
+      "text": "업무명: 공원관리\n기준연도: 2026\n제출기한: 2026. 10. 16.\n계약금액: 3200만원\n제출처: 총무과",
+      "year": 2026
+    },
+    {
+      "filename": "공원관리_산문.txt",
+      "text": "2026년 공원관리 업무를 준비하였다. 공원관리 담당 인원은 45명이다. 제출처는 총무과이다.",
+      "year": 2026
+    },
+    {
+      "filename": "공원관리_부재.txt",
+      "text": "2026년 공원관리 업무를 준비하였다. 담당 인원은 추후 결정한다. 수량 정보를 확정하지 않았다.",
+      "year": 2026
+    },
+    {
+      "filename": "공원관리_잡음.txt",
+      "text": "2026년 지역상담 업무를 처리하였다. 방문상담 인원은 64명이다. 자료 수는 4건이다.",
+      "year": 2026
+    },
+    {
+      "filename": "공원관리_변경.txt",
+      "text": "업무명: 공원관리\n기준연도: 2026\n제출기한: 2026. 10. 19.\n계약금액: 3200만원",
+      "year": 2026
+    },
+    {
+      "filename": "공원관리_전년.txt",
+      "text": "업무명: 공원관리\n기준연도: 2025\n제출기한: 2025. 10. 16.\n계약금액: 3100만원",
+      "year": 2025
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "holdout-00-direct_date",
+      "category": "direct_date",
+      "sources": [
+        "도서정리_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "2026년 도서정리 제출기한은 언제야?",
+          "expect": "answer",
+          "must_contain": [
+            "12"
+          ],
+          "must_cite_any": [
+            "도서정리_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-00-direct_amount",
+      "category": "direct_amount",
+      "sources": [
+        "도서정리_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "도서정리 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "2800"
+          ],
+          "must_cite_any": [
+            "도서정리_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-00-role_positive",
+      "category": "role_positive",
+      "sources": [
+        "도서정리_산문.txt",
+        "도서정리_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "도서정리 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "37"
+          ],
+          "must_not_contain": [
+            "56"
+          ],
+          "must_cite_any": [
+            "도서정리_산문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-00-role_absent",
+      "category": "role_absent",
+      "sources": [
+        "도서정리_부재.txt",
+        "도서정리_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "도서정리 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-00-source_scope",
+      "category": "source_scope",
+      "sources": [
+        "도서정리_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "도서정리 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-00-conflict",
+      "category": "conflict",
+      "sources": [
+        "도서정리_원문.txt",
+        "도서정리_변경.txt"
+      ],
+      "turns": [
+        {
+          "question": "도서정리 제출기한은 언제야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-00-followup",
+      "category": "followup",
+      "sources": [
+        "도서정리_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "도서정리 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 제출처는 어디야?",
+          "expect": "answer",
+          "must_contain": [
+            "총무과"
+          ],
+          "must_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-00-selection_change",
+      "category": "selection_change",
+      "sources": [
+        "도서정리_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "도서정리 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 담당 인원은 몇 명이야?",
+          "expect": "withhold",
+          "select": [
+            "도서정리_잡음.txt"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-00-overview",
+      "category": "overview",
+      "sources": [
+        "도서정리_원문.txt",
+        "도서정리_산문.txt"
+      ],
+      "turns": [
+        {
+          "question": "선택 자료 전체를 요약해줘",
+          "expect": "answer",
+          "mode": "overview",
+          "min_distinct_docs": 1
+        }
+      ]
+    },
+    {
+      "id": "holdout-00-year",
+      "category": "year",
+      "sources": [
+        "도서정리_원문.txt",
+        "도서정리_전년.txt"
+      ],
+      "turns": [
+        {
+          "question": "2025년 도서정리 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "2700"
+          ],
+          "must_cite_any": [
+            "도서정리_전년.txt"
+          ],
+          "must_not_cite": [
+            "도서정리_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-00-noise",
+      "category": "noise",
+      "sources": [
+        "도서정리_원문.txt",
+        "도서정리_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "도서정리 제출기한은 언제야?",
+          "expect": "answer",
+          "must_cite_any": [
+            "도서정리_원문.txt"
+          ],
+          "must_not_cite": [
+            "도서정리_잡음.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-00-positive_after_selection",
+      "category": "positive_after_selection",
+      "sources": [
+        "도서정리_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "지역상담 방문상담 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "56"
+          ]
+        },
+        {
+          "question": "도서정리 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "select": [
+            "도서정리_산문.txt"
+          ],
+          "must_contain": [
+            "37"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-direct_date",
+      "category": "direct_date",
+      "sources": [
+        "차량검사_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "2026년 차량검사 제출기한은 언제야?",
+          "expect": "answer",
+          "must_contain": [
+            "13"
+          ],
+          "must_cite_any": [
+            "차량검사_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-direct_amount",
+      "category": "direct_amount",
+      "sources": [
+        "차량검사_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "차량검사 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "2900"
+          ],
+          "must_cite_any": [
+            "차량검사_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-role_positive",
+      "category": "role_positive",
+      "sources": [
+        "차량검사_산문.txt",
+        "차량검사_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "차량검사 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "39"
+          ],
+          "must_not_contain": [
+            "58"
+          ],
+          "must_cite_any": [
+            "차량검사_산문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-role_absent",
+      "category": "role_absent",
+      "sources": [
+        "차량검사_부재.txt",
+        "차량검사_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "차량검사 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-source_scope",
+      "category": "source_scope",
+      "sources": [
+        "차량검사_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "차량검사 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-conflict",
+      "category": "conflict",
+      "sources": [
+        "차량검사_원문.txt",
+        "차량검사_변경.txt"
+      ],
+      "turns": [
+        {
+          "question": "차량검사 제출기한은 언제야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-followup",
+      "category": "followup",
+      "sources": [
+        "차량검사_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "차량검사 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 제출처는 어디야?",
+          "expect": "answer",
+          "must_contain": [
+            "총무과"
+          ],
+          "must_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-selection_change",
+      "category": "selection_change",
+      "sources": [
+        "차량검사_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "차량검사 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 담당 인원은 몇 명이야?",
+          "expect": "withhold",
+          "select": [
+            "차량검사_잡음.txt"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-overview",
+      "category": "overview",
+      "sources": [
+        "차량검사_원문.txt",
+        "차량검사_산문.txt"
+      ],
+      "turns": [
+        {
+          "question": "선택 자료 전체를 요약해줘",
+          "expect": "answer",
+          "mode": "overview",
+          "min_distinct_docs": 1
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-year",
+      "category": "year",
+      "sources": [
+        "차량검사_원문.txt",
+        "차량검사_전년.txt"
+      ],
+      "turns": [
+        {
+          "question": "2025년 차량검사 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "2800"
+          ],
+          "must_cite_any": [
+            "차량검사_전년.txt"
+          ],
+          "must_not_cite": [
+            "차량검사_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-noise",
+      "category": "noise",
+      "sources": [
+        "차량검사_원문.txt",
+        "차량검사_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "차량검사 제출기한은 언제야?",
+          "expect": "answer",
+          "must_cite_any": [
+            "차량검사_원문.txt"
+          ],
+          "must_not_cite": [
+            "차량검사_잡음.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-01-positive_after_selection",
+      "category": "positive_after_selection",
+      "sources": [
+        "차량검사_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "지역상담 방문상담 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "58"
+          ]
+        },
+        {
+          "question": "차량검사 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "select": [
+            "차량검사_산문.txt"
+          ],
+          "must_contain": [
+            "39"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-direct_date",
+      "category": "direct_date",
+      "sources": [
+        "장비대여_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "2026년 장비대여 제출기한은 언제야?",
+          "expect": "answer",
+          "must_contain": [
+            "14"
+          ],
+          "must_cite_any": [
+            "장비대여_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-direct_amount",
+      "category": "direct_amount",
+      "sources": [
+        "장비대여_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "장비대여 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "3000"
+          ],
+          "must_cite_any": [
+            "장비대여_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-role_positive",
+      "category": "role_positive",
+      "sources": [
+        "장비대여_산문.txt",
+        "장비대여_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "장비대여 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "41"
+          ],
+          "must_not_contain": [
+            "60"
+          ],
+          "must_cite_any": [
+            "장비대여_산문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-role_absent",
+      "category": "role_absent",
+      "sources": [
+        "장비대여_부재.txt",
+        "장비대여_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "장비대여 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-source_scope",
+      "category": "source_scope",
+      "sources": [
+        "장비대여_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "장비대여 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-conflict",
+      "category": "conflict",
+      "sources": [
+        "장비대여_원문.txt",
+        "장비대여_변경.txt"
+      ],
+      "turns": [
+        {
+          "question": "장비대여 제출기한은 언제야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-followup",
+      "category": "followup",
+      "sources": [
+        "장비대여_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "장비대여 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 제출처는 어디야?",
+          "expect": "answer",
+          "must_contain": [
+            "총무과"
+          ],
+          "must_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-selection_change",
+      "category": "selection_change",
+      "sources": [
+        "장비대여_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "장비대여 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 담당 인원은 몇 명이야?",
+          "expect": "withhold",
+          "select": [
+            "장비대여_잡음.txt"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-overview",
+      "category": "overview",
+      "sources": [
+        "장비대여_원문.txt",
+        "장비대여_산문.txt"
+      ],
+      "turns": [
+        {
+          "question": "선택 자료 전체를 요약해줘",
+          "expect": "answer",
+          "mode": "overview",
+          "min_distinct_docs": 1
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-year",
+      "category": "year",
+      "sources": [
+        "장비대여_원문.txt",
+        "장비대여_전년.txt"
+      ],
+      "turns": [
+        {
+          "question": "2025년 장비대여 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "2900"
+          ],
+          "must_cite_any": [
+            "장비대여_전년.txt"
+          ],
+          "must_not_cite": [
+            "장비대여_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-noise",
+      "category": "noise",
+      "sources": [
+        "장비대여_원문.txt",
+        "장비대여_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "장비대여 제출기한은 언제야?",
+          "expect": "answer",
+          "must_cite_any": [
+            "장비대여_원문.txt"
+          ],
+          "must_not_cite": [
+            "장비대여_잡음.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-02-positive_after_selection",
+      "category": "positive_after_selection",
+      "sources": [
+        "장비대여_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "지역상담 방문상담 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "60"
+          ]
+        },
+        {
+          "question": "장비대여 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "select": [
+            "장비대여_산문.txt"
+          ],
+          "must_contain": [
+            "41"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-direct_date",
+      "category": "direct_date",
+      "sources": [
+        "문화행사_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "2026년 문화행사 제출기한은 언제야?",
+          "expect": "answer",
+          "must_contain": [
+            "15"
+          ],
+          "must_cite_any": [
+            "문화행사_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-direct_amount",
+      "category": "direct_amount",
+      "sources": [
+        "문화행사_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "문화행사 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "3100"
+          ],
+          "must_cite_any": [
+            "문화행사_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-role_positive",
+      "category": "role_positive",
+      "sources": [
+        "문화행사_산문.txt",
+        "문화행사_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "문화행사 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "43"
+          ],
+          "must_not_contain": [
+            "62"
+          ],
+          "must_cite_any": [
+            "문화행사_산문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-role_absent",
+      "category": "role_absent",
+      "sources": [
+        "문화행사_부재.txt",
+        "문화행사_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "문화행사 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-source_scope",
+      "category": "source_scope",
+      "sources": [
+        "문화행사_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "문화행사 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-conflict",
+      "category": "conflict",
+      "sources": [
+        "문화행사_원문.txt",
+        "문화행사_변경.txt"
+      ],
+      "turns": [
+        {
+          "question": "문화행사 제출기한은 언제야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-followup",
+      "category": "followup",
+      "sources": [
+        "문화행사_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "문화행사 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 제출처는 어디야?",
+          "expect": "answer",
+          "must_contain": [
+            "총무과"
+          ],
+          "must_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-selection_change",
+      "category": "selection_change",
+      "sources": [
+        "문화행사_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "문화행사 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 담당 인원은 몇 명이야?",
+          "expect": "withhold",
+          "select": [
+            "문화행사_잡음.txt"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-overview",
+      "category": "overview",
+      "sources": [
+        "문화행사_원문.txt",
+        "문화행사_산문.txt"
+      ],
+      "turns": [
+        {
+          "question": "선택 자료 전체를 요약해줘",
+          "expect": "answer",
+          "mode": "overview",
+          "min_distinct_docs": 1
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-year",
+      "category": "year",
+      "sources": [
+        "문화행사_원문.txt",
+        "문화행사_전년.txt"
+      ],
+      "turns": [
+        {
+          "question": "2025년 문화행사 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "3000"
+          ],
+          "must_cite_any": [
+            "문화행사_전년.txt"
+          ],
+          "must_not_cite": [
+            "문화행사_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-noise",
+      "category": "noise",
+      "sources": [
+        "문화행사_원문.txt",
+        "문화행사_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "문화행사 제출기한은 언제야?",
+          "expect": "answer",
+          "must_cite_any": [
+            "문화행사_원문.txt"
+          ],
+          "must_not_cite": [
+            "문화행사_잡음.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-03-positive_after_selection",
+      "category": "positive_after_selection",
+      "sources": [
+        "문화행사_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "지역상담 방문상담 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "62"
+          ]
+        },
+        {
+          "question": "문화행사 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "select": [
+            "문화행사_산문.txt"
+          ],
+          "must_contain": [
+            "43"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-direct_date",
+      "category": "direct_date",
+      "sources": [
+        "공원관리_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "2026년 공원관리 제출기한은 언제야?",
+          "expect": "answer",
+          "must_contain": [
+            "16"
+          ],
+          "must_cite_any": [
+            "공원관리_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-direct_amount",
+      "category": "direct_amount",
+      "sources": [
+        "공원관리_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "공원관리 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "3200"
+          ],
+          "must_cite_any": [
+            "공원관리_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-role_positive",
+      "category": "role_positive",
+      "sources": [
+        "공원관리_산문.txt",
+        "공원관리_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "공원관리 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "45"
+          ],
+          "must_not_contain": [
+            "64"
+          ],
+          "must_cite_any": [
+            "공원관리_산문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-role_absent",
+      "category": "role_absent",
+      "sources": [
+        "공원관리_부재.txt",
+        "공원관리_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "공원관리 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-source_scope",
+      "category": "source_scope",
+      "sources": [
+        "공원관리_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "공원관리 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-conflict",
+      "category": "conflict",
+      "sources": [
+        "공원관리_원문.txt",
+        "공원관리_변경.txt"
+      ],
+      "turns": [
+        {
+          "question": "공원관리 제출기한은 언제야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-followup",
+      "category": "followup",
+      "sources": [
+        "공원관리_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "공원관리 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 제출처는 어디야?",
+          "expect": "answer",
+          "must_contain": [
+            "총무과"
+          ],
+          "must_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-selection_change",
+      "category": "selection_change",
+      "sources": [
+        "공원관리_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "공원관리 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 담당 인원은 몇 명이야?",
+          "expect": "withhold",
+          "select": [
+            "공원관리_잡음.txt"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-overview",
+      "category": "overview",
+      "sources": [
+        "공원관리_원문.txt",
+        "공원관리_산문.txt"
+      ],
+      "turns": [
+        {
+          "question": "선택 자료 전체를 요약해줘",
+          "expect": "answer",
+          "mode": "overview",
+          "min_distinct_docs": 1
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-year",
+      "category": "year",
+      "sources": [
+        "공원관리_원문.txt",
+        "공원관리_전년.txt"
+      ],
+      "turns": [
+        {
+          "question": "2025년 공원관리 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "3100"
+          ],
+          "must_cite_any": [
+            "공원관리_전년.txt"
+          ],
+          "must_not_cite": [
+            "공원관리_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-noise",
+      "category": "noise",
+      "sources": [
+        "공원관리_원문.txt",
+        "공원관리_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "공원관리 제출기한은 언제야?",
+          "expect": "answer",
+          "must_cite_any": [
+            "공원관리_원문.txt"
+          ],
+          "must_not_cite": [
+            "공원관리_잡음.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "holdout-04-positive_after_selection",
+      "category": "positive_after_selection",
+      "sources": [
+        "공원관리_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "지역상담 방문상담 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "64"
+          ]
+        },
+        {
+          "question": "공원관리 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "select": [
+            "공원관리_산문.txt"
+          ],
+          "must_contain": [
+            "45"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    }
+  ]
+}

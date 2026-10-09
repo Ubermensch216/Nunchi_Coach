@@ -1,0 +1,1307 @@
+{
+  "reference_date": "2026-10-09",
+  "documents": [
+    {
+      "filename": "시설방문_원문.txt",
+      "text": "업무명: 시설방문\n기준연도: 2026\n제출기한: 2026. 10. 12.\n계약금액: 800만원\n제출처: 총무과",
+      "year": 2026
+    },
+    {
+      "filename": "시설방문_산문.txt",
+      "text": "2026년 시설방문 업무를 준비하였다. 시설방문 담당 인원은 7명이다. 제출처는 총무과이다.",
+      "year": 2026
+    },
+    {
+      "filename": "시설방문_부재.txt",
+      "text": "2026년 시설방문 업무를 준비하였다. 담당 인원은 추후 결정한다. 수량 정보를 확정하지 않았다.",
+      "year": 2026
+    },
+    {
+      "filename": "시설방문_잡음.txt",
+      "text": "2026년 지역상담 업무를 처리하였다. 방문상담 인원은 26명이다. 자료 수는 4건이다.",
+      "year": 2026
+    },
+    {
+      "filename": "시설방문_변경.txt",
+      "text": "업무명: 시설방문\n기준연도: 2026\n제출기한: 2026. 10. 15.\n계약금액: 800만원",
+      "year": 2026
+    },
+    {
+      "filename": "시설방문_전년.txt",
+      "text": "업무명: 시설방문\n기준연도: 2025\n제출기한: 2025. 10. 12.\n계약금액: 700만원",
+      "year": 2025
+    },
+    {
+      "filename": "기록보존_원문.txt",
+      "text": "업무명: 기록보존\n기준연도: 2026\n제출기한: 2026. 10. 13.\n계약금액: 900만원\n제출처: 총무과",
+      "year": 2026
+    },
+    {
+      "filename": "기록보존_산문.txt",
+      "text": "2026년 기록보존 업무를 준비하였다. 기록보존 담당 인원은 9명이다. 제출처는 총무과이다.",
+      "year": 2026
+    },
+    {
+      "filename": "기록보존_부재.txt",
+      "text": "2026년 기록보존 업무를 준비하였다. 담당 인원은 추후 결정한다. 수량 정보를 확정하지 않았다.",
+      "year": 2026
+    },
+    {
+      "filename": "기록보존_잡음.txt",
+      "text": "2026년 지역상담 업무를 처리하였다. 방문상담 인원은 28명이다. 자료 수는 4건이다.",
+      "year": 2026
+    },
+    {
+      "filename": "기록보존_변경.txt",
+      "text": "업무명: 기록보존\n기준연도: 2026\n제출기한: 2026. 10. 16.\n계약금액: 900만원",
+      "year": 2026
+    },
+    {
+      "filename": "기록보존_전년.txt",
+      "text": "업무명: 기록보존\n기준연도: 2025\n제출기한: 2025. 10. 13.\n계약금액: 800만원",
+      "year": 2025
+    },
+    {
+      "filename": "방재점검_원문.txt",
+      "text": "업무명: 방재점검\n기준연도: 2026\n제출기한: 2026. 10. 14.\n계약금액: 1000만원\n제출처: 총무과",
+      "year": 2026
+    },
+    {
+      "filename": "방재점검_산문.txt",
+      "text": "2026년 방재점검 업무를 준비하였다. 방재점검 담당 인원은 11명이다. 제출처는 총무과이다.",
+      "year": 2026
+    },
+    {
+      "filename": "방재점검_부재.txt",
+      "text": "2026년 방재점검 업무를 준비하였다. 담당 인원은 추후 결정한다. 수량 정보를 확정하지 않았다.",
+      "year": 2026
+    },
+    {
+      "filename": "방재점검_잡음.txt",
+      "text": "2026년 지역상담 업무를 처리하였다. 방문상담 인원은 30명이다. 자료 수는 4건이다.",
+      "year": 2026
+    },
+    {
+      "filename": "방재점검_변경.txt",
+      "text": "업무명: 방재점검\n기준연도: 2026\n제출기한: 2026. 10. 17.\n계약금액: 1000만원",
+      "year": 2026
+    },
+    {
+      "filename": "방재점검_전년.txt",
+      "text": "업무명: 방재점검\n기준연도: 2025\n제출기한: 2025. 10. 14.\n계약금액: 900만원",
+      "year": 2025
+    },
+    {
+      "filename": "청사이전_원문.txt",
+      "text": "업무명: 청사이전\n기준연도: 2026\n제출기한: 2026. 10. 15.\n계약금액: 1100만원\n제출처: 총무과",
+      "year": 2026
+    },
+    {
+      "filename": "청사이전_산문.txt",
+      "text": "2026년 청사이전 업무를 준비하였다. 청사이전 담당 인원은 13명이다. 제출처는 총무과이다.",
+      "year": 2026
+    },
+    {
+      "filename": "청사이전_부재.txt",
+      "text": "2026년 청사이전 업무를 준비하였다. 담당 인원은 추후 결정한다. 수량 정보를 확정하지 않았다.",
+      "year": 2026
+    },
+    {
+      "filename": "청사이전_잡음.txt",
+      "text": "2026년 지역상담 업무를 처리하였다. 방문상담 인원은 32명이다. 자료 수는 4건이다.",
+      "year": 2026
+    },
+    {
+      "filename": "청사이전_변경.txt",
+      "text": "업무명: 청사이전\n기준연도: 2026\n제출기한: 2026. 10. 18.\n계약금액: 1100만원",
+      "year": 2026
+    },
+    {
+      "filename": "청사이전_전년.txt",
+      "text": "업무명: 청사이전\n기준연도: 2025\n제출기한: 2025. 10. 15.\n계약금액: 1000만원",
+      "year": 2025
+    },
+    {
+      "filename": "교육운영_원문.txt",
+      "text": "업무명: 교육운영\n기준연도: 2026\n제출기한: 2026. 10. 16.\n계약금액: 1200만원\n제출처: 총무과",
+      "year": 2026
+    },
+    {
+      "filename": "교육운영_산문.txt",
+      "text": "2026년 교육운영 업무를 준비하였다. 교육운영 담당 인원은 15명이다. 제출처는 총무과이다.",
+      "year": 2026
+    },
+    {
+      "filename": "교육운영_부재.txt",
+      "text": "2026년 교육운영 업무를 준비하였다. 담당 인원은 추후 결정한다. 수량 정보를 확정하지 않았다.",
+      "year": 2026
+    },
+    {
+      "filename": "교육운영_잡음.txt",
+      "text": "2026년 지역상담 업무를 처리하였다. 방문상담 인원은 34명이다. 자료 수는 4건이다.",
+      "year": 2026
+    },
+    {
+      "filename": "교육운영_변경.txt",
+      "text": "업무명: 교육운영\n기준연도: 2026\n제출기한: 2026. 10. 19.\n계약금액: 1200만원",
+      "year": 2026
+    },
+    {
+      "filename": "교육운영_전년.txt",
+      "text": "업무명: 교육운영\n기준연도: 2025\n제출기한: 2025. 10. 16.\n계약금액: 1100만원",
+      "year": 2025
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "dev-00-direct_date",
+      "category": "direct_date",
+      "sources": [
+        "시설방문_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "2026년 시설방문 제출기한은 언제야?",
+          "expect": "answer",
+          "must_contain": [
+            "12"
+          ],
+          "must_cite_any": [
+            "시설방문_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-00-direct_amount",
+      "category": "direct_amount",
+      "sources": [
+        "시설방문_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "시설방문 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "800"
+          ],
+          "must_cite_any": [
+            "시설방문_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-00-role_positive",
+      "category": "role_positive",
+      "sources": [
+        "시설방문_산문.txt",
+        "시설방문_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "시설방문 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "7"
+          ],
+          "must_not_contain": [
+            "26"
+          ],
+          "must_cite_any": [
+            "시설방문_산문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-00-role_absent",
+      "category": "role_absent",
+      "sources": [
+        "시설방문_부재.txt",
+        "시설방문_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "시설방문 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-00-source_scope",
+      "category": "source_scope",
+      "sources": [
+        "시설방문_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "시설방문 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-00-conflict",
+      "category": "conflict",
+      "sources": [
+        "시설방문_원문.txt",
+        "시설방문_변경.txt"
+      ],
+      "turns": [
+        {
+          "question": "시설방문 제출기한은 언제야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-00-followup",
+      "category": "followup",
+      "sources": [
+        "시설방문_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "시설방문 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 제출처는 어디야?",
+          "expect": "answer",
+          "must_contain": [
+            "총무과"
+          ],
+          "must_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-00-selection_change",
+      "category": "selection_change",
+      "sources": [
+        "시설방문_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "시설방문 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 담당 인원은 몇 명이야?",
+          "expect": "withhold",
+          "select": [
+            "시설방문_잡음.txt"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-00-overview",
+      "category": "overview",
+      "sources": [
+        "시설방문_원문.txt",
+        "시설방문_산문.txt"
+      ],
+      "turns": [
+        {
+          "question": "선택 자료 전체를 요약해줘",
+          "expect": "answer",
+          "mode": "overview",
+          "min_distinct_docs": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-00-year",
+      "category": "year",
+      "sources": [
+        "시설방문_원문.txt",
+        "시설방문_전년.txt"
+      ],
+      "turns": [
+        {
+          "question": "2025년 시설방문 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "700"
+          ],
+          "must_cite_any": [
+            "시설방문_전년.txt"
+          ],
+          "must_not_cite": [
+            "시설방문_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-00-noise",
+      "category": "noise",
+      "sources": [
+        "시설방문_원문.txt",
+        "시설방문_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "시설방문 제출기한은 언제야?",
+          "expect": "answer",
+          "must_cite_any": [
+            "시설방문_원문.txt"
+          ],
+          "must_not_cite": [
+            "시설방문_잡음.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-00-positive_after_selection",
+      "category": "positive_after_selection",
+      "sources": [
+        "시설방문_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "지역상담 방문상담 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "26"
+          ]
+        },
+        {
+          "question": "시설방문 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "select": [
+            "시설방문_산문.txt"
+          ],
+          "must_contain": [
+            "7"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-01-direct_date",
+      "category": "direct_date",
+      "sources": [
+        "기록보존_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "2026년 기록보존 제출기한은 언제야?",
+          "expect": "answer",
+          "must_contain": [
+            "13"
+          ],
+          "must_cite_any": [
+            "기록보존_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-01-direct_amount",
+      "category": "direct_amount",
+      "sources": [
+        "기록보존_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "기록보존 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "900"
+          ],
+          "must_cite_any": [
+            "기록보존_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-01-role_positive",
+      "category": "role_positive",
+      "sources": [
+        "기록보존_산문.txt",
+        "기록보존_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "기록보존 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "9"
+          ],
+          "must_not_contain": [
+            "28"
+          ],
+          "must_cite_any": [
+            "기록보존_산문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-01-role_absent",
+      "category": "role_absent",
+      "sources": [
+        "기록보존_부재.txt",
+        "기록보존_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "기록보존 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-01-source_scope",
+      "category": "source_scope",
+      "sources": [
+        "기록보존_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "기록보존 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-01-conflict",
+      "category": "conflict",
+      "sources": [
+        "기록보존_원문.txt",
+        "기록보존_변경.txt"
+      ],
+      "turns": [
+        {
+          "question": "기록보존 제출기한은 언제야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-01-followup",
+      "category": "followup",
+      "sources": [
+        "기록보존_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "기록보존 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 제출처는 어디야?",
+          "expect": "answer",
+          "must_contain": [
+            "총무과"
+          ],
+          "must_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-01-selection_change",
+      "category": "selection_change",
+      "sources": [
+        "기록보존_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "기록보존 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 담당 인원은 몇 명이야?",
+          "expect": "withhold",
+          "select": [
+            "기록보존_잡음.txt"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-01-overview",
+      "category": "overview",
+      "sources": [
+        "기록보존_원문.txt",
+        "기록보존_산문.txt"
+      ],
+      "turns": [
+        {
+          "question": "선택 자료 전체를 요약해줘",
+          "expect": "answer",
+          "mode": "overview",
+          "min_distinct_docs": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-01-year",
+      "category": "year",
+      "sources": [
+        "기록보존_원문.txt",
+        "기록보존_전년.txt"
+      ],
+      "turns": [
+        {
+          "question": "2025년 기록보존 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "800"
+          ],
+          "must_cite_any": [
+            "기록보존_전년.txt"
+          ],
+          "must_not_cite": [
+            "기록보존_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-01-noise",
+      "category": "noise",
+      "sources": [
+        "기록보존_원문.txt",
+        "기록보존_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "기록보존 제출기한은 언제야?",
+          "expect": "answer",
+          "must_cite_any": [
+            "기록보존_원문.txt"
+          ],
+          "must_not_cite": [
+            "기록보존_잡음.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-01-positive_after_selection",
+      "category": "positive_after_selection",
+      "sources": [
+        "기록보존_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "지역상담 방문상담 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "28"
+          ]
+        },
+        {
+          "question": "기록보존 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "select": [
+            "기록보존_산문.txt"
+          ],
+          "must_contain": [
+            "9"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-02-direct_date",
+      "category": "direct_date",
+      "sources": [
+        "방재점검_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "2026년 방재점검 제출기한은 언제야?",
+          "expect": "answer",
+          "must_contain": [
+            "14"
+          ],
+          "must_cite_any": [
+            "방재점검_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-02-direct_amount",
+      "category": "direct_amount",
+      "sources": [
+        "방재점검_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "방재점검 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "1000"
+          ],
+          "must_cite_any": [
+            "방재점검_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-02-role_positive",
+      "category": "role_positive",
+      "sources": [
+        "방재점검_산문.txt",
+        "방재점검_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "방재점검 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "11"
+          ],
+          "must_not_contain": [
+            "30"
+          ],
+          "must_cite_any": [
+            "방재점검_산문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-02-role_absent",
+      "category": "role_absent",
+      "sources": [
+        "방재점검_부재.txt",
+        "방재점검_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "방재점검 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-02-source_scope",
+      "category": "source_scope",
+      "sources": [
+        "방재점검_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "방재점검 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-02-conflict",
+      "category": "conflict",
+      "sources": [
+        "방재점검_원문.txt",
+        "방재점검_변경.txt"
+      ],
+      "turns": [
+        {
+          "question": "방재점검 제출기한은 언제야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-02-followup",
+      "category": "followup",
+      "sources": [
+        "방재점검_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "방재점검 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 제출처는 어디야?",
+          "expect": "answer",
+          "must_contain": [
+            "총무과"
+          ],
+          "must_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-02-selection_change",
+      "category": "selection_change",
+      "sources": [
+        "방재점검_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "방재점검 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 담당 인원은 몇 명이야?",
+          "expect": "withhold",
+          "select": [
+            "방재점검_잡음.txt"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-02-overview",
+      "category": "overview",
+      "sources": [
+        "방재점검_원문.txt",
+        "방재점검_산문.txt"
+      ],
+      "turns": [
+        {
+          "question": "선택 자료 전체를 요약해줘",
+          "expect": "answer",
+          "mode": "overview",
+          "min_distinct_docs": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-02-year",
+      "category": "year",
+      "sources": [
+        "방재점검_원문.txt",
+        "방재점검_전년.txt"
+      ],
+      "turns": [
+        {
+          "question": "2025년 방재점검 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "900"
+          ],
+          "must_cite_any": [
+            "방재점검_전년.txt"
+          ],
+          "must_not_cite": [
+            "방재점검_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-02-noise",
+      "category": "noise",
+      "sources": [
+        "방재점검_원문.txt",
+        "방재점검_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "방재점검 제출기한은 언제야?",
+          "expect": "answer",
+          "must_cite_any": [
+            "방재점검_원문.txt"
+          ],
+          "must_not_cite": [
+            "방재점검_잡음.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-02-positive_after_selection",
+      "category": "positive_after_selection",
+      "sources": [
+        "방재점검_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "지역상담 방문상담 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "30"
+          ]
+        },
+        {
+          "question": "방재점검 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "select": [
+            "방재점검_산문.txt"
+          ],
+          "must_contain": [
+            "11"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-03-direct_date",
+      "category": "direct_date",
+      "sources": [
+        "청사이전_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "2026년 청사이전 제출기한은 언제야?",
+          "expect": "answer",
+          "must_contain": [
+            "15"
+          ],
+          "must_cite_any": [
+            "청사이전_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-03-direct_amount",
+      "category": "direct_amount",
+      "sources": [
+        "청사이전_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "청사이전 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "1100"
+          ],
+          "must_cite_any": [
+            "청사이전_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-03-role_positive",
+      "category": "role_positive",
+      "sources": [
+        "청사이전_산문.txt",
+        "청사이전_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "청사이전 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "13"
+          ],
+          "must_not_contain": [
+            "32"
+          ],
+          "must_cite_any": [
+            "청사이전_산문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-03-role_absent",
+      "category": "role_absent",
+      "sources": [
+        "청사이전_부재.txt",
+        "청사이전_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "청사이전 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-03-source_scope",
+      "category": "source_scope",
+      "sources": [
+        "청사이전_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "청사이전 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-03-conflict",
+      "category": "conflict",
+      "sources": [
+        "청사이전_원문.txt",
+        "청사이전_변경.txt"
+      ],
+      "turns": [
+        {
+          "question": "청사이전 제출기한은 언제야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-03-followup",
+      "category": "followup",
+      "sources": [
+        "청사이전_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "청사이전 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 제출처는 어디야?",
+          "expect": "answer",
+          "must_contain": [
+            "총무과"
+          ],
+          "must_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-03-selection_change",
+      "category": "selection_change",
+      "sources": [
+        "청사이전_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "청사이전 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 담당 인원은 몇 명이야?",
+          "expect": "withhold",
+          "select": [
+            "청사이전_잡음.txt"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-03-overview",
+      "category": "overview",
+      "sources": [
+        "청사이전_원문.txt",
+        "청사이전_산문.txt"
+      ],
+      "turns": [
+        {
+          "question": "선택 자료 전체를 요약해줘",
+          "expect": "answer",
+          "mode": "overview",
+          "min_distinct_docs": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-03-year",
+      "category": "year",
+      "sources": [
+        "청사이전_원문.txt",
+        "청사이전_전년.txt"
+      ],
+      "turns": [
+        {
+          "question": "2025년 청사이전 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "1000"
+          ],
+          "must_cite_any": [
+            "청사이전_전년.txt"
+          ],
+          "must_not_cite": [
+            "청사이전_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-03-noise",
+      "category": "noise",
+      "sources": [
+        "청사이전_원문.txt",
+        "청사이전_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "청사이전 제출기한은 언제야?",
+          "expect": "answer",
+          "must_cite_any": [
+            "청사이전_원문.txt"
+          ],
+          "must_not_cite": [
+            "청사이전_잡음.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-03-positive_after_selection",
+      "category": "positive_after_selection",
+      "sources": [
+        "청사이전_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "지역상담 방문상담 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "32"
+          ]
+        },
+        {
+          "question": "청사이전 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "select": [
+            "청사이전_산문.txt"
+          ],
+          "must_contain": [
+            "13"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-04-direct_date",
+      "category": "direct_date",
+      "sources": [
+        "교육운영_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "2026년 교육운영 제출기한은 언제야?",
+          "expect": "answer",
+          "must_contain": [
+            "16"
+          ],
+          "must_cite_any": [
+            "교육운영_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-04-direct_amount",
+      "category": "direct_amount",
+      "sources": [
+        "교육운영_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "교육운영 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "1200"
+          ],
+          "must_cite_any": [
+            "교육운영_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-04-role_positive",
+      "category": "role_positive",
+      "sources": [
+        "교육운영_산문.txt",
+        "교육운영_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "교육운영 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "15"
+          ],
+          "must_not_contain": [
+            "34"
+          ],
+          "must_cite_any": [
+            "교육운영_산문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-04-role_absent",
+      "category": "role_absent",
+      "sources": [
+        "교육운영_부재.txt",
+        "교육운영_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "교육운영 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-04-source_scope",
+      "category": "source_scope",
+      "sources": [
+        "교육운영_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "교육운영 담당 인원은 몇 명이야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-04-conflict",
+      "category": "conflict",
+      "sources": [
+        "교육운영_원문.txt",
+        "교육운영_변경.txt"
+      ],
+      "turns": [
+        {
+          "question": "교육운영 제출기한은 언제야?",
+          "expect": "withhold"
+        }
+      ]
+    },
+    {
+      "id": "dev-04-followup",
+      "category": "followup",
+      "sources": [
+        "교육운영_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "교육운영 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 제출처는 어디야?",
+          "expect": "answer",
+          "must_contain": [
+            "총무과"
+          ],
+          "must_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-04-selection_change",
+      "category": "selection_change",
+      "sources": [
+        "교육운영_원문.txt"
+      ],
+      "turns": [
+        {
+          "question": "교육운영 제출기한은 언제야?",
+          "expect": "answer"
+        },
+        {
+          "question": "그럼 담당 인원은 몇 명이야?",
+          "expect": "withhold",
+          "select": [
+            "교육운영_잡음.txt"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    },
+    {
+      "id": "dev-04-overview",
+      "category": "overview",
+      "sources": [
+        "교육운영_원문.txt",
+        "교육운영_산문.txt"
+      ],
+      "turns": [
+        {
+          "question": "선택 자료 전체를 요약해줘",
+          "expect": "answer",
+          "mode": "overview",
+          "min_distinct_docs": 1
+        }
+      ]
+    },
+    {
+      "id": "dev-04-year",
+      "category": "year",
+      "sources": [
+        "교육운영_원문.txt",
+        "교육운영_전년.txt"
+      ],
+      "turns": [
+        {
+          "question": "2025년 교육운영 계약금액은 얼마야?",
+          "expect": "answer",
+          "must_contain": [
+            "1100"
+          ],
+          "must_cite_any": [
+            "교육운영_전년.txt"
+          ],
+          "must_not_cite": [
+            "교육운영_원문.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-04-noise",
+      "category": "noise",
+      "sources": [
+        "교육운영_원문.txt",
+        "교육운영_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "교육운영 제출기한은 언제야?",
+          "expect": "answer",
+          "must_cite_any": [
+            "교육운영_원문.txt"
+          ],
+          "must_not_cite": [
+            "교육운영_잡음.txt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev-04-positive_after_selection",
+      "category": "positive_after_selection",
+      "sources": [
+        "교육운영_잡음.txt"
+      ],
+      "turns": [
+        {
+          "question": "지역상담 방문상담 인원은 몇 명이야?",
+          "expect": "answer",
+          "must_contain": [
+            "34"
+          ]
+        },
+        {
+          "question": "교육운영 담당 인원은 몇 명이야?",
+          "expect": "answer",
+          "select": [
+            "교육운영_산문.txt"
+          ],
+          "must_contain": [
+            "15"
+          ],
+          "must_not_rewrite": true
+        }
+      ]
+    }
+  ]
+}

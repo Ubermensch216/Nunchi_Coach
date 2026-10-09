@@ -14,7 +14,7 @@ resize 때마다 다시 배치하되, 열 수가 실제로 바뀔 때만 재배�
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QGridLayout, QSizePolicy, QWidget
 
 from .. import theme

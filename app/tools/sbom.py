@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import uuid
 from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
 
+from .console import force_utf8
 from .lockfile import SKIP, normalize
 
 SPEC_VERSION = "1.5"
@@ -29,7 +29,7 @@ DEFAULT_OUT = Path("dist") / "sbom.cdx.json"
 
 
 def main(argv: list[str] | None = None) -> int:
-    _force_utf8()
+    force_utf8()
     args = _parse_args(argv)
     document = build(app_version=args.version)
 
@@ -103,14 +103,6 @@ def _license(dist) -> str:
         return value
     expression = (dist.metadata.get("License-Expression") or "").strip()
     return expression
-
-
-def _force_utf8() -> None:
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError):
-            pass
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

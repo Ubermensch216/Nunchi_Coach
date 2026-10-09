@@ -4,8 +4,8 @@
 읽혀야 한다. 그래서 정보를 세 층으로 못 박고 그 이상 넣지 않는다.
 
   1. 이름과 한 줄 설명 — 무슨 업무인가
-  2. 월 스트립         — 언제 하는 일인가 (12칸을 한 줄로 압축)
-  3. 주기·규모 한 줄   — 매년 9~11월 · 17건 · 2022~2025
+  2. 월 스트립         — 언제 하는 일인가 (12칸을 한 줄로 압축, 하는 달은 숫자로)
+  3. 규모 한 줄        — 17건 · 2022~2025
 
 상태 표시는 **예외에만** 붙인다. 처음 연 프로젝트는 모든 업무가 '확인 전'이라
 카드마다 '확인 필요'를 달면 아홉 장이 똑같이 주황색이 되고, 정작 묶음이
@@ -48,7 +48,9 @@ TASK_COLORS = [
 ]
 
 STRIP_CELL_W = 14
-STRIP_H = 10
+# 칸 안에 달 숫자를 적으므로 글자 한 줄이 들어갈 높이다.
+STRIP_H = 18
+STRIP_FONT_PX = 10
 DESCRIPTION_CHARS = 44
 
 
@@ -57,26 +59,16 @@ def color_for(name: str) -> str:
     return TASK_COLORS[sum(ord(c) for c in name) % len(TASK_COLORS)]
 
 
-def month_legend() -> str:
-    """카드 아래 열두 칸이 무엇인지 말한다.
-
-    일정 화면의 격자에는 범례가 붙어 있는데(timeline_grid.legend_text) 업무
-    카드의 월 스트립에는 없었다. 같은 뜻의 그림이 한 화면에서는 설명되고
-    다른 화면에서는 설명되지 않으면, 사용자는 두 그림이 다른 것이라고
-    생각하거나 둘 다 안 믿는다.
-
-    범례는 판마다 붙이지 않고 카드 묶음 아래 한 줄만 둔다 — 카드가 여덟
-    장이면 같은 설명이 여덟 번 붙는다.
-    """
-    return "카드 아래 열두 칸은 1월부터 12월까지입니다   ■ 이 업무를 하는 달   □ 아닌 달"
-
-
 class MonthStrip(QWidget):
     """12개월을 한 줄로 압축해 '언제 하는 일인가'를 즉시 보여준다.
 
     칸을 위젯으로 그리면 12칸의 틀이 언제나 같은 자리에 있으므로, 채워진
     구간이 몇 월인지 눈으로 셀 수 있다. 연속한 달은 이어 붙여 하나의 기간으로
     보이게 한다 — 일정 화면의 막대와 같은 말이다.
+
+    채운 칸에는 그 달의 숫자를 적는다. 예전에는 띠 아래에 '매년 9~11월'을
+    따로 적어 같은 말을 그림과 글로 두 번 했고, 띠만 봐서는 몇 월인지 칸을
+    세어야 했다.
 
     반복 주기를 모르는 업무는 빈 틀만 그린다. 없는 것을 지어내지 않는다.
     """
@@ -95,10 +87,6 @@ class MonthStrip(QWidget):
 
         self.setFixedHeight(STRIP_H)
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
-        self.setToolTip(
-            "1월부터 12월까지. 채워진 칸이 이 업무를 하는 달입니다."
-            if active else "반복 주기를 아직 찾지 못했습니다."
-        )
 
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
@@ -107,7 +95,8 @@ class MonthStrip(QWidget):
         for month in range(1, 13):
             # 칸은 카드 폭을 열둘로 나눠 갖는다. 폭을 못 박으면 넓은 카드에서
             # 띠가 왼쪽 절반에만 서서 어느 칸이 몇 월인지 가늠하기 어렵다.
-            cell = QLabel()
+            cell = QLabel(str(month) if month in active else "")
+            cell.setAlignment(Qt.AlignmentFlag.AlignCenter)
             cell.setFixedHeight(STRIP_H)
             cell.setMinimumWidth(STRIP_CELL_W // 2)
             cell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -121,7 +110,8 @@ class MonthStrip(QWidget):
                 right = radius if month + 1 not in active else 0
                 fill = accent
             cell.setStyleSheet(
-                f"background: {fill};"
+                f"background: {fill}; color: {theme.TEXT_ON_PRIMARY};"
+                f"font-size: {STRIP_FONT_PX}px; font-weight: 700;"
                 f"border-top-left-radius: {left}px;"
                 f"border-bottom-left-radius: {left}px;"
                 f"border-top-right-radius: {right}px;"
@@ -171,8 +161,7 @@ class TaskCard(QFrame):
         column.addLayout(_head(name, confidence, review_state, now))
         column.addWidget(_description(description or ""))
         column.addSpacing(theme.SP_SM)
-        column.addWidget(MonthStrip(months))
-        column.addWidget(_cycle_line(cycle_text))
+        column.addWidget(_year_row(months, cycle_text))
         span = QLabel(span_text)
         span.setObjectName("Small")
         column.addWidget(span)
@@ -242,23 +231,40 @@ def _description(text: str) -> QLabel:
     return label
 
 
-def _cycle_line(cycle_text: str | None) -> QWidget:
+def _year_row(months: list[int] | None, cycle_text: str | None) -> QWidget:
+    """달력 아이콘 + 월 스트립. 아이콘이 '이 띠는 한 해'라고 말한다.
+
+    주기를 글로 다시 적지 않는다 — 띠의 숫자가 이미 말한다. 띠가 못 담는
+    것(매월 12일의 '12일')은 풍선말에 둔다. 주기를 모를 때만 글로 그렇다고
+    적는다. 빈 띠만 두면 못 찾은 것인지 덜 그려진 것인지 알 수 없다.
+    """
     from .. import icons
 
     box = QWidget()
-    row = QHBoxLayout(box)
+    column = QVBoxLayout(box)
+    column.setContentsMargins(0, 0, 0, 0)
+    column.setSpacing(theme.SP_XS)
+    row = QHBoxLayout()
     row.setContentsMargins(0, 0, 0, 0)
-    row.setSpacing(theme.SP_XS)
-    label = QLabel(cycle_text or "반복 주기 미확인")
-    label.setObjectName("Small")
-    if cycle_text:
-        mark = icons.label("repeat", theme.TEXT_MUTED, 14)
-        if mark is not None:
-            row.addWidget(mark)
-    else:
+    row.setSpacing(theme.SP_SM)
+    tip = (
+        f"연간 일정 · {cycle_text}\n1월부터 12월까지이고, 숫자가 적힌 칸이 "
+        "이 업무를 하는 달입니다."
+        if cycle_text else "반복 주기를 아직 찾지 못했습니다."
+    )
+    mark = icons.label("calendar", theme.TEXT_MUTED, 16)
+    if mark is not None:
+        mark.setToolTip(tip)
+        row.addWidget(mark, 0, Qt.AlignmentFlag.AlignVCenter)
+    strip = MonthStrip(months)
+    strip.setToolTip(tip)
+    row.addWidget(strip, 1)
+    column.addLayout(row)
+    if not cycle_text:
+        label = QLabel("반복 주기 미확인")
+        label.setObjectName("Small")
         label.setStyleSheet(f"color: {theme.TEXT_SUBTLE};")
-    row.addWidget(label)
-    row.addStretch(1)
+        column.addWidget(label)
     return box
 
 

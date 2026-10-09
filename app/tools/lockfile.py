@@ -27,6 +27,8 @@ from datetime import date
 from importlib import metadata
 from pathlib import Path
 
+from .console import force_utf8
+
 LOCK_PATH = Path(__file__).resolve().parents[2] / "requirements.lock"
 
 # 환경을 세우는 도구 자신은 잠그지 않는다. pip를 고정한 잠금 파일을 pip로
@@ -37,7 +39,7 @@ HEADER = "# 눈치코치 의존성 잠금 파일 — 배포·재현 빌드의 �
 
 
 def main(argv: list[str] | None = None) -> int:
-    _force_utf8()
+    force_utf8()
     args = _parse_args(argv)
     path = Path(args.out) if args.out else LOCK_PATH
 
@@ -156,14 +158,6 @@ def _check(path: Path) -> int:
     for line in gaps:
         print("  " + line, file=sys.stderr)
     return 1
-
-
-def _force_utf8() -> None:
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError):
-            pass
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

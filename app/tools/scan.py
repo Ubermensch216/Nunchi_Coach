@@ -16,10 +16,11 @@ from PySide6.QtCore import QCoreApplication
 
 from ..db import Database, default_project_dir
 from ..jobs.pipeline import Pipeline
+from .console import force_utf8
 
 
 def main(argv: list[str] | None = None) -> int:
-    _force_utf8()
+    force_utf8()
     args = _parse_args(argv)
     root = Path(args.folder)
     if not root.is_dir():
@@ -101,14 +102,6 @@ def _summary(db: Database) -> None:
 
     print("다음으로:")
     print("    python -m app.main        # 화면에서 확인")
-
-
-def _force_utf8() -> None:
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError):
-            pass
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

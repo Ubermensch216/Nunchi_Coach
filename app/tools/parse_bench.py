@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 from ..ingest.parsers import parse, supported_extensions
+from .console import force_utf8
 
 ENV_VAR = "NUNCHICOACH_SAMPLES"
 BASELINE_NAME = "parse_baseline.json"
@@ -37,7 +38,7 @@ CHAR_TOLERANCE = 0.02
 
 
 def main(argv: list[str] | None = None) -> int:
-    _force_utf8()
+    force_utf8()
     args = _parse_args(argv)
 
     folder = _folder(args)
@@ -161,14 +162,6 @@ def _folder(args) -> Path | None:
         return None
     path = Path(raw)
     return path if path.is_dir() else None
-
-
-def _force_utf8() -> None:
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError):
-            pass
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

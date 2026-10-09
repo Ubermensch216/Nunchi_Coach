@@ -297,9 +297,6 @@ class ElidedLabel(QLabel):
         self.setToolTip(text)
         self._render()
 
-    def full_text(self) -> str:
-        return self._full
-
     def resizeEvent(self, event) -> None:  # noqa: N802 — Qt 규약
         super().resizeEvent(event)
         self._render()
@@ -835,4 +832,3 @@ class EmptyState(QWidget):
             button.setObjectName("Primary")
             button.clicked.connect(on_action)
             column.addWidget(button, alignment=Qt.AlignmentFlag.AlignHCenter)
-

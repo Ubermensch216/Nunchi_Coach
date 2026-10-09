@@ -60,7 +60,33 @@ class QueryScope:
             years=chosen.years or self.years,
             task_id=chosen.task_id if chosen.task_id is not None else self.task_id,
             doc_ids=chosen.doc_ids if chosen.doc_ids is not None else self.doc_ids,
+            notebook_id=chosen.notebook_id,
+            mode=chosen.mode,
+            law=chosen.law,
         )
+
+    def predicate(self, alias: str = "d") -> tuple[str, list]:
+        """문서를 읽는 모든 검색·보조 검사에 같은 범위를 적용한다."""
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", alias):
+            raise ValueError("문서 테이블 별칭이 올바르지 않습니다.")
+        clauses, params = [f"{alias}.missing_since IS NULL"], []
+        if self.doc_ids is not None:
+            clauses.append(f"{alias}.id IN (" + (",".join("?" for _ in self.doc_ids) or "NULL") + ")")
+            params.extend(self.doc_ids)
+        if self.task_id is not None:
+            clauses.append(f"EXISTS (SELECT 1 FROM task_docs scope_td WHERE scope_td.doc_id={alias}.id AND scope_td.task_id=?)")
+            params.append(self.task_id)
+        if self.years:
+            clauses.append(f"{alias}.eff_year IN (" + ",".join("?" for _ in self.years) + ")")
+            params.extend(self.years)
+        return " AND ".join(clauses), params
+
+    def search_documents(self, db) -> list[int] | None:
+        """업무·연도를 순위 제한 전에 적용한다. 무제한 범위는 None을 유지한다."""
+        if not self.has_task and not self.has_year:
+            return self.doc_ids
+        clause, params = self.predicate()
+        return [row[0] for row in db.con.execute(f"SELECT d.id FROM documents d WHERE {clause}", params)]
 
 
 def infer_scope(question: str, today: date | None = None) -> QueryScope:

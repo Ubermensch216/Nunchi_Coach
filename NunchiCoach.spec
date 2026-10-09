@@ -77,6 +77,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name='NunchiCoach',
+    icon=str(Path(SPECPATH) / 'app' / 'ui' / 'assets' / 'logo.ico'),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -48,7 +48,6 @@ from PySide6.QtWidgets import (
 from ...core import status
 from ...db import Database, representative_predicate
 from ...jobs import SummaryRunner
-from ...search import fts
 from ...search.documents import find_documents
 from .. import theme
 from ..widgets import (

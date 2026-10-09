@@ -14,6 +14,21 @@ from dataclasses import dataclass, field
 # v2: 재파싱 시 날짜·문서/조각 색인을 함께 갱신하는 계약으로 기존 자료도 재처리한다.
 # v4: HWPX 표를 행 단위(첫 행·단위·병합 포함)로 낸다 — 기존 HWPX도 다시 읽는다.
 PARSER_VERSION = "4"
+# 한 형식의 파서만 바뀌었을 때는 여기에 적는다. PARSER_VERSION을 올리면 모든 문서를
+# 다시 읽고 AI 분석까지 다시 돌지만, 여기 적으면 그 형식의 문서만 다시 읽는다.
+# xlsx 5: 시트를 행 경계에서 나누고(행 중간에서 자르지 않는다) 이어지는 조각에 머리 행을 붙인다.
+PARSER_REVISIONS = {"xlsx": "5"}
+
+
+def version_of(parser: str | None) -> str:
+    return PARSER_REVISIONS.get(parser or "", PARSER_VERSION)
+
+
+def outdated_clause(alias: str = "d") -> str:
+    """지금 파서로 읽은 것이 아닌 문서를 고르는 SQL 조건(매개변수 없음)."""
+    cases = " ".join(f"WHEN '{name}' THEN '{version}'" for name, version in PARSER_REVISIONS.items())
+    return (f"COALESCE({alias}.parser_version,'') != "
+            f"CASE COALESCE({alias}.parser,'') {cases} ELSE '{PARSER_VERSION}' END")
 
 # 파싱 상태
 OK = "ok"                    # 본문 정상 추출
@@ -72,7 +87,10 @@ class ParseResult:
     error: str | None = None
     note: str | None = None
     elapsed_ms: int = 0
-    parser_version: str = PARSER_VERSION
+    parser_version: str = ""
+
+    def __post_init__(self) -> None:
+        self.parser_version = self.parser_version or version_of(self.parser)
 
     @property
     def text(self) -> str:

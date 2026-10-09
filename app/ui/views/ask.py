@@ -2,7 +2,7 @@
 
 **지금은 메뉴에 걸려 있지 않다.** 묻는 일은 노트북으로 들어갔다(ui/shell.py NAV,
 core/notebook_tasks.py). 이 파일은 노트북의 출처·대화 판이 가져다 쓰는 조각
-(_paragraph · _meta_strip · _cited_ordinals · OPEN_SECTIONS · ASK_INPUT_H)의 자리로
+(_fill_passages · _meta_strip · _cited_ordinals · ASK_INPUT_H)의 자리로
 남아 있고, AskView 자체는 시험에서만 선다.
 
 대화가 아니라 단발 질의로 설계한다. 멀티턴 문맥 유지·지시대명사 해석·대화
@@ -50,7 +50,6 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -833,44 +832,10 @@ class AskView(QWidget):
             self.reader_column.addWidget(card)
             return
 
-        cited = _cited_ordinals(sections, citation)
-        opened = self._visible_ordinals(citation.doc_id, sections, cited)
-        hidden: list[int] = []
-        for section in sections:
-            ordinal = section["ordinal"]
-            if ordinal in opened:
-                if hidden:
-                    card.body.addWidget(self._folded(citation.doc_id, hidden))
-                    hidden = []
-                card.body.addWidget(_paragraph(section, ordinal in cited))
-            else:
-                hidden.append(ordinal)
-        if hidden:
-            card.body.addWidget(self._folded(citation.doc_id, hidden))
+        doc_id = citation.doc_id
+        _fill_passages(card.body, sections, _cited_ordinals(sections, citation),
+                       doc_id in self._expanded, lambda: self._expand(doc_id))
         self.reader_column.addWidget(card)
-
-    def _visible_ordinals(self, doc_id: int, sections, cited: set[int]) -> set[int]:
-        """처음에는 인용된 대목과 그 앞뒤만 편다.
-
-        문서 전체를 다 펴면 오른쪽 칸이 원문 뷰어가 아니라 스크롤 지옥이 된다.
-        인용된 곳을 눈이 바로 찾을 수 있는 것이 이 칸의 목적이다.
-        """
-        if doc_id in self._expanded:
-            return {section["ordinal"] for section in sections}
-        opened = set(cited)
-        for ordinal in list(cited):
-            opened.add(ordinal + 1)
-        opened |= {section["ordinal"] for section in sections[:OPEN_SECTIONS]}
-        return opened
-
-    def _folded(self, doc_id: int, ordinals: list[int]) -> QWidget:
-        first, last = ordinals[0], ordinals[-1]
-        span = f"{first}~{last}문단" if first != last else f"{first}문단"
-        button = QPushButton(f"{span} 접힘 — 눌러서 펼치기")
-        button.setObjectName("Fold")
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.clicked.connect(lambda _=False, d=doc_id: self._expand(d))
-        return button
 
     def _expand(self, doc_id: int) -> None:
         self._expanded.add(doc_id)
@@ -1037,6 +1002,41 @@ def _paragraph(section, cited: bool) -> QWidget:
     text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     row.addWidget(text, 1)
     return holder
+
+
+def _fill_passages(body, sections, cited: set[int], expanded: bool, on_expand) -> None:
+    """원문 대목을 채운다. 처음에는 인용된 대목과 그 앞뒤만 펴고 나머지는 접는다.
+
+    문서 전체를 다 펴면 오른쪽 칸이 원문 뷰어가 아니라 스크롤 지옥이 된다.
+    인용된 곳을 눈이 바로 찾을 수 있는 것이 이 칸의 목적이다.
+    """
+    if expanded:
+        opened = {section["ordinal"] for section in sections}
+    else:
+        opened = cited | {ordinal + 1 for ordinal in cited}
+        opened |= {section["ordinal"] for section in sections[:OPEN_SECTIONS]}
+    hidden: list[int] = []
+    for section in sections:
+        ordinal = section["ordinal"]
+        if ordinal in opened:
+            if hidden:
+                body.addWidget(_fold_button(hidden, on_expand))
+                hidden = []
+            body.addWidget(_paragraph(section, ordinal in cited))
+        else:
+            hidden.append(ordinal)
+    if hidden:
+        body.addWidget(_fold_button(hidden, on_expand))
+
+
+def _fold_button(ordinals: list[int], on_expand) -> QWidget:
+    first, last = ordinals[0], ordinals[-1]
+    span = f"{first}~{last}문단" if first != last else f"{first}문단"
+    button = QPushButton(f"{span} 접힘 — 눌러서 펼치기")
+    button.setObjectName("Fold")
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    button.clicked.connect(lambda _=False: on_expand())
+    return button
 
 
 def _meta_strip(db: Database, citation, info: dict, sections: int) -> QWidget:

@@ -191,3 +191,51 @@ def test_parsing_does_not_modify_originals():
         parse(path)
     after = {p: (hashlib.sha256(p.read_bytes()).hexdigest(), p.stat().st_mtime_ns) for p in targets}
     assert before == after
+
+
+def test_xlsx_long_sheet_breaks_between_rows_and_repeats_the_header(tmp_path):
+    """실측: 한 행이 250자쯤인 시트가 글자 수로 잘려 조각이 행 중간('ight fluorescent…')에서 시작했다."""
+    import openpyxl
+
+    from app.core.chunking import MAX_CHUNK_CHARS, build_chunks
+
+    book = openpyxl.Workbook()
+    sheet = book.active
+    sheet.title = "테마"
+    sheet.append(["작사용 테마 목록"])
+    sheet.append(["번호", "테마명", "키워드"])
+    for number in range(1, 21):
+        sheet.append([number, f"테마{number}", "낱말 " * 50])
+    path = tmp_path / "목록.xlsx"
+    book.save(path)
+
+    result = parse(path)
+    assert result.status == OK and len(result.sections) > 1
+    chunks = build_chunks([(s.kind, s.locator, s.text) for s in result.sections])
+    assert len(chunks) == len(result.sections)              # 글자 수로 다시 잘리지 않는다
+    assert len({locator for _n, locator, _text in chunks}) == len(chunks)
+    seen = []
+    for _n, locator, text in chunks:
+        assert len(text) <= MAX_CHUNK_CHARS and locator.startswith("'테마' A")
+        lines = text.split("\n")
+        assert lines[0] == "[테마]" and "번호\t테마명\t키워드" in lines[:3]
+        rows = [line for line in lines if line.split("\t")[0].isdigit()]
+        assert all(row.endswith("낱말") for row in rows)     # 행이 중간에서 끊기지 않았다
+        seen += [row.split("\t")[0] for row in rows]
+    assert seen == [str(number) for number in range(1, 21)]
+
+
+def test_only_documents_of_a_revised_parser_are_read_again():
+    import sqlite3
+
+    from app.ingest.parsers.base import PARSER_VERSION, ParseResult, outdated_clause, version_of
+
+    con = sqlite3.connect(":memory:")
+    con.execute("CREATE TABLE documents (name TEXT, parser TEXT, parser_version TEXT)")
+    con.executemany("INSERT INTO documents VALUES (?,?,?)", [
+        ("옛 엑셀", "xlsx", PARSER_VERSION), ("새 엑셀", "xlsx", version_of("xlsx")),
+        ("PDF", "pdf", PARSER_VERSION), ("옛 PDF", "pdf", "1"), ("판본 없음", None, None)])
+    stale = [row[0] for row in con.execute(f"SELECT name FROM documents d WHERE {outdated_clause('d')}")]
+    assert stale == ["옛 엑셀", "옛 PDF", "판본 없음"]
+    assert ParseResult(OK, "xlsx").parser_version == version_of("xlsx") != PARSER_VERSION
+    assert ParseResult(OK, "pdf").parser_version == PARSER_VERSION

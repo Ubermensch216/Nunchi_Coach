@@ -31,6 +31,7 @@ from .query import QueryScope, infer_scope
 from .rerank import Candidate, collapse_near_duplicates, rerank
 from .vector import normalize, unpack
 from .verify import VerifiedSentence, verify_sentences
+from .trace import RetrievalTrace
 
 TOP_K = 8
 # 실측으로 보정한 값(R7). 옛 임시값 0.30은 아무것도 거르지 못했다 — 대부분의
@@ -131,7 +132,9 @@ class Answer:
 
     def __post_init__(self):
         if self.withheld and not self.error and self.generation.get("mode") != "search_only":
-            self.guidance = self.guidance or needed_material(self.question)
+            # 저장한 대화를 되살릴 때는 그때 남긴 안내를 쓴다(generation에 실려 온다).
+            self.guidance = (self.guidance or self.generation.get("guidance")
+                             or needed_material(self.question))
 
 
 def needed_material(question: str) -> str:
@@ -154,6 +157,7 @@ def needed_material(question: str) -> str:
 def search_only(db: Database, question: str, scope: QueryScope | None = None,
                 message: str = "자료 검색 결과") -> Answer:
     scope = infer_scope(question).merged_with(scope)
+    scope.doc_ids = scope.search_documents(db)
     if scope.doc_ids == [] or db.con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] == 0:
         return Answer(question, "", True, error="검색할 자료가 아직 준비되지 않았습니다. 자료 선택과 분석 상태를 확인하세요.",
                       generation={"mode": "search_only"})
@@ -192,6 +196,13 @@ def search_only(db: Database, question: str, scope: QueryScope | None = None,
 
 def ask(db: Database, question: str, client: OllamaClient | None = None,
         scope: QueryScope | None = None, expander=None) -> Answer:
+    """모든 반환 경로에 원문 없는 검색 진단을 붙인다."""
+    trace = RetrievalTrace()
+    return trace.finish(_ask(db, question, client, scope, expander, trace))
+
+
+def _ask(db: Database, question: str, client: OllamaClient | None,
+         scope: QueryScope | None, expander, trace: RetrievalTrace) -> Answer:
     """질문 하나에 답한다. 이전 질문을 기억하지 않는다.
 
     scope는 사용자가 화면에서 직접 고른 범위다. 질문 문장에서 읽어 낸
@@ -206,6 +217,10 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
         return Answer(question=question, text="", withheld=True, error="빈 질문입니다")
     content_revision = db.get_meta("content_revision")
     scope = infer_scope(question).merged_with(scope)
+    with trace.stage("scope"):
+        search_docs = scope.search_documents(db)
+    trace.record(scope_documents=len(search_docs) if search_docs is not None else None,
+                 years=list(scope.years), task_scoped=scope.has_task)
 
     client = client or project_client(db, OllamaClient)
     health = client.health()
@@ -214,30 +229,43 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
 
     # 업무명·속성이 명시된 단일 값은 전체 허용 자료에서 대조한다.
     # 상충 판본이 근접 중복 축약이나 검색 순위 때문에 사라지기 전에 확인한다.
-    labelled = _labelled_answer(db, question, scope)
+    with trace.stage("direct_fields"):
+        labelled = _labelled_answer(db, question, scope)
     if labelled is not None:
+        trace.path = "direct_fields"
         if db.get_meta("content_revision") != content_revision:
             return Answer(question, "", True, error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
         return labelled
 
-    variants = [v for v in (expander(question) if expander else []) if v and v != question]
-    vectors, error = client.embed([question, *variants])
+    with trace.stage("expansion"):
+        variants = [v for v in (expander(question) if expander else []) if v and v != question]
+    trace.record(query_variants=len(variants))
+    with trace.stage("embedding"):
+        vectors, error = client.embed([question, *variants])
     if error or not vectors:
         return search_only(db, question, scope, "의미 검색을 사용할 수 없어 자료 검색 결과를 보여 드립니다.")
     query_vectors = normalize(np.asarray(vectors, dtype=np.float32))
     query_vector = query_vectors[0]
 
-    chunk_ids, matrix = _load_chunk_matrix(db, client.embed_model, scope.doc_ids)
+    with trace.stage("matrix"):
+        chunk_ids, matrix = _load_chunk_matrix(db, client.embed_model, search_docs)
+    trace.record(indexed_chunks=int(chunk_ids.size))
     if chunk_ids.size == 0:
         return search_only(db, question, scope, "의미 색인 준비 전입니다. 자료 검색 결과를 보여 드립니다.")
 
     # 하이브리드 검색 — 의미(벡터)와 정확 일치(FTS5)를 각각 넉넉히 훑어
     # RRF로 합친다. 문서번호·고유명사처럼 정확히 일치해야 하는 질의는
     # 벡터만으로는 놓치기 쉽다(doc/질문화면_RAG_개선계획.md §1 측정 7).
-    scores = matrix @ query_vector
-    pool = np.argsort(-scores)[:RANK_POOL]
-    vector_ranked = [(int(chunk_ids[i]), float(scores[i])) for i in pool]
-    fts_ranked = fts.search_chunk_ids(db, question, limit=RANK_POOL, doc_ids=scope.doc_ids)
+    if matrix.shape[1] != query_vector.shape[0]:
+        trace.record(index_dimension_mismatch=True)
+        return search_only(db, question, scope, "의미 색인과 검색 모델의 차원이 달라 자료 검색 결과를 보여 드립니다. 색인을 다시 준비하세요.")
+    with trace.stage("vector"):
+        scores = matrix @ query_vector
+        pool = np.argsort(-scores)[:RANK_POOL]
+        vector_ranked = [(int(chunk_ids[i]), float(scores[i])) for i in pool]
+    with trace.stage("lexical"):
+        fts_ranked = fts.search_chunk_ids(db, question, limit=RANK_POOL, doc_ids=search_docs)
+    trace.record(vector_candidates=len(vector_ranked), lexical_candidates=len(fts_ranked))
     combined = _reciprocal_rank_fusion(vector_ranked, fts_ranked)
 
     # '근거로 쓸 만큼 강한가'는 두 검색 중 하나라도 확신을 준 경우다.
@@ -254,12 +282,16 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
     strong_ids = {cid for cid, score in vector_ranked if score >= MIN_SIMILARITY}
     strong_ids |= set(fts_ranked[:TOP_K])
     if variants:
-        combined, widened = _with_variants(
-            db, chunk_ids, matrix, query_vectors[1:], variants, vector_ranked, fts_ranked, scope.doc_ids)
+        with trace.stage("variant_retrieval"):
+            combined, widened = _with_variants(
+                db, chunk_ids, matrix, query_vectors[1:], variants, vector_ranked, fts_ranked, search_docs)
+        trace.record(variant_added_candidates=len(widened - strong_ids))
         strong_ids |= widened
 
     scope = infer_scope(question).merged_with(scope)
-    strong = _select_context(db, combined, strong_ids, scope, question)
+    with trace.stage("selection"):
+        strong = _select_context(db, combined, strong_ids, scope, question, trace)
+    trace.record(fused_candidates=len(combined), selected_chunks=len(strong))
 
     if not strong:
         # 범위 밖 자료를 '관련 문서'로 노출하지 않는다.
@@ -272,8 +304,10 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
             inferred_years=scope.years,
         )
 
-    selected = _expand_neighbors(db, [cid for cid, _ in strong], question)
-    context_rows = _load_chunk_context(db, selected)
+    with trace.stage("context"):
+        selected = _expand_neighbors(db, [cid for cid, _ in strong], question, scope)
+        context_rows = _load_chunk_context(db, selected)
+    trace.record(context_chunks=len(context_rows))
     if not context_rows:
         return Answer(question=question, text="확인 가능한 자료가 부족합니다.", withheld=True,
                        inferred_years=scope.years)
@@ -313,7 +347,7 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
         return Answer(question=question, text=text, withheld=False, citations=citations,
                       inferred_years=scope.years, generation={**diagnosis, "rule_answer": rule})
 
-    if _subject_unknown(db, question, asked.field if asked.stems else ""):
+    if _subject_unknown(db, question, asked.field if asked.stems else "", scope):
         # 묻는 대상의 이름이 자료 어디에도 없다. 같은 속성을 가진 다른 대상의 값이
         # 답으로 나가면 안 된다(실측: "정수장 소독약품 구매 단가는 얼마야?"에 사무용품
         # 구매 계약의 "토너의 단가는 58,000원이다"가 나갔다). 모델에 묻지 않고 보류한다.
@@ -324,7 +358,8 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
 
     prompt, _version = render(
         "ask", context=_format_context(context_rows, official, source_text), question=question)
-    data, gen_error, raw = client.generate_json(prompt, ASK_SCHEMA, num_predict=GEN_TOKEN_BUDGET)
+    with trace.stage("generation"):
+        data, gen_error, raw = client.generate_json(prompt, ASK_SCHEMA, num_predict=GEN_TOKEN_BUDGET)
     generation = {**diagnosis, **_generation_record(client)}
     if db.get_meta("content_revision") != content_revision:
         return Answer(question=question, text="", withheld=True,
@@ -645,7 +680,8 @@ _CONFIRMED = "confirmed"
 _JOSA_END = re.compile(r"(?:에서|으로|까지|부터|에게|은|는|이|가|을|를|의|에|로|도|과|와|만)$")
 
 
-def _subject_unknown(db: Database, question: str, field_word: str) -> bool:
+def _subject_unknown(db: Database, question: str, field_word: str,
+                     scope: QueryScope | None = None) -> bool:
     """묻는 속성 바로 앞에 붙여 쓴 대상의 이름이 자료 전체에 한 번도 나오지 않는가.
 
     "정수장 소독약품 구매 단가는"에서 '단가' 앞의 '정수장·소독약품·구매'가 대상이다.
@@ -655,6 +691,7 @@ def _subject_unknown(db: Database, question: str, field_word: str) -> bool:
     """
     if not field_word:
         return False
+    clause, params = (scope or QueryScope()).predicate()
     words = question.split()
     at = next((i for i, word in enumerate(words) if word.startswith(field_word)), None)
     if at is None:
@@ -668,9 +705,8 @@ def _subject_unknown(db: Database, question: str, field_word: str) -> bool:
             continue
         like = f"%{word}%"
         if not db.con.execute(
-                "SELECT 1 FROM chunks WHERE text LIKE ? LIMIT 1", (like,)).fetchone() and \
-           not db.con.execute(
-                "SELECT 1 FROM documents WHERE filename LIKE ? LIMIT 1", (like,)).fetchone():
+                f"SELECT 1 FROM chunks c JOIN documents d ON d.id=c.doc_id WHERE {clause} "
+                "AND (c.text LIKE ? OR d.filename LIKE ?) LIMIT 1", (*params, like, like)).fetchone():
             return True
     return False
 
@@ -742,7 +778,14 @@ def _salvage_ask_response(raw: str) -> dict | None:
     answered_match = _ANSWERED.search(raw)
     if not answered_match:
         return None
+    sentences = _complete_sentences(raw)
+    if not sentences:
+        return None
+    return {"answered": answered_match.group(1) == "true", "sentences": sentences}
 
+
+def _complete_sentences(raw: str) -> list[dict]:
+    """끊긴 응답에서 끝까지 적힌 {"text":…,"sources":[…]} 항목만."""
     sentences: list[dict] = []
     for match in _SENTENCE.finditer(raw):
         try:
@@ -751,10 +794,7 @@ def _salvage_ask_response(raw: str) -> dict | None:
             continue
         sources = [int(n) for n in re.findall(r"-?\d+", match.group(2))]
         sentences.append({"text": text, "sources": sources})
-
-    if not sentences:
-        return None
-    return {"answered": answered_match.group(1) == "true", "sentences": sentences}
+    return sentences
 
 
 def _compose_answer(
@@ -856,7 +896,7 @@ def _with_variants(db, chunk_ids, matrix, variant_vectors, variants, vector_rank
 
 def _select_context(
     db: Database, combined: list[tuple[int, float]], strong_ids: set[int], scope: QueryScope,
-    question: str = "",
+    question: str = "", trace: RetrievalTrace | None = None,
 ) -> list[tuple[int, float]]:
     """RRF 순위에서 실제로 컨텍스트에 넣을 TOP_K를 고른다.
 
@@ -874,14 +914,22 @@ def _select_context(
     업무·연도 범위에 맞는 근거가 없으면 빈 결과를 반환한다.
     범위 밖 문서를 해당 업무·연도의 근거로 대체하지 않는다.
     """
-    eligible = [(cid, score) for cid, score in combined if cid in strong_ids][:EXPLORATION_WINDOW]
+    eligible = [(cid, score) for cid, score in combined if cid in strong_ids]
+    # 呼び出しが質問を渡さない旧APIは、深い候補の穴埋めを引き続き禁じる。
+    if not question:
+        eligible = eligible[:EXPLORATION_WINDOW]
     if not eligible:
         return []
 
     meta = _load_chunk_meta(db, [cid for cid, _score in eligible])
 
-    if scope.doc_ids is not None:
-        eligible = [(cid, score) for cid, score in eligible if meta[cid]["doc_id"] in scope.doc_ids]
+    clause, params = scope.predicate()
+    allowed = {r[0] for r in db.con.execute(f"SELECT d.id FROM documents d WHERE {clause}", params)}
+    before_scope = len(eligible)
+    eligible = [(cid, score) for cid, score in eligible if cid in meta and meta[cid]["doc_id"] in allowed]
+    if trace:
+        trace.record(scope_removed=before_scope-len(eligible), strong_candidates=before_scope)
+    eligible = eligible[:EXPLORATION_WINDOW]
     representative = ({cid for cid, _ in eligible} if scope.doc_ids is not None else
                       _representative_chunk_ids(db, [cid for cid, _score in eligible]))
     narrowed = [(cid, s) for cid, s in eligible if cid in representative]
@@ -912,7 +960,9 @@ def _select_context(
 
     # 연도는 위의 범위 필터가 이미 걸렀다 — 낱말 가산점에서는 뺀다.
     candidates = rerank(candidates, question, terms=_distinctive_terms(
-        db, [term for term in korean.tokens(question) if not re.search(r"\d", term)]))
+        db, [term for term in korean.tokens(question) if not re.search(r"\d", term)], scope))
+    if trace:
+        trace.record(deduplicated_candidates=len(collapsed), reranked_candidates=len(candidates))
 
     ranked = [(c.chunk_id, c.score) for c in candidates]
     doc_of = {cid: meta[cid]["doc_id"] for cid, _s in ranked if cid in meta}
@@ -953,7 +1003,7 @@ def _task_chunk_ids(db: Database, task_id: int, chunk_ids: list[int]) -> set[int
     return {row["chunk_id"] for row in rows}
 
 
-def _distinctive_terms(db: Database, terms: list[str]) -> list[str]:
+def _distinctive_terms(db: Database, terms: list[str], scope: QueryScope | None = None) -> list[str]:
     """질문 낱말 중 실제로 주제를 가르는 것만 남긴다.
 
     "계약관리 업무는 어떤 순서로 처리해?"에서 주제를 가르는 낱말은
@@ -967,9 +1017,10 @@ def _distinctive_terms(db: Database, terms: list[str]) -> list[str]:
     """
     if not terms:
         return []
+    clause, params = (scope or QueryScope()).predicate()
     total = db.con.execute(
-        "SELECT COUNT(DISTINCT doc_id) AS n FROM chunks"
-    ).fetchone()["n"]
+        f"SELECT COUNT(DISTINCT c.doc_id) AS n FROM chunks c JOIN documents d ON d.id=c.doc_id WHERE {clause}",
+        params).fetchone()["n"]
     if not total:
         return terms
 
@@ -978,8 +1029,9 @@ def _distinctive_terms(db: Database, terms: list[str]) -> list[str]:
         # 대조와 같은 어간으로 센다. 조사가 붙은 "업무는"으로 세면 드물다고
         # 나오지만, 실제로 대조에 쓰이는 "업무"는 어느 공문에나 있다.
         hits = db.con.execute(
-            "SELECT COUNT(DISTINCT doc_id) AS n FROM chunks WHERE text LIKE ?",
-            (f"%{korean.stem(term)}%",),
+            f"SELECT COUNT(DISTINCT c.doc_id) AS n FROM chunks c JOIN documents d ON d.id=c.doc_id "
+            f"WHERE {clause} AND c.text LIKE ?",
+            (*params, f"%{korean.stem(term)}%"),
         ).fetchone()["n"]
         if hits <= total * GENERIC_TERM_RATIO:
             distinctive.append(term)
@@ -1002,7 +1054,8 @@ def _support_text(context_rows: list, source_text: dict[int, str]) -> dict[int, 
     }
 
 
-def _expand_neighbors(db: Database, chunk_ids: list[int], question: str = "") -> list[int]:
+def _expand_neighbors(db: Database, chunk_ids: list[int], question: str = "",
+                      scope: QueryScope | None = None) -> list[int]:
     """고른 조각의 바로 앞뒤 조각을 함께 넣는다. 원래 순위 순서는 유지한다.
 
     조각 하나가 스스로를 설명하지 못할 때가 있다 — 표에는 숫자만 있고
@@ -1020,12 +1073,15 @@ def _expand_neighbors(db: Database, chunk_ids: list[int], question: str = "") ->
     """
     if not chunk_ids:
         return []
-    terms = _distinctive_terms(db, korean.tokens(question))
+    terms = _distinctive_terms(db, korean.tokens(question), scope)
 
     marks = ", ".join("?" * len(chunk_ids))
+    clause, params = (scope or QueryScope()).predicate()
     anchors = db.con.execute(
-        f"SELECT id, doc_id, ordinal FROM chunks WHERE id IN ({marks})", chunk_ids
-    ).fetchall()
+        f"SELECT c.id, c.doc_id, c.ordinal FROM chunks c JOIN documents d ON d.id=c.doc_id "
+        f"WHERE c.id IN ({marks}) AND {clause}", (*chunk_ids, *params)).fetchall()
+    allowed_anchors = {row['id'] for row in anchors}
+    chunk_ids = [cid for cid in chunk_ids if cid in allowed_anchors]
     position = {row["id"]: (row["doc_id"], row["ordinal"]) for row in anchors}
 
     wanted: list[tuple[int, int]] = []

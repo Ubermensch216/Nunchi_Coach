@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.ai.schemas import EXPAND_SCHEMA, MAP_SCHEMA, REDUCE_SCHEMA, REWRITE_SCHEMA
+from app.ai.schemas import EXPAND_SCHEMA, REWRITE_SCHEMA
 from app.core import notebook
 from app.db import Database
 from app.search import expand, overview
@@ -36,13 +36,15 @@ class Scripted:
 
     def generate_json(self, prompt, schema, num_predict=400, temperature=0.0):
         name = {id(EXPAND_SCHEMA): "expand", id(REWRITE_SCHEMA): "rewrite",
-                id(MAP_SCHEMA): "map", id(REDUCE_SCHEMA): "reduce"}.get(id(schema), "ask")
+                id(overview._MAP_SCHEMA): "map", id(overview._REDUCE_SCHEMA): "reduce"}.get(id(schema), "ask")
         self.calls.append((name, prompt))
         response = self.responses.get(name)
         if callable(response):
             response = response(prompt)
         if response is None:
             return None, "응답 없음", ""
+        if isinstance(response, str):          # 생성 한도에 걸려 끊긴 응답
+            return None, "생성 한도에 걸려 응답이 중간에 끊겼습니다", response
         return response, None, ""
 
 
@@ -250,3 +252,61 @@ def test_notebook_overview_mode_is_stored_with_the_message(db, book):
     row = db.con.execute("SELECT * FROM notebook_messages WHERE id=?", (message,)).fetchone()
     assert row["mode"] == "overview" and json.loads(row["generation"])["mode"] == "overview"
     assert json.loads(row["citations"])[0]["exact_quote"] == "제출처는 총무과이다"
+
+
+# ── 주제 없는 요약 요청 ─────────────────────────────────────────────
+
+@pytest.mark.parametrize("question", ["요약해줘.", "전체를 정리해 줘", "이 파일 무슨 내용이야?", "3줄로 간단히 요약해 주세요"])
+def test_bare_summary_requests_are_recognised_by_rule(question):
+    assert overview.asks_whole(question)
+
+
+@pytest.mark.parametrize("question", ["예산 집행 내용을 정리해 줘", "해외 출장 요약", "제출기한은 언제야?",
+                                      "이 보고서에서 핵심적으로 주장하는 바는 무엇인지 설명해줘."])
+def test_requests_with_a_topic_stay_ordinary_questions(question):
+    assert not overview.asks_whole(question)
+
+
+def test_bare_summary_of_a_small_selection_is_answered_as_an_overview(db, book, monkeypatch):
+    """실측: 올린 엑셀에 "요약해줘" — 조각 몇 개만 본 모델이 답을 거절해 '자료 부족'으로 보였다."""
+    seen = capture(monkeypatch)
+    client = Scripted(map={"facts": [{"text": "제출처는 총무과이다", "sources": [2]}]})
+    message, answer = notebook.query(db, book, "요약해줘.", client)
+    row = db.con.execute("SELECT * FROM notebook_messages WHERE id=?", (message,)).fetchone()
+    assert not answer.withheld and row["mode"] == "overview" and not seen
+    notebook.query(db, book, "보관실 이전 제출기한을 정리해 줘", client)
+    assert len(seen) == 1                                   # 주제가 있으면 보통 질문이다
+
+
+def test_bare_summary_of_a_large_selection_points_to_the_overview_switch(db, book, monkeypatch):
+    monkeypatch.setattr(overview, "AUTO_CHUNKS", 1)
+    client = Scripted(ask={"answered": False, "sentences": []})
+    message, answer = notebook.query(db, book, "요약해줘.", client)
+    assert answer.withheld and "전체 정리" in answer.guidance
+    row = db.con.execute("SELECT * FROM notebook_messages WHERE id=?", (message,)).fetchone()
+    assert row["mode"] == "rag" and "전체 정리" in json.loads(row["generation"])["guidance"]
+
+
+def test_overview_keeps_the_complete_facts_of_a_cut_off_response(db, tmp_path):
+    doc, _ = add_doc(db, tmp_path, "집행.txt", ["1분기 집행액은 100만원이다", "2분기 집행액은 200만원이다"])
+    cut = '{"facts": [{"text": "1분기 집행액은 100만원이다", "sources": [1]}, {"text": "2분기 집행액은 2'
+    answer = overview.overview(db, "정리해 줘", Scripted(map=cut), QueryScope(doc_ids=[doc]))
+    assert answer.text == "· 1분기 집행액은 100만원이다[1]" and answer.generation["map_recovered"] == 1
+
+
+def test_sheet_is_outlined_by_rule_when_the_whole_material_is_asked(db, tmp_path):
+    head = "번호\t곡 테마명\t키워드"
+    pieces = ["[테마]\n작사용 테마 목록\n" + head + "\n1\t식어가는 커피\t머그컵, 라떼\n2\t자전거 벨소리\t따르릉, 바게트",
+              "[테마]\n" + head + "\n3\t빨래 너는 오후\t수건, 빨랫줄"]
+    source = db.add_source(tmp_path)
+    path = tmp_path / "테마.xlsx"
+    path.write_bytes(b"sheet")
+    doc = db.upsert_document(source, {"path": str(path), "filename": path.name, "ext": ".xlsx",
+                                      "hash": hashlib.sha256(b"sheet").hexdigest(), "parse_status": "ok"})
+    db.replace_document_chunks(doc, [(i, f"'테마' A{i}:C{i}", text) for i, text in enumerate(pieces, 1)])
+    answer = overview.overview(db, "요약해줘", Scripted(map={"facts": []}), QueryScope(doc_ids=[doc]))
+    assert not answer.withheld and answer.generation["sheet_outlines"] == 1
+    assert answer.text == ("· '테마' 시트는 번호·곡 테마명·키워드 열로 된 표이며 3개 행이 있다. "
+                           "곡 테마명: 식어가는 커피, 자전거 벨소리, 빨래 너는 오후.[1][2]")
+    topical = overview.overview(db, "커피 키워드를 정리해 줘", Scripted(map={"facts": []}), QueryScope(doc_ids=[doc]))
+    assert topical.withheld                                 # 주제를 물으면 표 개요로 때우지 않는다

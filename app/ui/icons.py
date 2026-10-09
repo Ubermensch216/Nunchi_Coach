@@ -202,6 +202,12 @@ _SHAPES = {
         '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M14.5 4.5 V19.5"/>'
         '<path d="M10.4 9.4 L7.8 12 L10.4 14.6"/>'
     ),
+    # 대화 입력칸의 단추 — 보내기(Enter 글쇠의 꺾인 화살표)와 멈춤(채운 네모).
+    "enter": (
+        '<path d="M18.5 6.5 V11.5 a2.5 2.5 0 0 1 -2.5 2.5 H6.2"/>'
+        '<path d="M9.8 10.2 L6 14 L9.8 17.8"/>'
+    ),
+    "stop": '<rect x="7" y="7" width="10" height="10" rx="2.2" fill="{c}" stroke="none"/>',
 }
 
 # 제품 표지. 검은 띠 위에 올라가므로 바탕 없이 선만 그린다 — 흰 바탕째 줄인
@@ -237,10 +243,16 @@ def pixmap(name: str, color: str, size: int = 20) -> QPixmap | None:
 
 
 def brand(color: str, size: int = 24) -> QPixmap | None:
-    """제품 표지. 서류의 선은 주어진 색, 안의 점은 고정된 청록이다."""
-    if QSvgRenderer is None:
+    """제품 표지: 인수인계 문서를 잇는 연결 고리."""
+    from pathlib import Path
+
+    art = QPixmap(str(Path(__file__).parent / "assets" / "logo.png"))
+    if art.isNull():
         return None
-    return _render("brand", color, size, _BRAND.format(c=color, a=_BRAND_ACCENT))
+    return art.scaled(
+        size, size, Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
 
 
 def icon(name: str, color: str, size: int = 16):

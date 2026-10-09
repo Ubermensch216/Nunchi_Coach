@@ -22,6 +22,8 @@ import sys
 import zipfile
 from pathlib import Path
 
+from .console import force_utf8
+
 DEFAULT_OUT = Path("tests/fixtures/sample_tree")
 
 # (업무, 연도, 월, 단계, 문서유형, 확장자)
@@ -58,7 +60,7 @@ VERSION_SUFFIXES = ["", "_수정", "_최종", "_최종2", "_진짜최종", "_부
 
 
 def main(argv: list[str] | None = None) -> int:
-    _force_utf8()
+    force_utf8()
     argv = list(sys.argv[1:] if argv is None else argv)
     out = Path(argv[0]) if argv else DEFAULT_OUT
     out.mkdir(parents=True, exist_ok=True)
@@ -239,14 +241,6 @@ def _write_hwpx(path: Path, body: str) -> int:
 
 def _esc(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-def _force_utf8() -> None:
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError):
-            pass
 
 
 if __name__ == "__main__":

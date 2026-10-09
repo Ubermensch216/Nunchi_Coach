@@ -444,18 +444,25 @@ def _check_marks() -> str:
         image: url({mark});
     }}
     QCheckBox::indicator:disabled {{ border-color: {BORDER}; background: {SURFACE}; }}
-    QListWidget::indicator {{
+    QListWidget::indicator, QTreeView::indicator {{
         width: 16px;
         height: 16px;
         border: 1px solid {TEXT_SUBTLE};
         border-radius: {RADIUS_SM}px;
         background: {BG};
     }}
-    QListWidget::indicator:checked {{
+    QListWidget::indicator:checked, QTreeView::indicator:checked {{
         background: {PRIMARY};
         border-color: {PRIMARY};
         image: url({mark});
     }}
+    /* 업무 줄 — 아래 항목 가운데 일부만 골랐다. 표식 없이 옅게 채운다. */
+    QTreeView::indicator:indeterminate {{
+        background: {PRIMARY_SOFT};
+        border: 2px solid {PRIMARY};
+    }}
+    QTreeView::indicator:disabled {{ border-color: {BORDER}; background: {SURFACE}; }}
+    QTreeView::indicator:checked:disabled {{ background: {TEXT_SUBTLE}; border-color: {TEXT_SUBTLE}; }}
     """
 
 
@@ -707,6 +714,15 @@ def stylesheet(text_size: str = "medium") -> str:
     }}
     QFrame#NotebookCard:hover {{ border-color: {PRIMARY}; }}
     QFrame#NotebookCard:focus {{ border: 2px solid {TEXT}; }}
+    /* 업무 카드도 판 전체가 누르는 자리다. 윤곽이 없으면 회색 바탕 위에서
+       어디까지가 한 업무인지 갈리지 않는다. */
+    QFrame#TaskCard {{
+        background: {BG};
+        border: 1px solid {BORDER};
+        border-radius: {RADIUS_LG}px;
+    }}
+    QFrame#TaskCard:hover {{ border-color: {PRIMARY}; }}
+    QFrame#TaskCard:focus {{ border: 2px solid {TEXT}; }}
     QLabel#NotebookCardTitle {{ font-size: {lead}px; font-weight: 700; color: {TEXT}; }}
     /* 작업 화면의 세 판. 회색 바탕 위의 흰 판으로 서로 갈린다. */
     QFrame#NotebookPanel {{
@@ -719,6 +735,9 @@ def stylesheet(text_size: str = "medium") -> str:
         border: none;
         outline: none;
     }}
+    /* 업무에서 고르는 창. 줄이 낮으면 체크 상자의 위아래가 잘린다. */
+    QTreeWidget#TaskTree {{ padding: {SP_XS}px; }}
+    QTreeWidget#TaskTree::item {{ min-height: 26px; padding: 1px 0; }}
     QListWidget#SourceList::item {{
         padding: {SP_SM}px {SP_XS}px;
         border-radius: {RADIUS_SM}px;
@@ -776,6 +795,21 @@ def stylesheet(text_size: str = "medium") -> str:
         border-radius: {RADIUS_LG}px;
     }}
     QLineEdit#ChatInput {{ border: none; background: transparent; }}
+    /* 보내기와 멈춤이 한 단추다. 기다릴 때는 옅게 물러서 있고, 보낼 글이 있으면
+       강조색으로, 답을 만드는 동안에는 짙은 바탕의 멈춤으로 바뀐다. */
+    QPushButton#ChatSend {{
+        background: {SURFACE_ALT};
+        border: none;
+        border-radius: {RADIUS}px;
+        padding: 0;
+    }}
+    QPushButton#ChatSend:hover {{ background: {BORDER_STRONG}; }}
+    QPushButton#ChatSend[state="ready"] {{ background: {PRIMARY}; }}
+    QPushButton#ChatSend[state="ready"]:hover {{ background: {PRIMARY_HOVER}; }}
+    QPushButton#ChatSend[state="busy"] {{ background: {TEXT}; }}
+    QPushButton#ChatSend[state="busy"]:hover {{ background: {DANGER}; }}
+    QPushButton#ChatSend:disabled {{ background: {SURFACE_ALT}; }}
+    QPushButton#ChatSend:focus {{ border: 2px solid {PRIMARY}; }}
     /* 답이 이 화면에서 가장 큰 글자다. */
     QLabel#AnswerBody {{
         color: {TEXT};

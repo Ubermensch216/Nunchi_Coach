@@ -7,7 +7,7 @@ from pathlib import Path
 import shutil
 
 from .contract import (AccessDenied, Asset, Capabilities, DocumentRecord,
-                       SearchPage, SearchScope)
+                       SearchPage)
 
 
 def _model(cls, value):

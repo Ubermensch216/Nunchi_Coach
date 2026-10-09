@@ -23,6 +23,7 @@ from pathlib import Path
 from ..core import dating
 from ..ingest.parsers import parse, supported_extensions
 from ..ingest.scanner import EXCLUDE_DIRS, EXCLUDE_PREFIXES
+from .console import force_utf8
 
 KIND_LABEL = {
     dating.BODY: "① 본문",
@@ -37,7 +38,7 @@ TRUSTED = (dating.BODY, dating.FILENAME, dating.META, dating.FOLDER)
 
 
 def main(argv: list[str] | None = None) -> int:
-    _force_utf8()
+    force_utf8()
     args = _parse_args(argv)
     root = Path(args.folder)
     if not root.is_dir():
@@ -179,14 +180,6 @@ def _collect(root: Path, limit: int | None) -> list[Path]:
         if path.is_file() and path.suffix.lower() in supported:
             found.append(path)
     return found
-
-
-def _force_utf8() -> None:
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError):
-            pass
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

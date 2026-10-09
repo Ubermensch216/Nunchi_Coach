@@ -28,7 +28,7 @@ from ..ai import analyze
 from ..ingest import vision
 from ..ingest.hasher import sha256
 from ..ingest.parsers import parse, supported_extensions
-from ..ingest.parsers.base import EMPTY, MAX_BYTES, PARSER_VERSION, PARTIAL, ParseResult
+from ..ingest.parsers.base import EMPTY, MAX_BYTES, PARTIAL, ParseResult, outdated_clause
 from ..search import pack
 from . import dating, notebook
 from .chunking import build_chunks
@@ -142,7 +142,7 @@ def write_parse(db, doc_id: int, filename: str, path: str, result: ParseResult) 
             db.invalidate_document_analysis(doc_id)
         db.update_document(
             doc_id, parse_status=result.status, parse_error=result.error, parse_note=result.note,
-            parser=result.parser, parser_version=PARSER_VERSION, char_count=result.char_count,
+            parser=result.parser, parser_version=result.parser_version, char_count=result.char_count,
             author=result.meta.author, doc_title=result.meta.title,
             meta_created=result.meta.created, meta_modified=result.meta.modified)
         if result.ok:
@@ -279,8 +279,7 @@ def outdated_uploads(db) -> list[int]:
     return [row[0] for row in db.con.execute(
         "SELECT d.id FROM documents d JOIN sources s ON s.id=d.source_id AND s.kind='upload' "
         "WHERE d.missing_since IS NULL AND (d.parse_status='pending' "
-        "OR (d.parse_status IN ('ok','partial') AND COALESCE(d.parser_version,'') != ?))",
-        (PARSER_VERSION,))]
+        "OR (d.parse_status IN ('ok','partial') AND " + outdated_clause("d") + "))")]
 
 
 def reprocess(db, doc_id: int, client=None, on_phase=lambda phase: None,

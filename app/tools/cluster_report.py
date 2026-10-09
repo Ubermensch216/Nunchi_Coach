@@ -36,18 +36,18 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import sys
 from collections import Counter
 from itertools import combinations
 from pathlib import Path
 
 from ..db import Database, default_project_dir, open_project
+from .console import force_utf8
 
 UNCLASSIFIED = "(미분류)"
 
 
 def main(argv: list[str] | None = None) -> int:
-    _force_utf8()
+    force_utf8()
     args = _parse_args(argv)
 
     db = open_project(args.project, Path(args.data) if args.data else None)
@@ -222,14 +222,6 @@ def _print_report(result: dict, graded: list[tuple[dict, str]]) -> None:
         print("\n한 업무가 여러 묶음으로 갈린 사례")
         for item in result["split"]:
             print(f"  {item['task']}   놓친 짝 {item['pairs']:,}건")
-
-
-def _force_utf8() -> None:
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError):
-            pass
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

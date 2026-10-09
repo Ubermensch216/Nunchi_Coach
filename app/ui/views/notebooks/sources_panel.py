@@ -46,7 +46,7 @@ from ...widgets import (
     muted_label,
     open_original,
 )
-from ..ask import OPEN_SECTIONS, _cited_ordinals, _meta_strip, _paragraph
+from ..ask import _cited_ordinals, _fill_passages, _meta_strip
 from .panel import Panel
 from .task_picker import TaskSourceDialog
 
@@ -592,19 +592,8 @@ class SourcesPanel(Panel):
             return
 
         cited = _cited_ordinals(sections, citation) if self._citation else set()
-        opened = self._visible(doc_id, sections, cited)
-        hidden: list[int] = []
-        for section in sections:
-            ordinal = section["ordinal"]
-            if ordinal in opened:
-                if hidden:
-                    card.body.addWidget(self._folded(doc_id, hidden))
-                    hidden = []
-                card.body.addWidget(_paragraph(section, ordinal in cited))
-            else:
-                hidden.append(ordinal)
-        if hidden:
-            card.body.addWidget(self._folded(doc_id, hidden))
+        _fill_passages(card.body, sections, cited, doc_id in self._expanded,
+                       lambda: self._expand(doc_id))
         _fit_narrow(card)
         self.reader_column.addWidget(card)
         self.stack.setCurrentIndex(1)
@@ -633,21 +622,6 @@ class SourcesPanel(Panel):
         document = self.db.document(self.reader_doc_id) if self.reader_doc_id is not None else None
         if document is not None:
             open_original(self, self.db, document["path"])
-
-    def _visible(self, doc_id: int, sections, cited: set[int]) -> set[int]:
-        if doc_id in self._expanded:
-            return {section["ordinal"] for section in sections}
-        opened = set(cited) | {ordinal + 1 for ordinal in cited}
-        return opened | {section["ordinal"] for section in sections[:OPEN_SECTIONS]}
-
-    def _folded(self, doc_id: int, ordinals: list[int]) -> QWidget:
-        first, last = ordinals[0], ordinals[-1]
-        span = f"{first}~{last}문단" if first != last else f"{first}문단"
-        button = QPushButton(f"{span} 접힘 — 눌러서 펼치기")
-        button.setObjectName("Fold")
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.clicked.connect(lambda _=False, d=doc_id: self._expand(d))
-        return button
 
     def _expand(self, doc_id: int) -> None:
         self._expanded.add(doc_id)

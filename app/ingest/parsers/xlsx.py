@@ -30,6 +30,11 @@ from .base import (
 
 PARSER = "xlsx"
 ROWS_PER_SECTION = 50
+# 조각 하나의 글자 수 상한. core/chunking.py의 MAX_CHUNK_CHARS(1200)를 넘으면 조각이
+# 글자 수로 강제로 잘려 행이 중간에서 끊긴다(실측: 한 행이 250자쯤인 24행짜리 시트가
+# 'ight fluorescent light…'로 시작하는 조각이 됐다). 머리 행을 붙일 여유를 남긴다.
+SECTION_CHARS = 900
+HEADER_CHARS = 200
 
 
 def parse(path: Path) -> ParseResult:
@@ -58,6 +63,18 @@ def parse(path: Path) -> ParseResult:
             first_row = None
             max_col = 0
             row_idx = 0
+            last_row = 0
+            header = None          # 이어지는 조각에 다시 붙일 머리 행
+            continued = False
+
+            def close_section() -> None:
+                nonlocal ordinal, buffer, first_row, max_col, continued
+                if not buffer:
+                    return
+                ordinal += 1
+                lines = [header, *buffer] if continued and header else buffer
+                out.append(_section(ws.title, ordinal, first_row, last_row, max_col, lines, budget))
+                buffer, first_row, max_col, continued = [], None, 0, True
 
             for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
                 if cells_seen >= MAX_CELLS_PER_SHEET:
@@ -65,24 +82,22 @@ def parse(path: Path) -> ParseResult:
                     break
                 values = [_fmt(v) for v in row]
                 cells_seen += len(values)
-                if any(values):
-                    max_col = max(max_col, len(values))
-                    if first_row is None:
-                        first_row = row_idx
-                    buffer.append("\t".join(values).rstrip())
+                if not any(values):
+                    continue
+                line = "\t".join(values).rstrip()
+                # 행 중간에서 끊기지 않게, 넘치기 전에 조각을 닫는다.
+                if buffer and (len(buffer) >= ROWS_PER_SECTION
+                               or sum(map(len, buffer)) + len(buffer) + len(line) > SECTION_CHARS):
+                    close_section()
+                if header is None and not continued and _is_header(row, line):
+                    header = line
+                max_col = max(max_col, len(values))
+                if first_row is None:
+                    first_row = row_idx
+                last_row = row_idx
+                buffer.append(line)
 
-                if len(buffer) >= ROWS_PER_SECTION:
-                    ordinal += 1
-                    out.append(
-                        _section(ws.title, ordinal, first_row, row_idx, max_col, buffer, budget)
-                    )
-                    buffer, first_row, max_col = [], None, 0
-
-            if buffer:
-                ordinal += 1
-                out.append(
-                    _section(ws.title, ordinal, first_row, row_idx, max_col, buffer, budget)
-                )
+            close_section()
     finally:
         wb.close()
 
@@ -106,6 +121,12 @@ def _section(sheet, ordinal, first_row, last_row, max_col, buffer, budget) -> Se
     locator = f"'{sheet}' A{start}:{end_col}{last_row}"
     body = clip(f"[{sheet}]\n" + "\n".join(buffer), budget)
     return Section("sheet", ordinal, locator, body)
+
+
+def _is_header(row, line: str) -> bool:
+    """열 이름으로 볼 만한 행 — 칸이 둘 이상이고 전부 글자다."""
+    cells = [v for v in row if v is not None and str(v).strip()]
+    return len(cells) >= 2 and len(line) <= HEADER_CHARS and all(isinstance(v, str) for v in cells)
 
 
 def _fmt(value) -> str:

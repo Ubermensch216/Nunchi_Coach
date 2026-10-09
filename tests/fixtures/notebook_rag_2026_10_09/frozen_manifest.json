@@ -1,0 +1,17 @@
+{
+  "description": "동일 작성자의 합성 평가. 개발/최종 업무와 값 분리. 최종 결과로 수정하면 개발용으로 전환.",
+  "files": {
+    "dev.json": "3f60a6ecb502ffde77e016e0275006fb061f42c874d1a81f37ec55c2dccb9daa",
+    "holdout.json": "88648c08eb5e3a8d414ee9c68ec28e23982d886dab43ebea46d7ee07c734eb1e"
+  },
+  "baseline_code": {
+    "app/search/rag.py": "d0caecdcb63f1669c348d1791a1ce3a1f926f2d11fd93a483b5aae78cfe4f9d8",
+    "app/search/query.py": "7fa5238504b0366f6ce88057c5a93936996685891d02390ffcd60a76a57510c7",
+    "app/search/quantity.py": "c34de8472bbf6a3cfcaef5ac60a9d296a18afb563d91d205891d57a9282a590a",
+    "app/search/intent.py": "2c30a0bac622f7b54a64ee159e40089eec96793c060f14007797a64e8eb45052",
+    "app/search/fts.py": "f489b90069146190181f538d63b42d81ef21fa43ddb9d12d5c469687db427ca6",
+    "app/search/expand.py": "63f6b5c0e829175681b59a0c4281cc17de098fcaf74370dd5383dc09ce514c38",
+    "app/search/overview.py": "b7d7d0b36d9d8e5422b8407b2204e34004e4b42b6156c97a9e30fd144db97ba8",
+    "app/core/notebook.py": "d780c626f94a4f075842a90e6a5428b83756d77070e2a8c90fe574ef7f357173"
+  }
+}

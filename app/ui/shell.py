@@ -83,8 +83,7 @@ class TopBar(QWidget):
         row.setContentsMargins(theme.SP_XL, 0, theme.SP_LG, 0)
         row.setSpacing(theme.SP_SM)
 
-        # 표지는 선으로 다시 그린 것을 쓴다. 흰 바탕째인 logo.png를 줄여 올리면
-        # 검은 띠 위에 흰 네모가 떠서 그림이 안 뜬 자리처럼 보인다.
+        # 창 아이콘과 같은 연결 고리 표지를 쓴다.
         art = icons.brand(theme.NAVBAR_TEXT, theme.TOPBAR_H - 24)
         if art is not None:
             mark = QLabel()
@@ -356,7 +355,7 @@ class MainWindow(QMainWindow):
         if not self.db.work_sources():
             return
         from ..ai.settings import model_names
-        from ..ingest.parsers.base import PARSER_VERSION
+        from ..ingest.parsers.base import outdated_clause
         embed_model = model_names(self.db)[1]
         pending = self.db.con.execute(
             "SELECT COUNT(*) AS n FROM documents d "
@@ -366,8 +365,8 @@ class MainWindow(QMainWindow):
             "  AND (d.hash IS NULL OR d.parse_status = 'pending' "
             "       OR d.eff_date IS NULL "
             "       OR (d.parse_status IN ('ok','partial') AND "
-            "           (e.doc_id IS NULL OR COALESCE(d.parser_version,'') != ?)))",
-            (embed_model, PARSER_VERSION),
+            "           (e.doc_id IS NULL OR " + outdated_clause("d") + ")))",
+            (embed_model,),
         ).fetchone()["n"]
         counts = self.db.counts()
         # 문서 처리는 끝났는데 업무를 아직 못 찾았거나, 업무는 찾았는데

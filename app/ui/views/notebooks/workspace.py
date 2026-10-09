@@ -19,7 +19,6 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
-    QLabel,
     QMessageBox,
     QPushButton,
     QSplitter,

@@ -104,10 +104,6 @@ class Health:
     embedding_ready: bool = False
 
 
-class OllamaError(Exception):
-    """이 모듈 밖으로 나가지 않는다. 호출자에게는 값으로 알린다."""
-
-
 class OllamaClient:
     def __init__(
         self,

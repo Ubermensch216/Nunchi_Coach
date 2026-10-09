@@ -2,12 +2,12 @@
 
 import hashlib
 import json
-import re
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 
 from ..search import expand
+from ..search.overview import asks_whole, automatic
 from ..search.query import QueryScope
 from ..search.rag import ask
 
@@ -203,6 +203,14 @@ def _law_lookup(db, question, client, answer):
     return service.answer(db, question, client, cited_in_documents=refs.extract(quoted)[:2])
 
 
+def effective_mode(db, notebook_id, question, mode="", generating=True):
+    """이 질문을 실제로 받을 방식. 주제 없는 요약 요청은 자료가 적으면 전체 정리로 받는다."""
+    if mode or not generating:
+        return mode
+    doc_ids = [int(k) for k in selected_snapshot(db, notebook_id)]
+    return "overview" if automatic(db, question, doc_ids) else ""
+
+
 def query(db, notebook_id, question, client=None, mode="", law=False):
     """노트북의 한 차례 대화.
 
@@ -224,6 +232,7 @@ def query(db, notebook_id, question, client=None, mode="", law=False):
             rewritten = expand.standalone(client, effective, earlier)
         effective = rewritten or earlier[-1] + "\n후속 질문: " + effective
     scope = QueryScope(doc_ids=[int(k) for k in snapshot])
+    mode = effective_mode(db, notebook_id, question, mode, generating)
     if mode == "overview":
         from ..search.overview import overview
         answer = overview(db, effective, client, scope)
@@ -235,6 +244,11 @@ def query(db, notebook_id, question, client=None, mode="", law=False):
     if getattr(client, "cancelled", False):
         raise ValueError("질문을 취소했습니다.")
     answer.question = question.strip()
+    if answer.withheld and not answer.error and mode != "overview" and asks_whole(question):
+        # 자료가 많아 보통 질문으로 받은 요약 요청이 보류됐다. 자료가 없는 것이 아니다.
+        answer.guidance = ("자료 전체를 요약·정리하려면 입력창 옆 '전체 정리'를 켜고 다시 요청하세요. "
+                           "특정 내용이 궁금하면 그 주제를 질문에 적어 주세요.")
+        answer.generation["guidance"] = answer.guidance
     if selected_snapshot(db, notebook_id) != snapshot:
         raise ValueError("질문 중 자료 선택이나 판본이 바뀌었습니다. 다시 질문하세요.")
     # 법령 검색에는 사용자가 쓴 문장만 보낸다. 앞선 질문을 이어 붙인 문장은 보내지 않는다.

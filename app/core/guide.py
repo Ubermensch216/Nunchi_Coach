@@ -85,9 +85,6 @@ class Guide:
     def measured(self) -> list[Item]:
         return [item for item in self.items if item.total]
 
-    def stage_label(self) -> str:
-        return STAGE_LABEL[self.stage]
-
     def headline(self) -> str:
         if not self.measured:
             return "아직 확인할 것이 없습니다"

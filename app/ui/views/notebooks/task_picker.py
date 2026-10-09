@@ -65,7 +65,7 @@ class TaskSourceDialog(QDialog):
         layout.addLayout(row)
 
         self.tree = QTreeWidget()
-        self.tree.setObjectName("SourceList")
+        self.tree.setObjectName("TaskTree")
         self.tree.setHeaderHidden(True)
         self.tree.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         self.tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
