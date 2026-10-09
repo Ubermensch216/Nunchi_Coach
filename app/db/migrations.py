@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "7"
+SCHEMA_VERSION = "8"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -426,6 +426,16 @@ def _to_v7(con: sqlite3.Connection) -> None:
     add_notebook_columns(con)
 
 
+def _to_v8(con: sqlite3.Connection) -> None:
+    # complete_statement handles trigger bodies without executescript's implicit COMMIT.
+    statement = ""
+    for line in Path(__file__).with_name("child_schema.sql").read_text(encoding="utf-8").splitlines(True):
+        statement += line
+        if sqlite3.complete_statement(statement):
+            con.execute(statement)
+            statement = ""
+
+
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
@@ -433,6 +443,7 @@ STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "5": _to_v5,
     "6": _to_v6,
     "7": _to_v7,
+    "8": _to_v8,
 }
 
 

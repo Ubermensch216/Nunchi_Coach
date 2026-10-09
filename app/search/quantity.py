@@ -104,3 +104,39 @@ def verdict(asked, answer, original):
     if explicit(answer) and requested:
         return 'quantity_unit_mismatch'
     return 'quantity_missing'
+
+
+_ROLES = ('담당', '참석', '참여', '초청', '수료', '신청', '접수', '계획', '배정')
+_BINDING_FILLERS = {'업무', '사업', '자료', '관련', '대한', '대해', '기준', '현재', '전체', '우리'}
+
+
+def binding_verdict(asked, answer, original, title='', computed_values=None):
+    """인원의 역할과 그 숫자가 같은 문장/표 항목에 연결됐는가.
+
+    명시적 역할이 있는 인원 질문에만 적용한다. 이름표·표는 기존 bindings도
+    사용하며, 다른 문장의 '담당'이라는 말로 상담 인원을 승인하지 않는다.
+    """
+    if asked.intent != 'count' or unit_in(asked.question) != '명':
+        return ''
+    role = next((r for r in _ROLES if r in asked.question), '')
+    if not role:
+        return ''
+    values = explicit(answer, '명') | {(value, '명') for value in _named_scalar(answer, asked)}
+    if computed_values is not None:
+        values |= {(value, '명') for value in computed_values}
+    if not values:
+        return ''  # 수량 없음은 기존 verdict가 판정한다.
+    prefix = re.split(r'인원|인력|사람|몇', asked.question, maxsplit=1)[0]
+    topics = [re.sub(r'(?:에서|으로|의|은|는|이|가|을|를)$', '', w)
+              for w in re.findall(r'[가-힣]{2,}', prefix)]
+    topics = [w for w in topics if len(w) >= 3 and w not in _BINDING_FILLERS and w not in _ROLES]
+    clauses = re.split(r'[\n;]|\.\s+(?=[가-힣])|(?<=[며고])\s+(?=[가-힣])', original)
+    # 표의 행·열 이름과 값은 parser/intent가 복원한 묶임으로 대조한다.
+    clauses.extend(name + ': ' + ' '.join(str(v[1]) + '명' for v in vals if v[0] == 'num')
+                   for name, vals in intent.bindings(original) if re.search(r'인원|인력|명', name))
+    for clause in clauses:
+        if role not in clause or not (values & explicit(clause, '명')):
+            continue
+        if not topics or all(word in re.sub(r'\s+', '', title + clause) for word in topics):
+            return ''
+    return 'quantity_role_unbound'

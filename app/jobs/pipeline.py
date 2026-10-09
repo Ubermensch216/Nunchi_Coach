@@ -636,6 +636,15 @@ class Pipeline(QObject):
             if index % 20 == 0 or index == len(bare):
                 self.progress.emit(STAGE_CHUNKS, index, len(bare), row["filename"])
 
+        # 기존 부모 ID를 유지한 채 자식만 보충한다. 취소 후 다음 실행에서 이어진다.
+        hierarchy_docs = db.con.execute(
+            "SELECT DISTINCT c.doc_id FROM chunks c JOIN documents d ON d.id=c.doc_id "
+            "WHERE d.missing_since IS NULL ORDER BY c.doc_id").fetchall()
+        for row in hierarchy_docs:
+            if self._stop:
+                break
+            db.ensure_child_chunks(row["doc_id"])
+
         health = client.health()
         if not health.embedding_ready:
             # chunks_checked는 세우지 않는다 — 연결되면 임베딩을 이어서 해야 한다.
@@ -675,7 +684,15 @@ class Pipeline(QObject):
             if index % 5 == 0 or index == len(rows):
                 self.progress.emit(STAGE_CHUNKS, index, len(rows), row["filename"])
 
-        left = db.unembedded_chunk_count(client.embed_model)
+        from ..core.child_index import embed_children
+        for row in hierarchy_docs:
+            if self._stop:
+                break
+            error = embed_children(db, row["doc_id"], client, lambda: self._stop, CHUNK_EMBED_BATCH)
+            if error and error != "cancelled":
+                report.errors.append(f"자식 검색 준비: {row['doc_id']}: {error}")
+        child_left = db.unembedded_child_count(client.embed_model)
+        left = db.unembedded_chunk_count(client.embed_model) + child_left
         if made or embedded:
             report.note = f"{embedded:,}조각 준비"
         else:
@@ -685,8 +702,10 @@ class Pipeline(QObject):
             report.note += f" · {left:,}조각 남음"
         if report.errors:
             report.note += " · 일부 실패"
-        if not self._stop:
+        if not self._stop and not child_left:
             db.set_meta("chunks_checked", "1")
+        elif child_left:
+            db.con.execute("DELETE FROM meta WHERE key='chunks_checked'")
         self.stage_done.emit(report)
 
 

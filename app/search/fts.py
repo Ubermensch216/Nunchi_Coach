@@ -13,6 +13,7 @@ trigram 토크나이저는 3글자 미만 질의를 처리하지 못한다(실�
 from __future__ import annotations
 
 from ..db import Database
+import re
 
 MIN_TRIGRAM_LEN = 3
 
@@ -73,24 +74,52 @@ def search_chunk_ids(db: Database, term: str, limit: int = 40, doc_ids=None) -> 
     같은 기준이라야, 두 순위를 합칠 때 후보 모집단이 어긋나지 않는다.
     """
     term = term.strip()
-    if not usable_for_trigram(term):
-        return []
-    if doc_ids == []:
+    if doc_ids == [] or limit <= 0:
         return []
     restriction = ""
     args = []
     if doc_ids is not None:
         restriction = " AND d.id IN (" + ",".join("?" for _ in doc_ids) + ")"
         args = list(doc_ids)
+    if not usable_for_trigram(term):
+        return _short_chunk_ids(db, term, limit, doc_ids)
     try:
         rows = db.con.execute(
-            "SELECT f.rowid AS chunk_id FROM chunk_fts f "
+            "SELECT s.parent_id AS chunk_id, f.rank AS score FROM child_fts f "
+            "JOIN chunk_children s ON s.id=f.rowid JOIN chunks c ON c.id=s.parent_id "
+            "JOIN documents d ON d.id=c.doc_id "
+            "WHERE child_fts MATCH ? AND d.missing_since IS NULL " + restriction +
+            " UNION ALL SELECT f.rowid AS chunk_id, f.rank AS score FROM chunk_fts f "
             "JOIN chunks c ON c.id = f.rowid "
             "JOIN documents d ON d.id = c.doc_id "
             "WHERE chunk_fts MATCH ? AND d.missing_since IS NULL " + restriction +
-            "ORDER BY rank LIMIT ?",
-            (escape_match_any(term), *args, limit),
-        ).fetchall()
+            "AND NOT EXISTS(SELECT 1 FROM chunk_children s WHERE s.parent_id=c.id) ORDER BY score,chunk_id",
+            (escape_match_any(term), *args, escape_match_any(term), *args),
+        )
+        found = []
+        seen = set()
+        for row in rows:
+            if row["chunk_id"] not in seen:
+                seen.add(row["chunk_id"])
+                found.append(row["chunk_id"])
+                if len(found) >= limit:
+                    break
     except Exception:
         return []
-    return [row["chunk_id"] for row in rows]
+    return found or _short_chunk_ids(db, term, limit, doc_ids)
+
+
+def _short_chunk_ids(db, term, limit, doc_ids):
+    """trigram이 처리하지 못하는 두 글자 용어. 선택 범위 내 정확 문자열만 찾는다."""
+    words = [re.sub(r'(?:은|는|이|가|을|를|의)$', '', w) if len(w) == 3 else w
+             for w in re.findall(r'[가-힣A-Za-z0-9]+', term)]
+    words = list(dict.fromkeys(w for w in words if len(w) == 2))
+    if not words:
+        return []
+    from .query import QueryScope
+    clause, args = QueryScope(doc_ids=doc_ids).predicate()
+    exact = ' OR '.join("c.text LIKE ? ESCAPE '\\'" for _ in words)
+    matches = ['%' + w.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%' for w in words]
+    return [row[0] for row in db.con.execute(
+        f'SELECT c.id FROM chunks c JOIN documents d ON d.id=c.doc_id WHERE {clause} '
+        f'AND ({exact}) ORDER BY c.id LIMIT ?', (*args, *matches, limit))]

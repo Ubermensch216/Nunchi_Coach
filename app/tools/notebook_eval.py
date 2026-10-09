@@ -21,7 +21,7 @@ FIXTURES = Path(__file__).resolve().parents[2] / 'tests/fixtures/notebook_rag_20
 
 
 def judge_turn(db, message_id, answer, spec, snapshot):
-    """画面答변뿐 아니라 실제 저장된 선택 범위·원문 인용도 채점한다."""
+    """화면 답변뿐 아니라 실제 저장된 선택 범위·원문 인용도 채점한다."""
     outcome = rag_report.Outcome(spec.get('id', ''), answer.question, spec['expect'],
                                 answer.withheld, 0, [c.filename for c in answer.citations],
                                 answer.text, answer.error)
@@ -70,11 +70,25 @@ def run_scenario(db, scenario, client, expansion):
             message, answer = notebook.query(db, book, spec['question'], client,
                                               mode=spec.get('mode', ''))
             outcome, failures, rewritten = judge_turn(db, message, answer, spec, snapshot)
+            expected = {mapping[name] for name in spec.get('must_cite_any', []) if name in mapping}
+            retrieved = set(answer.generation.get('retrieval', {}).get('selected_doc_ids', []))
+            if not failures:
+                failure_kind = ''
+            elif any('범위' in f or '판본' in f for f in failures):
+                failure_kind = 'scope_or_version'
+            elif answer.error:
+                failure_kind = 'runtime_error'
+            elif expected and not (expected & (retrieved | {c.doc_id for c in answer.citations})):
+                failure_kind = 'retrieval_miss'
+            elif answer.withheld:
+                failure_kind = 'over_abstention'
+            else:
+                failure_kind = 'answer_or_evidence_mismatch'
             record = {'turn': index, 'question': spec['question'], 'answer': answer.text,
                       'withheld': answer.withheld, 'path': outcome.path,
                       'citations': [asdict(c) for c in answer.citations],
                       'generation': answer.generation, 'standalone_question': rewritten,
-                      'source_snapshot': snapshot, 'failures': failures}
+                      'source_snapshot': snapshot, 'failures': failures, 'failure_kind': failure_kind}
         except Exception as exc:
             record = {'turn': index, 'failures': [f'실행 오류: {type(exc).__name__}: {exc}']}
         record['seconds'] = round(time.monotonic() - started, 3)
@@ -148,7 +162,7 @@ def main(argv=None):
                     result = run_scenario(db, scenario, client, enabled)
                     results.append(result)
                     print(f"seed={seed} expansion={enabled} {scenario['id']} {'PASS' if result['passed'] else 'FAIL'}", flush=True)
-                    # 中断時にも完了分を記録する。
+                    # 중단되더라도 완료한 시나리오는 남긴다.
                     checkpoint = {**record, 'in_progress': {'seed': seed, 'expansion': enabled, 'scenarios': results}}
                     args.json.write_text(json.dumps(checkpoint, ensure_ascii=False, indent=2), encoding='utf-8')
                 record['rounds'].append({'seed': seed, 'expansion': enabled,

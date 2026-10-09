@@ -381,7 +381,8 @@ class MainWindow(QMainWindow):
         needs_chunks = (
             counts["documents"] > 0
             and (self.db.get_meta("chunks_checked") is None
-                 or self.db.unembedded_chunk_count(embed_model) > 0)
+                 or self.db.unembedded_chunk_count(embed_model) > 0
+                 or self.db.unembedded_child_count(embed_model) > 0)
         )
         if (pending or needs_discovery or needs_cycles or needs_steps or needs_items
                 or needs_chunks):

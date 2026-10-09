@@ -223,7 +223,7 @@ def test_v4_project_gains_the_tables_and_keeps_corrections(tmp_path):
     db = Database(path)
     db.init()
     try:
-        assert db.get_meta("schema_version") == SCHEMA_VERSION == "7"
+        assert db.get_meta("schema_version") == SCHEMA_VERSION == "8"
         tables = {r[0] for r in db.con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert NEW_TABLES <= tables
         assert db.task(1)["review_state"] == "confirmed"

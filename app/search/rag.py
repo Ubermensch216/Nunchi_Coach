@@ -249,7 +249,8 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
 
     with trace.stage("matrix"):
         chunk_ids, matrix = _load_chunk_matrix(db, client.embed_model, search_docs)
-    trace.record(indexed_chunks=int(chunk_ids.size))
+    trace.record(indexed_chunks=len(set(chunk_ids.tolist())), indexed_vector_rows=int(chunk_ids.size),
+                 hierarchy_version=1)
     if chunk_ids.size == 0:
         return search_only(db, question, scope, "의미 색인 준비 전입니다. 자료 검색 결과를 보여 드립니다.")
 
@@ -261,8 +262,7 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         return search_only(db, question, scope, "의미 색인과 검색 모델의 차원이 달라 자료 검색 결과를 보여 드립니다. 색인을 다시 준비하세요.")
     with trace.stage("vector"):
         scores = matrix @ query_vector
-        pool = np.argsort(-scores)[:RANK_POOL]
-        vector_ranked = [(int(chunk_ids[i]), float(scores[i])) for i in pool]
+        vector_ranked = _parent_vector_rank(chunk_ids, scores)
     with trace.stage("lexical"):
         fts_ranked = fts.search_chunk_ids(db, question, limit=RANK_POOL, doc_ids=search_docs)
     trace.record(vector_candidates=len(vector_ranked), lexical_candidates=len(fts_ranked))
@@ -292,6 +292,7 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
     with trace.stage("selection"):
         strong = _select_context(db, combined, strong_ids, scope, question, trace)
     trace.record(fused_candidates=len(combined), selected_chunks=len(strong))
+    trace.record(selected_chunk_ids=[cid for cid, _ in strong])
 
     if not strong:
         # 범위 밖 자료를 '관련 문서'로 노출하지 않는다.
@@ -308,6 +309,8 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         selected = _expand_neighbors(db, [cid for cid, _ in strong], question, scope)
         context_rows = _load_chunk_context(db, selected)
     trace.record(context_chunks=len(context_rows))
+    trace.record(selected_doc_ids=sorted({row['doc_id'] for row in context_rows}),
+                 context_characters=sum(len(row['text']) for row in context_rows))
     if not context_rows:
         return Answer(question=question, text="확인 가능한 자료가 부족합니다.", withheld=True,
                        inferred_years=scope.years)
@@ -341,6 +344,19 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
             index: f"{row['filename']}\n{about[index]}"
             for index, row in enumerate(context_rows, start=1)}, stems=asked.stems), "table_cell"
     if computed is not None:
+        if asked.intent == 'count':
+            from . import quantity
+            # 규칙으로 읽은 무단위 표 숫자는 모델의 수량 표현 검사에 보내지 않는다.
+            # 다만 인원 역할은 그 표의 원문 행·열과 다시 대조한다.
+            support = _support_text(context_rows, source_text)
+            values = {v[1] for v in intent.values(computed[0]) if v[0] == 'num'}
+            verdicts = [quantity.binding_verdict(asked, computed[0], support.get(n, ''),
+                        context_rows[n-1]['filename'], computed_values=values) for n in computed[1]
+                        if 0 < n <= len(context_rows)]
+            failure = '' if '' in verdicts else 'quantity_role_unbound'
+            if failure:
+                return Answer(question, '질문한 수량·역할을 원문에서 확인할 수 없어 확정을 보류했습니다.', True,
+                              inferred_years=scope.years, generation={**diagnosis, 'withheld': failure})
         text, citations = _compose_answer(
             [VerifiedSentence(text=computed[0], sources=computed[1])],
             context_rows, official, source_text)
@@ -360,6 +376,7 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         "ask", context=_format_context(context_rows, official, source_text), question=question)
     with trace.stage("generation"):
         data, gen_error, raw = client.generate_json(prompt, ASK_SCHEMA, num_predict=GEN_TOKEN_BUDGET)
+    trace.record(generation_calls=1)
     generation = {**diagnosis, **_generation_record(client)}
     if db.get_meta("content_revision") != content_revision:
         return Answer(question=question, text="", withheld=True,
@@ -383,7 +400,9 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         # 한다(실측: 같은 질문을 잇달아 두 번 물으면 두 번째에 answered=false가
         # 왔다). 근거로 쓸 만한 조각이 있어 여기까지 온 질문이므로 한 번만 다시
         # 묻는다. 다시 받은 답도 아래의 검증을 그대로 거친다.
-        again, again_error, _raw = _ask_again(client, prompt, ASK_SCHEMA)
+        with trace.stage("generation"):
+            again, again_error, _raw = _ask_again(client, prompt, ASK_SCHEMA)
+        trace.record(generation_calls=trace.counts['generation_calls']+1)
         generation = {**generation, **_generation_record(client), "asked_twice": True}
         if db.get_meta("content_revision") != content_revision:
             return Answer(question=question, text="", withheld=True,
@@ -410,7 +429,9 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         # 이렇게 끝났고, 같은 조건으로 다시 물으면 같은 빈 목록이 온다. 문장을
         # 하나 이상 내도록 문법을 좁혀 한 번만 다시 묻는다. 그렇게 받은 문장도
         # 아래의 근거 검증을 그대로 거치므로, 근거 없는 문장은 화면에 오르지 않는다.
-        forced, forced_error, _raw = _ask_again(client, prompt, _ASK_SCHEMA_NONEMPTY)
+        with trace.stage("generation"):
+            forced, forced_error, _raw = _ask_again(client, prompt, _ASK_SCHEMA_NONEMPTY)
+        trace.record(generation_calls=trace.counts['generation_calls']+1)
         generation = {**generation, **_generation_record(client), "empty_answer_retry": True}
         if db.get_meta("content_revision") != content_revision:
             return Answer(question=question, text="", withheld=True,
@@ -437,11 +458,13 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
     # 모델이 문장·근거를 스스로 짝지어 냈어도, 그 근거가 실제로 그 문장을
     # 뒷받침하는지는 모델이 보장하지 않는다. 여기서 규칙으로 한 번 더
     # 확인한다 — 근거 없는 문장은 화면에 올리지 않는다(§1 측정 1).
-    verified = verify_sentences(
-        data.get("sentences") or [], source_text, _support_text(context_rows, source_text),
-        question=question,
-        names={index: row["filename"] for index, row in enumerate(context_rows, start=1)},
-    )
+    with trace.stage("verification"):
+        verified = verify_sentences(
+            data.get("sentences") or [], source_text, _support_text(context_rows, source_text),
+            question=question,
+            names={index: row["filename"] for index, row in enumerate(context_rows, start=1)},
+        )
+    trace.record(verified_sentences=len(verified.kept), dropped_sentences=len(verified.dropped))
 
     if verified.reattributed:
         generation["sources_corrected"] = verified.reattributed
@@ -473,7 +496,8 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
             related_docs=_dedupe(related), model=client.gen_model,
             inferred_years=scope.years, generation=generation)
 
-    off = _off_the_point(question, verified.kept, context_rows, source_text, asked)
+    with trace.stage("answer_fit"):
+        off = _off_the_point(question, verified.kept, context_rows, source_text, asked)
     if off:
         generation[off] = True
         generation["withheld"] = off
@@ -488,6 +512,11 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
                       if quantity_problem else ""))
 
     kept = verified.kept
+    if asked.intent == 'count':
+        matching = [sentence for sentence in kept if not _quantity_failure(asked, sentence, context_rows, source_text)]
+        if len(matching) != len(kept):
+            generation['sentences_off_quantity'] = len(kept)-len(matching)
+        kept = matching
     if asked.stems:
         # 옳은 값을 말한 문장이 있어 답은 나가지만, 다른 속성의 값을 말한 문장은 뺀다.
         verdicts = _wrong_field(asked, kept, context_rows, source_text)
@@ -663,17 +692,36 @@ def _off_the_point(question: str, kept: list, context_rows: list,
         if wrong and _CONFIRMED not in verdicts:
             return wrong
     if asked is not None and asked.intent == "count":
-        from . import quantity
-        support = _support_text(context_rows, source_text)
-        failures = []
-        for sentence in kept:
-            cited = "\n".join(support.get(source, "") for source in sentence.sources)
-            failure = quantity.verdict(asked, sentence.text, cited)
-            if not failure:
-                return ""
-            failures.append(failure)
+        failures = [_quantity_failure(asked, sentence, context_rows, source_text) for sentence in kept]
+        if '' in failures:
+            return ''
+        if 'quantity_role_unbound' in failures:
+            return 'quantity_role_unbound'
         return next((f for f in failures if f != "quantity_missing"), "quantity_missing")
     return ""
+
+
+def _quantity_failure(asked, sentence, context_rows, source_text):
+    from . import quantity
+    support = _support_text(context_rows, source_text)
+    failures, checked_docs = [], set()
+    for source in sentence.sources:
+        if not 0 < source <= len(context_rows):
+            continue
+        row = context_rows[source-1]
+        if row['doc_id'] in checked_docs:
+            continue
+        checked_docs.add(row['doc_id'])
+        cited = support.get(source, '')
+        failure = quantity.verdict(asked, sentence.text, cited)
+        if not failure:
+            failure = quantity.binding_verdict(asked, sentence.text, cited, row['filename'])
+        if not failure:
+            return ''
+        failures.append(failure)
+    if 'quantity_role_unbound' in failures:
+        return 'quantity_role_unbound'
+    return next((f for f in failures if f != 'quantity_missing'), 'quantity_missing')
 
 
 _CONFIRMED = "confirmed"
@@ -885,9 +933,9 @@ def _with_variants(db, chunk_ids, matrix, variant_vectors, variants, vector_rank
     widened: set[int] = set()
     for vector, text in zip(variant_vectors, variants):
         similarity = matrix @ vector
-        pool = np.argsort(-similarity)[:RANK_POOL]
-        add([int(chunk_ids[i]) for i in pool], VARIANT_WEIGHT)
-        widened |= {int(chunk_ids[i]) for i in pool if float(similarity[i]) >= MIN_SIMILARITY}
+        ranked = _parent_vector_rank(chunk_ids, similarity)
+        add([cid for cid, _ in ranked], VARIANT_WEIGHT)
+        widened |= {cid for cid, score in ranked if score >= MIN_SIMILARITY}
         exact = fts.search_chunk_ids(db, text, limit=RANK_POOL, doc_ids=doc_ids)
         add(exact, VARIANT_WEIGHT)
         widened |= set(exact[:VARIANT_FTS_STRONG])
@@ -901,13 +949,12 @@ def _select_context(
     """RRF 순위에서 실제로 컨텍스트에 넣을 TOP_K를 고른다.
 
     순서가 중요하다.
-      ① 탐색 범위를 EXPLORATION_WINDOW로 못 박는다 — 그 아래는 걸러서
-         생긴 빈 자리를 메우는 데도 쓰지 않는다.
+      ① 사용자 범위·업무·연도를 적용한 뒤 탐색 범위를 제한한다.
       ② 대표본 판정(파일 단위 중복 제거)
       ③ 내용 단위 근접 중복 축약 — 파일은 다른데 내용이 같은 버전 사본을
          접는다. 다양성 상한보다 **먼저** 해야 한다. 나중에 하면 같은 내용
          여덟 건이 각자 다른 문서라는 이유로 상한을 통과해 버린다.
-      ④ 연도 필터
+      ④ 업무·연도 범위를 재확인한다
       ⑤ 규칙 재정렬 — 상한을 적용하기 전에 해야 좋은 후보가 살아남는다.
       ⑥ 문서당 상한 → TOP_K
 
@@ -915,7 +962,7 @@ def _select_context(
     범위 밖 문서를 해당 업무·연도의 근거로 대체하지 않는다.
     """
     eligible = [(cid, score) for cid, score in combined if cid in strong_ids]
-    # 呼び出しが質問を渡さない旧APIは、深い候補の穴埋めを引き続き禁じる。
+    # 質問がない旧APIでは、深い候補による穴埋めを引き続き禁じる。
     if not question:
         eligible = eligible[:EXPLORATION_WINDOW]
     if not eligible:
@@ -928,7 +975,8 @@ def _select_context(
     before_scope = len(eligible)
     eligible = [(cid, score) for cid, score in eligible if cid in meta and meta[cid]["doc_id"] in allowed]
     if trace:
-        trace.record(scope_removed=before_scope-len(eligible), strong_candidates=before_scope)
+        trace.record(scope_removed=before_scope-len(eligible), strong_candidates=before_scope,
+                     window_removed=max(0, len(eligible)-EXPLORATION_WINDOW))
     eligible = eligible[:EXPLORATION_WINDOW]
     representative = ({cid for cid, _ in eligible} if scope.doc_ids is not None else
                       _representative_chunk_ids(db, [cid for cid, _score in eligible]))
@@ -962,11 +1010,15 @@ def _select_context(
     candidates = rerank(candidates, question, terms=_distinctive_terms(
         db, [term for term in korean.tokens(question) if not re.search(r"\d", term)], scope))
     if trace:
-        trace.record(deduplicated_candidates=len(collapsed), reranked_candidates=len(candidates))
+        trace.record(deduplicated_candidates=len(collapsed), reranked_candidates=len(candidates),
+                     duplicate_removed=len(eligible)-len(collapsed))
 
     ranked = [(c.chunk_id, c.score) for c in candidates]
     doc_of = {cid: meta[cid]["doc_id"] for cid, _s in ranked if cid in meta}
-    return _cap_per_document(ranked, doc_of)[:TOP_K]
+    capped = _cap_per_document(ranked, doc_of)
+    if trace:
+        trace.record(diversity_removed=len(ranked)-len(capped), top_k_removed=max(0,len(capped)-TOP_K))
+    return capped[:TOP_K]
 
 
 def _cap_per_document(
@@ -1194,6 +1246,15 @@ def _load_chunk_meta(db: Database, chunk_ids: list[int]) -> dict[int, dict]:
     }
 
 
+def _parent_vector_rank(ids, scores) -> list[tuple[int, float]]:
+    """자식 최고 점수로 부모를 한 번만 순위화한다. 긴 문서에 중복 가산하지 않는다."""
+    best = {}
+    for cid, score in zip(ids, scores):
+        key = int(cid)
+        best[key] = max(best.get(key, float('-inf')), float(score))
+    return sorted(best.items(), key=lambda item: (-item[1], item[0]))[:RANK_POOL]
+
+
 def _load_chunk_matrix(db: Database, model: str, doc_ids=None) -> tuple[np.ndarray, np.ndarray]:
     restriction = ""
     args = []
@@ -1201,11 +1262,18 @@ def _load_chunk_matrix(db: Database, model: str, doc_ids=None) -> tuple[np.ndarr
         restriction = " AND d.id IN (" + (",".join("?" for _ in doc_ids) or "NULL") + ")"
         args = list(doc_ids)
     rows = db.con.execute(
-        "SELECT e.chunk_id, e.dim, e.vector FROM embeddings e "
+        "WITH ready AS (SELECT s.parent_id FROM chunk_children s "
+        "LEFT JOIN child_embeddings e ON e.child_id=s.id AND e.model=? "
+        "GROUP BY s.parent_id HAVING COUNT(*)=COUNT(e.child_id) AND MIN(e.dim)=MAX(e.dim)), "
+        "vectors AS (SELECT s.parent_id AS chunk_id,e.dim,e.vector FROM child_embeddings e "
+        "JOIN chunk_children s ON s.id=e.child_id JOIN ready r ON r.parent_id=s.parent_id WHERE e.model=? "
+        "UNION ALL SELECT e.chunk_id,e.dim,e.vector FROM embeddings e WHERE e.model=? "
+        "AND NOT EXISTS(SELECT 1 FROM ready r WHERE r.parent_id=e.chunk_id)) "
+        "SELECT e.chunk_id, e.dim, e.vector FROM vectors e "
         "JOIN chunks c ON c.id = e.chunk_id "
         "JOIN documents d ON d.id = c.doc_id "
-        "WHERE e.model = ? AND d.missing_since IS NULL" + restriction,
-        (model, *args),
+        "WHERE d.missing_since IS NULL" + restriction,
+        (model, model, model, *args),
     ).fetchall()
     if not rows:
         return np.empty(0, dtype=np.int64), np.empty((0, 0), dtype=np.float32)

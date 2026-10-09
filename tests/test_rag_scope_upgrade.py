@@ -9,6 +9,7 @@ from app.db import Database
 from app.search.query import QueryScope
 from app.search.rag import _distinctive_terms, _select_context, _subject_unknown, ask
 from app.search.vector import pack
+from app.search import fts, intent, quantity
 
 
 @pytest.fixture
@@ -115,3 +116,79 @@ def test_notebook_keeps_retrieval_diagnostics_without_raw_text(store):
     assert not any(word in str(record) for word in ('시설방문', '몇 명', '7명'))
     row = db.con.execute('SELECT generation FROM notebook_messages WHERE id=?', (key,)).fetchone()
     assert 'retrieval' in row[0]
+
+
+def test_two_character_lexical_search_is_scoped(store):
+    db, add = store
+    doc, cid = add('budget.txt', '예산 신청')
+    add('outside.txt', '예산 확정')
+    assert fts.search_chunk_ids(db, '예산', doc_ids=[doc]) == [cid]
+    assert fts.search_chunk_ids(db, '예산은', doc_ids=[doc]) == [cid]
+    assert fts.search_chunk_ids(db, '예산', doc_ids=[]) == []
+
+
+def test_role_table_preserves_header_binding_without_using_other_columns():
+    asked = intent.frame('시설방문 담당 인원은 몇 명이야?', '인원')
+    original = '구분 | 담당 인원 | 방문 인원 / 시설방문 | 7 | 19'
+    assert quantity.binding_verdict(asked, '담당 인원은 7명이다', original) == ''
+    assert quantity.binding_verdict(asked, '담당 인원은 19명이다', original) == 'quantity_role_unbound'
+
+
+def test_year_and_task_filter_apply_before_vector_pool(store):
+    db, add = store
+    other, _ = add('old.txt', '계약 담당 인원은 9명이다', 2025)
+    doc, _ = add('current.txt', '시설방문 담당 인원은 7명이다')
+    db.con.execute("INSERT INTO tasks(id,name) VALUES (1,'시설방문')")
+    db.con.execute('INSERT INTO task_docs(task_id,doc_id) VALUES (1,?)', (doc,))
+    result = ask(db, '시설방문 담당 인원은 몇 명이야?', Model('시설방문 담당 인원은 7명이다'),
+                 QueryScope(years=[2026], task_id=1))
+    assert not result.withheld and [c.doc_id for c in result.citations] == [doc]
+    assert result.generation['retrieval']['indexed_chunks'] == 1
+
+
+def test_scope_filters_missing_documents_in_auxiliary_checks(store):
+    db, add = store
+    doc, _ = add('missing.txt', '소독약품 단가는 7원이다')
+    db.con.execute("UPDATE documents SET missing_since='2026-10-09' WHERE id=?", (doc,))
+    assert _subject_unknown(db, '소독약품 단가는 얼마야?', '단가')
+
+
+def test_wrong_embedding_dimension_is_a_search_fallback(store):
+    db, add = store
+    doc, cid = add('budget.txt', '예산 신청 담당 인원은 7명이다')
+    db.save_chunk_embedding(cid, 'fake', 2, pack([1., 0.]))
+    result = ask(db, '예산 신청 담당 인원은 몇 명이야?', Model('담당 인원은 7명이다'), QueryScope(doc_ids=[doc]))
+    assert result.generation['mode'] == 'search_only'
+    assert result.generation['retrieval']['index_dimension_mismatch']
+
+
+def test_person_count_cannot_borrow_task_name_from_another_cited_document():
+    from app.search.rag import _off_the_point
+    from app.search.verify import VerifiedSentence
+    question = '시설방문 담당 인원은 몇 명이야?'
+    rows = [{'doc_id': 1, 'filename': '시설방문.txt'}, {'doc_id': 2, 'filename': '상담.txt'}]
+    source = {1: '시설방문 담당 인원은 추후 결정한다.', 2: '지역상담 담당 인원은 19명이다.'}
+    assert _off_the_point(question, [VerifiedSentence('담당 인원은 19명이다.', [1, 2])],
+                         rows, source, intent.frame(question, '인원')) == 'quantity_role_unbound'
+
+
+def test_valid_person_count_does_not_authorize_an_invalid_extra_sentence(store):
+    db, add = store
+    doc, _ = add('시설방문.txt', '시설방문 담당 인원은 7명이다. 방문상담 인원은 19명이다.')
+
+    class Mixed(Model):
+        def generate_json(self, *args, **kwargs):
+            return {'answered': True, 'sentences': [
+                {'text': '시설방문 담당 인원은 7명이다.', 'sources': [1]},
+                {'text': '방문상담 인원은 19명이다.', 'sources': [1]},
+            ]}, None, ''
+
+    result = ask(db, '시설방문 담당 인원은 몇 명이야?', Mixed(''), QueryScope(doc_ids=[doc]))
+    assert not result.withheld and '7명' in result.text and '19명' not in result.text
+    assert result.generation['sentences_off_quantity'] == 1
+
+
+def test_person_role_is_not_borrowed_across_clauses():
+    asked = intent.frame('시설방문 담당 인원은 몇 명이야?', '인원')
+    original = '시설방문 담당 인원은 7명이며 방문상담 인원은 19명이다.'
+    assert quantity.binding_verdict(asked, '담당 인원은 19명이다', original, '시설방문.txt') == 'quantity_role_unbound'

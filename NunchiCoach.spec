@@ -56,6 +56,7 @@ a = Analysis(
         ('app/ai/prompts', 'app/ai/prompts'),
         ('app/db/schema.sql', 'app/db'),
         ('app/db/notebook_schema.sql', 'app/db'),
+        ('app/db/child_schema.sql', 'app/db'),
         ('app/ui/assets', 'app/ui/assets'),
         (str(NOTICES), 'app/licenses'),
     ],

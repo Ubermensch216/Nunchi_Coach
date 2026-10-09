@@ -99,6 +99,12 @@ def prepare(folder, suite, suite_hash, client):
             with db.transaction():
                 for row,vector in zip(batch,vectors):
                     db.save_chunk_embedding(row['id'],client.embed_model,len(vector),pack(vector))
+        from ..core.child_index import embed_children
+        for row in db.con.execute('SELECT id FROM documents ORDER BY id').fetchall():
+            db.ensure_child_chunks(row['id'])
+            error = embed_children(db, row['id'], client)
+            if error:
+                raise ValueError(error)
         return db
     except BaseException:
         db.close()

@@ -16,7 +16,8 @@ class RetrievalTrace:
         try:
             yield
         finally:
-            self.timing[name + '_ms'] = round((perf_counter() - started) * 1000, 3)
+            key = name + '_ms'
+            self.timing[key] = round(self.timing.get(key, 0) + (perf_counter() - started) * 1000, 3)
 
     def record(self, **counts):
         self.counts.update(counts)

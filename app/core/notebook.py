@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
+from time import perf_counter
 
 from ..search import expand
 from ..search.overview import asks_whole, automatic
@@ -217,7 +218,9 @@ def query(db, notebook_id, question, client=None, mode="", law=False):
     mode="overview"면 선택한 자료 전체를 훑어 정리한다. law=True면 현행 법령을
     함께 조회해 따로 답한다(app/law) — 자료 답변과 섞지 않는다.
     """
+    started = perf_counter()
     snapshot = selected_snapshot(db, notebook_id)
+    snapshot_ms = (perf_counter()-started)*1000
     effective = question.strip()
     if not effective:
         raise ValueError("질문을 입력하세요.")
@@ -227,11 +230,13 @@ def query(db, notebook_id, question, client=None, mode="", law=False):
         (notebook_id, expand.HISTORY_TURNS)) if json.loads(row["source_snapshot"]) == snapshot][::-1]
     generating = _can_generate(client)
     rewritten = ""
+    rewrite_started = perf_counter()
     if earlier and expand.needs_context(effective):
         if generating:
             rewritten = expand.standalone(client, effective, earlier)
         effective = rewritten or earlier[-1] + "\n후속 질문: " + effective
-    scope = QueryScope(doc_ids=[int(k) for k in snapshot])
+    rewrite_ms = (perf_counter()-rewrite_started)*1000
+    scope = QueryScope(doc_ids=[int(k) for k in snapshot], notebook_id=notebook_id)
     mode = effective_mode(db, notebook_id, question, mode, generating)
     if mode == "overview":
         from ..search.overview import overview
@@ -251,6 +256,12 @@ def query(db, notebook_id, question, client=None, mode="", law=False):
         answer.generation["guidance"] = answer.guidance
     if selected_snapshot(db, notebook_id) != snapshot:
         raise ValueError("질문 중 자료 선택이나 판본이 바뀌었습니다. 다시 질문하세요.")
+    answer.generation['notebook_trace'] = {
+        'version': 1, 'source_documents': len(snapshot), 'history_questions': len(earlier),
+        'rewritten': bool(rewritten), 'mode': mode or 'rag',
+        'source_snapshot_ms': round(snapshot_ms, 3), 'rewrite_ms': round(rewrite_ms, 3),
+        'query_ms': round((perf_counter()-started)*1000, 3),
+    }
     # 법령 검색에는 사용자가 쓴 문장만 보낸다. 앞선 질문을 이어 붙인 문장은 보내지 않는다.
     statutes = _law_lookup(db, rewritten or question.strip(), client, answer) if law else {}
     if getattr(client, "cancelled", False):

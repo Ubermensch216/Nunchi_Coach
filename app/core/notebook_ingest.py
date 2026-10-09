@@ -179,6 +179,7 @@ def write_chunks(db, doc_id: int, client, should_stop: Callable[[], bool] = lamb
         if pieces:
             with db.transaction():
                 db.replace_document_chunks(doc_id, pieces)
+    db.ensure_child_chunks(doc_id)
     if client is None or not client.health().embedding_ready:
         return "의미 검색은 로컬 AI가 준비되면 이어서 준비합니다."
     pending = db.chunks_needing_embedding(doc_id, client.embed_model)
@@ -192,7 +193,9 @@ def write_chunks(db, doc_id: int, client, should_stop: Callable[[], bool] = lamb
         with db.transaction():
             for (chunk_id, _text), vector in zip(batch, vectors):
                 db.save_chunk_embedding(chunk_id, client.embed_model, len(vector), pack(vector))
-    return ""
+    from .child_index import embed_children
+    error = embed_children(db, doc_id, client, should_stop, EMBED_BATCH)
+    return f"자식 의미 검색 준비가 중단됐습니다: {error}" if error and error != "cancelled" else ""
 
 
 def summarize_source(db, notebook_id: int, doc_id: int, client) -> bool:

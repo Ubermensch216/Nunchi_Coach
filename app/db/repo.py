@@ -214,6 +214,10 @@ class Database(WorkStore):
         self.sync_chunking_version()
         self.con.executescript(Path(__file__).with_name("notebook_schema.sql").read_text(encoding="utf-8"))
         add_notebook_columns(self.con)
+        self.con.executescript(Path(__file__).with_name("child_schema.sql").read_text(encoding="utf-8"))
+        if self.con.execute("SELECT 1 FROM chunks c WHERE NOT EXISTS "
+                            "(SELECT 1 FROM chunk_children s WHERE s.parent_id=c.id) LIMIT 1").fetchone():
+            self.con.execute("DELETE FROM meta WHERE key='chunks_checked'")
 
     def sync_chunking_version(self) -> bool:
         """조각 규칙이 바뀌면 옛 조각을 지우고 다시 만들게 한다.
@@ -814,6 +818,40 @@ class Database(WorkStore):
         ).fetchall()
 
     # ── 질문 (RAG 재료) ─────────────────────────────────────────────
+    def ensure_child_chunks(self, doc_id: int) -> int:
+        """문서별 원자적 자식 색인. 부모·기존 임베딩·저장된 인용은 유지한다."""
+        from ..core.child_chunking import CHILD_VERSION, build_children
+        made = 0
+        with self.transaction():
+            for parent in self.con.execute("SELECT id,text FROM chunks WHERE doc_id=? ORDER BY ordinal", (doc_id,)).fetchall():
+                versions = self.con.execute("SELECT DISTINCT version FROM chunk_children WHERE parent_id=?", (parent["id"],)).fetchall()
+                if versions and all(r[0] == CHILD_VERSION for r in versions):
+                    continue
+                children = build_children(parent["text"])
+                self.con.execute("DELETE FROM chunk_children WHERE parent_id=?", (parent["id"],))
+                self.con.executemany(
+                    "INSERT INTO chunk_children(parent_id,ordinal,start_offset,end_offset,text,version) VALUES(?,?,?,?,?,?)",
+                    [(parent["id"], c.ordinal, c.start, c.end, c.text, CHILD_VERSION) for c in children])
+                made += len(children)
+        return made
+
+    def children_needing_embedding(self, doc_id: int, model: str) -> list[tuple[int, str]]:
+        return [(r[0], r[1]) for r in self.con.execute(
+            "SELECT s.id,s.text FROM chunk_children s JOIN chunks c ON c.id=s.parent_id "
+            "LEFT JOIN child_embeddings e ON e.child_id=s.id AND e.model=? "
+            "WHERE c.doc_id=? AND e.child_id IS NULL ORDER BY c.ordinal,s.ordinal", (model, doc_id))]
+
+    def save_child_embedding(self, child_id: int, model: str, dim: int, vector: bytes) -> None:
+        self.con.execute("INSERT INTO child_embeddings(child_id,model,dim,vector) VALUES(?,?,?,?) "
+                         "ON CONFLICT(child_id) DO UPDATE SET model=excluded.model,dim=excluded.dim,vector=excluded.vector",
+                         (child_id, model, dim, vector))
+
+    def unembedded_child_count(self, model: str) -> int:
+        return self.con.execute(
+            "SELECT COUNT(*) FROM chunk_children s JOIN chunks c ON c.id=s.parent_id "
+            "JOIN documents d ON d.id=c.doc_id LEFT JOIN child_embeddings e ON e.child_id=s.id AND e.model=? "
+            "WHERE d.missing_since IS NULL AND e.child_id IS NULL", (model,)).fetchone()[0]
+
     def replace_document_chunks(
         self, doc_id: int, pieces: list[tuple[int, str, str]]
     ) -> list[tuple[int, str]]:
