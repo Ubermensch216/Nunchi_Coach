@@ -252,18 +252,11 @@ class DocumentsView(QWidget):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setShowGrid(False)
         header = self.table.horizontalHeader()
-<<<<<<< Updated upstream
         # 머리글은 칸의 내용과 같은 쪽에 선다. 가운데에 두면 왼쪽으로 붙은
         # 내용과 어긋나 어느 열의 이름인지 눈이 한 번 더 찾는다.
         header.setDefaultAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-=======
-        # 머리글은 그 아래 값과 같은 쪽에 붙인다. 가운데에 두면 긴 파일명 칸에서
-        # 머리글과 값의 시작점이 멀어져 어느 칸의 이름인지 다시 찾아야 한다.
-        header.setDefaultAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
->>>>>>> Stashed changes
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for i in range(1, len(COLUMNS)):
             header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)

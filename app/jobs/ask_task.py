@@ -46,15 +46,22 @@ class AskWorker(QObject):
             self._client = project_client(db, OllamaClient)
             if self.cancelled:
                 self._client.cancel()
-            answer = ask(db, self._question, client=self._client, scope=self._scope)
+            notebook_id = getattr(self._scope, "notebook_id", None)
+            if notebook_id is not None:
+                from ..core import notebook
+                message_id, answer = notebook.query(db, notebook_id, self._question, client=self._client)
+                answer.generation["notebook_message_id"] = message_id
+            else:
+                answer = ask(db, self._question, client=self._client, scope=self._scope)
             with self._state_lock:
                 if self.cancelled:
                     self.done.emit(Answer(self._question, "", True, error="질문을 취소했습니다."))
                     return
-                db.save_question(
-                    answer.question, answer.text, _citations_json(answer),
-                    answer.withheld, answer.model, filters=_filters_json(answer),
-                )
+                if notebook_id is None:
+                    db.save_question(
+                        answer.question, answer.text, _citations_json(answer),
+                        answer.withheld, answer.model, filters=_filters_json(answer),
+                    )
                 db.audit("question.ask", detail=f"{len(self._question)}자",
                          result="withheld" if answer.withheld else "ok")
                 self._completed = True

@@ -35,6 +35,7 @@ from .views.calendar import CalendarView
 from .views.documents import DocumentsView
 from .views.onboarding import OnboardingView
 from .views.tasks import TasksView
+from .views.notebooks import NotebooksView
 
 # 메뉴마다 그 메뉴가 답하는 질문을 함께 적는다. 이름만 있는 메뉴는
 # 처음 쓰는 사람에게 "눌러 봐야 아는 것"이지만, 질문이 붙으면 누르기 전에
@@ -44,6 +45,7 @@ NAV = [
     ("calendar", "calendar", "일정", "언제 무엇을 하나"),
     ("documents", "documents", "문서", "이 파일이 최신본인가"),
     ("ask", "ask", "질문", "자료에 직접 물어본다"),
+    ("notebooks", "documents", "노트북", "선택한 자료로 탐구하고 지식으로 남긴다"),
 ]
 
 # 가로 띠에서는 메뉴가 글자만으로 선다. 아이콘 체계(icons.py)는 설정 창처럼
@@ -83,15 +85,7 @@ class TopBar(QWidget):
         art = icons.brand(theme.NAVBAR_TEXT, theme.TOPBAR_H - 24)
         if art is not None:
             mark = QLabel()
-<<<<<<< Updated upstream
             mark.setPixmap(art)
-=======
-            mark.setPixmap(
-                QPixmap(str(logo_path)).scaledToHeight(
-                    26, Qt.TransformationMode.SmoothTransformation
-                )
-            )
->>>>>>> Stashed changes
             row.addWidget(mark)
 
         name = QLabel("눈치코치")
@@ -124,13 +118,6 @@ class TopBar(QWidget):
         self.progress.hide()
         row.addWidget(self.progress)
 
-        self.status = QPushButton("자료 폴더를 연결하세요")
-        self.status.setObjectName("TopLink")
-        self.status.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.status.setToolTip("분석 상태 — 눌러서 단계별 진행과 읽지 못한 파일을 봅니다")
-        self.status.clicked.connect(self.status_clicked.emit)
-        row.addWidget(self.status)
-
         # 인수인계 진행도. 어느 화면에 있든 "얼마나 남았나"가 보여야 확인
         # 작업이 끝이 있는 일로 느껴진다.
         self.handover = QPushButton("")
@@ -158,7 +145,6 @@ class TopBar(QWidget):
         self.promise.setToolTip("원본을 수정·이동·삭제·이름 변경하지 않습니다")
         row.addWidget(self.promise)
 
-<<<<<<< Updated upstream
         self.status = QPushButton("자료원이 없습니다")
         self.status.setObjectName("TopLink")
         self.status.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -174,12 +160,6 @@ class TopBar(QWidget):
         settings.setCursor(Qt.CursorShape.PointingHandCursor)
         settings.setToolTip("설정")
         settings.setAccessibleName("설정")
-=======
-        settings = QPushButton("설정")
-        settings.setObjectName("TopLink")
-        settings.setCursor(Qt.CursorShape.PointingHandCursor)
-        settings.setToolTip("글자 크기·테마·자료 폴더·로컬 AI")
->>>>>>> Stashed changes
         settings.clicked.connect(self.settings_requested.emit)
         row.addWidget(settings)
 
@@ -266,6 +246,7 @@ class MainWindow(QMainWindow):
         self.views: dict[str, QWidget] = {
             "onboarding": OnboardingView(self.db),
             "tasks": TasksView(self.db),
+            "notebooks": NotebooksView(self.db),
             "calendar": CalendarView(self.db),
             "documents": DocumentsView(self.db),
             "ask": AskView(self.db),

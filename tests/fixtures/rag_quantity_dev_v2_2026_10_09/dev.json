@@ -1,0 +1,237 @@
+{
+  "note": [
+    "2026-10-09 수량 부재 답변 개선 전에 동결했다. 모두 합성 자료이며 독립 작성자·기관 실자료 평가가 아니다.",
+    "dev는 이전 2차 최종 세트를 개발용으로 전환한 자료와 양성 대조를 포함한다. 이전 원장·파일은 수정하지 않았다.",
+    "holdout은 새 업무·새 자료·새 질문이다. 결과를 보고 검색·검증·채점 조건을 재조정하지 않는다.",
+    "개발 v2: 수량 양성 자료의 공간·대상이 음성 질문과 겹쳐 자료 부재 조건을 훼손했으므로 별도 업무·장비로 분리했다. 최초 개발/기준 실행은 오류 진단 기록이며 개선률 비교에 쓰지 않는다.",
+    "최종 20문항은 최초 코드 변경 전 동결 파일을 그대로 사용한다. 원래 최종 파일과 원장은 변경하지 않았다."
+  ],
+  "documents": [
+    {
+      "filename": "시민자료실_이용관리.txt",
+      "text": "2026년 시민자료실 이용관리 자료입니다.\n열람시간과 자료대출 현황, 문의접수 내역을 정리했습니다.",
+      "year": 2026
+    },
+    {
+      "filename": "청사조명_교체검수.txt",
+      "text": "2026년 청사조명 교체 검수 자료입니다.\n설치위치와 소비전력, 시공불량 여부를 점검했습니다.",
+      "year": 2026
+    },
+    {
+      "filename": "휴게공간_설비조사.txt",
+      "text": "2026년 휴게공간 설비 현황을 조사했습니다.\n정수기 수량과 냉난방기 위치, 고장 신고 내역을 기록했습니다.",
+      "year": 2026
+    },
+    {
+      "filename": "외부서고_공지1.txt",
+      "text": "업무명: 외부서고 정리\n기준연도: 2026\n제출기한: 2026. 11. 10.\n예산한도: 62만원\n접수처: 서고지원팀",
+      "year": 2026
+    },
+    {
+      "filename": "외부서고_공지2.txt",
+      "text": "업무명: 외부서고 정리\n기준연도: 2026\n제출기한: 2026. 11. 13.\n예산한도: 620000원",
+      "year": 2026
+    },
+    {
+      "filename": "외부서고_지난해.txt",
+      "text": "업무명: 외부서고 정리\n기준연도: 2025\n예산한도: 58만원",
+      "year": 2025
+    },
+    {
+      "filename": "교육기자재_수량확인.txt",
+      "text": "2026년 교육기자재 설비 확인 결과입니다.\n모니터 수량: 12대\n프로젝터 수량: 7대\n신규 불량 신고 건수: 0건",
+      "year": 2026
+    },
+    {
+      "filename": "분기접수_집계.txt",
+      "text": "2026년 분기접수 집계 자료입니다.\n접수 건수: 45건\n처리율: 90%",
+      "year": 2026
+    }
+  ],
+  "cases": [
+    {
+      "id": "f-q01",
+      "question": "2026년 시민자료실 이용관리 관련해서 무엇을 정리했어?",
+      "expect": "answer",
+      "must_contain": [
+        "열람시간",
+        "자료대출",
+        "문의접수"
+      ],
+      "must_cite_any": [
+        "시민자료실"
+      ],
+      "kind": "narrative"
+    },
+    {
+      "id": "f-q02",
+      "question": "2026년 시민자료실 이용관리에 관해서 뭘 정리했어?",
+      "expect": "answer",
+      "must_contain": [
+        "열람시간",
+        "자료대출",
+        "문의접수"
+      ],
+      "must_cite_any": [
+        "시민자료실"
+      ],
+      "kind": "narrative"
+    },
+    {
+      "id": "f-q03",
+      "question": "2026년 청사조명 교체 관련해서 뭘 점검했어?",
+      "expect": "answer",
+      "must_contain": [
+        "설치위치",
+        "소비전력",
+        "시공불량"
+      ],
+      "must_cite_any": [
+        "청사조명"
+      ],
+      "kind": "narrative"
+    },
+    {
+      "id": "f-q04",
+      "question": "2026년 휴게공간 설비에 대해서 뭘 기록했어?",
+      "expect": "answer",
+      "must_contain": [
+        "정수기",
+        "냉난방기",
+        "고장"
+      ],
+      "must_cite_any": [
+        "휴게공간"
+      ],
+      "kind": "narrative"
+    },
+    {
+      "id": "f-q05",
+      "question": "2026년 시민자료실 문의접수가 늘어난 이유가 뭐야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "kind": "absent"
+    },
+    {
+      "id": "f-q06",
+      "question": "2026년 휴게공간 정수기 수량은 몇 대야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "kind": "absent"
+    },
+    {
+      "id": "f-q07",
+      "question": "2026년 외부서고 정리 제출기한은 언제야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "kind": "conflict"
+    },
+    {
+      "id": "f-q08",
+      "question": "2026년 외부서고 정리 예산한도는 얼마야?",
+      "expect": "answer",
+      "must_contain": [
+        "62만원"
+      ],
+      "must_cite_any": [
+        "외부서고_공지1"
+      ],
+      "kind": "direct"
+    },
+    {
+      "id": "f-q09",
+      "question": "2026년 외부서고 정리 접수처는 어디야?",
+      "expect": "answer",
+      "must_contain": [
+        "서고지원팀"
+      ],
+      "must_cite_any": [
+        "외부서고_공지1"
+      ],
+      "kind": "direct"
+    },
+    {
+      "id": "f-q10",
+      "question": "2025년 외부서고 정리 예산한도는 얼마야?",
+      "expect": "answer",
+      "must_contain": [
+        "58만원"
+      ],
+      "must_cite_any": [
+        "외부서고_지난해"
+      ],
+      "kind": "direct"
+    },
+    {
+      "id": "f-q11",
+      "question": "현재 2026년 외부서고 정리 예산한도는 얼마야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "kind": "authority"
+    },
+    {
+      "id": "f-q12",
+      "question": "2026년 도시농장 예산한도는 얼마야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "kind": "absent"
+    },
+    {
+      "id": "n-d13",
+      "question": "2026년 교육기자재 모니터 수량은 몇 대야?",
+      "expect": "answer",
+      "must_contain": [
+        "12"
+      ],
+      "must_cite_any": [
+        "교육기자재_수량확인"
+      ],
+      "must_not_contain": [],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-d14",
+      "question": "2026년 교육기자재 프로젝터 수량은 몇 대야?",
+      "expect": "answer",
+      "must_contain": [
+        "7"
+      ],
+      "must_cite_any": [
+        "교육기자재_수량확인"
+      ],
+      "must_not_contain": [],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-d15",
+      "question": "2026년 교육기자재 신규 불량 신고 건수는 몇 건이야?",
+      "expect": "answer",
+      "must_contain": [
+        "0"
+      ],
+      "must_cite_any": [
+        "교육기자재_수량확인"
+      ],
+      "must_not_contain": [],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-d16",
+      "question": "2026년 분기접수 접수 건수는 몇 건이야?",
+      "expect": "answer",
+      "must_contain": [
+        "45"
+      ],
+      "must_cite_any": [
+        "분기접수"
+      ],
+      "must_not_contain": [],
+      "kind": "quantity"
+    }
+  ]
+}

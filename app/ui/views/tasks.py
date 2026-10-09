@@ -63,11 +63,7 @@ from ..widgets import (
     TaskCard,
     TimelineGrid,
     UnknownBlock,
-<<<<<<< Updated upstream
     center_column,
-=======
-    centered_column,
->>>>>>> Stashed changes
     clear_layout,
     divider,
     doc_icon,
@@ -179,7 +175,6 @@ class TasksView(QWidget):
         header = QWidget()
         header.setObjectName("ViewHeader")
         header.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-<<<<<<< Updated upstream
         # 머리의 내용은 본문과 같은 기둥에 선다 — 제목의 왼쪽 끝과 아래 카드의
         # 왼쪽 끝이 한 줄로 맞아야 머리와 본문이 한 화면으로 읽힌다.
         head_row, head_wrap = center_column(theme.CONTENT_MAX_W)
@@ -187,16 +182,6 @@ class TasksView(QWidget):
         frame = QVBoxLayout(header)
         frame.setContentsMargins(*header_margins(theme.SP_XL))
         frame.addLayout(head_row)
-=======
-        header_box = QVBoxLayout(header)
-        header_box.setContentsMargins(0, theme.SP_XL, 0, 0)
-        header_box.setSpacing(0)
-        head_outer, head_column = centered_column()
-        header_box.addWidget(head_outer)
-        head_wrap = QVBoxLayout(head_column)
-        head_wrap.setContentsMargins(0, 0, 0, 0)
-        head_wrap.setSpacing(theme.SP_LG)
->>>>>>> Stashed changes
 
         self.head = QVBoxLayout()
         self.head.setContentsMargins(0, 0, 0, 0)
@@ -212,10 +197,6 @@ class TasksView(QWidget):
         self._head_pad = QWidget()
         self._head_pad.setFixedHeight(theme.SP_XS)
         head_wrap.addWidget(self._head_pad)
-<<<<<<< Updated upstream
-=======
-        main.addWidget(header)
->>>>>>> Stashed changes
 
         # 카드 그리드는 세로로만 늘어나야 한다. 가로 스크롤을 허용하면
         # 좁은 창에서 열 수가 줄지 않고 카드가 잘린 채 옆으로 밀린다(Page가 막는다).
@@ -232,22 +213,11 @@ class TasksView(QWidget):
         # 근거 서랍은 질문 화면과 같은 위젯이다(계획서 §29). 업무 화면에서는
         # 상주가 아니라 부를 때만 연다 — 여기서는 근거가 늘 있는 것이 아니라
         # 어떤 주장(설명·주기·단계)을 짚었을 때 생긴다.
-<<<<<<< Updated upstream
         #
         # 서랍은 머리 띠 옆에 선다(아래가 아니라). 머리와 본문이 같은 폭을
         # 나눠 가져야 서랍을 열어도 둘의 기둥이 어긋나지 않고, 서랍도 창의
         # 높이를 다 써서 근거를 더 길게 보여 준다.
-        main = QVBoxLayout()
-        main.setContentsMargins(0, 0, 0, 0)
-        main.setSpacing(0)
-        main.addWidget(header)
-        main.addWidget(self.stack, 1)
-        body = QHBoxLayout()
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(0)
-        body.addLayout(main, 1)
-=======
->>>>>>> Stashed changes
+        main.insertWidget(0, header)
         self.drawer = EvidenceDrawer()
         self.drawer.open_original.connect(self._open)
         outer.addWidget(self.drawer)
@@ -317,7 +287,6 @@ class TasksView(QWidget):
             Qt.AlignmentFlag.AlignVCenter,
         )
         title_row.addStretch(1)
-<<<<<<< Updated upstream
         marks = title_row   # 내보내기 버튼은 제목 줄 오른쪽에 선다
         self.head.addLayout(title_row)
 
@@ -332,8 +301,6 @@ class TasksView(QWidget):
             f"확인한 업무 {done} / {len(tasks)}",
             wrap=False,
         ))
-=======
->>>>>>> Stashed changes
         # 인수인계는 화면 안에서 끝나지 않는다 — 후임자가 이 프로그램을 쓰지
         # 않을 수도 있고, 결재로 올려야 할 수도 있다.
         export = QPushButton("보고서 만들기")
@@ -352,12 +319,7 @@ class TasksView(QWidget):
             "글 파일로 내보내거나 다른 PC로 옮깁니다(업무 복원본)."
         )
         snapshots.clicked.connect(lambda _=False: self._open_snapshots())
-<<<<<<< Updated upstream
         marks.addWidget(snapshots)
-=======
-        title_row.addWidget(snapshots)
-        self.head.addLayout(title_row)
->>>>>>> Stashed changes
 
         done = sum(1 for row in tasks if status.of_task(row) == status.CONFIRMED)
         lead = f"전임자 자료 {counts['documents']:,}건에서 찾았습니다."
@@ -574,7 +536,6 @@ class TasksView(QWidget):
         head.addWidget(muted_label(progress.headline(), small=True, wrap=False))
         card.body.addLayout(head)
 
-<<<<<<< Updated upstream
         # 체크리스트의 줄과 그 줄을 누를 자리를 **한 줄로** 묶는다. 예전에는
         # '업무 9개 확인 필요'(체크리스트)와 '아직 확인하지 않은 업무 9개'(바로가기)가
         # 위아래로 따로 서서 같은 일을 두 번 읽게 했다.
@@ -589,11 +550,11 @@ class TasksView(QWidget):
                 f"{names}{more}", "첫 업무 열기 →", lambda: self.open_task(first),
             )
         if unread:
-            names = ", ".join(pick["filename"] for pick in unread[:2])
+            names = ", ".join(pick["filename"] for _, pick in unread[:2])
             more = f" 외 {len(unread) - 2}건" if len(unread) > 2 else ""
             first_task = next(
                 row["id"] for row in tasks
-                if any(p["doc_id"] == unread[0]["doc_id"]
+                if any(p["doc_id"] == unread[0][1]["doc_id"]
                        for p in self.db.task_reading(row["id"]))
             )
             actions["reading"] = (
@@ -615,6 +576,21 @@ class TasksView(QWidget):
             card.body.addWidget(self._start_row(headline, detail, link, slot))
         self.column.addWidget(card)
 
+    def _start_row(self, headline, detail, link, slot) -> QWidget:
+        holder = QWidget()
+        row = QHBoxLayout(holder)
+        row.setContentsMargins(0, theme.SP_SM, 0, theme.SP_SM)
+        text = QVBoxLayout()
+        text.addWidget(body_text(headline))
+        if detail:
+            text.addWidget(muted_label(detail, small=True))
+        row.addLayout(text, 1)
+        button = QPushButton(link)
+        button.setObjectName("Link")
+        button.clicked.connect(lambda _=False: slot())
+        row.addWidget(button)
+        return holder
+
     def _render_stage(self, card, plan, actions: dict | None = None) -> None:
         """첫날 / 첫 주 체크리스트 (계획서 §18).
 
@@ -625,8 +601,6 @@ class TasksView(QWidget):
         줄마다 기호(✓ ◐ △)를 앞에 둔다. 색만으로 구분하면 흑백 인쇄나
         색각 이상에서 상태가 사라진다(PRD §18.4).
         """
-=======
->>>>>>> Stashed changes
         if not plan.measured:
             self.column.addWidget(card)
             return
@@ -643,7 +617,6 @@ class TasksView(QWidget):
             self.column.addWidget(card)
             return
 
-<<<<<<< Updated upstream
         nxt = plan.next_item()
         actions = actions if actions is not None else {}
         for index, item in enumerate(plan.of_stage(plan.stage)):
@@ -681,11 +654,6 @@ class TasksView(QWidget):
                 link.clicked.connect(lambda _=False, slot=action[3]: slot())
                 line.addWidget(link, 0, Qt.AlignmentFlag.AlignVCenter)
             card.body.addLayout(line)
-=======
-        links = self._guide_links(tasks, unconfirmed, unread, soon)
-        for index, item in enumerate(plan.of_stage(plan.stage), start=1):
-            card.body.addWidget(self._guide_row(index, item, links.get(item.key)))
->>>>>>> Stashed changes
 
         if plan.stage == guide.DAY:
             later = plan.of_stage(guide.WEEK)
@@ -726,7 +694,6 @@ class TasksView(QWidget):
         if not parts:
             return
 
-<<<<<<< Updated upstream
         # 남은 것을 화면 밑에 흐린 글씨로 흘리면 사용자는 못 본 채 넘어간다.
         # 판에 얹어 "이만큼은 업무에 못 넣었다"를 분명히 말한다.
         panel = SubPanel()
@@ -737,18 +704,9 @@ class TasksView(QWidget):
         if mark is not None:
             head_row.addWidget(mark)
         head = QLabel(" · ".join(parts))
-=======
-        # 업무에 넣지 못한 문서가 있다는 사실은 숨기지 않는다. 다만 오류가
-        # 아니라 정상이라 한 줄로 조용히 적는다.
-        holder = QWidget()
-        row = QHBoxLayout(holder)
-        row.setContentsMargins(theme.SP_XS, 0, theme.SP_XS, 0)
-        row.setSpacing(theme.SP_SM)
-        head = QLabel("업무에 넣지 않은 문서 — " + " · ".join(parts))
->>>>>>> Stashed changes
         head.setObjectName("LeftoverHead")
-        row.addWidget(head)
-        row.addWidget(
+        head_row.addWidget(head)
+        head_row.addWidget(
             InfoDot(
                 "미분류가 남는 것은 정상입니다. 확신이 없는 문서를 억지로 "
                 "업무에 밀어 넣지 않습니다."
@@ -756,13 +714,14 @@ class TasksView(QWidget):
             0,
             Qt.AlignmentFlag.AlignVCenter,
         )
+        head_row.addStretch(1)
         link = QPushButton("문서에서 보기 →")
         link.setObjectName("Link")
         link.setCursor(Qt.CursorShape.PointingHandCursor)
         link.clicked.connect(self.go_documents.emit)
-        row.addWidget(link)
-        row.addStretch(1)
-        self.column.addWidget(holder)
+        head_row.addWidget(link)
+        panel.body.addLayout(head_row)
+        self.column.addWidget(panel)
 
     def _render_progress(self, counts: dict) -> None:
         if counts["total"] == 0:
@@ -816,26 +775,9 @@ class TasksView(QWidget):
 
         # 제목과 조작을 한 줄에 둔다. 제목은 왼쪽, 손댈 것은 오른쪽 —
         # 스크롤을 내려도 이 줄은 머리 띠에 남는다.
-        picks = self.db.task_reading(task_id)
-        docs = self.db.task_documents(task_id)
-        cycle = self.db.task_cycle(task_id)
-        state = status.of_task(row)
-
         title_row = QHBoxLayout()
         title_row.setSpacing(theme.SP_SM)
         title_row.addWidget(view_title(row["name"]))
-        # 표시는 예외에만 붙인다 — 사람이 확인했거나, 묶음이 느슨해 살펴봐야
-        # 하거나. 기본 상태(자료에서 추정)는 이 제품의 평소 모습이라 적지 않는다.
-        if state == status.CONFIRMED:
-            title_row.addWidget(Badge.state(state), 0, Qt.AlignmentFlag.AlignVCenter)
-        elif (row["confidence"] or "").lower() == "low":
-            note, kind = status.cluster_note(row["confidence"])
-            loose = Badge(note, kind)
-            loose.setToolTip(
-                "내용만으로는 묶이지 않아 파일명이 비슷한 문서를 묶은 업무입니다. "
-                "같은 업무가 맞는지 확인해 주세요."
-            )
-            title_row.addWidget(loose, 0, Qt.AlignmentFlag.AlignVCenter)
         title_row.addStretch(1)
 
         edit = QPushButton("수정 ▾")
@@ -844,7 +786,6 @@ class TasksView(QWidget):
         edit.setToolTip("업무명·설명을 고치거나 다른 업무와 합치고 나눕니다")
         edit.setMenu(self._edit_menu(task_id, edit))
         title_row.addWidget(edit)
-<<<<<<< Updated upstream
         state = status.of_task(row)
         if state != status.CONFIRMED:
             approve = QPushButton(CONFIRM_TASK)
@@ -852,20 +793,10 @@ class TasksView(QWidget):
             approve.setCursor(Qt.CursorShape.PointingHandCursor)
             approve.setToolTip("업무 이름과 문서 묶음이 맞다고 남깁니다. "
                                "다시 분석해도 바뀌지 않습니다")
-=======
-        if state != status.CONFIRMED:
-            approve = QPushButton("이 업무 확인함")
-            approve.setCursor(Qt.CursorShape.PointingHandCursor)
-            approve.setToolTip(
-                "업무 이름과 문서 묶음이 맞다고 남깁니다. 확인하지 않아도 "
-                "모든 기능을 쓸 수 있습니다."
-            )
->>>>>>> Stashed changes
             approve.clicked.connect(lambda: self._approve(task_id))
             title_row.addWidget(approve)
         self.head.addLayout(title_row)
 
-<<<<<<< Updated upstream
         # 규모 한 조각과, **예외일 때만** 상태를 한 줄에 둔다.
         #
         # 예전에는 '자료에서 추정'·'묶음이 단단합니다'·'기억 확인 필요'가 늘
@@ -902,11 +833,6 @@ class TasksView(QWidget):
         if row["description"]:
             about = QHBoxLayout()
             about.setSpacing(theme.SP_SM)
-=======
-        if row["description"]:
-            about = QHBoxLayout()
-            about.setSpacing(theme.SP_MD)
->>>>>>> Stashed changes
             about.addWidget(muted_label(row["description"]), 1)
             basis = evidence.for_task(self.db, row, docs)
             if basis:
@@ -915,27 +841,22 @@ class TasksView(QWidget):
                         f"근거 {len(basis)}건",
                         "이 이름과 설명을 어느 문서에서 얻었는지 봅니다",
                         lambda: self._show_evidence(basis, "업무 설명의 근거"),
-                    ),
-                    0, Qt.AlignmentFlag.AlignTop,
+                    )
                 )
             self.head.addLayout(about)
 
-<<<<<<< Updated upstream
         cycle = self.db.task_cycle(task_id)
-=======
-        # 규모와 시기를 글자 한 줄로. 뱃지 넷으로 나누면 제목 아래가 색 조각으로
-        # 덮여 정작 설명이 안 읽힌다.
-        facts = [_doc_span(docs)]
-        if cycle and cycle["kind"] != "none":
-            facts.append(cycle_headline(cycle))
-        self.head.addWidget(muted_label(" · ".join(facts), small=True))
-
->>>>>>> Stashed changes
         work = workcard.build(self.db, task_id)
-        self.tabs.set_label(WORK, "지금 할 일")
+        # 확인할 것이 남은 탭은 열어 보기 전에 알려 준다.
+        self.tabs.set_label(WORK, "지금 할 일" + ("  ◐" if work.gaps else ""))
         self.tabs.set_count(READ, "먼저 읽을 문서", len(picks))
-        self.tabs.set_label(WHEN, "언제 하는 일인가")
         self.tabs.set_count(DOCS, "이 업무의 문서", len(docs))
+        # 손댈 곳이 있는 탭은 열어 보기 전에 알려 준다.
+        self.tabs.set_label(
+            WHEN,
+            "언제 하는 일인가"
+            + ("  ◐" if cycle and status.of_cycle(cycle) != status.CONFIRMED else ""),
+        )
 
         self._render_work(self.pages[WORK].reset(), task_id, work)
         self._render_reading(self.pages[READ].reset(), picks)
@@ -954,6 +875,7 @@ class TasksView(QWidget):
         return None
 
     def _render_reading(self, column: QVBoxLayout, picks) -> None:
+        column.addWidget(hint_row("이 순서로 읽으세요", DETAIL_HINTS[READ]))
         marks = self.db.reading_marks()
 
         if not picks:
@@ -963,32 +885,20 @@ class TasksView(QWidget):
             )
             return
 
-        card = Card()
-        card.body.setSpacing(0)
-        card.body.addWidget(hint_row("이 순서로 읽으세요", DETAIL_HINTS[READ], strong=True))
-        card.body.addSpacing(theme.SP_SM)
         for index, pick in enumerate(picks, start=1):
-            frame = QFrame()
-            frame.setObjectName("Row")
-            line = QHBoxLayout(frame)
-            line.setContentsMargins(0, theme.SP_MD, 0, theme.SP_MD)
-            line.setSpacing(theme.SP_MD)
+            card = Card()
+            card.body.setSpacing(theme.SP_SM)
 
+            top = QHBoxLayout()
+            top.setSpacing(theme.SP_MD)
             rank = QLabel(str(index))
             rank.setObjectName("RankChip")
             rank.setAlignment(Qt.AlignmentFlag.AlignCenter)
             rank.setFixedSize(24, 24)
-            line.addWidget(rank, 0, Qt.AlignmentFlag.AlignTop)
+            top.addWidget(rank, 0, Qt.AlignmentFlag.AlignTop)
 
-<<<<<<< Updated upstream
             name = doc_icon(QPushButton(pick["filename"]), 18)
             name.setObjectName("CardTitle")
-=======
-            text = QVBoxLayout()
-            text.setSpacing(2)
-            name = QPushButton(pick["filename"])
-            name.setObjectName("RowTitle")
->>>>>>> Stashed changes
             name.setCursor(Qt.CursorShape.PointingHandCursor)
             name.setToolTip(f"{pick['path']}\n클릭하면 이 문서의 첫 대목을 옆에서 봅니다")
             name.clicked.connect(
@@ -997,12 +907,12 @@ class TasksView(QWidget):
                     "먼저 읽을 문서",
                 )
             )
-            text.addWidget(name, 0, Qt.AlignmentFlag.AlignLeft)
-            # 이유 없는 추천은 만들지 않는다.
-            why = ElidedLabel(f"{pick['reason']} · {_when(pick)}")
-            why.setObjectName("Small")
-            text.addWidget(why)
-            line.addLayout(text, 1)
+            top.addWidget(name)
+            top.addStretch(1)
+            when = QLabel(_when(pick))
+            when.setObjectName("MetaChip")
+            when.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+            top.addWidget(when, 0, Qt.AlignmentFlag.AlignTop)
 
             # 읽음 표시는 인수인계 진행도의 네 축 중 하나다(§18). '읽었다'는
             # 어느 표에도 남지 않아서 이것만 따로 적어 둔다(handover_checks).
@@ -1015,9 +925,14 @@ class TasksView(QWidget):
             read.clicked.connect(
                 lambda checked, d=pick["doc_id"]: self._mark_read(d, checked)
             )
-            line.addWidget(read, 0, Qt.AlignmentFlag.AlignVCenter)
-            card.body.addWidget(frame)
-        column.addWidget(card)
+            top.addWidget(read, 0, Qt.AlignmentFlag.AlignTop)
+            card.body.addLayout(top)
+
+            # 이유 없는 추천은 만들지 않는다. 판에 얹어 "이건 근거"라고 말한다.
+            reason = SubPanel()
+            reason.body.addWidget(muted_label(f"고른 이유 · {pick['reason']}", small=True))
+            card.body.addWidget(reason)
+            column.addWidget(card)
 
     def _render_when(self, column: QVBoxLayout, task_id: int, cycle) -> None:
         """When — 격자를 세로로 읽어 반복 주기를 보여준다.
@@ -1066,12 +981,9 @@ class TasksView(QWidget):
             # 결론을 한 줄로 먼저 말한다. 격자는 그 근거다.
             head = QHBoxLayout()
             head.setSpacing(theme.SP_SM)
-<<<<<<< Updated upstream
             mark = icons.label("repeat", theme.PRIMARY, 18)
             if mark is not None:
                 head.addWidget(mark)
-=======
->>>>>>> Stashed changes
             line = QLabel(f"{cycle_headline(cycle)} 반복")
             line.setObjectName("Answer")
             head.addWidget(line)
@@ -1260,7 +1172,6 @@ class TasksView(QWidget):
         if not any(s["doc_id"] for s in steps):
             lead.setText(f"{selected}년 순서는 자료가 아니라 사람이 적어 둔 것입니다")
 
-<<<<<<< Updated upstream
         if any(s["decided_by"] == "user" for s in steps):
             column.addWidget(
                 muted_label(
@@ -1347,9 +1258,6 @@ class TasksView(QWidget):
             # 근거 없는 공백은 지어내지 않고 그렇다고 밝힌다.
             if step["gap_note"]:
                 column.addWidget(UnknownBlock(step["gap_note"]))
-=======
-        self._render_how_steps(column, task_id, selected, steps)
->>>>>>> Stashed changes
 
     def _render_compare(
         self, column: QVBoxLayout, task_id: int, selected: int, against: int
@@ -1468,11 +1376,8 @@ class TasksView(QWidget):
         button = QPushButton(
             "올해 처리 결과로 반영" if mine else f"{year}년 순서가 맞습니다"
         )
-<<<<<<< Updated upstream
         # 채운 파란 버튼은 머리의 '이 업무가 맞습니다' 하나로 둔다. 화면에
         # 파란 덩어리가 둘이면 어느 것이 이 화면의 주된 행동인지 흐려진다.
-=======
->>>>>>> Stashed changes
         button.setObjectName("Confirm")
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setToolTip(f"{count}개 단계를 담당자 확인으로 남깁니다")
@@ -1552,6 +1457,8 @@ class TasksView(QWidget):
         self.refresh()
 
     def _render_by_year(self, column: QVBoxLayout, task_id: int, rows) -> None:
+        column.addWidget(hint_row("연도별 분포", DETAIL_HINTS[DOCS]))
+
         if not rows:
             column.addWidget(UnknownBlock("이 업무에 배정된 문서가 없습니다."))
             return
@@ -1561,31 +1468,23 @@ class TasksView(QWidget):
             key = str(row["eff_year"]) if row["eff_year"] else "연도 미상"
             by_year[key] = by_year.get(key, 0) + 1
 
-        card = Card()
-        card.body.setSpacing(0)
-        head = QHBoxLayout()
-        head.setSpacing(theme.SP_SM)
-        head.addWidget(hint_row("연도별 분포", DETAIL_HINTS[DOCS], strong=True))
+        years = QHBoxLayout()
+        years.setSpacing(theme.SP_SM)
         for year, count in sorted(by_year.items(), key=lambda kv: kv[0], reverse=True):
             chip = QLabel(f"{year} ({count})")
             chip.setObjectName("YearChip")
             chip.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-            head.addWidget(chip)
-        head.addStretch(1)
-        card.body.addLayout(head)
-        card.body.addSpacing(theme.SP_MD)
+            years.addWidget(chip)
+        years.addStretch(1)
+        column.addLayout(years)
 
         primary = self.db.primary_document(task_id)
         primary_id = primary["id"] if primary else None
 
         for row in rows[:30]:
-            frame = QFrame()
-            frame.setObjectName("Row")
-            item = QHBoxLayout(frame)
-            item.setContentsMargins(0, theme.SP_SM, 0, theme.SP_SM)
-            item.setSpacing(theme.SP_MD)
+            item = ListRow()
+            item.row.setSpacing(theme.SP_MD)
 
-<<<<<<< Updated upstream
             star = QLabel("★" if row["id"] == primary_id else "")
             star.setObjectName("PrimaryMark")
             star.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1593,9 +1492,6 @@ class TasksView(QWidget):
             item.row.addWidget(star)
 
             name = doc_icon(QPushButton(row["filename"]))
-=======
-            name = QPushButton(row["filename"])
->>>>>>> Stashed changes
             name.setObjectName("RowTitle")
             name.setCursor(Qt.CursorShape.PointingHandCursor)
             name.setToolTip(
@@ -1603,30 +1499,25 @@ class TasksView(QWidget):
                 + ("\n이 업무의 대표 문서입니다" if row["id"] == primary_id else "")
             )
             name.clicked.connect(lambda _=False, p=row["path"]: self._open(p))
-            item.addWidget(name)
-            if row["id"] == primary_id:
-                star = Badge("★ 대표", "neutral")
-                star.setToolTip("이 업무를 대표하는 문서입니다")
-                item.addWidget(star)
-            item.addStretch(1)
-            item.addWidget(muted_label(_when(row), small=True, wrap=False))
+            item.row.addWidget(name)
+            item.row.addStretch(1)
+            item.row.addWidget(muted_label(_when(row), small=True, wrap=False))
 
-            more = QPushButton(MORE)
+            more = QPushButton("⋯")
             more.setObjectName("IconButton")
-            more.setFixedWidth(28)
+            more.setFixedWidth(26)
             more.setCursor(Qt.CursorShape.PointingHandCursor)
             more.setToolTip("이 문서를 다른 업무로 옮기거나 대표로 지정합니다")
             more.setMenu(
                 self._document_menu(task_id, row["id"], row["id"] == primary_id, more)
             )
-            item.addWidget(more)
-            card.body.addWidget(frame)
+            item.row.addWidget(more)
+            column.addWidget(item)
 
         if len(rows) > 30:
-            card.body.addWidget(
+            column.addWidget(
                 muted_label(f"… 외 {len(rows) - 30:,}건은 [문서]에서 볼 수 있습니다", small=True)
             )
-        column.addWidget(card)
 
     # ── 교정 ────────────────────────────────────────────────────────
     # AI가 지식을 만들고, 사람이 지식을 확정한다. 여기 있는 조작이 그
@@ -1676,6 +1567,12 @@ class TasksView(QWidget):
         if not ok:
             return
         target = next(t for t in others if t["name"] == choice)
+        counts = self.db.preview_task_edit(task_id)
+        if QMessageBox.question(self, "합치기 미리보기",
+                f"문서와 함께 항목 {counts['item']}건, 수행 단계 {counts['step']}개, "
+                f"정보 공백 {counts['gap']}건을 '{choice}'로 옮깁니다.\n"
+                "근거·검토·수행 기록을 보존하고, 변경 전 복원본을 저장합니다.\n계속할까요?") != QMessageBox.StandardButton.Yes:
+            return
         if self.db.merge_tasks(task_id, target["id"]):
             self.open_task(target["id"])
 
@@ -1688,6 +1585,13 @@ class TasksView(QWidget):
             return
         picked, name = SplitDialog.run(self, self.db.task(task_id)["name"], docs)
         if not picked:
+            return
+        counts = self.db.preview_task_edit(task_id, picked)
+        if QMessageBox.question(self, "나누기 미리보기",
+                f"선택한 문서의 항목 {counts['item']}건, 수행 단계 {counts['step']}개, "
+                f"정보 공백 {counts['gap']}건을 새 업무로 옮깁니다.\n"
+                f"양쪽 자료에 걸친 기록은 기존 업무에 남깁니다(재확인 {counts['recheck']}건).\n"
+                "변경 전 복원본을 저장합니다. 계속할까요?") != QMessageBox.StandardButton.Yes:
             return
         new_id = self.db.split_task(task_id, picked, name)
         if new_id is None:
@@ -1832,24 +1736,34 @@ class TasksView(QWidget):
 
     # ── 지금 할 일 — 첫 업무 카드 (구축계획서 C05, §4.4) ─────────────
     def _render_work(self, column: QVBoxLayout, task_id: int, card) -> None:
-        """자료에서 복원한 것을 한 화면에: 지금 할 수 있는 일 → 해야 할 일 →
-        처리 순서 → 확인이 필요한 정보.
-
-        맨 위에는 **답 하나만** 둔다. 예전에는 '다음 행동'에 할 수 있는 일과
-        확인할 일을 함께 적었는데, 확인할 일은 아래 '확인이 필요한 정보'에
-        같은 문장으로 한 번 더 나와 화면 첫머리가 글 덩어리가 됐다.
+        from ...core import notebook
+        import json
+        knowledge = notebook.published(self.db, task_id)
+        if knowledge:
+            panel = Card()
+            panel.body.addWidget(section_title("검토한 업무 지식"))
+            for knowledge_card in knowledge:
+                panel.body.addWidget(body_text(knowledge_card["body"]))
+                panel.body.addWidget(muted_label(
+                    f"적용 조건: {knowledge_card['applicability']} · 검토: {knowledge_card['reviewer']} · {knowledge_card['reviewed_at']}", small=True))
+                proofs = json.loads(knowledge_card["evidence"])
+                panel.body.addWidget(self._evidence_button("원천 근거", "검토한 원문을 봅니다",
+                    lambda refs=proofs: self._show_evidence([
+                        Evidence(label=e["filename"], locator=e["locator"], snippet=e["exact_quote"], path=e["path"])
+                        for e in refs], "지식 카드의 원천 근거")))
+            column.addWidget(panel)
+        """자료에서 복원한 것을 한 화면에: 다음 행동 → 해야 할 일 → 순서 → 공백.
 
         전임자의 확인을 기다리는 칸이 없다. 사람 확인은 값 옆의 표시일 뿐이고,
         확인이 없어도 근거를 열고 단계를 진행하고 초안을 저장할 수 있다.
         """
+        column.addWidget(hint_row("자료로 시작하기", DETAIL_HINTS[WORK]))
         if card.empty:
             column.addWidget(UnknownBlock(
                 "이 업무의 문서에서 기한·절차 같은 항목을 아직 읽어 내지 못했습니다. "
                 "분석이 끝나면 여기에 채워집니다. 그동안 ‘먼저 읽을 문서’부터 볼 수 있습니다."))
-            column.addWidget(self._work_footer(task_id, card))
             return
 
-<<<<<<< Updated upstream
         top = QHBoxLayout()
         top.setSpacing(theme.SP_SM)
         top.addWidget(muted_label(card.headline(), small=True), 1)
@@ -1864,55 +1778,47 @@ class TasksView(QWidget):
 
         # 1) 다음 행동 — 확인할 것이 남아 있어도 할 수 있는 일이 먼저다.
         column.addWidget(self._next_actions_card(card))
-=======
-        column.addWidget(self._work_hero(card))
 
-        # 해야 할 일 — 목적·기한·제출처와 시작 준비를 한 표로. 따로 나누면
-        # '서식'을 찾으러 카드 하나를 더 내려가야 한다.
-        facts = Card()
-        facts.body.setSpacing(0)
-        head = QHBoxLayout()
-        head.addWidget(hint_row("해야 할 일", DETAIL_HINTS[WORK], strong=True), 1)
-        more = QPushButton("아는 내용 보태기")
-        more.setObjectName("Quiet")
-        more.setCursor(Qt.CursorShape.PointingHandCursor)
-        more.setToolTip("문서에 없는 기한·제출처·주의할 점을 적습니다. "
-                        "누가 보탰는지 함께 남습니다")
-        more.clicked.connect(lambda _=False: self._ask_work_item(task_id))
-        head.addWidget(more)
-        facts.body.addLayout(head)
-        facts.body.addSpacing(theme.SP_SM)
-        if not card.todo:
-            facts.body.addWidget(
-                muted_label("자료에 적힌 목적·기한·제출처를 찾지 못했습니다.", small=True))
-            facts.body.addSpacing(theme.SP_SM)
-        for item in (*card.todo, *card.prepare):
-            facts.body.addWidget(self._work_item_row(item))
-        column.addWidget(facts)
->>>>>>> Stashed changes
+        # 2) 해야 할 일 / 현재까지의 기록 / 시작 준비
+        for title, rows, empty in (
+            ("해야 할 일", card.todo, "자료에 적힌 목적·기한·제출처를 찾지 못했습니다."),
+            ("현재까지의 기록", card.records, ""),
+            ("시작 준비", card.prepare, ""),
+            ("문장에서 찾은 내용", card.found, ""),
+            ("보충 설명", card.notes, ""),
+        ):
+            if not rows and not empty:
+                continue
+            block = Card()
+            block.body.setSpacing(theme.SP_SM)
+            if rows is card.found:
+                block.body.addWidget(section_title(title))
+                block.body.addWidget(muted_label(workcard.FOUND_NOTE, small=True))
+                for item in rows:
+                    block.body.addWidget(self._work_item_row(item))
+                column.addWidget(block)
+                continue
+            if title == "해야 할 일":
+                # 문서에 없는 것을 아는 사람이 보탤 자리. 비워 둬도 된다.
+                head = QHBoxLayout()
+                head.addWidget(section_title(title), 1)
+                more = QPushButton("아는 내용 보태기")
+                more.setObjectName("Quiet")
+                more.setCursor(Qt.CursorShape.PointingHandCursor)
+                more.setToolTip("문서에 없는 기한·제출처·주의할 점을 적습니다. "
+                                "누가 보탰는지 함께 남습니다")
+                more.clicked.connect(lambda _=False: self._ask_work_item(task_id))
+                head.addWidget(more)
+                block.body.addLayout(head)
+            else:
+                block.body.addWidget(section_title(title))
+            if not rows:
+                block.body.addWidget(muted_label(empty, small=True))
+            for item in rows:
+                block.body.addWidget(self._work_item_row(item))
+            column.addWidget(block)
 
-        if card.notes:
-            # 사람이 보탠 설명은 문서에서 읽은 값과 섞지 않는다.
-            notes = Card()
-            notes.body.setSpacing(0)
-            notes.body.addWidget(section_title("보충 설명"))
-            notes.body.addWidget(muted_label(
-                "문서에는 없고 사람이 보탠 내용입니다.", small=True))
-            notes.body.addSpacing(theme.SP_SM)
-            for item in card.notes:
-                notes.body.addWidget(self._work_item_row(item))
-            column.addWidget(notes)
-
-        if card.records:
-            records = Card()
-            records.body.setSpacing(0)
-            records.body.addWidget(section_title("현재까지의 기록"))
-            records.body.addSpacing(theme.SP_SM)
-            for item in card.records:
-                records.body.addWidget(self._work_item_row(item))
-            column.addWidget(records)
-
-        # 처리 순서 — 적힌 절차와 과거 사례를 섞지 않는다.
+        # 3) 처리 순서 — 적힌 절차와 과거 사례를 섞지 않는다.
         column.addWidget(self._work_steps_card(card))
         if card.precedent_steps:
             past = Card()
@@ -1933,18 +1839,17 @@ class TasksView(QWidget):
                 past.body.addLayout(line)
             column.addWidget(past)
 
+        # 4) 확인이 필요한 정보
         if card.gaps:
             gaps = Card()
-            gaps.body.setSpacing(0)
+            gaps.body.setSpacing(theme.SP_SM)
             gaps.body.addWidget(section_title(f"확인이 필요한 정보 {len(card.gaps)}건"))
-            gaps.body.addSpacing(theme.SP_SM)
             for gap in card.gaps:
                 gaps.body.addWidget(self._work_gap_panel(gap))
             if any(continuity.ONNARA_HINT in (gap["next_action"] or "") for gap in card.gaps):
                 gaps.body.addWidget(muted_label(continuity.ONNARA_HINT, small=True))
             column.addWidget(gaps)
 
-<<<<<<< Updated upstream
         # 확인·보충을 누구의 것으로 남길지는 맨 아래에 둔다. 정하지 않아도 모든
         # 기능을 쓰는 선택 사항인데, 예전에는 내용보다 먼저 나와 이 화면이
         # 양식을 채우라는 화면처럼 보였다.
@@ -2001,36 +1906,13 @@ class TasksView(QWidget):
         if hinted:
             block.body.addWidget(muted_label(continuity.ONNARA_HINT, small=True))
         return block
-=======
-        if card.found:
-            found = Card()
-            found.body.setSpacing(0)
-            found.body.addWidget(section_title("문장에서 찾은 내용"))
-            # 'AI가 골랐다'는 단서는 ⓘ로 접지 않는다. 이 묶음을 얼마나 믿을지
-            # 정하는 말이라, 값보다 먼저 읽혀야 한다.
-            found.body.addWidget(muted_label(workcard.FOUND_NOTE, small=True))
-            found.body.addSpacing(theme.SP_SM)
-            for item in card.found:
-                found.body.addWidget(self._work_item_row(item))
-            column.addWidget(found)
-
-        column.addWidget(self._work_footer(task_id, card))
->>>>>>> Stashed changes
 
     def _work_item_row(self, item: dict) -> QWidget:
-        """값 한 줄 — 이름표 · 값 · 근거. 값이 가장 크게 선다.
-
-        상태 표시는 알아야 할 때만 붙인다(_item_note). 세 축을 다 적은 문장은
-        값에 마우스를 올리면 나온다 — 숨기지는 않되 줄마다 깔지 않는다.
-        """
-        frame = QFrame()
-        frame.setObjectName("Row")
-        row = QHBoxLayout(frame)
-        row.setContentsMargins(0, theme.SP_MD, 0, theme.SP_MD)
-        row.setSpacing(theme.SP_MD)
-
+        holder = SubPanel()
+        holder.body.setSpacing(theme.SP_XS)
+        head = QHBoxLayout()
+        head.setSpacing(theme.SP_SM)
         label = workcard.item_label(item)
-<<<<<<< Updated upstream
         name = QLabel(label)
         name.setObjectName("FieldName")
         head.addWidget(name)
@@ -2047,74 +1929,26 @@ class TasksView(QWidget):
                 f"근거 {len(item['evidence'])}건", "이 값이 적힌 대목을 봅니다",
                 lambda i=item: self._show_evidence(self._work_evidence(i), f"{label}의 근거")))
         if item["kind"] != reconstruction.RECORD:
+            more = QPushButton(MORE)
+            more.setObjectName("IconButton")
+            menu = QMenu(more)
             if item["human_state"] not in workstate.CONFIRMED_BY:
-                confirm = QPushButton(CONFIRM)
-                confirm.setObjectName("Quiet")
-                confirm.setCursor(Qt.CursorShape.PointingHandCursor)
-                confirm.setToolTip("이 값을 확인했다고 남깁니다. 확인하지 않아도 계속 쓸 수 있습니다")
-                confirm.clicked.connect(
-                    lambda _=False, i=item["id"]: self._review_work_item(i, "confirm"))
-                head.addWidget(confirm)
-            edit = QPushButton("고치기")
-            edit.setObjectName("Quiet")
-            edit.setCursor(Qt.CursorShape.PointingHandCursor)
-            edit.clicked.connect(
-                lambda _=False, i=item["id"], c=item["content"]: self._edit_work_item(i, c))
-            head.addWidget(edit)
+                menu.addAction("맞습니다", lambda i=item["id"]: self._review_work_item(i, "confirm"))
+            menu.addAction("고치기", lambda i=item["id"], c=item["content"]: self._edit_work_item(i,c))
+            more.setMenu(menu)
+            head.addWidget(more)
         holder.body.addLayout(head)
         # 값이 이 줄의 주인공이다. 표지·뱃지·부기는 작게 물러서고 값만 크게 선다.
         value = body_text(item["content"])
         value.setObjectName("Value")
         holder.body.addWidget(value)
         holder.body.addWidget(muted_label(workcard.state_line(item), small=True))
-=======
-        key = QLabel(label)
-        key.setObjectName("FieldKey")
-        key.setWordWrap(True)
-        key.setFixedWidth(FIELD_KEY_W)
-        row.addWidget(key, 0, Qt.AlignmentFlag.AlignTop)
-
-        text = QVBoxLayout()
-        text.setSpacing(2)
-        value = body_text(item["content"])
-        value.setObjectName("FieldValue")
-        value.setToolTip(workcard.state_line(item))
-        text.addWidget(value)
-        note = _item_note(item)
-        if note:
-            mark = QLabel(note[0])
-            mark.setObjectName("QualifierOk" if note[1] else "Qualifier")
-            mark.setWordWrap(True)
-            text.addWidget(mark)
->>>>>>> Stashed changes
         if item["human_state"] == workstate.RECHECK and item["auto_content"]:
             # 사람이 정한 값은 그대로 두고, 자료가 지금 말하는 값을 옆에 보인다.
-            text.addWidget(muted_label(
-                f"지금 자료의 값: {item['auto_content']}", small=True))
-        row.addLayout(text, 1)
-
-        if item["evidence"]:
-            row.addWidget(self._evidence_button(
-                f"근거 {len(item['evidence'])}건", "이 값이 적힌 대목을 봅니다",
-                lambda i=item: self._show_evidence(self._work_evidence(i), f"{label}의 근거")),
-                0, Qt.AlignmentFlag.AlignTop)
-        if item["kind"] != reconstruction.RECORD:
-            more = QPushButton(MORE)
-            more.setObjectName("IconButton")
-            more.setFixedWidth(28)
-            more.setCursor(Qt.CursorShape.PointingHandCursor)
-            more.setToolTip("이 값을 확인했다고 남기거나 고칩니다")
-            menu = QMenu(more)      # 메뉴의 부모는 항상 그 메뉴를 여는 버튼이다
-            if item["human_state"] not in workstate.CONFIRMED_BY:
-                menu.addAction(
-                    "맞습니다",
-                    lambda i=item["id"]: self._review_work_item(i, "confirm"))
-            menu.addAction(
-                "고치기",
-                lambda i=item["id"], c=item["content"]: self._edit_work_item(i, c))
-            more.setMenu(menu)
-            row.addWidget(more, 0, Qt.AlignmentFlag.AlignTop)
-        return frame
+            holder.body.addWidget(muted_label(
+                f"확인 뒤에 자료가 달라졌습니다. 지금 자료의 값: {item['auto_content']}",
+                small=True))
+        return holder
 
     def _work_steps_card(self, card) -> QWidget:
         block = Card()
@@ -2142,7 +1976,6 @@ class TasksView(QWidget):
             "문서에 적힌 절차입니다." + (
                 " ‘문서에 없음’ 표시는 사람이 알려 준 단계입니다." if told else ""),
             small=True))
-<<<<<<< Updated upstream
         # 다음에 할 단계 하나만 버튼을 세운다. 단계마다 채운 파란 버튼을 달면
         # 화면이 버튼밭이 되고, 어느 단계가 지금 차례인지가 오히려 안 보인다.
         upcoming_id = next(
@@ -2169,116 +2002,46 @@ class TasksView(QWidget):
                 "근거", "이 절차가 적힌 대목을 봅니다",
                 lambda s=step: self._show_evidence(self._work_evidence(s), "절차의 근거")))
         # 완료는 사용자가 누를 때만 기록된다. 화면을 열어 봤다고 끝난 일이 되지 않는다.
-        for text, state in _RUN_BUTTONS[run]:
-            button = QPushButton(text)
-            button.setObjectName(
-                "Confirm" if state == workstate.DONE and upcoming else "Quiet")
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.clicked.connect(
-                lambda _=False, i=step["id"], st=state: self._set_step_run(i, st))
-            head.addWidget(button)
-        holder.body.addLayout(head)
-        details = [f"{name}: {step[key]}" for name, key in (
-=======
-        block.body.addSpacing(theme.SP_SM)
-        # 지금 차례인 단계 하나에만 단추를 세운다. 단계마다 '시작·완료'를
-        # 늘어놓으면 네 단계에 단추가 여덟 개 서고 정작 단계 이름이 안 읽힌다.
-        current = next(
-            (s["id"] for s in card.stated_steps if s["run_state"] != workstate.DONE), None)
-        for number, step in enumerate(card.stated_steps, start=1):
-            block.body.addWidget(self._work_step_row(number, step, step["id"] == current))
-        return block
-
-    def _work_step_row(self, number: int, step: dict, current: bool = False) -> QWidget:
-        frame = QFrame()
-        frame.setObjectName("Row")
-        row = QHBoxLayout(frame)
-        row.setContentsMargins(0, theme.SP_MD, 0, theme.SP_MD)
-        row.setSpacing(theme.SP_MD)
-
-        run = step["run_state"]
-        done = run == workstate.DONE
-        mark = QLabel(status.symbol(status.CONFIRMED) if done else str(number))
-        mark.setObjectName(
-            "StepNumberDone" if done else "StepNumberNow" if current else "StepNumber")
-        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        mark.setFixedSize(24, 24)
-        row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
-
-        text = QVBoxLayout()
-        text.setSpacing(2)
-        name = body_text(step["label"])
-        name.setObjectName("StepLabel")
-        text.addWidget(name)
-        details = [f"{title}: {step[key]}" for title, key in (
->>>>>>> Stashed changes
-            ("준비 자료", "inputs"), ("서식", "forms"), ("완료 확인", "done_criteria")) if step[key]]
-        if details:
-            text.addWidget(muted_label("  ·  ".join(details), small=True))
-        if step["blocked"]:
-            blocked = QLabel(
-                "이 단계에 필요한 정보가 아직 확인되지 않았습니다. 아래 ‘확인이 필요한 "
-                "정보’를 보세요. 다른 단계는 진행할 수 있습니다.")
-            blocked.setObjectName("Qualifier")
-            blocked.setWordWrap(True)
-            text.addWidget(blocked)
-        if step["result_path"] or step["run_note"]:
-            text.addWidget(muted_label(
-                "기록 — " + " · ".join(part for part in (step["result_path"], step["run_note"])
-                                        if part), small=True))
-        row.addLayout(text, 1)
-
-        if step["procedure_kind"] == workstate.PROCEDURE_TOLD:
-            told = Badge(f"{workstate.human_label(step['human_state'])} · 문서에 없음", "neutral")
-            row.addWidget(told, 0, Qt.AlignmentFlag.AlignTop)
-        # 시작 전은 기본이라 적지 않는다. 손댄 단계만 상태를 말한다.
-        if run != workstate.NOT_STARTED:
-            row.addWidget(
-                Badge(workstate.run_label(run), "ok" if done else "accent"),
-                0, Qt.AlignmentFlag.AlignTop)
-        if step["evidence"]:
-            row.addWidget(self._evidence_button(
-                "근거", "이 절차가 적힌 대목을 봅니다",
-                lambda s=step: self._show_evidence(self._work_evidence(s), "절차의 근거")),
-                0, Qt.AlignmentFlag.AlignTop)
-
-        # 완료는 사용자가 누를 때만 기록된다. 화면을 열어 봤다고 끝난 일이 되지 않는다.
-        if current:
-            for label, state in _RUN_BUTTONS[run]:
-                button = QPushButton(label)
+        if upcoming:
+            for text, state in _RUN_BUTTONS[run]:
+                button = QPushButton(text)
                 button.setObjectName("Confirm" if state == workstate.DONE else "Quiet")
-                button.setCursor(Qt.CursorShape.PointingHandCursor)
-                button.clicked.connect(
-                    lambda _=False, i=step["id"], st=state: self._set_step_run(i, st))
-                row.addWidget(button, 0, Qt.AlignmentFlag.AlignTop)
+                button.clicked.connect(lambda _=False, i=step["id"], st=state: self._set_step_run(i,st))
+                head.addWidget(button)
         else:
             more = QPushButton(MORE)
             more.setObjectName("IconButton")
-            more.setFixedWidth(28)
-            more.setCursor(Qt.CursorShape.PointingHandCursor)
-            more.setToolTip("이 단계의 진행을 기록합니다")
             menu = QMenu(more)
-            for label, state in _RUN_BUTTONS[run]:
-                menu.addAction(
-                    label, lambda i=step["id"], st=state: self._set_step_run(i, st))
+            for text, state in _RUN_BUTTONS[run]:
+                menu.addAction(text, lambda i=step["id"], st=state: self._set_step_run(i,st))
             more.setMenu(menu)
-            row.addWidget(more, 0, Qt.AlignmentFlag.AlignTop)
-        return frame
+            head.addWidget(more)
+        result = QPushButton("결과 파일 연결")
+        result.setObjectName("Quiet")
+        result.clicked.connect(lambda _=False, i=step["id"]: self._link_step_result(i))
+        head.addWidget(result)
+        holder.body.addLayout(head)
+        details = [f"{name}: {step[key]}" for name, key in (
+            ("준비 자료", "inputs"), ("서식", "forms"), ("완료 확인", "done_criteria")) if step[key]]
+        if details:
+            holder.body.addWidget(muted_label("  ·  ".join(details), small=True))
+        if step["blocked"]:
+            holder.body.addWidget(muted_label(
+                "◐ 이 단계에 필요한 정보가 아직 확인되지 않았습니다. 아래 ‘확인이 필요한 "
+                "정보’를 보세요. 다른 단계는 진행할 수 있습니다.", small=True))
+        if step["result_path"] or step["run_note"]:
+            holder.body.addWidget(muted_label(
+                "기록 — " + " · ".join(part for part in (step["result_path"], step["run_note"])
+                                        if part), small=True))
+        return holder
 
     def _work_gap_panel(self, gap: dict) -> QWidget:
-        frame = QFrame()
-        frame.setObjectName("Row")
-        column = QVBoxLayout(frame)
-        column.setContentsMargins(0, theme.SP_MD, 0, theme.SP_MD)
-        column.setSpacing(theme.SP_XS)
-
+        holder = SubPanel()
+        holder.body.setSpacing(theme.SP_XS)
         head = QHBoxLayout()
         head.setSpacing(theme.SP_SM)
-        name = QLabel(gap["field"])
-        name.setObjectName("StepLabel")
-        head.addWidget(name)
+        head.addWidget(body_text(gap["field"]), 1)
         head.addWidget(Badge(_GAP_LABEL.get(gap["kind"], gap["kind"]), "attention"))
-        head.addStretch(1)
         evidence = self.db.evidence_for("gap", [gap["id"]]).get(gap["id"], [])
         if evidence:
             head.addWidget(self._evidence_button(
@@ -2291,20 +2054,15 @@ class TasksView(QWidget):
         done.setToolTip("어떻게 확인했는지 적고 닫습니다")
         done.clicked.connect(lambda _=False, i=gap["id"]: self._resolve_work_gap(i))
         head.addWidget(done)
-        column.addLayout(head)
-        column.addWidget(muted_label(gap["detail"]))
+        holder.body.addLayout(head)
+        holder.body.addWidget(muted_label(gap["detail"]))
         if gap["research"]:
-            column.addWidget(muted_label(f"다시 찾아본 결과 — {gap['research']}", small=True))
+            holder.body.addWidget(muted_label(f"다시 찾아본 결과 — {gap['research']}", small=True))
         if gap["next_action"]:
-<<<<<<< Updated upstream
             # 온나라 안내는 공백마다 되풀이하지 않는다 — 판 아래에 한 번 적는다.
             todo = gap["next_action"].replace(continuity.ONNARA_HINT, "").strip()
             holder.body.addWidget(body_text(f"다음 행동 — {todo}"))
         return holder
-=======
-            column.addWidget(body_text(f"다음 행동 — {gap['next_action']}"))
-        return frame
->>>>>>> Stashed changes
 
     def _work_evidence(self, row: dict) -> list:
         return [
@@ -2447,6 +2205,17 @@ class TasksView(QWidget):
 
     def _publish_handover(self, note: str = "") -> tuple[int, bool]:
         return handover_release.publish(self.db, note)
+
+    def _link_step_result(self, step_id: int) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "이 단계의 결과 파일 선택")
+        if not path:
+            return
+        from pathlib import Path
+        if not Path(path).is_file():
+            QMessageBox.information(self,"결과 파일","존재하는 파일을 선택하세요.")
+            return
+        step = self.db.con.execute("SELECT state FROM step_runs WHERE step_id=?",(step_id,)).fetchone()
+        self._set_step_run(step_id, step[0] if step else workstate.NOT_STARTED, result_path=path)
 
     def _set_step_run(self, step_id: int, state: str, result_path: str | None = None,
                       note: str | None = None) -> None:

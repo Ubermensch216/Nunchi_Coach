@@ -203,16 +203,10 @@ def test_start_here_lists_what_to_check_first(db: Database, qapp):
     try:
         texts = [w.text() for w in view.findChildren(QLabel) if w.text()]
         assert any("지금 먼저 확인할 것" in t for t in texts)
-<<<<<<< Updated upstream
         # 체크리스트의 줄이 곧 누를 자리다 — 같은 수를 두 번 적지 않는다.
         assert any("업무 2개 확인 필요" in t for t in texts)
         assert any("핵심문서 2건 확인 필요" in t for t in texts)
         assert sum("확인하지 않은 업무" in t for t in texts) == 0
-=======
-        # 한 줄이 할 일 하나다 — 무엇이 남았는지와 갈 곳을 같은 줄에 둔다.
-        assert any("업무 2개 확인 필요" in t for t in texts)
-        assert any("핵심문서 2건 확인 필요" in t for t in texts)
->>>>>>> Stashed changes
         assert any("인수인계 진행도" in t for t in texts)
         links = [b.text() for b in view.findChildren(QPushButton)]
         assert "첫 업무 열기 →" in links and "먼저 읽을 문서 →" in links
@@ -262,11 +256,7 @@ def test_upcoming_tasks_show_up_in_start_here(db: Database, qapp, monkeypatch):
     view = TasksView(db)
     try:
         texts = [w.text() for w in view.findChildren(QLabel) if w.text()]
-<<<<<<< Updated upstream
         assert any("이번 달" in t and "업무 1개" in t for t in texts)
-=======
-        assert any("이번 달 업무 1개 확인 필요" in t for t in texts)
->>>>>>> Stashed changes
         assert any("행정사무감사" in t for t in texts)
         assert "일정에서 보기 →" in [b.text() for b in view.findChildren(QPushButton)]
     finally:

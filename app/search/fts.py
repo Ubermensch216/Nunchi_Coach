@@ -66,7 +66,7 @@ def search_document_ids(db: Database, term: str, limit: int = 500) -> list[int]:
     return [row["rowid"] for row in rows]
 
 
-def search_chunk_ids(db: Database, term: str, limit: int = 40) -> list[int]:
+def search_chunk_ids(db: Database, term: str, limit: int = 40, doc_ids=None) -> list[int]:
     """chunk_fts로 조각 id를 관련도 순으로 찾는다. RAG 하이브리드 검색의 절반이다.
 
     원본이 사라진 문서의 조각은 뺀다 — 벡터 검색이 이미 하는 것과
@@ -75,14 +75,21 @@ def search_chunk_ids(db: Database, term: str, limit: int = 40) -> list[int]:
     term = term.strip()
     if not usable_for_trigram(term):
         return []
+    if doc_ids == []:
+        return []
+    restriction = ""
+    args = []
+    if doc_ids is not None:
+        restriction = " AND d.id IN (" + ",".join("?" for _ in doc_ids) + ")"
+        args = list(doc_ids)
     try:
         rows = db.con.execute(
             "SELECT f.rowid AS chunk_id FROM chunk_fts f "
             "JOIN chunks c ON c.id = f.rowid "
             "JOIN documents d ON d.id = c.doc_id "
-            "WHERE chunk_fts MATCH ? AND d.missing_since IS NULL "
+            "WHERE chunk_fts MATCH ? AND d.missing_since IS NULL " + restriction +
             "ORDER BY rank LIMIT ?",
-            (escape_match_any(term), limit),
+            (escape_match_any(term), *args, limit),
         ).fetchall()
     except Exception:
         return []

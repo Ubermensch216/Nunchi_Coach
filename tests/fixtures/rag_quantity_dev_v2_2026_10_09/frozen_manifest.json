@@ -1,0 +1,24 @@
+{
+  "frozen_date": "2026-10-09",
+  "baseline_commit": "ca2f04a",
+  "files": {
+    "dev.json": "9792e732e8f694b8f50ac132a0dccfa493af8d6f212cc0336e88fd4d31844528",
+    "holdout.json": "e5c8efd21dd5394dd038ac519d0330513b508a3535d551c6c553ded8e09e34a6"
+  },
+  "baseline_code": {
+    "app\\search\\documents.py": "b311da316584c07bde3d39da28591c9603f16a5c2925d04a31347a502ec525e9",
+    "app\\search\\evidence.py": "a7c9f1300e1797cf740658b3630e85a27501499d0547ed1f334d1913b297bbf7",
+    "app\\search\\facts.py": "99ed6053cef6a319102ca32e46269a463064c32375ba32296bb67dd176daf30b",
+    "app\\search\\fts.py": "f489b90069146190181f538d63b42d81ef21fa43ddb9d12d5c469687db427ca6",
+    "app\\search\\intent.py": "2c30a0bac622f7b54a64ee159e40089eec96793c060f14007797a64e8eb45052",
+    "app\\search\\query.py": "a2784ebbd80082550342776a7fbcae28843b8d69f62624a869d759d317f3d779",
+    "app\\search\\rag.py": "3337f56ea5bf46c61417f04060c7aef4de32c1348fb75f92728d32bb39198ca1",
+    "app\\search\\rerank.py": "1969d8f4cadc1735645b01d9fc50fff003f916ccc186bd6eb778ba83b51acd72",
+    "app\\search\\tablemath.py": "a9f26a6e20e762a2c2d32101c3deedbbf588254f080ff5a9a670ae75e98ea1f0",
+    "app\\search\\vector.py": "2ea57b683e16d98b06492252c0d3971c333bb7634f2ca0786ccbb328d2142b72",
+    "app\\search\\verify.py": "728d2798b6ba5c7e4dbb96a6907bb0722311a1124a7c271e029ee388e3600bfc",
+    "app\\search\\__init__.py": "01319743babb213cb5e6bd0dc7540e0ad6c644a4096da701f206e33b82481b63"
+  },
+  "reserved_origin": "tests\\fixtures\\rag_quantity_2026_10_09\\holdout.json",
+  "development_revision": "v2: 음성/양성 업무·대상 분리; baseline 비교 대상 아님"
+}

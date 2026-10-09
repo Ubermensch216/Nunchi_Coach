@@ -25,16 +25,11 @@ from PySide6.QtWidgets import (
 
 from ...db import Database
 from ...ingest.parsers import supported_extensions
-<<<<<<< Updated upstream
 from .. import icons, theme
 from ..widgets import Card, SubPanel, body_label, center_column, muted_label, view_title
 
 # 이 화면의 기둥 폭. 할 일이 하나뿐인 화면이라 좁게 세운다.
 ONBOARDING_W = 760
-=======
-from .. import theme
-from ..widgets import Card, centered_column, muted_label, view_title
->>>>>>> Stashed changes
 
 # 사전 점검에서 훑을 최대 항목 수. 네트워크 공유 폴더에서 멈추지 않도록 상한을 둔다.
 PRECHECK_CAP = 40_000
@@ -52,7 +47,6 @@ class OnboardingView(QWidget):
 
         self.setObjectName("Canvas")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-<<<<<<< Updated upstream
 
         # 첫 화면은 할 일이 하나뿐이다 — 폴더를 고르고 분석을 시작한다. 그 하나를
         # 화면 가운데의 좁은 기둥에 세운다. 예전에는 창 폭을 다 쓰는 빈 상자
@@ -64,22 +58,8 @@ class OnboardingView(QWidget):
         outer.setAlignment(Qt.AlignmentFlag.AlignTop)
         frame.addLayout(row)
         frame.addStretch(1)
-=======
->>>>>>> Stashed changes
 
-        # 처음 보는 화면이다. 할 일은 하나(폴더 연결)뿐이라 가운데 좁은 기둥에
-        # 그것만 세운다 — 넓은 판에 빈 목록 상자를 펼쳐 두면 무엇을 누르라는
-        # 화면인지 읽히지 않는다.
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, theme.SP_2XL * 2, 0, theme.SP_XL)
-        outer.setSpacing(0)
-        outer.setAlignment(Qt.AlignmentFlag.AlignTop)
-        holder, column_widget = centered_column(ONBOARDING_W)
-        outer.addWidget(holder)
-        outer.addStretch(1)
-        column = QVBoxLayout(column_widget)
-        column.setContentsMargins(0, 0, 0, 0)
-        column.setSpacing(theme.SP_LG)
+        column = outer
 
         column.addWidget(view_title("전임자 자료가 있는 폴더를 연결하세요"))
         column.addWidget(
@@ -91,7 +71,6 @@ class OnboardingView(QWidget):
         )
 
         card = Card()
-<<<<<<< Updated upstream
 
         # 고른 폴더가 없을 때는 빈 목록 대신 무엇을 하면 되는지를 적는다.
         self.placeholder = SubPanel()
@@ -107,12 +86,6 @@ class OnboardingView(QWidget):
         self.list.setFixedHeight(140)
         self.list.setAlternatingRowColors(True)
         self.list.setVisible(False)
-=======
-
-        self.list = QListWidget()
-        self.list.setAlternatingRowColors(False)
-        self.list.hide()            # 고른 폴더가 생기면 편다
->>>>>>> Stashed changes
         card.body.addWidget(self.list)
 
         buttons = QHBoxLayout()
@@ -133,7 +106,6 @@ class OnboardingView(QWidget):
 
         self.summary = muted_label("아직 선택한 폴더가 없습니다.")
         card.body.addWidget(self.summary)
-<<<<<<< Updated upstream
 
         # 시작 버튼은 카드 안, 고른 폴더 바로 아래에 둔다. 카드 밖에 떨어져
         # 있으면 무엇을 시작하는 버튼인지가 카드와 끊긴다.
@@ -151,37 +123,15 @@ class OnboardingView(QWidget):
         )
         notice.setObjectName("Small")
         foot_row.addWidget(notice, 1)
-=======
-        column.addWidget(card)
->>>>>>> Stashed changes
 
         self.start = QPushButton("분석 시작")
         self.start.setEnabled(False)
-<<<<<<< Updated upstream
         self.start.setToolTip("폴더를 하나 이상 고르면 시작할 수 있습니다")
         self.start.clicked.connect(self._start)
         foot_row.addWidget(self.start, 0, Qt.AlignmentFlag.AlignVCenter)
         card.body.addWidget(foot)
 
         outer.addWidget(card)
-=======
-        self.start.setMinimumHeight(theme.CONTROL_H + 6)
-        self.start.setMinimumWidth(160)
-        self.start.clicked.connect(self._start)
-        column.addWidget(self.start, alignment=Qt.AlignmentFlag.AlignLeft)
-
-        # 공직 자료를 다루는 프로그램에 대한 첫 신뢰가 이 세 줄에서 만들어진다.
-        promise = QVBoxLayout()
-        promise.setSpacing(theme.SP_XS)
-        for line in (
-            "원본은 읽기만 합니다. 수정·이동·삭제·이름 변경을 하지 않고, 분석 결과는 따로 저장합니다.",
-            "PC 밖으로 나가지 않습니다. 인터넷 없이 동작합니다.",
-            "분석은 뒤에서 돕니다. 끝나기를 기다리지 않고 먼저 나온 결과부터 볼 수 있습니다.",
-        ):
-            promise.addWidget(muted_label(f"✓  {line}", small=True))
-        column.addSpacing(theme.SP_SM)
-        column.addLayout(promise)
->>>>>>> Stashed changes
 
         self.list.itemSelectionChanged.connect(
             lambda: self.remove.setEnabled(bool(self.list.selectedItems()))

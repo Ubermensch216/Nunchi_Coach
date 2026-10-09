@@ -152,7 +152,9 @@ class OllamaClient:
         if self.cancelled:
             raise httpx.RequestError("요청 취소됨")
         # 기관 PC의 환경 프록시를 따라 문서를 외부로 보내지 않는다.
-        async with httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=timeout) as client:
+        # 생성에는 긴 읽기 시간이 필요해도 연결 대기는 짧게 제한한다.
+        request_timeout = httpx.Timeout(timeout, connect=CONNECT_TIMEOUT)
+        async with httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=request_timeout) as client:
             request = asyncio.create_task(client.request(method, f"{self.base_url}{endpoint}", **kwargs))
             loop = asyncio.get_running_loop()
             deadline = loop.time() + timeout

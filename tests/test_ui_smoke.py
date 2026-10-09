@@ -25,6 +25,14 @@ from app.ui.views import ask as ask_view  # noqa: E402
 from app.ui.views import tasks as tasks_view  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def no_live_model_warmup(monkeypatch):
+    # 화면 시험은 실제 Ollama 설치·응답 시간에 의존하지 않는다.
+    # 워커 수명 검증은 test_job_lifecycle.py의 모의 클라이언트로 수행한다.
+    from app.jobs.ask_task import _WarmupWorker
+    monkeypatch.setattr(_WarmupWorker, "run", lambda self: self.finished.emit())
+
+
 @pytest.fixture(scope="session")
 def qapp():
     app = QApplication.instance() or QApplication([])
@@ -1283,7 +1291,7 @@ def test_navigation_lives_in_the_top_bar(make_window, db, qapp):
     qapp.processEvents()
 
     assert [b.text() for b in window.topbar._buttons.values()] == [
-        "업무", "일정", "문서", "질문"
+        "업무", "일정", "문서", "질문", "노트북"
     ]
     assert not hasattr(window, "sidebar")
     # 메뉴가 답하는 질문은 버리지 않고 툴팁으로 옮겼다.

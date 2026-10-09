@@ -110,15 +110,10 @@ class LauncherDialog(QDialog):
         buttons.addWidget(new)
 
         existing = QPushButton("폴더에서 열기…")
-<<<<<<< Updated upstream
         existing.setToolTip(
             "USB나 공유 폴더에 있는 프로젝트 폴더를 직접 고릅니다. "
             "전임자 자료 폴더를 고르면 그 자료로 새 인수인계를 시작합니다"
         )
-=======
-        existing.setObjectName("Quiet")
-        existing.setToolTip("USB나 공유 폴더에 있는 프로젝트 폴더를 직접 고릅니다")
->>>>>>> Stashed changes
         existing.clicked.connect(self._open_folder)
         buttons.addWidget(existing)
         buttons.addStretch(1)
@@ -330,13 +325,9 @@ class _ProjectRow(QFrame):
         # 손은 한 칸 옆을 짚는다. 되돌릴 수 없는 것은 한 번 더 열게 한다.
         more = QPushButton(MORE)
         more.setObjectName("IconButton")
-<<<<<<< Updated upstream
         more.setFixedWidth(36)
         more.setCursor(Qt.CursorShape.PointingHandCursor)
         more.setAccessibleName(f"{entry.name} — 이름 바꾸기·목록에서 빼기·완전 삭제")
-=======
-        more.setFixedWidth(32)
->>>>>>> Stashed changes
         more.setToolTip("이름 바꾸기 · 목록에서 빼기 · 완전 삭제")
         menu = QMenu(more)          # 메뉴의 부모는 언제나 그 메뉴를 여는 버튼이다
         menu.addAction("이름 바꾸기", lambda: on_rename(entry))

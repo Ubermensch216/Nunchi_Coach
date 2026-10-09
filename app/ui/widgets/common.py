@@ -428,13 +428,9 @@ class TabBar(QWidget):
         self.setObjectName("TabBar")
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
-<<<<<<< Updated upstream
         # 밑줄 탭은 테두리가 없어 간격만이 경계다. 좁으면 건수·◐ 표시가 어느
         # 탭의 것인지 읽히지 않는다.
         row.setSpacing(theme.SP_XL)
-=======
-        row.setSpacing(0)
->>>>>>> Stashed changes
 
         self._group = QButtonGroup(self)
         self._group.setExclusive(True)
@@ -564,7 +560,6 @@ class IconChoice(QWidget):
             button._icon_mark.setPixmap(art)
 
 
-<<<<<<< Updated upstream
 def _center(row: QHBoxLayout, holder: QWidget, max_width: int) -> None:
     """기둥을 줄 가운데에 세운다. 폭 상한이 없으면 줄을 다 쓴다."""
     if not max_width:
@@ -599,27 +594,6 @@ def center_column(max_width: int = 0) -> tuple[QHBoxLayout, QVBoxLayout]:
 def header_margins(top: int, bottom: int = 0) -> tuple[int, int, int, int]:
     """머리 띠의 여백. 오른쪽은 본문의 스크롤바 자리만큼 더 둔다(Page 참고)."""
     return (theme.SP_XL, top, theme.SP_XL + theme.SCROLLBAR_W, bottom)
-=======
-def centered_column(max_width: int = theme.CONTENT_MAX_W) -> tuple[QWidget, QWidget]:
-    """(바깥 그릇, 가운데 기둥). 기둥은 max_width를 넘지 않고 가운데에 선다.
-
-    머리 띠와 본문이 **같은 폭 규칙**을 써야 제목의 왼쪽 끝과 카드의 왼쪽 끝이
-    한 줄에 선다. 둘이 따로 폭을 정하면 창을 넓힐 때 서로 어긋난다.
-    기둥에 레이아웃을 채우는 것은 호출부가 한다.
-    """
-    outer = QWidget()
-    outer.setObjectName("HeaderColumn")
-    row = QHBoxLayout(outer)
-    row.setContentsMargins(theme.SP_XL, 0, theme.SP_XL, 0)
-    row.setSpacing(0)
-    column = QWidget()
-    column.setObjectName("HeaderColumn")
-    column.setMaximumWidth(max_width)
-    row.addStretch(1)
-    row.addWidget(column, 1000)
-    row.addStretch(1)
-    return outer, column
->>>>>>> Stashed changes
 
 
 class Page(QWidget):
@@ -628,7 +602,6 @@ class Page(QWidget):
     바탕은 흰색이 아니라 한 단계 낮춘 회색이다. 흰 종이 위에 흰 카드를
     올리면 카드가 카드로 보이지 않는다.
 
-<<<<<<< Updated upstream
     max_width를 주면 본문 기둥의 폭을 묶고 **가운데에 세운다.** 창을 넓혔을 때
     한 줄이 끝없이 길어지면 다음 줄 첫 글자를 눈이 못 찾는다. 예전에는 묶은
     기둥을 왼쪽에 붙여서, 넓은 창에서는 오른쪽 3분의 1이 빈 채로 화면이 한쪽으로
@@ -637,11 +610,6 @@ class Page(QWidget):
     기둥이 서는 자리는 스크롤바가 있든 없든 같다. 스크롤바가 없을 때는 그 폭만큼
     오른쪽 여백을 더 둔다 — 그래야 내용이 길어져 스크롤바가 생기는 순간 본문이
     옆으로 밀리지 않고, 머리 띠의 기둥(center_column)과도 왼쪽 끝이 맞는다.
-=======
-    본문 기둥은 max_width를 넘지 않고 **가운데에** 선다. 창을 넓혔을 때 한
-    줄이 끝없이 길어지면 다음 줄 첫 글자를 눈이 못 찾고, 왼쪽에 몰아 두면
-    넓은 화면의 오른쪽이 빈 채로 남는다. 0을 주면 폭을 묶지 않는다.
->>>>>>> Stashed changes
     """
 
     def __init__(self, max_width: int = theme.CONTENT_MAX_W,
@@ -656,39 +624,19 @@ class Page(QWidget):
         body = QWidget()
         body.setObjectName("PageBody")
         body.setAutoFillBackground(True)
-<<<<<<< Updated upstream
         self._gutter = QHBoxLayout(body)
         self._gutter.setContentsMargins(
             theme.SP_XL, theme.SP_LG, theme.SP_XL + theme.SCROLLBAR_W, theme.SP_XL
-=======
-        outer_body = QHBoxLayout(body)
-        outer_body.setContentsMargins(
-            theme.SP_XL, theme.SP_XL, theme.SP_XL, theme.SP_2XL
->>>>>>> Stashed changes
         )
         self._gutter.setSpacing(0)
 
         holder = QWidget()
         holder.setObjectName("PageColumn")
-<<<<<<< Updated upstream
-=======
-        self._holder = holder
->>>>>>> Stashed changes
         self.column = QVBoxLayout(holder)
         self.column.setContentsMargins(0, 0, 0, 0)
         self.column.setSpacing(theme.SP_LG)
         self.column.setAlignment(Qt.AlignmentFlag.AlignTop)
-<<<<<<< Updated upstream
         _center(self._gutter, holder, max_width)
-=======
-        if max_width:
-            holder.setMaximumWidth(max_width)
-            outer_body.addStretch(1)
-            outer_body.addWidget(holder, 1000)
-            outer_body.addStretch(1)
-        else:
-            outer_body.addWidget(holder, 1)
->>>>>>> Stashed changes
         scroll.setWidget(body)
         scroll.verticalScrollBar().rangeChanged.connect(self._reserve_gutter)
 

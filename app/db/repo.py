@@ -205,6 +205,7 @@ class Database(WorkStore):
         # 옛 조각을 지울 기회를 영영 놓친다(이 코드가 나오기 전까지는
         # 승격 경로가 여기서 그냥 return 해 버렸다).
         self.sync_chunking_version()
+        self.con.executescript(Path(__file__).with_name("notebook_schema.sql").read_text(encoding="utf-8"))
 
     def sync_chunking_version(self) -> bool:
         """조각 규칙이 바뀌면 옛 조각을 지우고 다시 만들게 한다.
@@ -1187,80 +1188,17 @@ class Database(WorkStore):
         self._record("tasks", task_id, "not_a_task", int(not flag), int(flag))
         self.audit("task.not_a_task" if flag else "task.restore", str(task_id))
 
+    def preview_task_edit(self, task_id: int, doc_ids=None) -> dict:
+        from .taskedit import preview
+        return preview(self, task_id, doc_ids)
+
     def merge_tasks(self, source_id: int, target_id: int) -> bool:
-        """source를 target에 합친다. source는 지우지 않고 흔적으로 남긴다.
-
-        주기·처리순서는 옮기지 않는다. 두 업무의 격자가 합쳐지면 다시
-        계산해야 맞는 값이 나오는데, 그 계산을 여기서 몰래 하면 사용자가
-        모르는 사이에 근거가 바뀐다. 재분석에 맡기고 표시만 지운다.
-        """
-        if source_id == target_id:
-            return False
-        if self.task(source_id) is None or self.task(target_id) is None:
-            return False
-
-        # 이미 target에 있는 문서는 건너뛴다 (복합 PK 충돌 방지).
-        self.con.execute(
-            "INSERT OR IGNORE INTO task_docs(task_id, doc_id, origin, confidence, evidence) "
-            "SELECT ?, doc_id, 'user', confidence, evidence FROM task_docs WHERE task_id = ?",
-            (target_id, source_id),
-        )
-        self.con.execute("DELETE FROM task_docs WHERE task_id = ?", (source_id,))
-        self.con.execute("DELETE FROM task_reading WHERE task_id = ?", (source_id,))
-        # 합쳐진 묶음의 옛 주기·순서는 더 이상 근거가 없다.
-        self.con.execute("DELETE FROM task_cycles WHERE task_id = ?", (source_id,))
-        self.con.execute("DELETE FROM task_steps WHERE task_id = ?", (source_id,))
-
-        source = self.task(source_id)
-        self.con.execute(
-            "UPDATE tasks SET merged_into = ?, review_state = 'confirmed', "
-            "reviewed_at = datetime('now'), origin = 'user' WHERE id = ?",
-            (target_id, source_id),
-        )
-        self.con.execute(
-            "UPDATE tasks SET status = 'edited', origin = 'user', "
-            "review_state = 'confirmed', reviewed_at = datetime('now') WHERE id = ?",
-            (target_id,),
-        )
-        self._record("tasks", source_id, "merged_into", None, target_id)
-        self.audit("task.merge", f"{source_id}→{target_id}", source["name"])
-        return True
+        from .taskedit import merge
+        return merge(self, source_id, target_id)
 
     def split_task(self, task_id: int, doc_ids: Sequence[int], new_name: str) -> int | None:
-        """고른 문서를 떼어 새 업무로 만든다. 새 업무 id를 돌려준다."""
-        new_name = new_name.strip()
-        if not new_name or not doc_ids:
-            return None
-        if self.con.execute(
-            "SELECT id FROM tasks WHERE name = ?", (new_name,)
-        ).fetchone():
-            return None
-
-        cur = self.con.execute(
-            "INSERT INTO tasks(name, origin, status, confidence, review_state, "
-            "reviewed_at) VALUES (?, 'user', 'edited', 'high', 'confirmed', "
-            "datetime('now'))",
-            (new_name,),
-        )
-        new_id = cur.lastrowid
-        marks = ", ".join("?" * len(doc_ids))
-        self.con.execute(
-            f"INSERT OR IGNORE INTO task_docs(task_id, doc_id, origin, confidence) "
-            f"SELECT ?, doc_id, 'user', confidence FROM task_docs "
-            f"WHERE task_id = ? AND doc_id IN ({marks})",
-            (new_id, task_id, *doc_ids),
-        )
-        self.con.execute(
-            f"DELETE FROM task_docs WHERE task_id = ? AND doc_id IN ({marks})",
-            (task_id, *doc_ids),
-        )
-        self.con.execute(
-            f"DELETE FROM task_reading WHERE task_id = ? AND doc_id IN ({marks})",
-            (task_id, *doc_ids),
-        )
-        self._record("tasks", task_id, "split", task_id, new_id)
-        self.audit("task.split", f"{task_id}→{new_id}", f"{len(doc_ids)}건")
-        return new_id
+        from .taskedit import split
+        return split(self, task_id, doc_ids, new_name)
 
     # ── 문서 배정 교정 ──────────────────────────────────────────────
     def assign_document(self, task_id: int, doc_id: int) -> None:

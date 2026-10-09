@@ -1,0 +1,296 @@
+{
+  "note": [
+    "2026-10-09 수량 부재 답변 개선 전에 동결했다. 모두 합성 자료이며 독립 작성자·기관 실자료 평가가 아니다.",
+    "dev는 이전 2차 최종 세트를 개발용으로 전환한 자료와 양성 대조를 포함한다. 이전 원장·파일은 수정하지 않았다.",
+    "holdout은 새 업무·새 자료·새 질문이다. 결과를 보고 검색·검증·채점 조건을 재조정하지 않는다."
+  ],
+  "documents": [
+    {
+      "filename": "도시관측_센서조사.txt",
+      "text": "2026년 도시관측 센서 점검 조사입니다.\n센서 수량과 설치위치, 관리 부서를 조사했습니다.\n조사일은 2026. 10. 2.이며 본관 4층에서 기록을 확인했습니다.",
+      "year": 2026
+    },
+    {
+      "filename": "구민상담_접수결과.txt",
+      "text": "2026년 구민상담 접수 결과입니다.\n접수 건수: 37건\n방문상담 인원: 19명\n미처리 건수: 0건",
+      "year": 2026
+    },
+    {
+      "filename": "전자서고_자료이관.txt",
+      "text": "2026년 전자서고 자료이관 결과입니다.\n이관 수량: 126상자\n검수완료 수량: 118상자\n검수일: 2026. 10. 8.",
+      "year": 2026
+    },
+    {
+      "filename": "야외쉼터_설비조사.txt",
+      "text": "2026년 야외쉼터 설비 현황 조사입니다.\n정수기 수량과 벤치 수량, 이용 현황을 조사했습니다.\n설비 관리번호는 제3호이며, 2026. 9. 15.에 안내문을 작성했습니다.\n안내 담당: 공원지원팀",
+      "year": 2026
+    },
+    {
+      "filename": "시설방문_수량확인.txt",
+      "text": "2026년 시설방문 안내 현황입니다.\n방문시설 수: 9곳\n안내책자 수량: 64권\n누락 접수 건수: 0건",
+      "year": 2026
+    },
+    {
+      "filename": "구민상담_지난해.txt",
+      "text": "2025년 구민상담 접수 결과입니다.\n접수 건수: 21건\n방문상담 인원: 16명",
+      "year": 2025
+    },
+    {
+      "filename": "구민상담_처리보고.txt",
+      "text": "2026년 구민상담 처리 완료 보고입니다.\n처리완료율: 92%\n처리기간: 2026. 9. 1. ~ 9. 30.",
+      "year": 2026
+    },
+    {
+      "filename": "시설방문_공문안내.txt",
+      "text": "업무명: 시설방문 안내\n기준연도: 2026\n제출처: 방문지원팀\n제출기한: 2026. 11. 9.",
+      "year": 2026
+    }
+  ],
+  "cases": [
+    {
+      "id": "n-q01",
+      "question": "2026년 도시관측 센서 수량은 몇 개야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "must_not_contain": [],
+      "kind": "absent_quantity"
+    },
+    {
+      "id": "n-q02",
+      "question": "2026년 도시관측 센서 점검 수량은 몇 대야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "must_not_contain": [],
+      "kind": "absent_quantity"
+    },
+    {
+      "id": "n-q03",
+      "question": "2026년 도시관측 조사 인원은 몇 명이야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "must_not_contain": [],
+      "kind": "absent_quantity"
+    },
+    {
+      "id": "n-q04",
+      "question": "2026년 야외쉼터 정수기 수량은 몇 대야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "must_not_contain": [],
+      "kind": "absent_quantity"
+    },
+    {
+      "id": "n-q05",
+      "question": "2026년 야외쉼터 벤치 수량은 몇 개야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "must_not_contain": [],
+      "kind": "absent_quantity"
+    },
+    {
+      "id": "n-q06",
+      "question": "2026년 야외쉼터 이용 인원은 몇 명이야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "must_not_contain": [],
+      "kind": "absent_quantity"
+    },
+    {
+      "id": "n-q07",
+      "question": "2026년 시설방문 담당 인원은 몇 명이야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "must_not_contain": [],
+      "kind": "absent_quantity"
+    },
+    {
+      "id": "n-q08",
+      "question": "2026년 구민상담 전화상담 건수는 몇 건이야?",
+      "expect": "withhold",
+      "must_contain": [],
+      "must_cite_any": [],
+      "must_not_contain": [],
+      "kind": "absent_quantity"
+    },
+    {
+      "id": "n-q09",
+      "question": "2026년 구민상담 접수 건수는 몇 건이야?",
+      "expect": "answer",
+      "must_contain": [
+        "37"
+      ],
+      "must_cite_any": [
+        "구민상담_접수결과"
+      ],
+      "must_not_contain": [
+        "21",
+        "19",
+        "0"
+      ],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-q10",
+      "question": "2026년 구민상담 방문상담 인원은 몇 명이야?",
+      "expect": "answer",
+      "must_contain": [
+        "19"
+      ],
+      "must_cite_any": [
+        "구민상담_접수결과"
+      ],
+      "must_not_contain": [
+        "37",
+        "16"
+      ],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-q11",
+      "question": "2026년 구민상담 미처리 건수는 몇 건이야?",
+      "expect": "answer",
+      "must_contain": [
+        "0"
+      ],
+      "must_cite_any": [
+        "구민상담_접수결과"
+      ],
+      "must_not_contain": [
+        "37"
+      ],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-q12",
+      "question": "2026년 전자서고 이관 수량은 몇 상자야?",
+      "expect": "answer",
+      "must_contain": [
+        "126"
+      ],
+      "must_cite_any": [
+        "전자서고"
+      ],
+      "must_not_contain": [
+        "118"
+      ],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-q13",
+      "question": "2026년 전자서고 검수완료 수량은 몇 상자야?",
+      "expect": "answer",
+      "must_contain": [
+        "118"
+      ],
+      "must_cite_any": [
+        "전자서고"
+      ],
+      "must_not_contain": [
+        "126"
+      ],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-q14",
+      "question": "2026년 시설방문 방문시설 수는 몇 곳이야?",
+      "expect": "answer",
+      "must_contain": [
+        "9"
+      ],
+      "must_cite_any": [
+        "시설방문_수량확인"
+      ],
+      "must_not_contain": [],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-q15",
+      "question": "2026년 시설방문 안내책자 수량은 몇 권이야?",
+      "expect": "answer",
+      "must_contain": [
+        "64"
+      ],
+      "must_cite_any": [
+        "시설방문_수량확인"
+      ],
+      "must_not_contain": [],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-q16",
+      "question": "2026년 시설방문 누락 접수 건수는 몇 건이야?",
+      "expect": "answer",
+      "must_contain": [
+        "0"
+      ],
+      "must_cite_any": [
+        "시설방문_수량확인"
+      ],
+      "must_not_contain": [],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-q17",
+      "question": "2025년 구민상담 접수 건수는 몇 건이야?",
+      "expect": "answer",
+      "must_contain": [
+        "21"
+      ],
+      "must_cite_any": [
+        "구민상담_지난해"
+      ],
+      "must_not_contain": [
+        "37"
+      ],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-q18",
+      "question": "2026년 구민상담 처리완료율은 몇 퍼센트야?",
+      "expect": "answer",
+      "must_contain": [
+        "92"
+      ],
+      "must_cite_any": [
+        "구민상담_처리보고"
+      ],
+      "must_not_contain": [],
+      "kind": "quantity"
+    },
+    {
+      "id": "n-q19",
+      "question": "2026년 시설방문 안내 제출처는 어디야?",
+      "expect": "answer",
+      "must_contain": [
+        "방문지원팀"
+      ],
+      "must_cite_any": [
+        "시설방문_공문안내"
+      ],
+      "must_not_contain": [],
+      "kind": "control"
+    },
+    {
+      "id": "n-q20",
+      "question": "2026년 도시관측 관련해서 뭘 조사했어?",
+      "expect": "answer",
+      "must_contain": [
+        "센서",
+        "설치위치",
+        "관리"
+      ],
+      "must_cite_any": [
+        "도시관측"
+      ],
+      "must_not_contain": [],
+      "kind": "control"
+    }
+  ]
+}

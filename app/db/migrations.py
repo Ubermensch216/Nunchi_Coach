@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "5"
+SCHEMA_VERSION = "6"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -385,11 +385,19 @@ _V5_STATEMENTS = (
 
 
 # 버전 문자열 → 그 버전으로 올리는 함수.
+def _to_v6(con: sqlite3.Connection) -> None:
+    # 신규 표만 추가한다. 기존 문서·업무·검토·수행 기록은 변경하지 않는다.
+    for statement in Path(__file__).with_name("notebook_schema.sql").read_text(encoding="utf-8").split(";"):
+        if statement.strip():
+            con.execute(statement)
+
+
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
     "4": _to_v4,
     "5": _to_v5,
+    "6": _to_v6,
 }
 
 

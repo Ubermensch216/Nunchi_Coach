@@ -281,7 +281,6 @@ def font_family() -> str:
 
 
 FONT_FAMILY = '"Pretendard", "Malgun Gothic", "맑은 고딕", sans-serif'
-<<<<<<< Updated upstream
 # 다섯 단계. 예전에는 20·16·14·12 넷이었는데 이웃한 단계의 차가 2~4px뿐이라
 # 제목·구획·본문이 한 덩어리로 읽혔다. 화면 제목과 구획 제목을 벌리고, 본문과
 # 구획 사이에 '답'의 자리(FS_LEAD)를 따로 둔다 — 기한·제출처처럼 화면이 내놓는
@@ -291,14 +290,6 @@ FS_SECTION = 18
 FS_LEAD = 16
 FS_BODY = 14
 FS_SMALL = 13                # Pretendard는 맑은 고딕보다 글자가 좁아 12에서는 부기가 잘다
-=======
-# 위계는 네 단이다. 화면 제목 → 구획 제목 → 본문 → 부기. 단마다 크기와
-# 무게를 함께 바꿔야 훑는 눈이 어디서 멈출지 안다.
-FS_TITLE = 22
-FS_SECTION = 16
-FS_BODY = 14
-FS_SMALL = 13
->>>>>>> Stashed changes
 LINE_HEIGHT = 1.6            # 한글은 1.5 이하면 답답하다
 
 # 글자 크기 3단계. 소·중·대이며 저장값은 이 키다.
@@ -355,16 +346,10 @@ CONTROL_H = 36
 DETAIL_PANEL_W = 400
 # 근거 서랍(계획서 §28: 360~420px). 인용문이 서너 줄로 접히는 최소 폭이다.
 DRAWER_W = 380
-<<<<<<< Updated upstream
 # 읽는 화면(업무·일정)의 본문 기둥. 목록과 상세가 같은 폭을 써야 화면을
 # 오갈 때 제목이 제자리에 있다. 표와 대조가 일인 화면(문서·질문)은 묶지 않는다.
 CONTENT_MAX_W = 1120
 SCROLLBAR_W = 10             # 아래 스타일시트의 QScrollBar:vertical 폭과 같아야 한다
-=======
-# 본문 기둥의 폭. 창이 넓어도 이 폭을 넘지 않고 **가운데에** 선다 — 왼쪽에
-# 몰아 두면 넓은 화면의 오른쪽 3분의 1이 빈 채로 남아 화면이 기울어 보인다.
-CONTENT_MAX_W = 1080
->>>>>>> Stashed changes
 WINDOW_MIN = (1120, 720)
 
 # 연간 패턴 격자 (일정 화면). 가장 좁은 창(WINDOW_MIN)의 본문 기둥 1062px에
@@ -482,7 +467,6 @@ def stylesheet(text_size: str = "medium") -> str:
     section = _scaled(FS_SECTION, scale)
     lead = _scaled(FS_LEAD, scale)
     title = _scaled(FS_TITLE, scale)
-    lead = _scaled(FS_BODY + 1, scale)
     return f"""
     * {{
         font-family: {_qss_family()};
@@ -580,7 +564,6 @@ def stylesheet(text_size: str = "medium") -> str:
         border: none;
         border-bottom: 2px solid transparent;
         border-radius: 0;
-<<<<<<< Updated upstream
         padding: {SP_SM}px 2px {SP_SM + 2}px 2px;
         color: {TEXT_MUTED};
         font-weight: 600;
@@ -594,18 +577,6 @@ def stylesheet(text_size: str = "medium") -> str:
        탭 폭이 달라져 누를 때마다 옆 탭이 밀린다. */
     QPushButton#Tab:checked {{
         color: {PRIMARY};
-=======
-        padding: {SP_SM}px 2px {SP_MD}px 2px;
-        margin-right: {SP_LG}px;
-        color: {TEXT_SUBTLE};
-        font-weight: 600;
-        min-height: 24px;
-    }}
-    QPushButton#Tab:hover {{ color: {TEXT}; background: transparent; }}
-    QPushButton#Tab:checked {{
-        color: {TEXT};
-        font-weight: 700;
->>>>>>> Stashed changes
         border-bottom: 2px solid {PRIMARY};
     }}
     QPushButton#Tab:focus {{ color: {PRIMARY}; }}
@@ -615,11 +586,7 @@ def stylesheet(text_size: str = "medium") -> str:
        본문에서 떼어 낸 판이다. 왼쪽 선으로 경계를 긋는다. */
     QFrame#EvidenceDrawer {{
         background: {BG};
-<<<<<<< Updated upstream
         border-left: 1px solid {BORDER_STRONG};
-=======
-        border-left: 1px solid {BORDER};
->>>>>>> Stashed changes
     }}
     QFrame#EvidenceEntry {{
         border: 1px solid transparent;
@@ -632,7 +599,6 @@ def stylesheet(text_size: str = "medium") -> str:
 
     /* 질문 가이드 칩. 누르면 그 질문을 바로 묻는다. */
     QPushButton#Chip {{
-<<<<<<< Updated upstream
         background: {BG};
         border: 1px solid {BORDER_STRONG};
         /* 반지름이 높이의 절반을 넘으면 Qt는 둥근 모서리를 아예 그리지 않는다.
@@ -640,13 +606,6 @@ def stylesheet(text_size: str = "medium") -> str:
         border-radius: 14px;
         min-height: 20px;
         padding: {SP_XS}px {SP_MD}px;
-=======
-        background: {SURFACE_ALT};
-        border: none;
-        border-radius: 12px;
-        padding: 5px {SP_MD}px;
-        min-height: 16px;
->>>>>>> Stashed changes
         color: {TEXT_MUTED};
         font-size: {small}px;
         font-weight: 400;
@@ -692,12 +651,8 @@ def stylesheet(text_size: str = "medium") -> str:
     QScrollArea#AnswerPane > QWidget#qt_scrollarea_viewport {{
         background: transparent;
     }}
-<<<<<<< Updated upstream
     /* 문서 화면 오른쪽 상세. 표와 나란히 서는 흰 판이라 같은 테두리를 쓴다. */
     QFrame#DetailFrame {{
-=======
-    QScrollArea#DetailPane {{
->>>>>>> Stashed changes
         background: {BG};
         border: 1px solid {BORDER};
         border-radius: {RADIUS_LG}px;
@@ -762,7 +717,6 @@ def stylesheet(text_size: str = "medium") -> str:
     QLabel#ViewTitle {{
         font-size: {title}px;
         font-weight: 700;
-<<<<<<< Updated upstream
     }}
     /* 화면이 내놓는 값(기한·제출처·서식). 표지와 부기는 small로 물러서고
        값만 한 단계 크게 선다 — 한 줄에서 눈이 먼저 닿아야 하는 것이 이것이다. */
@@ -777,8 +731,6 @@ def stylesheet(text_size: str = "medium") -> str:
         color: {TEXT_MUTED};
         font-size: {small}px;
         font-weight: 700;
-=======
->>>>>>> Stashed changes
     }}
     QLabel#ViewLead {{
         color: {TEXT_MUTED};
@@ -896,7 +848,6 @@ def stylesheet(text_size: str = "medium") -> str:
         font-size: {small}px;
     }}
 
-<<<<<<< Updated upstream
     /* 카드는 회색 바탕 위의 흰 판이다. 바탕과 색이 이미 갈리므로 테두리는
        옅게만 둔다 — 짙은 테두리를 판마다 두르면 화면이 양식 문서의 칸처럼
        보인다. 마우스가 스친다고 테두리가 파래지지도 않는다: 카드 대부분은
@@ -919,28 +870,6 @@ def stylesheet(text_size: str = "medium") -> str:
         border-left: 4px solid {PRIMARY};
         border-radius: {RADIUS}px;
     }}
-=======
-    /* ── 카드 ──
-       흰 판에 가는 윤곽 하나. 마우스가 스쳐도 변하지 않는다 — 누를 수 없는
-       판이 파래지면 "눌러야 하나?" 싶어진다. 누를 수 있는 카드만 반응한다. */
-    QFrame#Card, QFrame#CardStatic, QFrame#CardAttention, QFrame#CardPrimary {{
-        background: {BG};
-        border: 1px solid {BORDER};
-        border-radius: {RADIUS_LG}px;
-    }}
-    /* 급한 것은 왼쪽 띠로 먼저 말한다 — 뱃지 하나보다 멀리서 보인다. */
-    QFrame#CardAttention {{ border-left: 3px solid {ATTENTION}; }}
-    QFrame#CardPrimary {{ border-left: 3px solid {PRIMARY}; }}
-
-    /* 업무 카드. 눌러서 들어가는 카드라 이것만 마우스에 반응한다. */
-    QFrame#TaskCard {{
-        background: {BG};
-        border: 1px solid {BORDER};
-        border-radius: {RADIUS_LG}px;
-    }}
-    QFrame#TaskCard:hover {{ border-color: {PRIMARY}; }}
-    QLabel#CardName {{ font-size: {section}px; font-weight: 700; color: {TEXT}; }}
->>>>>>> Stashed changes
 
     QPushButton#CardTitle {{
         background: transparent;
@@ -953,7 +882,6 @@ def stylesheet(text_size: str = "medium") -> str:
     }}
     QPushButton#CardTitle:hover {{ color: {PRIMARY}; }}
 
-<<<<<<< Updated upstream
     /* 카드 안의 근거 묶음. 본문과 같은 흰 바탕에 두면 어디까지가 근거인지
        경계가 사라진다. 경계는 바탕 톤만으로 만든다 — 카드 안에 테두리 상자를
        또 두면 상자 속 상자가 되어, 줄마다 칸을 친 서식처럼 보인다. */
@@ -961,13 +889,6 @@ def stylesheet(text_size: str = "medium") -> str:
         background: {SURFACE};
         border: 1px solid {SURFACE};
         border-radius: 6px;
-=======
-    /* 카드 안에서 한 단계 물린 자리. 테두리 없이 옅은 바탕만으로 묶는다. */
-    QFrame#SubPanel {{
-        background: {SURFACE};
-        border: 1px solid transparent;
-        border-radius: {RADIUS}px;
->>>>>>> Stashed changes
     }}
 
     /* ── 목록 한 줄 ── */
@@ -1123,7 +1044,6 @@ def stylesheet(text_size: str = "medium") -> str:
     QPushButton#Primary:disabled {{
         background: {SURFACE_ALT}; border-color: {SURFACE_ALT}; color: {TEXT_DISABLED};
     }}
-<<<<<<< Updated upstream
     QPushButton#Primary:hover {{ background: {PRIMARY_HOVER}; }}
     /* 못 누르는 주 버튼은 못 누르게 보여야 한다. 이 규칙이 없으면 파란 채움이
        그대로 남아, 자료 폴더를 고르기 전의 '분석 시작'이 눌릴 것처럼 보였다. */
@@ -1168,8 +1088,6 @@ def stylesheet(text_size: str = "medium") -> str:
     QPushButton#TopLink:focus {{ border: none; color: {NAVBAR_TEXT}; }}
     QPushButton#TopHandover:focus {{ border: 1px solid {NAVBAR_MUTED}; }}
     QPushButton#Tab:focus {{ border: none; border-bottom: 2px solid {PRIMARY}; }}
-=======
->>>>>>> Stashed changes
     QPushButton#Link {{
         background: transparent;
         border: none;
@@ -1250,15 +1168,10 @@ def stylesheet(text_size: str = "medium") -> str:
         border: none;
         border-top: 1px solid {BORDER};
     }}
-<<<<<<< Updated upstream
     QLabel#SettingsHeading {{ font-size: {round(title * 0.84)}px; font-weight: 700; }}
     QLabel#SettingsLead {{ color: {TEXT_MUTED}; font-size: {small}px; }}
     /* 설정 항목 하나의 이름. 카드 제목(SectionTitle)보다 한 단계 작다 —
        카드 안에 항목이 둘 이상 들어가므로 위계가 한 층 더 필요하다. */
-=======
-    QLabel#SettingsHeading {{ font-size: {title}px; font-weight: 700; }}
-    QLabel#SettingsLead {{ color: {TEXT_SUBTLE}; font-size: {small}px; }}
->>>>>>> Stashed changes
     QLabel#FieldLabel {{ font-weight: 700; }}
     QLabel#FieldHint {{ color: {TEXT_SUBTLE}; font-size: {small}px; }}
 
@@ -1307,12 +1220,7 @@ def stylesheet(text_size: str = "medium") -> str:
         color: {TEXT_DISABLED};
         border-color: {BORDER};
     }}
-<<<<<<< Updated upstream
     {_combo_arrow()}
-=======
-    /* 화살표는 손대지 않는다. QSS로 drop-down·down-arrow를 건드리는 순간
-       Qt가 플랫폼 화살표 그리기를 멈춘다 — 기본 화살표가 가장 낫다. */
->>>>>>> Stashed changes
     QComboBox QAbstractItemView {{
         background: {BG};
         border: 1px solid {BORDER_STRONG};
@@ -1327,13 +1235,8 @@ def stylesheet(text_size: str = "medium") -> str:
         padding: 0 {SP_SM}px;
         border-radius: {RADIUS_SM}px;
     }}
-<<<<<<< Updated upstream
     QCheckBox {{ spacing: {SP_SM}px; }}
     {_check_marks()}
-=======
-    QCheckBox {{ spacing: {SP_SM}px; color: {TEXT_MUTED}; }}
-    QRadioButton {{ spacing: {SP_SM}px; }}
->>>>>>> Stashed changes
 
     QTreeView, QTableView, QListView {{
         background: {BG};
@@ -1372,24 +1275,16 @@ def stylesheet(text_size: str = "medium") -> str:
     QScrollArea#PageScroll {{ background: {CANVAS}; }}
     QScrollArea#PageScroll::viewport {{ background: {CANVAS}; }}
     QScrollBar:vertical {{
-<<<<<<< Updated upstream
         background: transparent; width: {SCROLLBAR_W}px; margin: 0;
-=======
-        background: transparent; width: 10px; margin: 2px;
->>>>>>> Stashed changes
     }}
     QScrollBar::handle:vertical {{
         background: {BORDER_STRONG}; border-radius: 3px; min-height: 32px;
     }}
-<<<<<<< Updated upstream
     /* 나눔 손잡이. 손대지 않으면 플랫폼이 짙은 띠를 그려, 표와 상세 사이에
        굵은 검은 선이 선 것처럼 보였다. 평소엔 비워 두고 올렸을 때만 보인다. */
     QSplitter::handle {{ background: transparent; }}
     QSplitter::handle:horizontal {{ width: {SP_MD}px; }}
     QSplitter::handle:horizontal:hover {{ background: {BORDER}; border-radius: 3px; }}
-=======
-    QScrollBar::handle:vertical:hover {{ background: {TEXT_SUBTLE}; }}
->>>>>>> Stashed changes
     QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
     QScrollBar::add-page, QScrollBar::sub-page {{ background: none; }}
 

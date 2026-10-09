@@ -21,11 +21,7 @@ from .common import (
     UnknownBlock,
     WrapLabel,
     body_label,
-<<<<<<< Updated upstream
     center_column,
-=======
-    centered_column,
->>>>>>> Stashed changes
     clear_layout,
     divider,
     doc_icon,
@@ -65,11 +61,7 @@ __all__ = [
     "UnknownBlock",
     "WrapLabel",
     "body_label",
-<<<<<<< Updated upstream
     "center_column",
-=======
-    "centered_column",
->>>>>>> Stashed changes
     "clear_layout",
     "divider",
     "doc_icon",

@@ -29,7 +29,6 @@ from PySide6.QtWidgets import (
 
 from .. import theme
 
-<<<<<<< Updated upstream
 # 업무 구분용 팔레트. 채도를 낮춰 공직 문서 환경에 어울리게 한다.
 #
 # **상태 색(빨강·주황·초록)과 겹치는 색은 쓰지 않는다.** 예전 팔레트에는
@@ -50,17 +49,12 @@ TASK_COLORS = [
 
 STRIP_CELL_W = 14
 STRIP_H = 10
+DESCRIPTION_CHARS = 44
 
 
 def color_for(name: str) -> str:
     """업무 이름에서 고정 색을 뽑는다. 같은 이름은 항상 같은 색."""
     return TASK_COLORS[sum(ord(c) for c in name) % len(TASK_COLORS)]
-=======
-STRIP_CELL_W = 16
-STRIP_H = 8
-# 카드 설명에 싣는 글자 수. 가장 좁은 카드에서도 두 줄에 들어가는 길이다.
-DESCRIPTION_CHARS = 44
->>>>>>> Stashed changes
 
 
 def month_legend() -> str:
@@ -165,33 +159,11 @@ class TaskCard(QFrame):
         self.setMinimumWidth(200)
         self.setToolTip(f"{name} — 눌러서 자세히 보기")
 
-<<<<<<< Updated upstream
         accent = color_for(name)
         # 누를 수 있는 카드다. 마우스로는 테두리가 서고, 키보드로도 닿는다 —
         # Tab으로 옮겨 Enter·Space로 연다(예전에는 마우스로만 열 수 있었다).
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName(f"{name} 업무 열기")
-        self.setStyleSheet(
-            f"""
-            QFrame#TaskCard {{
-                background: {theme.BG};
-                border: 1px solid {theme.BORDER};
-                border-left: 4px solid {accent};
-                border-radius: {theme.RADIUS}px;
-            }}
-            QFrame#TaskCard:hover {{
-                border-color: {theme.BORDER_STRONG};
-                border-left: 4px solid {accent};
-            }}
-            QFrame#TaskCard:focus {{
-                border: 2px solid {theme.PRIMARY};
-                border-left: 4px solid {accent};
-            }}
-            """
-        )
-
-=======
->>>>>>> Stashed changes
         column = QVBoxLayout(self)
         column.setContentsMargins(20, theme.SP_LG, 20, theme.SP_LG)
         column.setSpacing(theme.SP_SM)
@@ -200,7 +172,11 @@ class TaskCard(QFrame):
         column.addWidget(_description(description or ""))
         column.addSpacing(theme.SP_SM)
         column.addWidget(MonthStrip(months))
-        column.addWidget(_summary(cycle_text, span_text))
+        column.addWidget(_cycle_line(cycle_text))
+        span = QLabel(span_text)
+        span.setObjectName("Small")
+        column.addWidget(span)
+        column.addLayout(_footer(confidence, review_state, reading_count))
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802 — Qt 규약
         if event.button() == Qt.MouseButton.LeftButton:
@@ -221,27 +197,14 @@ def _head(name: str, confidence: str, review_state: str, now: bool) -> QHBoxLayo
     from ...core import status
     from .common import Badge
 
-<<<<<<< Updated upstream
-    한때 업무 색으로 칠했지만, 카드 여덟 장이 여덟 색 제목으로 늘어서면
-    이름을 읽는 일 자체가 느려진다. 색은 왼쪽 띠와 월 스트립이 맡고,
-    글자는 가장 읽기 쉬운 상태로 남긴다.
-    """
+    row = QHBoxLayout()
+    row.setSpacing(theme.SP_SM)
     label = QLabel(name)
     label.setWordWrap(True)
     # 크기는 전역 스타일시트가 정한다. 여기서 px를 못 박으면 '글자 크게'를
     # 골라도 카드 제목만 그대로 남는다.
     label.setObjectName("SectionTitle")
-    return label
-=======
-    row = QHBoxLayout()
-    row.setSpacing(theme.SP_SM)
-    # 이름은 한 줄이다. 줄바꿈 라벨은 폭을 모를 때 제 높이를 넉넉히 불러,
-    # 격자가 그 높이로 카드를 잡으면 카드마다 빈 띠가 생긴다.
-    title = QLabel(name)
-    title.setObjectName("CardName")
-    title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
-    row.addWidget(title, 1)
->>>>>>> Stashed changes
+    row.addWidget(label, 1)
 
     if now:
         mark = Badge("이번 달", "accent")
@@ -255,7 +218,7 @@ def _head(name: str, confidence: str, review_state: str, now: bool) -> QHBoxLayo
         )
     elif review_state in (status.WEAK, status.UNKNOWN):
         mark = Badge(f"{status.symbol(status.WEAK)} 확인 필요", "attention")
-        mark.setToolTip(_LOOSE_NOTE if confidence == "low" else "근거가 부족한 업무입니다")
+        mark.setToolTip("같은 업무로 묶을 근거가 부족합니다")
         row.addWidget(mark, 0, Qt.AlignmentFlag.AlignVCenter)
     return row
 
@@ -279,7 +242,6 @@ def _description(text: str) -> QLabel:
     return label
 
 
-<<<<<<< Updated upstream
 def _cycle_line(cycle_text: str | None) -> QWidget:
     from .. import icons
 
@@ -315,13 +277,8 @@ def _footer(confidence: str, review_state: str, reading_count: int) -> QHBoxLayo
     # 묶음이 단단한 것은 적지 않는다 — 문제가 없다는 말을 카드마다 읽게 하지 않는다.
     # 확인된 업무는 그렇다고 말해 준다. 인수인계 진행도(§18)에서 세는 것과
     # 카드에서 보이는 것이 같아야 사용자가 진도를 신뢰한다.
-    if review_state == status.CONFIRMED:
-        row.addWidget(Badge(f"{status.symbol(status.CONFIRMED)} 확인함", "ok"))
-    else:
-        row.addWidget(Badge(f"{status.symbol(review_state)} 확인 필요", "neutral"))
-    if confidence != "high":
-        note, kind = _CONFIDENCE.get(confidence, _CONFIDENCE["low"])
-        row.addWidget(Badge(note, kind))
+    if confidence == "low":
+        row.addWidget(Badge("느슨한 묶음", "attention"))
     row.addStretch(1)
 
     if reading_count:
@@ -345,19 +302,6 @@ _CONFIDENCE = {
     "medium": ("묶음 보통", "neutral"),
     "low": ("느슨한 묶음", "attention"),
 }
-=======
-def _summary(cycle_text: str | None, span_text: str) -> QLabel:
-    """'매년 9~11월 · 17건 · 2022~2025'. 주기를 모르면 모른다고 적는다."""
-    label = QLabel(f"{cycle_text or '반복 주기 미확인'} · {span_text}")
-    label.setObjectName("Small")
-    return label
-
-
-_LOOSE_NOTE = (
-    "내용만으로는 묶이지 않아 파일명이 비슷한 문서를 묶은 업무입니다. "
-    "같은 업무가 맞는지 열어서 확인해 주세요."
-)
->>>>>>> Stashed changes
 
 
 def _clip(text: str, limit: int) -> str:

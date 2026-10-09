@@ -86,15 +86,21 @@ def test_blank_question_is_withheld_without_calling_ollama(db: Database):
 # ── AI 연결 실패 ────────────────────────────────────────────────────
 
 def test_withholds_when_ollama_unreachable(db: Database):
-    answer = ask(db, "질문", client=FakeClient(embedding_ready=False))
+    source = db.add_source(r"D:\자료")
+    doc, _ = _seed_chunk(db, source, "질문자료.hwp", "1문단", "질문자료의 처리 절차", [1,0,0], "a")
+    answer = ask(db, "질문자료", client=FakeClient(embedding_ready=False))
     assert answer.withheld
-    assert "연결" in answer.error
+    assert answer.error is None and answer.generation["mode"] == "search_only"
+    assert {c.doc_id for c in answer.citations} == {doc}
 
 
 def test_withholds_when_question_embedding_fails(db: Database):
-    answer = ask(db, "질문", client=FakeClient(embed_error="임베딩 실패"))
+    source = db.add_source(r"D:\자료")
+    doc, _ = _seed_chunk(db, source, "질문자료.hwp", "1문단", "질문자료의 처리 절차", [1,0,0], "a")
+    answer = ask(db, "질문자료", client=FakeClient(embed_error="임베딩 실패"))
     assert answer.withheld
-    assert answer.error == "임베딩 실패"
+    assert answer.error is None and answer.generation["mode"] == "search_only"
+    assert {c.doc_id for c in answer.citations} == {doc}
 
 
 # ── 색인 없음 ───────────────────────────────────────────────────────

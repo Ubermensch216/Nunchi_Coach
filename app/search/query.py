@@ -37,6 +37,9 @@ class QueryScope:
 
     years: list[int] = field(default_factory=list)
     task_id: int | None = None
+    # None은 프로젝트 전체, 빈 목록은 허용된 문서 없음이다.
+    doc_ids: list[int] | None = None
+    notebook_id: int | None = None
 
     @property
     def has_year(self) -> bool:
@@ -52,6 +55,7 @@ class QueryScope:
         return QueryScope(
             years=chosen.years or self.years,
             task_id=chosen.task_id if chosen.task_id is not None else self.task_id,
+            doc_ids=chosen.doc_ids if chosen.doc_ids is not None else self.doc_ids,
         )
 
 

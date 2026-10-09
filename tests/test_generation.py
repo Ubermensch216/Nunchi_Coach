@@ -109,8 +109,13 @@ def test_truncated_and_malformed_json_are_told_apart():
     assert wrong.last_generation.outcome == "invalid_json" and "JSON" in wrong_error
 
 
-def test_connection_failure_is_an_error_outcome_and_unknown_capability_is_not_cached():
+def test_connection_failure_is_an_error_outcome_and_unknown_capability_is_not_cached(monkeypatch):
     dead = OllamaClient(base_url="http://127.0.0.1:1")
+    import httpx
+    def disconnected(*args, **kwargs):
+        raise httpx.ConnectError("모의 연결 실패")
+    # 실패 처리 검사는 Windows 방화벽이 닫힌 포트에 응답하는 시간에 의존하지 않는다.
+    monkeypatch.setattr(dead, "_request", disconnected)
     assert dead.generate_json("제목", schemas.NAME_TASK_SCHEMA)[0] is None
     assert dead.last_generation.outcome == "error"
 

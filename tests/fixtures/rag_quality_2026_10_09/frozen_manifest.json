@@ -1,0 +1,13 @@
+{
+  "frozen_date": "2026-10-09",
+  "baseline_commit": "ca2f04a",
+  "files": {
+    "dev.json": "ca5a1ddf49999d4df9a7edbd96513d1083e6f9862169c06379556b32d8d6e4f2",
+    "holdout.json": "cd572c635900f40af121c8a3707f1323e9e088ce55b25a946d99e5336ead0f04"
+  },
+  "baseline_code": {
+    "app\\search\\rag.py": "4c3b8d322fabf3c0b805702c08aef684c7cdeb60934e4f5ce6f1da346f1b3e56",
+    "app\\search\\intent.py": "2c30a0bac622f7b54a64ee159e40089eec96793c060f14007797a64e8eb45052",
+    "app\\search\\verify.py": "728d2798b6ba5c7e4dbb96a6907bb0722311a1124a7c271e029ee388e3600bfc"
+  }
+}

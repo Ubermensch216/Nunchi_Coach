@@ -83,6 +83,19 @@ def release_closed_qt_objects():
         app.processEvents()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
+
+@pytest.fixture(autouse=True)
+def deterministic_closed_ollama_port(monkeypatch):
+    # 닫힌 포트는 오프라인 실패를 의도한 표본이다. 방화벽의 대기 시간에 의존하지 않는다.
+    import httpx
+    from app.ai.client import OllamaClient
+    request = OllamaClient._request
+    def offline_request(self, *args, **kwargs):
+        if self.base_url == "http://127.0.0.1:1":
+            raise httpx.ConnectError("오프라인 시험용 연결 실패")
+        return request(self, *args, **kwargs)
+    monkeypatch.setattr(OllamaClient, "_request", offline_request)
+
 # "기본 프로그램으로 열기" 계열 명령. 이것만 막고 나머지 subprocess 사용
 # (test_crash_resume.py 가 앱을 직접 띄우는 등)은 그대로 통과시킨다.
 _LAUNCHER_COMMANDS = {"explorer", "explorer.exe", "open", "xdg-open"}

@@ -55,13 +55,9 @@ from ..widgets import (
     SubPanel,
     TabBar,
     UnknownBlock,
-<<<<<<< Updated upstream
     center_column,
     doc_icon,
     header_margins,
-=======
-    centered_column,
->>>>>>> Stashed changes
     hint_row,
     muted_label,
     open_original,
@@ -113,18 +109,7 @@ class CalendarView(QWidget):
         header = QWidget()
         header.setObjectName("ViewHeader")
         header.setAutoFillBackground(True)
-<<<<<<< Updated upstream
         head_row, head_column = center_column(theme.CONTENT_MAX_W)
-=======
-        header_box = QVBoxLayout(header)
-        header_box.setContentsMargins(0, theme.SP_XL, 0, 0)
-        header_box.setSpacing(0)
-        # 머리와 본문이 같은 폭 규칙을 써야 제목과 카드의 왼쪽 끝이 한 줄에 선다.
-        head_outer, head_holder = centered_column()
-        header_box.addWidget(head_outer)
-        head_column = QVBoxLayout(head_holder)
-        head_column.setContentsMargins(0, 0, 0, 0)
->>>>>>> Stashed changes
         head_column.setSpacing(theme.SP_SM)
         frame = QVBoxLayout(header)
         frame.setContentsMargins(*header_margins(theme.SP_XL))
@@ -340,14 +325,7 @@ class CalendarView(QWidget):
         name.clicked.connect(lambda _=False, t=entry.task_id: self.open_task.emit(t))
         head.addWidget(name)
         head.addStretch(1)
-<<<<<<< Updated upstream
         _add_state(head, entry.row)
-=======
-        # 표시는 예외에만. '자료에서 추정'은 이 화면의 기본 상태다.
-        state = status.of_cycle(entry.row)
-        if state != status.INFERRED:
-            head.addWidget(Badge.state(state))
->>>>>>> Stashed changes
         card.body.addLayout(head)
 
         card.body.addWidget(
@@ -389,11 +367,7 @@ class CalendarView(QWidget):
             row = QHBoxLayout()
             row.setSpacing(theme.SP_SM)
             row.addWidget(muted_label(f"{doc['eff_year']}년", small=True, wrap=False))
-<<<<<<< Updated upstream
             link = doc_icon(QPushButton(doc["filename"]))
-=======
-            link = QPushButton(doc["filename"])
->>>>>>> Stashed changes
             link.setObjectName("Link")
             link.setCursor(Qt.CursorShape.PointingHandCursor)
             link.setToolTip(f"{doc['path']}\n클릭하면 원본을 엽니다")
@@ -436,13 +410,7 @@ class CalendarView(QWidget):
                 muted_label(cycle_headline(entry.row), small=True, wrap=False)
             )
             line.row.addStretch(1)
-<<<<<<< Updated upstream
             _add_state(line.row, entry.row)
-=======
-            state = status.of_cycle(entry.row)
-            if state != status.INFERRED:
-                line.row.addWidget(Badge.state(state))
->>>>>>> Stashed changes
             column.addWidget(line)
 
         if len(later) > MAX_UPCOMING:
@@ -482,13 +450,9 @@ class CalendarView(QWidget):
 
         for row in pending[:MAX_REVIEW]:
             line = ListRow()
-<<<<<<< Updated upstream
             line.setMaximumWidth(theme.CONTENT_MAX_W)
             line.row.setSpacing(theme.SP_SM)
             _add_state(line.row, row)
-=======
-            line.row.setSpacing(theme.SP_MD)
->>>>>>> Stashed changes
 
             name = QPushButton(row["task_name"])
             name.setObjectName("RowTitle")

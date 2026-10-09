@@ -287,18 +287,11 @@ class AskView(QWidget):
             ((SOURCE, "근거 원문"), (VERSIONS, "버전 비교"), (TASK_DOCS, "이 업무의 문서"))
         )
         self.reader_tabs.switched.connect(self._switch_reader)
-<<<<<<< Updated upstream
         # 밑줄 탭은 판 안쪽으로 들여 세우고 아래에 줄을 긋는다 — 판의 모서리에
         # 붙으면 밑줄이 테두리와 겹쳐 탭인지 테두리인지 읽히지 않는다.
         self.reader_tabs.layout().setContentsMargins(theme.SP_LG, theme.SP_SM, theme.SP_LG, 0)
         column.addWidget(self.reader_tabs)
         column.addWidget(divider())
-=======
-        tab_row = QHBoxLayout()
-        tab_row.setContentsMargins(theme.SP_LG, theme.SP_SM, theme.SP_LG, 0)
-        tab_row.addWidget(self.reader_tabs)
-        column.addLayout(tab_row)
->>>>>>> Stashed changes
 
         # 스크롤 영역이 흰색을 칠하면 판의 둥근 모서리를 덮는다. 바탕을 비운다.
         scroll = QScrollArea()
@@ -428,6 +421,9 @@ class AskView(QWidget):
             (model,),
         ).fetchone()[0]
         if embedded == 0:
+            chunks = self.db.con.execute("SELECT COUNT(*) FROM chunks c JOIN documents d ON d.id=c.doc_id WHERE d.missing_since IS NULL").fetchone()[0]
+            if chunks:
+                return True, "의미 색인 준비 전입니다. 자료에서 일치하는 대목을 검색할 수 있습니다."
             return False, (
                 "질문에 답할 준비가 끝나지 않았습니다. 근거 없이 답하지 않기 위해 "
                 "자료를 다 읽고 서로 견줄 준비가 될 때까지 기다립니다."
@@ -562,9 +558,24 @@ class AskView(QWidget):
             self.answer_column.addWidget(UnknownBlock(answer.error))
             return
 
+        if answer.generation.get("mode") == "search_only":
+            self.answer_column.addWidget(section_title("자료 검색 결과"))
+            self.answer_column.addWidget(muted_label(answer.text))
+            self._selected = answer.citations[0].index if answer.citations else None
+            self._render_evidence_list()
+            self._render_reader()
+            return
+
         if answer.withheld:
             self.reader_tabs.setVisible(False)
             self.answer_column.addWidget(self._withheld_card(answer))
+            if answer.citations:
+                marks = {c.index for c in answer.citations}
+                if self._selected not in marks:
+                    self._selected = answer.citations[0].index
+                self.answer_column.addWidget(muted_label("확정하지 않은 원문 근거", small=True))
+                self._render_evidence_list()
+                self._render_reader()
             return
 
         self.answer_column.addWidget(muted_label("답변", small=True))
@@ -712,14 +723,12 @@ class AskView(QWidget):
         card.body.addWidget(
             muted_label(answer.text or "확인 가능한 자료가 부족합니다.")
         )
+        if answer.guidance:
+            card.body.addWidget(muted_label(answer.guidance))
         if answer.related_docs:
             card.body.addWidget(muted_label("대신 찾은 문서", small=True))
             for related in answer.related_docs:
-<<<<<<< Updated upstream
                 open_btn = doc_icon(QPushButton(related.filename))
-=======
-                open_btn = QPushButton(related.filename)
->>>>>>> Stashed changes
                 open_btn.setObjectName("Link")
                 open_btn.clicked.connect(lambda _=False, p=related.path: self._open(p))
                 card.body.addWidget(open_btn, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -1142,17 +1151,11 @@ def _linkify_citations(text: str) -> str:
     """
     escaped = html.escape(text or "")
     return _CITATION_MARK.sub(
-<<<<<<< Updated upstream
         # 색을 직접 준다. 맡겨 두면 QLabel은 팔레트의 링크 색을 쓰는데, 그 색이
         # 흰 바탕에서 거의 안 보였다 — 근거 표시는 이 화면에서 가장 잘 보여야 한다.
         lambda m: (
             f'<a href="{m.group(1)}" style="color:{theme.PRIMARY}; font-weight:700; '
             f'text-decoration:none;">[{m.group(1)}]</a>'
-=======
-        lambda m: (
-            f'<a href="{m.group(1)}" style="text-decoration:none; '
-            f'color:{theme.PRIMARY};">[{m.group(1)}]</a>'
->>>>>>> Stashed changes
         ),
         escaped,
     )

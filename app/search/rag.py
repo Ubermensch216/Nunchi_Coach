@@ -100,6 +100,8 @@ class Citation:
     snippet: str = ""
     # 온나라 공식 출처 한 줄(문서번호·상태·본문/붙임). 개인 폴더 자료면 빈 값.
     official: str = ""
+    # 긴 문단을 나눈 조각은 locator가 같을 수 있으므로 실제 조각도 고정한다.
+    chunk_id: int | None = None
 
 
 @dataclass(slots=True)
@@ -125,6 +127,67 @@ class Answer:
     # 생성 호출이 어떻게 끝났는가(종료 사유·토큰 수·소요 시간·복구 여부).
     # 본문은 담지 않는다. 생성까지 가지 않은 답변이면 비어 있다.
     generation: dict = field(default_factory=dict)
+    guidance: str = ""
+
+    def __post_init__(self):
+        if self.withheld and not self.error and self.generation.get("mode") != "search_only":
+            self.guidance = self.guidance or needed_material(self.question)
+
+
+def needed_material(question: str) -> str:
+    asked = intent.frame(question, _focus(question))
+    if asked.intent == "when":
+        material = "해당 회차의 기한·시행일이 명시된 공문이나 변경 안내"
+    elif asked.intent in ("amount", "count"):
+        material = f"{asked.field or '금액·수량'}의 항목명·단위·대상 기간이 표시된 원문이나 표"
+    elif asked.intent == "who":
+        material = "담당자·담당 부서 또는 계약 상대가 명시된 문서"
+    elif asked.intent == "where":
+        material = "제출처·장소가 명시된 공문이나 안내"
+    elif asked.intent == "how":
+        material = "처리 절차·필요 서식이 적힌 안내와 지난 수행 사례"
+    else:
+        material = "질문한 대상과 내용을 직접 설명하는 원문"
+    return f"확인할 자료 — {material}을 추가하거나, 선택한 업무·연도·자료 범위가 맞는지 확인하세요."
+
+
+def search_only(db: Database, question: str, scope: QueryScope | None = None,
+                message: str = "자료 검색 결과") -> Answer:
+    scope = infer_scope(question).merged_with(scope)
+    if scope.doc_ids == [] or db.con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] == 0:
+        return Answer(question, "", True, error="검색할 자료가 아직 준비되지 않았습니다. 자료 선택과 분석 상태를 확인하세요.",
+                      generation={"mode": "search_only"})
+    # 한국어 조사 때문에 원문과 다른 꼴의 질문도 핵심어로 검색한다.
+    terms = " ".join(korean.stem(word) for word in korean.tokens(question))
+    ranked = fts.search_chunk_ids(db, terms, limit=RANK_POOL, doc_ids=scope.doc_ids)
+    # 짧은 한국어 핵심어는 trigram으로 못 찾으므로 매개변수 LIKE를 사용한다.
+    if not ranked:
+        words = [w for w in terms.split() if len(w) >= 2]
+        if words:
+            clause = " OR ".join("c.text LIKE ? ESCAPE '\\'" for _ in words)
+            values = ["%" + w.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%" for w in words]
+            restriction = ""
+            if scope.doc_ids is not None:
+                restriction = " AND d.id IN (" + (",".join("?" for _ in scope.doc_ids) or "NULL") + ")"
+                values.extend(scope.doc_ids)
+            ranked = [r[0] for r in db.con.execute(
+                "SELECT c.id FROM chunks c JOIN documents d ON d.id=c.doc_id "
+                f"WHERE d.missing_since IS NULL AND ({clause}){restriction} ORDER BY c.id LIMIT ?",
+                (*values, RANK_POOL))]
+    selected = _select_context(db, [(cid, 1 / (i + 1)) for i, cid in enumerate(ranked)],
+                               set(ranked), scope, question)
+    rows = _load_chunk_context(db, [cid for cid, _ in selected])
+    official = provenance.official_sources(db, [row["doc_id"] for row in rows])
+    citations = [Citation(i, row["doc_id"], row["filename"], row["locator"], row["path"],
+                          intent.strip_instructions(evidence.window(row["text"], question, SNIPPET_CHARS))[0],
+                          provenance.describe(official.get(row["doc_id"])))
+                 # locator만으로는 긴 문단의 어느 조각인지 구별할 수 없다.
+                 for i, row in enumerate(rows, 1)]
+    for citation, row in zip(citations, rows):
+        citation.chunk_id = row["chunk_id"]
+    return Answer(question, message if citations else message + " 일치하는 자료를 찾지 못했습니다.",
+                  True, citations=citations, inferred_years=scope.years,
+                  generation={"mode": "search_only"})
 
 
 def ask(db: Database, question: str, client: OllamaClient | None = None,
@@ -138,26 +201,29 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
     if not question:
         return Answer(question=question, text="", withheld=True, error="빈 질문입니다")
     content_revision = db.get_meta("content_revision")
+    scope = infer_scope(question).merged_with(scope)
 
     client = client or project_client(db, OllamaClient)
     health = client.health()
     if not health.embedding_ready:
-        return Answer(
-            question=question, text="", withheld=True,
-            error=f"로컬 AI에 연결할 수 없습니다 — {health.message}",
-        )
+        return search_only(db, question, scope, "로컬 AI를 사용할 수 없어 자료 검색 결과를 보여 드립니다.")
+
+    # 업무명·속성이 명시된 단일 값은 전체 허용 자료에서 대조한다.
+    # 상충 판본이 근접 중복 축약이나 검색 순위 때문에 사라지기 전에 확인한다.
+    labelled = _labelled_answer(db, question, scope)
+    if labelled is not None:
+        if db.get_meta("content_revision") != content_revision:
+            return Answer(question, "", True, error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
+        return labelled
 
     vectors, error = client.embed([question])
     if error or not vectors:
-        return Answer(question=question, text="", withheld=True, error=error or "질문 임베딩 실패")
+        return search_only(db, question, scope, "의미 검색을 사용할 수 없어 자료 검색 결과를 보여 드립니다.")
     query_vector = normalize(np.asarray(vectors, dtype=np.float32))[0]
 
-    chunk_ids, matrix = _load_chunk_matrix(db, client.embed_model)
+    chunk_ids, matrix = _load_chunk_matrix(db, client.embed_model, scope.doc_ids)
     if chunk_ids.size == 0:
-        return Answer(
-            question=question, text="", withheld=True,
-            error="아직 자료를 읽는 중입니다. 분석이 끝난 뒤 다시 물어보세요.",
-        )
+        return search_only(db, question, scope, "의미 색인 준비 전입니다. 자료 검색 결과를 보여 드립니다.")
 
     # 하이브리드 검색 — 의미(벡터)와 정확 일치(FTS5)를 각각 넉넉히 훑어
     # RRF로 합친다. 문서번호·고유명사처럼 정확히 일치해야 하는 질의는
@@ -165,7 +231,7 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
     scores = matrix @ query_vector
     pool = np.argsort(-scores)[:RANK_POOL]
     vector_ranked = [(int(chunk_ids[i]), float(scores[i])) for i in pool]
-    fts_ranked = fts.search_chunk_ids(db, question, limit=RANK_POOL)
+    fts_ranked = fts.search_chunk_ids(db, question, limit=RANK_POOL, doc_ids=scope.doc_ids)
     combined = _reciprocal_rank_fusion(vector_ranked, fts_ranked)
 
     # '근거로 쓸 만큼 강한가'는 두 검색 중 하나라도 확신을 준 경우다.
@@ -186,7 +252,8 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
     strong = _select_context(db, combined, strong_ids, scope, question)
 
     if not strong:
-        related = _related_documents(db, [cid for cid, _score in combined[:RELATED_FALLBACK]])
+        # 범위 밖 자료를 '관련 문서'로 노출하지 않는다.
+        related = [] if scope.doc_ids is not None or scope.has_task or scope.has_year else _related_documents(db, [cid for cid, _score in combined[:RELATED_FALLBACK]])
         return Answer(
             question=question,
             text="확인 가능한 자료가 부족합니다.",
@@ -364,10 +431,14 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
         generation[off] = True
         generation["withheld"] = off
         related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
+        quantity_problem = off.startswith("quantity_")
         return Answer(
-            question=question, text="확인 가능한 자료가 부족합니다.", withheld=True,
+            question=question, text=("질문한 수량과 단위를 답변·원문에서 함께 확인할 수 없어 확정을 보류했습니다."
+                                    if quantity_problem else "확인 가능한 자료가 부족합니다."), withheld=True,
             related_docs=_dedupe(related), model=client.gen_model,
-            inferred_years=scope.years, generation=generation)
+            inferred_years=scope.years, generation=generation,
+            guidance=("수량·단위·대상 기간이 표시된 원문을 확인하세요. 원문에 값이 있다면 다시 질문해 주세요."
+                      if quantity_problem else ""))
 
     kept = verified.kept
     if asked.stems:
@@ -383,6 +454,52 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
 
 
 # ── 내부 ────────────────────────────────────────────────────────────
+
+def _labelled_answer(db, question, scope):
+    from . import facts
+
+    asked = intent.frame(question, "" if _asks_reason(question) else _focus(question))
+    result = facts.resolve(db, asked, scope)
+    if result is None:
+        return None
+    chosen = []
+    seen = set()
+    for fact in result.facts:
+        key = (fact.subject, fact.period, facts.canonical(fact.value))
+        if key not in seen:
+            chosen.append(fact)
+            seen.add(key)
+    # 각기 다른 값의 원문을 보여 주되 화면과 생성 문맥을 무한히 늘리지 않는다.
+    visible = chosen[:TOP_K]
+    official = provenance.official_sources(db, [f.doc_id for f in visible])
+    citations = [Citation(index, f.doc_id, f.filename, f.locator, f.path,
+                          snippet=f.quote, official=provenance.describe(official.get(f.doc_id)),
+                          chunk_id=f.chunk_id) for index, f in enumerate(visible,1)]
+    diagnosis = {"frame":asked.as_record(), "documents_checked":result.documents}
+    if result.status == "direct_field":
+        fact = visible[0]
+        period = f"{fact.period}년 자료에 " if fact.period else "자료에 "
+        return Answer(question, f"{period}적힌 {fact.label}: {fact.value} [1]", False,
+                      citations=citations, inferred_years=scope.years,
+                      generation={**diagnosis, "rule_answer":"direct_field"})
+    explanations = {
+        "evidence_conflict":"같은 업무·기간의 자료에 서로 다른 값이 적혀 있어 하나로 확정할 수 없습니다.",
+        "period_ambiguous":"자료의 대상 기간이 달라 적용할 값을 확정할 수 없습니다.",
+        "subject_ambiguous":"질문에 여러 업무가 함께 있어 적용할 값을 확정할 수 없습니다.",
+        "unresolved_field":"자료에서 해당 값이 아직 결정되지 않은 것으로 표시되어 있습니다.",
+        "authority_unresolved":"문서의 이름과 작성 시각만으로 현재 효력이나 최종 승인 상태를 확정할 수 없습니다.",
+        "scope_too_broad":"값을 대조할 자료 범위가 넓습니다. 업무·연도·선택 자료를 좁혀 다시 질문하세요.",
+        "intent_mismatch":"질문에서 요구한 단위와 원문에 적힌 값의 단위가 달라 답을 확정할 수 없습니다.",
+    }
+    compared = "\n".join(f"- {f.filename} · {f.period or '기간 미상'} · {f.label}: {f.value} [{i}]"
+                         for i,f in enumerate(visible,1))
+    if len(chosen)>len(visible):
+        compared += "\n일부 근거만 표시했습니다. 선택 자료를 좁혀 다시 확인하세요."
+    return Answer(question, explanations[result.status] + ("\n"+compared if compared else ""), True,
+                  citations=citations, inferred_years=scope.years,
+                  guidance=("질문의 단위와 자료 범위를 확인하세요." if result.status in ('intent_mismatch','scope_too_broad')
+                            else "적용 회차와 공식 승인·변경 안내를 확인하거나, 사용할 판본을 직접 선택하세요."),
+                  generation={**diagnosis, "withheld":result.status})
 
 # 이유를 묻는 질문과, 이유를 말하는 문장의 표지.
 _ASKS_REASON = re.compile(r"왜|이유|원인|까닭|어째서")
@@ -402,6 +519,7 @@ _PARTICLE = re.compile(r"(?:에서는|에서|으로|이나|은|는|이|가|을|�
 # 무엇을 묻는지 가리지 못하는 말. 초점으로 삼지 않는다.
 _NO_FOCUS = {"내용", "자료", "문서", "업무", "단계", "순서", "절차", "차례", "방법", "결과", "기준", "현재",
              "그때", "때", "것", "어느", "어떤", "무슨", "매년", "보통", "대략", "모두", "각각"}
+_TOPIC_CONNECTORS = {"관련해서", "대해서", "관해서"}
 
 
 def _focus(question: str) -> str:
@@ -416,6 +534,8 @@ def _focus(question: str) -> str:
     if match.group(1).endswith("적으로"):
         return ""                            # '최종적으로 얼마로'의 '최종적'은 묻는 것이 아니다
     word = stripped
+    if word in _TOPIC_CONNECTORS:
+        return ""  # '수질 관련해서 뭘'의 연결 표현은 원문 속성명이 아니다.
     if match.group(1)[-1] in "은는도":        # '질의에는' → '질의에' → '질의'
         again = re.sub(r"(?:에서|으로|에|로)$", "", word)
         word = again if len(again) >= 2 else word
@@ -495,6 +615,17 @@ def _off_the_point(question: str, kept: list, context_rows: list,
         # 묻는 값에 답한 것이 아니다.
         if wrong and _CONFIRMED not in verdicts:
             return wrong
+    if asked is not None and asked.intent == "count":
+        from . import quantity
+        support = _support_text(context_rows, source_text)
+        failures = []
+        for sentence in kept:
+            cited = "\n".join(support.get(source, "") for source in sentence.sources)
+            failure = quantity.verdict(asked, sentence.text, cited)
+            if not failure:
+                return ""
+            failures.append(failure)
+        return next((f for f in failures if f != "quantity_missing"), "quantity_missing")
     return ""
 
 
@@ -648,6 +779,7 @@ def _compose_answer(
                     snippet=(evidence_text or {}).get(source)
                     or " ".join(row["text"].split())[:SNIPPET_CHARS],
                     official=provenance.describe(official.get(row["doc_id"])),
+                    chunk_id=dict(row).get("chunk_id"),
                 ))
             marks.append(renumbered[source])
         # 모델이 sources를 따로 내면서 문장 안에도 [1]을 적는 일이 잦다
@@ -706,7 +838,10 @@ def _select_context(
 
     meta = _load_chunk_meta(db, [cid for cid, _score in eligible])
 
-    representative = _representative_chunk_ids(db, [cid for cid, _score in eligible])
+    if scope.doc_ids is not None:
+        eligible = [(cid, score) for cid, score in eligible if meta[cid]["doc_id"] in scope.doc_ids]
+    representative = ({cid for cid, _ in eligible} if scope.doc_ids is not None else
+                      _representative_chunk_ids(db, [cid for cid, _score in eligible]))
     narrowed = [(cid, s) for cid, s in eligible if cid in representative]
     if narrowed:
         eligible = narrowed
@@ -961,13 +1096,18 @@ def _load_chunk_meta(db: Database, chunk_ids: list[int]) -> dict[int, dict]:
     }
 
 
-def _load_chunk_matrix(db: Database, model: str) -> tuple[np.ndarray, np.ndarray]:
+def _load_chunk_matrix(db: Database, model: str, doc_ids=None) -> tuple[np.ndarray, np.ndarray]:
+    restriction = ""
+    args = []
+    if doc_ids is not None:
+        restriction = " AND d.id IN (" + (",".join("?" for _ in doc_ids) or "NULL") + ")"
+        args = list(doc_ids)
     rows = db.con.execute(
         "SELECT e.chunk_id, e.dim, e.vector FROM embeddings e "
         "JOIN chunks c ON c.id = e.chunk_id "
         "JOIN documents d ON d.id = c.doc_id "
-        "WHERE e.model = ? AND d.missing_since IS NULL",
-        (model,),
+        "WHERE e.model = ? AND d.missing_since IS NULL" + restriction,
+        (model, *args),
     ).fetchall()
     if not rows:
         return np.empty(0, dtype=np.int64), np.empty((0, 0), dtype=np.float32)
