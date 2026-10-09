@@ -99,10 +99,13 @@ class StudioRunner(QObject):
             self._thread.wait(wait_ms)
 
     def _finish(self, output_id, message: str) -> None:
-        thread = self._thread
+        # 워커를 스레드가 끝날 때까지 붙든다. 여기서 마지막 참조를 놓으면 워커가 아직
+        # done을 내보내는 중인데 객체가 지워져 프로세스가 통째로 죽는다(abort).
+        thread, worker = self._thread, self._worker
         self._thread, self._worker = None, None
         if thread is not None:
             thread.quit()
             thread.wait(5000)
             thread.deleteLater()
+        del worker
         self.done.emit(output_id, message)

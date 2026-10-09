@@ -141,10 +141,11 @@ class NotebookIngestRunner(QObject):
             self._thread.wait(wait_ms)
 
     def _finish(self, results) -> None:
-        thread = self._thread
+        thread, worker = self._thread, self._worker
         self._thread, self._worker = None, None
         if thread is not None:
             thread.quit()
             thread.wait(5000)
             thread.deleteLater()
+        del worker
         self.done.emit(results)
