@@ -326,6 +326,50 @@ class OllamaClient:
             finish(OUTCOME_OK)
             return data, None, raw
 
+    def generate_text(
+        self,
+        prompt: str,
+        images: list[str] | None = None,
+        num_predict: int = 800,
+        temperature: float = 0.0,
+        system: str | None = None,
+    ) -> tuple[str | None, str | None]:
+        """자유 형식 글을 받는다. (글, 오류) 가운데 하나만 채워 돌려준다.
+
+        images는 base64로 싼 그림이다. 그림을 읽을 수 있다고 스스로 밝힌 모델에만
+        보낸다 — 못 읽는 모델은 그림을 무시하고 그럴듯한 글을 지어낸다.
+        """
+        if images and not self._supports("vision"):
+            return None, "이 모델은 그림을 읽지 못합니다"
+        payload: dict[str, Any] = {
+            "model": self.gen_model,
+            "prompt": prompt,
+            "stream": False,
+            "keep_alive": KEEP_ALIVE,
+            "options": {"temperature": temperature, "num_predict": num_predict, "seed": self.seed},
+        }
+        if system:
+            payload["system"] = system
+        if images:
+            payload["images"] = images
+        if self._supports("thinking"):
+            payload["think"] = False
+        try:
+            response = self._request("POST", "/api/generate", json=payload, timeout=GENERATE_TIMEOUT)
+            response.raise_for_status()
+            text = (response.json().get("response") or "").strip()
+        except httpx.TimeoutException:
+            return None, "모델 응답 시간 초과"
+        except httpx.ConnectError:
+            return None, "Ollama 연결 끊김"
+        except httpx.HTTPError as exc:
+            return None, f"모델 호출 실패: {exc}"
+        except ValueError as exc:
+            return None, f"응답을 읽을 수 없음: {exc}"
+        if not text:
+            return None, "모델이 빈 응답을 냈습니다"
+        return text, None
+
     # ── 임베딩 ──────────────────────────────────────────────────────
     def embed(self, texts: list[str]) -> tuple[list[list[float]] | None, str | None]:
         """배치로 임베딩한다. 배치 32에서 건당 67ms로 가장 효율적이었다."""

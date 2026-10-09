@@ -1,0 +1,590 @@
+"""왼쪽 판 — 이 노트북의 자료를 더하고, 근거로 쓸 것을 고르고, 원문을 읽는다.
+
+목록과 원문은 같은 자리를 번갈아 쓴다. 대화에서 인용 번호를 누르면 이 판이
+그 문서의 원문으로 바뀌고 인용한 대목을 칠해 보여 준다 — 답 옆에 원문 칸을
+따로 세우면 세 판 가운데 대화가 가장 좁아진다.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QFileDialog,
+    QProgressBar,
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ....core import notebook, notebook_ingest, onnara_import
+from ....db import representative_predicate
+from ....jobs import NotebookIngestRunner
+from ....search.rag import Citation
+from ... import theme
+from ...widgets import (
+    Card,
+    ElidedLabel,
+    UnknownBlock,
+    clear_layout,
+    muted_label,
+    open_original,
+)
+from ..ask import OPEN_SECTIONS, _cited_ordinals, _meta_strip, _paragraph
+from .panel import Panel
+
+ORIGIN_LABELS = {"project": "전임자 자료", "upload": "올린 파일", "onnara": "온나라 수집본"}
+
+
+def source_state(row) -> str:
+    """문제가 있는 자료에만 붙는 한마디. 멀쩡하면 빈 문자열이다."""
+    if not row["allowed"] or row["missing_since"]:
+        return "이용 불가"
+    if row["parse_status"] == "pending":
+        return "읽는 중"
+    if row["parse_status"] not in ("ok", "partial"):
+        return "읽지 못함"
+    if row["hash"] != row["version_hash"]:
+        return "원문 변경"
+    if not notebook.file_matches(row["path"], row["version_hash"]):
+        return "원문 변경 · 재분석 필요"
+    if row["parse_status"] == "partial":
+        return "일부만 읽음"
+    return ""
+
+
+def _fit_narrow(card: QWidget) -> None:
+    """원문 대목이 좁은 판의 폭을 밀어내지 않게 한다.
+
+    파일 이름처럼 띄어쓰기 없는 긴 낱말은 QLabel이 접지 못해 그 길이가 곧
+    최소 폭이 된다. 질문 화면의 넓은 원문 칸에서는 드러나지 않던 문제다.
+    밑줄·빗금 뒤에 폭 없는 공백을 넣어 접을 자리를 만들어 준다.
+    """
+    for label in card.findChildren(QLabel):
+        if label.objectName() in ("ParaText", "ParaCited"):
+            label.setText(label.text().replace("_", "_\u200b").replace("/", "/\u200b"))
+            label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            label.setMinimumWidth(0)
+
+
+class SourcesPanel(Panel):
+    selection_changed = Signal()   # 근거로 쓸 자료가 바뀌었다 — 지난 답을 다시 판정해야 한다
+
+    def __init__(self, db, parent: QWidget | None = None):
+        super().__init__("출처", parent)
+        self.db = db
+        self.notebook_id: int | None = None
+        self.editable = False
+        self.reader_doc_id: int | None = None
+        self._report = ""            # 마지막으로 올린 묶음의 결과 한마디
+        self._signature = None
+        self._expanded: set[int] = set()
+        self._citation: Citation | None = None
+        self._ingest = NotebookIngestRunner(db.path, self)
+        self._ingest.progress.connect(self._on_progress)
+        self._ingest.file_done.connect(self._on_file_done)
+        self._ingest.done.connect(self._on_ingest_done)
+        # 파일을 끌어다 놓아 올릴 수 있다.
+        self.setAcceptDrops(True)
+
+        self.stack = QStackedWidget()
+        self.body.addWidget(self.stack, 1)
+        self.stack.addWidget(self._build_list())
+        self.stack.addWidget(self._build_reader())
+
+    # ── 목록 ────────────────────────────────────────────────────────
+    def _build_list(self) -> QWidget:
+        page = QWidget()
+        column = QVBoxLayout(page)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(theme.SP_SM)
+
+        self.add_button = QPushButton("+ 자료 추가")
+        self.add_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.add_menu = QMenu(self.add_button)
+        self.add_menu.addAction("파일 올리기…", lambda: self._safe(self._pick_files))
+        self.add_menu.addAction("분석한 전임자 자료에서 고르기…", lambda: self._safe(self._link_documents))
+        self.add_menu.addAction("온나라 수집본 가져오기…", lambda: self._safe(self._pick_collection))
+        self.add_button.setMenu(self.add_menu)
+        column.addWidget(self.add_button)
+
+        # 올리는 동안의 진행. 남은 시간을 아는 척하지 않는다 — 그림 판독은 쪽마다 다르다.
+        self.progress_box = QWidget()
+        progress = QVBoxLayout(self.progress_box)
+        progress.setContentsMargins(0, 0, 0, 0)
+        progress.setSpacing(theme.SP_XS)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setObjectName("Thinking")
+        self.progress_bar.setRange(0, 0)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setFixedHeight(3)
+        progress.addWidget(self.progress_bar)
+        line = QHBoxLayout()
+        line.setSpacing(theme.SP_SM)
+        self.progress_label = muted_label("", small=True)
+        line.addWidget(self.progress_label, 1)
+        self.cancel_ingest = QPushButton("올리기 취소")
+        self.cancel_ingest.setObjectName("Quiet")
+        self.cancel_ingest.clicked.connect(self._ingest.cancel)
+        line.addWidget(self.cancel_ingest)
+        progress.addLayout(line)
+        self.progress_box.hide()
+        column.addWidget(self.progress_box)
+
+        row = QHBoxLayout()
+        row.setSpacing(theme.SP_SM)
+        self.count = muted_label("", small=True, wrap=False)
+        row.addWidget(self.count)
+        row.addStretch(1)
+        self.all_box = QCheckBox("모두 선택")
+        self.all_box.setTristate(False)
+        self.all_box.clicked.connect(self._select_all)
+        row.addWidget(self.all_box)
+        column.addLayout(row)
+
+        self.source_list = QListWidget()
+        self.source_list.setObjectName("SourceList")
+        # 긴 파일 이름은 가운데를 접는다. 가로 스크롤이 생기면 상태 표시가 밀려 안 보인다.
+        self.source_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.source_list.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        self.source_list.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.source_list.itemChanged.connect(self._select_source)
+        self.source_list.itemActivated.connect(lambda item: self.show_document(item.data(Qt.ItemDataRole.UserRole)))
+        self.source_list.currentItemChanged.connect(lambda *_: self._sync_actions())
+        column.addWidget(self.source_list, 1)
+
+        self.hint = muted_label("", small=True)
+        column.addWidget(self.hint)
+
+        actions = QHBoxLayout()
+        actions.setSpacing(theme.SP_SM)
+        self.read_button = QPushButton("원문 보기")
+        self.read_button.setObjectName("Quiet")
+        self.read_button.clicked.connect(self._read_current)
+        actions.addWidget(self.read_button)
+        self.accept_button = QPushButton("새 판본 사용")
+        self.accept_button.setObjectName("Quiet")
+        self.accept_button.setToolTip("원문이 바뀐 자료를 다시 분석한 판본으로 근거를 바꿉니다")
+        self.accept_button.clicked.connect(lambda: self._safe(self._accept))
+        actions.addWidget(self.accept_button)
+        self.detach_button = QPushButton("연결 해제")
+        self.detach_button.setObjectName("Quiet")
+        self.detach_button.setToolTip("이 노트북에서만 뺍니다. 원문 파일과 분석 결과는 그대로입니다")
+        self.detach_button.clicked.connect(lambda: self._safe(self._detach))
+        actions.addWidget(self.detach_button)
+        actions.addStretch(1)
+        column.addLayout(actions)
+        return page
+
+    def set_notebook(self, notebook_id: int | None, editable: bool) -> None:
+        if notebook_id != self.notebook_id:
+            self._ingest.cancel()
+            self._report = ""
+        self.notebook_id = notebook_id
+        self.editable = editable
+        self._signature = None
+        self.show_list()
+        self.refresh()
+        if notebook_id is not None and editable:
+            self._resume_uploads()
+
+    def rows(self):
+        return notebook.sources(self.db, self.notebook_id) if self.notebook_id is not None else []
+
+    def refresh(self, force: bool = False) -> None:
+        """자료 목록을 지금 상태로 맞춘다. 달라진 것이 없으면 다시 그리지 않는다.
+
+        상태 판정(source_state)은 원문 파일의 해시를 다시 읽는다. 분석이 도는
+        동안 셸이 1.5초마다 refresh를 부르므로 매번 읽으면 화면이 굳는다.
+        """
+        rows = self.rows()
+        signature = (self.notebook_id, self.editable, tuple(
+            (r["doc_id"], r["hash"], r["version_hash"], r["selected"], r["allowed"],
+             r["missing_since"], r["parse_status"]) for r in rows))
+        if not force and signature == self._signature:
+            return
+        self._signature = signature
+        current = self._current_doc()
+        self.source_list.blockSignals(True)
+        self.source_list.clear()
+        for row in rows:
+            state = source_state(row)
+            item = QListWidgetItem(row["filename"] + (f"  ·  {state}" if state else ""))
+            item.setData(Qt.ItemDataRole.UserRole, row["doc_id"])
+            item.setData(Qt.ItemDataRole.UserRole + 1, state)
+            reason = row["parse_error"] or row["parse_note"] or ""
+            item.setToolTip("\n".join(part for part in (
+                row["filename"], ORIGIN_LABELS.get(row["origin"], row["origin"]), state, reason) if part))
+            # 보관한 노트북에서도 원문은 읽을 수 있어야 한다. 선택만 잠근다.
+            flags = item.flags()
+            item.setFlags(flags | Qt.ItemFlag.ItemIsUserCheckable if self.editable
+                          else flags & ~Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked if row["selected"] else Qt.CheckState.Unchecked)
+            self.source_list.addItem(item)
+            if row["doc_id"] == current:
+                self.source_list.setCurrentItem(item)
+        self.source_list.blockSignals(False)
+        self.add_button.setEnabled(self.editable and not self._ingest.running)
+        self._sync_counts(rows)
+        self._sync_actions()
+
+    def _sync_counts(self, rows) -> None:
+        chosen = sum(1 for r in rows if r["selected"])
+        self.count.setText(f"자료 {len(rows)}건 · 선택 {chosen}건" if rows else "")
+        self.all_box.setVisible(bool(rows))
+        self.all_box.setEnabled(self.editable)
+        self.all_box.blockSignals(True)
+        self.all_box.setChecked(bool(rows) and chosen == len(rows))
+        self.all_box.blockSignals(False)
+        if not rows and not self._report:
+            self.hint.setText("파일을 올리거나 끌어다 놓으세요. 추가한 자료만 근거로 묻고 정리합니다."
+                              if self.editable else "")
+        elif self._report:
+            self.hint.setText(self._report)
+        self.hint.setVisible(bool(self._report) or not rows)
+
+    def _sync_actions(self) -> None:
+        item = self.source_list.currentItem()
+        state = item.data(Qt.ItemDataRole.UserRole + 1) if item else ""
+        self.read_button.setEnabled(item is not None)
+        self.detach_button.setEnabled(item is not None and self.editable)
+        self.accept_button.setVisible(bool(state) and state.startswith("원문 변경"))
+        self.accept_button.setEnabled(self.editable and state == "원문 변경")
+
+    def _current_doc(self) -> int | None:
+        item = self.source_list.currentItem()
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _safe(self, action) -> None:
+        try:
+            action()
+        except (ValueError, OSError) as exc:
+            QMessageBox.information(self, "출처", str(exc))
+
+    def _select_source(self, item: QListWidgetItem) -> None:
+        notebook.select(self.db, self.notebook_id, item.data(Qt.ItemDataRole.UserRole),
+                        item.checkState() == Qt.CheckState.Checked)
+        self._signature = None
+        self._sync_counts(self.rows())
+        self.selection_changed.emit()
+
+    def _select_all(self, checked: bool) -> None:
+        notebook.select_all(self.db, self.notebook_id, checked)
+        self.refresh(force=True)
+        self.selection_changed.emit()
+
+    def _accept(self) -> None:
+        notebook.accept_version(self.db, self.notebook_id, self._current_doc())
+        self.refresh(force=True)
+        self.selection_changed.emit()
+
+    def _detach(self) -> None:
+        notebook.detach(self.db, self.notebook_id, self._current_doc())
+        self.refresh(force=True)
+        self.selection_changed.emit()
+
+    def _read_current(self) -> None:
+        doc_id = self._current_doc()
+        if doc_id is not None:
+            self.show_document(doc_id)
+
+    # ── 파일 올리기 ─────────────────────────────────────────────────
+    def _pick_files(self) -> None:
+        notebook.require(self.db, self.notebook_id)
+        paths, _ = QFileDialog.getOpenFileNames(self, "노트북에 올릴 파일", "", notebook_ingest.file_filter())
+        self.upload(paths)
+
+    def upload(self, paths: list[str]) -> None:
+        """파일을 보관소에 사본으로 두고 읽는다. 원래 자리의 파일은 건드리지 않는다."""
+        if not paths or self.notebook_id is None or not self.editable:
+            return
+        if self._ingest.running:
+            QMessageBox.information(self, "파일 올리기", "앞서 올린 파일을 읽고 있습니다. 끝난 뒤에 다시 올려 주세요.")
+            return
+        self._report = ""
+        if self._ingest.start(self.notebook_id, list(paths)):
+            self._show_progress(f"{len(paths)}건을 올리는 중")
+
+    def _pick_collection(self) -> None:
+        notebook.require(self.db, self.notebook_id)
+        folder = QFileDialog.getExistingDirectory(self, "온나라 수집본 폴더 (manifest.json이 있는 폴더)")
+        if not folder:
+            return
+        _root, state = onnara_import.read_manifest(folder)
+        answer = QMessageBox.question(
+            self, "온나라 수집본 가져오기",
+            f"{onnara_import.describe(state)}\n\n이 수집본의 문서를 읽어 노트북 자료로 연결합니다. "
+            "수집 폴더의 파일은 읽기만 하고 바꾸지 않습니다. 이 프로그램이 온나라에 접속하지는 않습니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if answer == QMessageBox.StandardButton.Yes:
+            self.import_collection(folder)
+
+    def import_collection(self, folder: str) -> None:
+        if self.notebook_id is None or not self.editable:
+            return
+        if self._ingest.running:
+            QMessageBox.information(self, "온나라 수집본", "앞서 올린 파일을 읽고 있습니다. 끝난 뒤에 다시 시도하세요.")
+            return
+        self._report = ""
+        if self._ingest.start(self.notebook_id, [], collection=folder):
+            self._show_progress("온나라 수집본을 읽는 중")
+
+    def _resume_uploads(self) -> None:
+        """읽다 멈췄거나 파서가 바뀐 올린 파일을 이어서 읽는다."""
+        linked = {row["doc_id"] for row in self.rows()}
+        stale = [key for key in notebook_ingest.outdated_uploads(self.db) if key in linked]
+        if stale and not self._ingest.running and self._ingest.start(self.notebook_id, [], stale):
+            self._show_progress(f"올린 파일 {len(stale)}건을 다시 읽는 중")
+
+    def _show_progress(self, text: str) -> None:
+        self.progress_label.setText(text)
+        self.cancel_ingest.setEnabled(True)
+        self.progress_box.show()
+        self.add_button.setEnabled(False)
+
+    def _on_progress(self, index: int, total: int, name: str, phase: str) -> None:
+        count = f"{index} / {total} · " if total else ""
+        self.progress_label.setText(f"{count}{name} — {phase}")
+
+    def _on_file_done(self, _outcome) -> None:
+        self.refresh(force=True)
+        self.selection_changed.emit()
+
+    def _on_ingest_done(self, results) -> None:
+        self.progress_box.hide()
+        failed = [r for r in results if not r.usable]
+        reused = sum(1 for r in results if r.status == "reused")
+        parts = []
+        done = len(results) - len(failed)
+        if done:
+            parts.append(f"{done}건을 추가했습니다.")
+        if reused:
+            parts.append(f"{reused}건은 이미 읽어 둔 같은 내용의 문서를 연결했습니다.")
+        for outcome in failed[:3]:
+            parts.append(f"읽지 못함 — {outcome.filename}: {outcome.error}")
+        if len(failed) > 3:
+            parts.append(f"그 밖에 {len(failed) - 3}건을 읽지 못했습니다. 목록의 상태를 확인하세요.")
+        self._report = "\n".join(parts)
+        self.refresh(force=True)
+        self.selection_changed.emit()
+
+    def dragEnterEvent(self, event) -> None:  # noqa: N802 — Qt 규약
+        if self.editable and event.mimeData().hasUrls() and any(u.isLocalFile() for u in event.mimeData().urls()):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event) -> None:  # noqa: N802 — Qt 규약
+        paths = [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
+        files = [p for p in paths if Path(p).is_file()]
+        if files:
+            event.acceptProposedAction()
+            self.upload(files)
+
+    def _link_documents(self) -> None:
+        notebook.require(self.db, self.notebook_id)
+        linked = {row["doc_id"] for row in self.rows()}
+        dialog = QDialog(self)
+        dialog.setWindowTitle("분석한 자료 연결 — 파일은 복사하지 않습니다")
+        layout = QVBoxLayout(dialog)
+        search = QLineEdit()
+        search.setPlaceholderText("파일 이름으로 찾기")
+        search.setClearButtonEnabled(True)
+        layout.addWidget(search)
+        choices = QListWidget()
+        for row in self.db.con.execute(
+                "SELECT d.id,d.filename FROM documents d WHERE d.hash IS NOT NULL AND d.missing_since IS NULL "
+                f"AND d.parse_status IN ('ok','partial') AND {representative_predicate('d')} "
+                "ORDER BY d.filename"):
+            item = QListWidgetItem(row["filename"])
+            item.setData(Qt.ItemDataRole.UserRole, row["id"])
+            item.setCheckState(Qt.CheckState.Checked if row["id"] in linked else Qt.CheckState.Unchecked)
+            choices.addItem(item)
+        layout.addWidget(choices, 1)
+
+        def narrow(text: str) -> None:
+            needle = text.strip().lower()
+            for index in range(choices.count()):
+                entry = choices.item(index)
+                entry.setHidden(needle not in entry.text().lower())
+
+        search.textChanged.connect(narrow)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.resize(560, 480)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        picked = {choices.item(i).data(Qt.ItemDataRole.UserRole) for i in range(choices.count())
+                  if choices.item(i).checkState() == Qt.CheckState.Checked}
+        notebook.add_sources(self.db, self.notebook_id, picked - linked)
+        for doc_id in linked - picked:
+            notebook.detach(self.db, self.notebook_id, doc_id)
+        self.refresh(force=True)
+        self.selection_changed.emit()
+
+    # ── 원문 ────────────────────────────────────────────────────────
+    def _build_reader(self) -> QWidget:
+        page = QWidget()
+        column = QVBoxLayout(page)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(theme.SP_SM)
+
+        head = QHBoxLayout()
+        head.setSpacing(theme.SP_SM)
+        back = QPushButton("← 자료 목록")
+        back.setObjectName("Quiet")
+        back.setCursor(Qt.CursorShape.PointingHandCursor)
+        back.clicked.connect(self.show_list)
+        head.addWidget(back)
+        head.addStretch(1)
+        self.open_button = QPushButton("원본 열기")
+        self.open_button.setObjectName("Quiet")
+        self.open_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.open_button.clicked.connect(self._open_original)
+        head.addWidget(self.open_button)
+        column.addLayout(head)
+
+        self.reader_title = ElidedLabel("")
+        self.reader_title.setObjectName("SectionTitle")
+        column.addWidget(self.reader_title)
+
+        scroll = QScrollArea()
+        scroll.setObjectName("AnswerPane")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        holder = QWidget()
+        holder.setObjectName("PaneBody")
+        self.reader_column = QVBoxLayout(holder)
+        self.reader_column.setContentsMargins(0, 0, theme.SP_SM, 0)
+        self.reader_column.setSpacing(theme.SP_SM)
+        self.reader_column.setAlignment(Qt.AlignmentFlag.AlignTop)
+        scroll.setWidget(holder)
+        column.addWidget(scroll, 1)
+        return page
+
+    def show_list(self) -> None:
+        self.reader_doc_id = None
+        self._citation = None
+        self.stack.setCurrentIndex(0)
+
+    def show_citation(self, citation: Citation) -> None:
+        """대화에서 고른 인용의 원문을 편다. 지금 선택한 자료의 것만 보여 준다."""
+        if self.notebook_id is None:
+            return
+        if str(citation.doc_id) not in notebook.selected_snapshot(self.db, self.notebook_id):
+            self._render_blocked("이 인용은 지금 선택한 자료 밖의 문서입니다. "
+                                 "자료를 다시 선택하거나 새로 질문하세요.")
+            return
+        self._citation = citation
+        self._render(citation.doc_id)
+
+    def show_document(self, doc_id: int) -> None:
+        if doc_id not in {row["doc_id"] for row in self.rows()}:
+            return
+        self._citation = None
+        self._render(doc_id)
+
+    def _render_blocked(self, message: str) -> None:
+        clear_layout(self.reader_column)
+        self.reader_doc_id = None
+        self.reader_title.setText("")
+        self.open_button.hide()
+        self.reader_column.addWidget(UnknownBlock(message))
+        self.stack.setCurrentIndex(1)
+
+    def _render(self, doc_id: int) -> None:
+        clear_layout(self.reader_column)
+        self.reader_doc_id = doc_id
+        info = self.db.document_context([doc_id]).get(doc_id, {})
+        document = self.db.document(doc_id)
+        citation = self._citation or Citation(0, doc_id, document["filename"], "", document["path"])
+        self.reader_title.setText(document["filename"])
+        self.open_button.show()
+
+        sections = self.db.sections(doc_id)
+        self._render_guide(doc_id, document)
+        card = Card(tone="static")
+        card.body.addWidget(_meta_strip(self.db, citation, info, len(sections)))
+        if not sections:
+            card.body.addWidget(UnknownBlock(
+                "이 문서의 본문을 읽지 못해 원문을 보여줄 수 없습니다. ‘원본 열기’로 직접 확인하세요."))
+            self.reader_column.addWidget(card)
+            self.stack.setCurrentIndex(1)
+            return
+
+        cited = _cited_ordinals(sections, citation) if self._citation else set()
+        opened = self._visible(doc_id, sections, cited)
+        hidden: list[int] = []
+        for section in sections:
+            ordinal = section["ordinal"]
+            if ordinal in opened:
+                if hidden:
+                    card.body.addWidget(self._folded(doc_id, hidden))
+                    hidden = []
+                card.body.addWidget(_paragraph(section, ordinal in cited))
+            else:
+                hidden.append(ordinal)
+        if hidden:
+            card.body.addWidget(self._folded(doc_id, hidden))
+        _fit_narrow(card)
+        self.reader_column.addWidget(card)
+        self.stack.setCurrentIndex(1)
+
+    def _render_guide(self, doc_id: int, document) -> None:
+        """자료 안내 — 요약·주제어와, 읽는 방식에 대한 주의."""
+        row = next((r for r in self.rows() if r["doc_id"] == doc_id), None)
+        if row is None:
+            return
+        if document["parse_note"]:
+            self.reader_column.addWidget(UnknownBlock(document["parse_note"]))
+        topics = [t for t in json.loads(row["topics"] or "[]") if isinstance(t, str)]
+        if not row["summary"] and not topics:
+            return
+        guide = Card(tone="static")
+        guide.body.addWidget(muted_label("AI가 만든 자료 안내 · 원문이 아닙니다", small=True))
+        if row["summary"]:
+            guide.body.addWidget(muted_label(row["summary"]))
+        if topics:
+            guide.body.addWidget(muted_label("주제어 — " + " · ".join(topics), small=True))
+        self.reader_column.addWidget(guide)
+
+    def _open_original(self) -> None:
+        document = self.db.document(self.reader_doc_id) if self.reader_doc_id is not None else None
+        if document is not None:
+            open_original(self, self.db, document["path"])
+
+    def _visible(self, doc_id: int, sections, cited: set[int]) -> set[int]:
+        if doc_id in self._expanded:
+            return {section["ordinal"] for section in sections}
+        opened = set(cited) | {ordinal + 1 for ordinal in cited}
+        return opened | {section["ordinal"] for section in sections[:OPEN_SECTIONS]}
+
+    def _folded(self, doc_id: int, ordinals: list[int]) -> QWidget:
+        first, last = ordinals[0], ordinals[-1]
+        span = f"{first}~{last}문단" if first != last else f"{first}문단"
+        button = QPushButton(f"{span} 접힘 — 눌러서 펼치기")
+        button.setObjectName("Fold")
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(lambda _=False, d=doc_id: self._expand(d))
+        return button
+
+    def _expand(self, doc_id: int) -> None:
+        self._expanded.add(doc_id)
+        self._render(doc_id)

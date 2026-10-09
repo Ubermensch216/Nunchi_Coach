@@ -40,6 +40,8 @@ from PySide6.QtWidgets import (
 )
 
 from ...ai import OllamaClient
+from ...law import service as law_service
+from ...law.client import LawError
 from ...ai.settings import model_names, project_client, save_models
 from ...jobs.ai_status import check_status
 from ...db import Database
@@ -284,7 +286,7 @@ class SettingsDialog(QDialog):
             )
         )
 
-        rows = self.db.sources()
+        rows = self.db.work_sources()
         counts = self.db.source_document_counts()
         if not rows:
             card.body.addWidget(
@@ -386,6 +388,7 @@ class SettingsDialog(QDialog):
     # ── 시스템 ──────────────────────────────────────────────────────
     def _build_system(self, body: QVBoxLayout) -> None:
         body.addWidget(self._ai_card())
+        body.addWidget(self._law_card())
         body.addWidget(self._storage_card())
         body.addWidget(self._audit_card())
         body.addWidget(self._notices_card())
@@ -450,6 +453,79 @@ class SettingsDialog(QDialog):
             )
         )
         return card
+
+    def _law_card(self) -> Card:
+        """현행 법령 조회. 이 프로그램에서 유일하게 PC 밖과 통신하는 기능이라 기본은 꺼져 있다."""
+        from PySide6.QtWidgets import QCheckBox, QLineEdit
+
+        card = Card(tone="static")
+        card.body.addWidget(section_title("현행 법령 조회"))
+        card.body.addWidget(muted_label(
+            "노트북 대화에서 ‘법령’을 고른 질문에 한해 국가법령정보센터(law.go.kr)에서 현행 조문을 "
+            "조회합니다. <b>이 기능만 인터넷을 씁니다.</b> 보내는 것은 법령 이름·조문 번호와 그 질문 "
+            "문장뿐이고, 자료의 본문·파일 이름은 보내지 않습니다."))
+        self.law_enabled = QCheckBox("이 인수인계에서 현행 법령 조회 사용")
+        self.law_enabled.setChecked(law_service.enabled(self.db))
+        self.law_enabled.toggled.connect(self._toggle_law)
+        card.body.addWidget(self.law_enabled)
+        row = QVBoxLayout()
+        row.addWidget(muted_label("법령정보 공동활용 인증키(OC)", small=True))
+        line = QHBoxLayout()
+        self.law_key = QLineEdit(law_service.api_key())
+        self.law_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.law_key.setPlaceholderText("open.law.go.kr에서 발급받은 값")
+        self.law_key.setMinimumHeight(theme.CONTROL_H)
+        self.law_key.setAccessibleName("법령정보 인증키")
+        line.addWidget(self.law_key, 1)
+        save = QPushButton("키 저장")
+        save.clicked.connect(self._save_law_key)
+        line.addWidget(save)
+        self.law_check = QPushButton("연결 확인")
+        self.law_check.clicked.connect(self._check_law)
+        line.addWidget(self.law_check)
+        row.addLayout(line)
+        card.body.addLayout(row)
+        self.law_state = muted_label("")
+        self.law_state.setAccessibleName("법령 조회 상태")
+        card.body.addWidget(self.law_state)
+        card.body.addWidget(muted_label(
+            "인증키는 이 PC 사용자 폴더에 암호화하지 않고 저장하며, 인수인계 폴더·내보내기 묶음에는 "
+            "들어가지 않습니다. 켜고 끄는 것은 인수인계마다 따로입니다.", small=True))
+        self._sync_law_state()
+        return card
+
+    def _sync_law_state(self) -> None:
+        if not law_service.enabled(self.db):
+            self.law_state.setText("꺼져 있습니다. 이 프로그램은 PC 밖과 통신하지 않습니다.")
+        elif not law_service.api_key():
+            self.law_state.setText("켜져 있지만 인증키가 없어 조회할 수 없습니다.")
+        else:
+            self.law_state.setText("켜져 있습니다. 노트북 대화의 입력칸에 ‘법령’이 나타납니다.")
+
+    def _toggle_law(self, on: bool) -> None:
+        law_service.set_enabled(self.db, on)
+        self._sync_law_state()
+
+    def _save_law_key(self) -> None:
+        try:
+            law_service.save_api_key(self.law_key.text())
+        except (ValueError, OSError) as exc:
+            self.law_state.setText(str(exc))
+            return
+        self._sync_law_state()
+
+    def _check_law(self) -> None:
+        """시험 조회. 누구나 아는 법령 이름 하나만 보낸다."""
+        self.law_check.setEnabled(False)
+        self.law_state.setText("law.go.kr에 연결을 확인하는 중입니다…")
+        from PySide6.QtWidgets import QApplication
+        QApplication.processEvents()
+        try:
+            self.law_state.setText(law_service.check(self.law_key.text().strip()))
+        except LawError as exc:
+            self.law_state.setText(str(exc))
+        finally:
+            self.law_check.setEnabled(True)
 
     def _recheck_ai(self) -> None:
         if self._ai_status_task is not None:

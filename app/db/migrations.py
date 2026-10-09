@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "6"
+SCHEMA_VERSION = "7"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -392,12 +392,45 @@ def _to_v6(con: sqlite3.Connection) -> None:
             con.execute(statement)
 
 
+# v7이 기존 노트북 표에 더하는 열. ALTER TABLE은 상수 기본값만 받으므로
+# 시각 열은 비워 두고 쓰는 쪽(core/notebook.py)이 채운다. 새 프로젝트도 같은
+# 목록을 지나므로(db/repo.py init) 승격 결과와 신규 설치가 같아진다.
+NOTEBOOK_COLUMNS = (
+    ("notebooks", "icon", "icon TEXT NOT NULL DEFAULT ''"),
+    ("notebooks", "updated_at", "updated_at TEXT"),
+    ("notebooks", "last_opened_at", "last_opened_at TEXT"),
+    ("notebooks", "layout", "layout TEXT NOT NULL DEFAULT ''"),
+    ("notebook_sources", "origin", "origin TEXT NOT NULL DEFAULT 'project'"),
+    ("notebook_sources", "added_at", "added_at TEXT"),
+    ("notebook_sources", "summary", "summary TEXT NOT NULL DEFAULT ''"),
+    ("notebook_sources", "topics", "topics TEXT NOT NULL DEFAULT '[]'"),
+    ("notebook_messages", "thread_id", "thread_id INTEGER NOT NULL DEFAULT 1"),
+    ("notebook_messages", "standalone_question", "standalone_question TEXT NOT NULL DEFAULT ''"),
+    ("notebook_messages", "law_citations", "law_citations TEXT NOT NULL DEFAULT '[]'"),
+    ("notebook_messages", "mode", "mode TEXT NOT NULL DEFAULT 'rag'"),
+    ("notebook_messages", "rating", "rating TEXT"),
+    ("notebook_notes", "kind", "kind TEXT NOT NULL DEFAULT 'answer'"),
+)
+
+
+def add_notebook_columns(con: sqlite3.Connection) -> None:
+    for table, column, ddl in NOTEBOOK_COLUMNS:
+        add_column(con, table, column, ddl)
+
+
+def _to_v7(con: sqlite3.Connection) -> None:
+    # 새 표(법령 캐시·서식·산출물)와 노트북 표의 새 열. 기존 행은 바꾸지 않는다.
+    _to_v6(con)
+    add_notebook_columns(con)
+
+
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
     "4": _to_v4,
     "5": _to_v5,
     "6": _to_v6,
+    "7": _to_v7,
 }
 
 

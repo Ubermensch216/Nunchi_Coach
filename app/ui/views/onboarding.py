@@ -141,7 +141,7 @@ class OnboardingView(QWidget):
         # 바로 분석을 돌리지 않고 목록에 올려만 두는 것은, 규모와 읽기 전용
         # 안내를 보고 '분석 시작'을 누르는 단계는 그대로 두기 위해서다.
         seed = self.db.get_meta("seed_source")
-        if seed and not self.db.sources():
+        if seed and not self.db.work_sources():
             self._append(Path(seed))
 
     # ── 폴더 ────────────────────────────────────────────────────────

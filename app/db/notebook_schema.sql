@@ -36,3 +36,34 @@ CREATE TABLE IF NOT EXISTS knowledge_cards (
  reviewer TEXT NOT NULL, applicability TEXT NOT NULL, valid_until TEXT,
  reviewed_at TEXT NOT NULL DEFAULT (datetime('now')), published_at TEXT
 );
+-- ── v7: 자료 분석 노트북 (법령 조회·서식 산출물) ─────────────────────
+-- 기존 표에 붙는 열은 db/migrations.py의 NOTEBOOK_COLUMNS가 더한다. 이 파일에는
+-- 방아쇠를 두지 않는다. 승격 단계가 이 파일을 쌍반점으로 끊어 실행하므로
+-- 주석에도 그 글자를 쓰지 않는다.
+CREATE TABLE IF NOT EXISTS law_cache (
+ key TEXT PRIMARY KEY, tool TEXT NOT NULL, payload TEXT NOT NULL,
+ fetched_at TEXT NOT NULL, expires_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS doc_templates (
+ id INTEGER PRIMARY KEY, key TEXT UNIQUE, title TEXT NOT NULL,
+ doc_type TEXT NOT NULL DEFAULT '기타', description TEXT NOT NULL DEFAULT '',
+ sections TEXT NOT NULL DEFAULT '[]', guidance TEXT NOT NULL DEFAULT '',
+ format TEXT NOT NULL DEFAULT '', builtin INTEGER NOT NULL DEFAULT 0,
+ created_at TEXT NOT NULL DEFAULT (datetime('now')),
+ updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS notebook_outputs (
+ id INTEGER PRIMARY KEY, notebook_id INTEGER NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+ template_id INTEGER REFERENCES doc_templates(id) ON DELETE SET NULL,
+ title TEXT NOT NULL, doc_type TEXT NOT NULL DEFAULT '', model TEXT NOT NULL,
+ source_snapshot TEXT NOT NULL DEFAULT '{}', citations TEXT NOT NULL DEFAULT '[]',
+ state TEXT NOT NULL DEFAULT 'ai_draft', revision INTEGER NOT NULL DEFAULT 1,
+ created_at TEXT NOT NULL DEFAULT (datetime('now')),
+ updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS output_files (
+ id INTEGER PRIMARY KEY, output_id INTEGER NOT NULL REFERENCES notebook_outputs(id) ON DELETE CASCADE,
+ revision INTEGER NOT NULL, format TEXT NOT NULL, path TEXT NOT NULL,
+ sha256 TEXT NOT NULL, renderer TEXT NOT NULL,
+ created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

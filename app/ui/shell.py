@@ -170,8 +170,9 @@ class TopBar(QWidget):
             button.setChecked(True)
 
     def setEnabledNav(self, enabled: bool) -> None:
-        for button in self._buttons.values():
-            button.setEnabled(enabled)
+        # 노트북은 자료 폴더 없이도 쓴다 — 파일을 직접 올려 시작할 수 있다.
+        for key, button in self._buttons.items():
+            button.setEnabled(enabled or key == "notebooks")
 
     # ── 상태 ────────────────────────────────────────────────────────
     def show_progress(self, done: int, total: int, note: str = "") -> None:
@@ -188,6 +189,18 @@ class TopBar(QWidget):
     def show_idle(self, text: str) -> None:
         self.progress.hide()
         self.status.setText(text)
+
+    def show_promise(self, law_on: bool) -> None:
+        """원본을 건드리지 않는다는 약속 옆에, PC 밖과 통신하는 기능이 켜져 있는지 적는다."""
+        if law_on:
+            self.promise.setText("읽기 전용 · 법령 조회 켜짐")
+            self.promise.setToolTip(
+                "원본을 수정·이동·삭제·이름 변경하지 않습니다.\n"
+                "현행 법령 조회가 켜져 있습니다 — 노트북 대화에서 ‘법령’을 고른 질문에 한해 "
+                "law.go.kr로 법령 이름·조문 번호·그 질문 문장을 보냅니다. 자료 본문은 보내지 않습니다.")
+        else:
+            self.promise.setText("읽기 전용")
+            self.promise.setToolTip("원본을 수정·이동·삭제·이름 변경하지 않습니다")
 
     def show_handover(self, progress) -> None:
         """진행도를 갱신한다. 잴 것이 없으면 아예 숨긴다 —
@@ -309,10 +322,13 @@ class MainWindow(QMainWindow):
     # ── 상태 ────────────────────────────────────────────────────────
     def refresh(self) -> None:
         """자료원이 없으면 시작 마법사만 보여준다. 빈 메뉴를 누르게 하지 않는다."""
-        has_source = bool(self.db.sources())
+        from ..law import service as law_service
+        self.topbar.show_promise(law_service.available(self.db))
+        has_source = bool(self.db.work_sources())
         self.topbar.setEnabledNav(has_source)
         if not has_source:
-            self.stack.setCurrentWidget(self.views["onboarding"])
+            if self.stack.currentWidget() is not self.views["notebooks"]:
+                self.stack.setCurrentWidget(self.views["onboarding"])
             self.topbar.show_idle("자료 폴더를 연결하세요")
             return
 
@@ -338,13 +354,14 @@ class MainWindow(QMainWindow):
         남은 일은 별도 큐가 아니라 문서 상태로 판단하므로, 강제 종료 뒤에도
         같은 질의가 그대로 집어낸다.
         """
-        if not self.db.sources():
+        if not self.db.work_sources():
             return
         from ..ai.settings import model_names
         from ..ingest.parsers.base import PARSER_VERSION
         embed_model = model_names(self.db)[1]
         pending = self.db.con.execute(
             "SELECT COUNT(*) AS n FROM documents d "
+            "JOIN sources s ON s.id = d.source_id AND s.kind != 'upload' "
             "LEFT JOIN doc_embeddings e ON e.doc_id = d.id AND e.model = ? "
             "WHERE d.missing_since IS NULL AND d.parse_status != 'skipped' "
             "  AND (d.hash IS NULL OR d.parse_status = 'pending' "
@@ -441,6 +458,10 @@ class MainWindow(QMainWindow):
         dialog.sources_changed.connect(self._on_sources_changed)
         dialog.models_changed.connect(self._on_sources_changed)
         dialog.exec()
+        # 법령 조회를 켜고 껐을 수 있다. 상단 띠의 표시와 노트북 입력칸을 다시 맞춘다.
+        from ..law import service as law_service
+        self.topbar.show_promise(law_service.available(self.db))
+        self._refresh_current()
 
     def _on_sources_changed(self) -> None:
         """자료 폴더를 더하거나 바꾸거나 뺐다 — 화면과 분석을 다시 맞춘다.
@@ -450,7 +471,7 @@ class MainWindow(QMainWindow):
         상태로 찾으므로 그냥 다시 켜면 새 폴더부터 훑는다(ING-006).
         """
         self.refresh()
-        if self.db.sources():
+        if self.db.work_sources():
             self._start_pipeline()
 
     def restyle(self) -> None:
@@ -473,7 +494,7 @@ class MainWindow(QMainWindow):
         self._tick.stop()
         runners = [self.runner]
         for view in self.views.values():
-            for name in ("_runner", "_summaries", "_warmup"):
+            for name in ("_runner", "_summaries", "_warmup", "_ingest", "_studio"):
                 runner = getattr(view, name, None)
                 if runner is not None:
                     runners.append(runner)

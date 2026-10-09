@@ -74,6 +74,36 @@ ASK_SCHEMA: dict[str, Any] = {
     "required": ["answered", "sentences"],
 }
 
+# 노트북 대화 — 검색에 넣을 문장만 만든다(search/expand.py).
+EXPAND_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"variants": {"type": "array", "items": {"type": "string"}, "maxItems": 4}},
+    "required": ["variants"],
+}
+REWRITE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"question": {"type": "string"}},
+    "required": ["question"],
+}
+# 전체 정리(search/overview.py). 사실·문장마다 근거 번호를 강제한다 — ASK_SCHEMA와 같은 이유.
+_GROUNDED_ITEMS: dict[str, Any] = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "text": {"type": "string"},
+            "sources": {"type": "array", "items": {"type": "integer"}},
+        },
+        "required": ["text", "sources"],
+    },
+}
+MAP_SCHEMA: dict[str, Any] = {
+    "type": "object", "properties": {"facts": _GROUNDED_ITEMS}, "required": ["facts"],
+}
+REDUCE_SCHEMA: dict[str, Any] = {
+    "type": "object", "properties": {"sentences": _GROUNDED_ITEMS}, "required": ["sentences"],
+}
+
 NAME_TASK_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {

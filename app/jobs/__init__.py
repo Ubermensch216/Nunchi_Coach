@@ -2,6 +2,7 @@
 
 from .ai_tasks import SummaryRunner
 from .ask_task import AskRunner, WarmupRunner
+from .notebook_ingest_task import NotebookIngestRunner
 from .pipeline import Pipeline, PipelineRunner, StageReport
 
-__all__ = ["AskRunner", "WarmupRunner", "Pipeline", "PipelineRunner", "StageReport", "SummaryRunner"]
+__all__ = ["AskRunner", "WarmupRunner", "NotebookIngestRunner", "Pipeline", "PipelineRunner", "StageReport", "SummaryRunner"]

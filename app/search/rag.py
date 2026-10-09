@@ -191,11 +191,15 @@ def search_only(db: Database, question: str, scope: QueryScope | None = None,
 
 
 def ask(db: Database, question: str, client: OllamaClient | None = None,
-        scope: QueryScope | None = None) -> Answer:
+        scope: QueryScope | None = None, expander=None) -> Answer:
     """질문 하나에 답한다. 이전 질문을 기억하지 않는다.
 
     scope는 사용자가 화면에서 직접 고른 범위다. 질문 문장에서 읽어 낸
     범위보다 우선한다 — 화면에서 골랐다는 것은 명시적 의사표시다.
+
+    expander는 질문을 받아 바꿔 쓴 검색 질의 목록을 돌려주는 함수다(노트북
+    대화만 준다 — search/expand.py). 규칙으로 답하는 경로에서는 부르지 않는다.
+    바꿔 쓴 질의는 후보를 넓히는 데만 쓰고, 답과 검증은 원래 질문으로 한다.
     """
     question = question.strip()
     if not question:
@@ -216,10 +220,12 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
             return Answer(question, "", True, error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
         return labelled
 
-    vectors, error = client.embed([question])
+    variants = [v for v in (expander(question) if expander else []) if v and v != question]
+    vectors, error = client.embed([question, *variants])
     if error or not vectors:
         return search_only(db, question, scope, "의미 검색을 사용할 수 없어 자료 검색 결과를 보여 드립니다.")
-    query_vector = normalize(np.asarray(vectors, dtype=np.float32))[0]
+    query_vectors = normalize(np.asarray(vectors, dtype=np.float32))
+    query_vector = query_vectors[0]
 
     chunk_ids, matrix = _load_chunk_matrix(db, client.embed_model, scope.doc_ids)
     if chunk_ids.size == 0:
@@ -247,6 +253,10 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
     # 답변에 끌어들였다(doc/질문화면_RAG_개선계획.md §1-D).
     strong_ids = {cid for cid, score in vector_ranked if score >= MIN_SIMILARITY}
     strong_ids |= set(fts_ranked[:TOP_K])
+    if variants:
+        combined, widened = _with_variants(
+            db, chunk_ids, matrix, query_vectors[1:], variants, vector_ranked, fts_ranked, scope.doc_ids)
+        strong_ids |= widened
 
     scope = infer_scope(question).merged_with(scope)
     strong = _select_context(db, combined, strong_ids, scope, question)
@@ -281,6 +291,8 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
     # 질문을 대상·속성·기간·의도로 푼 것. 이유를 묻는 질문의 초점은 이유 검사가 본다.
     asked = intent.frame(question, "" if _asks_reason(question) else _focus(question))
     diagnosis = {"frame": asked.as_record()}
+    if variants:
+        diagnosis["expansions"] = len(variants)
     if ignored:
         diagnosis["instructions_ignored"] = ignored
 
@@ -810,6 +822,36 @@ def _reciprocal_rank_fusion(
     for rank, chunk_id in enumerate(fts_ranked):
         scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (k + rank + 1)
     return sorted(scores.items(), key=lambda item: -item[1])
+
+
+# 바꿔 쓴 질의의 순위는 원래 질문의 절반만 친다. 원래 질문이 찾은 것을 밀어내지
+# 않고 빈 곳을 채우는 것이 목적이다.
+VARIANT_WEIGHT = 0.5
+# 바꿔 쓴 질의의 정확 일치는 맨 위 몇 건만 '강한 근거'로 인정한다(OR 결합의 잡음).
+VARIANT_FTS_STRONG = 3
+
+
+def _with_variants(db, chunk_ids, matrix, variant_vectors, variants, vector_ranked, fts_ranked,
+                   doc_ids) -> tuple[list[tuple[int, float]], set[int]]:
+    """원래 질문과 바꿔 쓴 질의들의 순위를 RRF로 합친다. (합친 순위, 새로 강해진 조각)."""
+    scores: dict[int, float] = {}
+
+    def add(ranking: list[int], weight: float) -> None:
+        for rank, chunk_id in enumerate(ranking):
+            scores[chunk_id] = scores.get(chunk_id, 0.0) + weight / (RRF_K + rank + 1)
+
+    add([cid for cid, _score in vector_ranked], 1.0)
+    add(fts_ranked, 1.0)
+    widened: set[int] = set()
+    for vector, text in zip(variant_vectors, variants):
+        similarity = matrix @ vector
+        pool = np.argsort(-similarity)[:RANK_POOL]
+        add([int(chunk_ids[i]) for i in pool], VARIANT_WEIGHT)
+        widened |= {int(chunk_ids[i]) for i in pool if float(similarity[i]) >= MIN_SIMILARITY}
+        exact = fts.search_chunk_ids(db, text, limit=RANK_POOL, doc_ids=doc_ids)
+        add(exact, VARIANT_WEIGHT)
+        widened |= set(exact[:VARIANT_FTS_STRONG])
+    return sorted(scores.items(), key=lambda item: -item[1]), widened
 
 
 def _select_context(

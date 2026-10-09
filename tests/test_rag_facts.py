@@ -180,14 +180,17 @@ def test_conflicting_answer_can_be_compared_in_notebook_but_cannot_be_saved_as_v
     book=notebook.create(db,'상충 대조');notebook.add_sources(db,book,[a,b])
     view=NotebooksView(db)
     try:
+        view.open_notebook(book)
         message,answer=notebook.query(db,book,'2026년 보관실 이전 제출기한은 언제야?',Ready())
-        view.ask_view._render_answer(answer)
+        view.workspace.chat.refresh()
         assert any(label.text()=='확정하지 않은 원문 근거' for label in view.findChildren(QLabel))
-        assert view.ask_view._selected_citation().doc_id==a
-        view.ask_view._select(2)
-        assert view.ask_view._selected_citation().doc_id==b
-        assert view.ask_view.reader_column.count()>0
-        assert view.ask_view.reader_tabs.isHidden()
+        sources=view.workspace.sources
+        assert [c.doc_id for c in answer.citations]==[a,b]
+        view.workspace.chat.citation_requested.emit(answer.citations[0])
+        assert sources.reader_doc_id==a
+        view.workspace.chat.citation_requested.emit(answer.citations[1])
+        assert sources.reader_doc_id==b
+        assert sources.reader_column.count()>0
         with pytest.raises(ValueError):
             notebook.save_note(db,book,message,'충돌 답변')
     finally:

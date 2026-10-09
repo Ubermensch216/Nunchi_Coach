@@ -136,7 +136,7 @@ class Pipeline(QObject):
 
     # ── 1단계: 찾기 ─────────────────────────────────────────────────
     def _scan(self, db: Database) -> None:
-        sources = db.sources()
+        sources = db.work_sources()
         report = StageReport(STAGE_SCAN)
         total = scanner.ScanStats()
 
@@ -192,6 +192,7 @@ class Pipeline(QObject):
             """
             SELECT d.id, d.path, d.filename, d.hash
             FROM documents d
+            JOIN sources s ON s.id = d.source_id AND s.kind != 'upload'
             LEFT JOIN jobs j ON j.doc_id = d.id AND j.kind = 'parse'
             WHERE d.missing_since IS NULL
               AND (d.parse_status = 'pending'
@@ -372,6 +373,7 @@ class Pipeline(QObject):
             """
             SELECT d.id, d.filename, di.body
             FROM documents d
+            JOIN sources s ON s.id = d.source_id AND s.kind != 'upload'
             JOIN document_index di ON di.doc_id = d.id
             LEFT JOIN doc_embeddings e ON e.doc_id = d.id AND e.model = ?
             WHERE d.missing_since IS NULL

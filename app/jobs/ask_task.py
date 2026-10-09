@@ -49,7 +49,9 @@ class AskWorker(QObject):
             notebook_id = getattr(self._scope, "notebook_id", None)
             if notebook_id is not None:
                 from ..core import notebook
-                message_id, answer = notebook.query(db, notebook_id, self._question, client=self._client)
+                message_id, answer = notebook.query(
+                    db, notebook_id, self._question, client=self._client,
+                    mode=getattr(self._scope, "mode", ""), law=getattr(self._scope, "law", False))
                 answer.generation["notebook_message_id"] = message_id
             else:
                 answer = ask(db, self._question, client=self._client, scope=self._scope)

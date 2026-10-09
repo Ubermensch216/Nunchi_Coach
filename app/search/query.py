@@ -40,6 +40,10 @@ class QueryScope:
     # None은 프로젝트 전체, 빈 목록은 허용된 문서 없음이다.
     doc_ids: list[int] | None = None
     notebook_id: int | None = None
+    # 노트북 대화의 방식. ""는 보통 질문, "overview"는 선택한 자료 전체 정리.
+    mode: str = ""
+    # 노트북 대화에서 현행 법령을 함께 조회할지(설정에서 켠 경우에만 쓰인다).
+    law: bool = False
 
     @property
     def has_year(self) -> bool:

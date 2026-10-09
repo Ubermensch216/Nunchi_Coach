@@ -16,7 +16,7 @@ from typing import Any
 
 from ..core import health, provenance
 from ..core.chunking import CHUNKING_VERSION
-from .migrations import SCHEMA_VERSION, add_column, upgrade
+from .migrations import SCHEMA_VERSION, add_column, add_notebook_columns, upgrade
 from .workstore import WorkStore
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
@@ -206,6 +206,7 @@ class Database(WorkStore):
         # 승격 경로가 여기서 그냥 return 해 버렸다).
         self.sync_chunking_version()
         self.con.executescript(Path(__file__).with_name("notebook_schema.sql").read_text(encoding="utf-8"))
+        add_notebook_columns(self.con)
 
     def sync_chunking_version(self) -> bool:
         """조각 규칙이 바뀌면 옛 조각을 지우고 다시 만들게 한다.
@@ -313,6 +314,15 @@ class Database(WorkStore):
 
     def sources(self) -> list[sqlite3.Row]:
         return self.con.execute("SELECT * FROM sources ORDER BY id").fetchall()
+
+    def work_sources(self) -> list[sqlite3.Row]:
+        """사용자가 연결한 자료 폴더. 노트북에 올린 파일의 보관소는 뺀다.
+
+        보관소(kind='upload')는 이 프로그램이 만든 폴더다. 자료 폴더 목록에
+        보이거나 폴더 훑기·업무 파악의 대상이 되면 안 된다. 다만 출력 보호
+        (core/output_policy.py)는 sources() 전체를 본다 — 보관소도 덮어쓰면 안 된다.
+        """
+        return self.con.execute("SELECT * FROM sources WHERE kind != 'upload' ORDER BY id").fetchall()
 
     def source_document_counts(self) -> dict[int, int]:
         """자료원별 문서 건수. 제거가 무엇을 지우는지 미리 보여주기 위한 것."""

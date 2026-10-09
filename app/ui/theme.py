@@ -444,6 +444,18 @@ def _check_marks() -> str:
         image: url({mark});
     }}
     QCheckBox::indicator:disabled {{ border-color: {BORDER}; background: {SURFACE}; }}
+    QListWidget::indicator {{
+        width: 16px;
+        height: 16px;
+        border: 1px solid {TEXT_SUBTLE};
+        border-radius: {RADIUS_SM}px;
+        background: {BG};
+    }}
+    QListWidget::indicator:checked {{
+        background: {PRIMARY};
+        border-color: {PRIMARY};
+        image: url({mark});
+    }}
     """
 
 
@@ -684,6 +696,74 @@ def stylesheet(text_size: str = "medium") -> str:
         border: 1px solid {BORDER};
         border-radius: {RADIUS_LG}px;
     }}
+
+    /* ── 노트북 ──
+       홈의 카드는 판 전체가 누르는 자리다. 읽는 카드(QFrame#Card)와 달리
+       마우스가 올라오면 테두리로 답한다. */
+    QFrame#NotebookCard {{
+        background: {BG};
+        border: 1px solid {BORDER};
+        border-radius: {RADIUS_LG}px;
+    }}
+    QFrame#NotebookCard:hover {{ border-color: {PRIMARY}; }}
+    QFrame#NotebookCard:focus {{ border: 2px solid {TEXT}; }}
+    QLabel#NotebookCardTitle {{ font-size: {lead}px; font-weight: 700; color: {TEXT}; }}
+    /* 작업 화면의 세 판. 회색 바탕 위의 흰 판으로 서로 갈린다. */
+    QFrame#NotebookPanel {{
+        background: {BG};
+        border: 1px solid {BORDER};
+        border-radius: {RADIUS_LG}px;
+    }}
+    QListWidget#SourceList {{
+        background: transparent;
+        border: none;
+        outline: none;
+    }}
+    QListWidget#SourceList::item {{
+        padding: {SP_SM}px {SP_XS}px;
+        border-radius: {RADIUS_SM}px;
+        color: {TEXT};
+    }}
+    QListWidget#SourceList::item:hover {{ background: {BAND}; }}
+    QListWidget#SourceList::item:selected {{ background: {PRIMARY_SOFT}; color: {TEXT}; }}
+    /* 여러 줄 입력칸. 맡겨 두면 윈도우의 어두운 모드 바탕을 그대로 써서, 밝은 벌에서
+       검은 판에 검은 글자가 된다. */
+    QTextEdit, QPlainTextEdit {{
+        background: {BG};
+        color: {TEXT};
+        border: 1px solid {BORDER_STRONG};
+        border-radius: {RADIUS}px;
+        padding: {SP_SM}px;
+        selection-background-color: {PRIMARY_SOFT};
+        selection-color: {TEXT};
+    }}
+    QTextEdit:focus, QPlainTextEdit:focus {{ border-color: {PRIMARY}; }}
+    /* 질문은 오른쪽의 옅은 강조색 말풍선, 답은 왼쪽의 테두리 없는 글 — 누가 한
+       말인지 자리와 바탕으로 갈린다. */
+    QFrame#ChatQuestion {{
+        background: {PRIMARY_SOFT};
+        border: none;
+        border-radius: {RADIUS_LG}px;
+    }}
+    QLabel#ChatQuestionText {{ color: {TEXT}; font-weight: 600; }}
+    QFrame#ChatAnswer {{ background: transparent; border: none; }}
+    /* 그림만 있는 단추(답 아래의 복사·평가, 판 접기·펴기). 테두리를 투명하게
+       미리 잡아 둔다 — 초점이 올 때 생기면 그림이 1px 밀린다. */
+    QPushButton#IconTool {{
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: {RADIUS_SM}px;
+        padding: 0;
+    }}
+    QPushButton#IconTool:hover {{ background: {SURFACE_ALT}; }}
+    QPushButton#IconTool:pressed {{ background: {BORDER_STRONG}; }}
+    QPushButton#IconTool:focus {{ border: 1px solid {PRIMARY}; }}
+    QFrame#ChatComposer {{
+        background: {BG};
+        border: 1px solid {BORDER_STRONG};
+        border-radius: {RADIUS_LG}px;
+    }}
+    QLineEdit#ChatInput {{ border: none; background: transparent; }}
     /* 답이 이 화면에서 가장 큰 글자다. */
     QLabel#AnswerBody {{
         color: {TEXT};
