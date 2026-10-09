@@ -441,7 +441,7 @@ class SettingsDialog(QDialog):
         self.ai_save = QPushButton("모델 설정 저장")
         self.ai_save.setObjectName("Primary")
         self.ai_save.clicked.connect(self._save_models)
-        card.body.addWidget(self.ai_save)
+        card.body.addWidget(self.ai_save, 0, Qt.AlignmentFlag.AlignLeft)
         self.ai_feedback = muted_label("")
         card.body.addWidget(self.ai_feedback)
         card.body.addWidget(

@@ -51,11 +51,11 @@ class SnapshotDialog(QDialog):
     def __init__(self, db, parent: QWidget | None = None):
         super().__init__(parent)
         self.db = db
-        self.setWindowTitle("업무 복원본")
+        self.setWindowTitle("저장·옮기기 — 업무 복원본")
         self.setMinimumSize(640, 480)
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(theme.SP_LG, theme.SP_LG, theme.SP_LG, theme.SP_LG)
+        outer.setContentsMargins(theme.SP_XL, theme.SP_XL, theme.SP_XL, theme.SP_LG)
         outer.setSpacing(theme.SP_MD)
         outer.addWidget(section_title("저장한 업무 복원본"))
         outer.addWidget(muted_label(

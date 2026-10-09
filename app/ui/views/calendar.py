@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QMenu,
     QMessageBox,
     QPushButton,
     QSizePolicy,
@@ -44,6 +45,7 @@ from ...core import status
 from ...db import Database
 from .. import theme
 from ..widgets import (
+    MORE,
     Badge,
     Card,
     EmptyState,
@@ -53,9 +55,13 @@ from ..widgets import (
     SubPanel,
     TabBar,
     UnknownBlock,
+<<<<<<< Updated upstream
     center_column,
     doc_icon,
     header_margins,
+=======
+    centered_column,
+>>>>>>> Stashed changes
     hint_row,
     muted_label,
     open_original,
@@ -87,6 +93,7 @@ TABS = (
 
 class CalendarView(QWidget):
     go_documents = Signal()
+    go_tasks = Signal()
     open_task = Signal(int)
 
     def __init__(self, db: Database, parent: QWidget | None = None):
@@ -106,7 +113,18 @@ class CalendarView(QWidget):
         header = QWidget()
         header.setObjectName("ViewHeader")
         header.setAutoFillBackground(True)
+<<<<<<< Updated upstream
         head_row, head_column = center_column(theme.CONTENT_MAX_W)
+=======
+        header_box = QVBoxLayout(header)
+        header_box.setContentsMargins(0, theme.SP_XL, 0, 0)
+        header_box.setSpacing(0)
+        # 머리와 본문이 같은 폭 규칙을 써야 제목과 카드의 왼쪽 끝이 한 줄에 선다.
+        head_outer, head_holder = centered_column()
+        header_box.addWidget(head_outer)
+        head_column = QVBoxLayout(head_holder)
+        head_column.setContentsMargins(0, 0, 0, 0)
+>>>>>>> Stashed changes
         head_column.setSpacing(theme.SP_SM)
         frame = QVBoxLayout(header)
         frame.setContentsMargins(*header_margins(theme.SP_XL))
@@ -136,7 +154,7 @@ class CalendarView(QWidget):
 
         self.tabs = TabBar(TABS)
         self.tabs.switched.connect(self._switch)
-        head_column.addSpacing(theme.SP_SM)
+        head_column.addSpacing(theme.SP_MD)
         head_column.addWidget(self.tabs)
         outer.addWidget(header)
 
@@ -224,7 +242,7 @@ class CalendarView(QWidget):
                 f"업무 {tasks}개를 확인했지만 뚜렷하게 반복되는 시기를 찾지 못했습니다. "
                 "근거 없이 추측하지 않습니다. 업무 화면에서 주기를 직접 지정할 수 있습니다.",
                 "업무 보기",
-                self.go_documents.emit,
+                self.go_tasks.emit,
             )
         )
 
@@ -308,11 +326,8 @@ class CalendarView(QWidget):
             column.addWidget(self._now_card(entry, today))
 
     def _now_card(self, entry: Upcoming, today: date) -> QWidget:
-        # 급한 것은 왼쪽 띠로 먼저 말한다. 카드가 여러 장 쌓이면 뱃지 하나는
-        # 훑는 눈에 걸리지 않는다.
-        urgent = entry.running_now or entry.days_away <= 7
-        card = Card(tone="attention" if urgent else "primary")
-        card.setMaximumWidth(theme.CONTENT_MAX_W)
+        card = Card()
+        card.body.setSpacing(theme.SP_SM)
 
         head = QHBoxLayout()
         head.setSpacing(theme.SP_SM)
@@ -325,7 +340,14 @@ class CalendarView(QWidget):
         name.clicked.connect(lambda _=False, t=entry.task_id: self.open_task.emit(t))
         head.addWidget(name)
         head.addStretch(1)
+<<<<<<< Updated upstream
         _add_state(head, entry.row)
+=======
+        # 표시는 예외에만. '자료에서 추정'은 이 화면의 기본 상태다.
+        state = status.of_cycle(entry.row)
+        if state != status.INFERRED:
+            head.addWidget(Badge.state(state))
+>>>>>>> Stashed changes
         card.body.addLayout(head)
 
         card.body.addWidget(
@@ -367,7 +389,11 @@ class CalendarView(QWidget):
             row = QHBoxLayout()
             row.setSpacing(theme.SP_SM)
             row.addWidget(muted_label(f"{doc['eff_year']}년", small=True, wrap=False))
+<<<<<<< Updated upstream
             link = doc_icon(QPushButton(doc["filename"]))
+=======
+            link = QPushButton(doc["filename"])
+>>>>>>> Stashed changes
             link.setObjectName("Link")
             link.setCursor(Qt.CursorShape.PointingHandCursor)
             link.setToolTip(f"{doc['path']}\n클릭하면 원본을 엽니다")
@@ -393,7 +419,6 @@ class CalendarView(QWidget):
         )
         for entry in later[:MAX_UPCOMING]:
             line = ListRow()
-            line.setMaximumWidth(theme.CONTENT_MAX_W)
 
             when = QLabel(_when_label(entry, today))
             when.setObjectName("WhenChip")
@@ -411,7 +436,13 @@ class CalendarView(QWidget):
                 muted_label(cycle_headline(entry.row), small=True, wrap=False)
             )
             line.row.addStretch(1)
+<<<<<<< Updated upstream
             _add_state(line.row, entry.row)
+=======
+            state = status.of_cycle(entry.row)
+            if state != status.INFERRED:
+                line.row.addWidget(Badge.state(state))
+>>>>>>> Stashed changes
             column.addWidget(line)
 
         if len(later) > MAX_UPCOMING:
@@ -451,9 +482,13 @@ class CalendarView(QWidget):
 
         for row in pending[:MAX_REVIEW]:
             line = ListRow()
+<<<<<<< Updated upstream
             line.setMaximumWidth(theme.CONTENT_MAX_W)
             line.row.setSpacing(theme.SP_SM)
             _add_state(line.row, row)
+=======
+            line.row.setSpacing(theme.SP_MD)
+>>>>>>> Stashed changes
 
             name = QPushButton(row["task_name"])
             name.setObjectName("RowTitle")
@@ -462,24 +497,35 @@ class CalendarView(QWidget):
             line.row.addWidget(name)
 
             line.row.addWidget(muted_label(cycle_headline(row), small=True, wrap=False))
+            # 근거가 약한 것만 표시한다. 아홉 줄이 모두 같은 뱃지를 달고 있으면
+            # 어느 줄부터 봐야 하는지 알 수 없다.
+            if status.of_cycle(row) == status.WEAK:
+                line.row.addWidget(Badge.state(status.WEAK))
             line.row.addWidget(
-                muted_label(f"· {_review_reason(row)}", small=True, wrap=False)
+                muted_label(_review_reason(row), small=True, wrap=False)
             )
             line.row.addStretch(1)
 
-            # 세 동작의 무게가 다르다는 것이 모양에서 보여야 한다 — 확인은
-            # 테두리 있는 강조, 나머지는 조용한 버튼.
-            for label, style, slot in (
-                ("맞습니다", "Confirm", lambda _=False, t=row["task_id"]: self._confirm(t)),
-                ("수정", "Quiet", lambda _=False, t=row["task_id"]: self._edit(t)),
-                ("반복 아님", "Quiet", lambda _=False, t=row["task_id"],
-                                      n=row["task_name"]: self._not_recurring(t, n)),
-            ):
-                button = QPushButton(label)
-                button.setObjectName(style)
-                button.setCursor(Qt.CursorShape.PointingHandCursor)
-                button.clicked.connect(slot)
-                line.row.addWidget(button)
+            # 줄마다 권하는 동작은 하나다. 나머지 둘은 ⋯ 안에 둔다 — 셋을
+            # 늘어놓으면 아홉 줄에 단추가 스물일곱 개 선다.
+            confirm = QPushButton("맞습니다")
+            confirm.setObjectName("Confirm")
+            confirm.setCursor(Qt.CursorShape.PointingHandCursor)
+            confirm.clicked.connect(lambda _=False, t=row["task_id"]: self._confirm(t))
+            line.row.addWidget(confirm)
+
+            more = QPushButton(MORE)
+            more.setObjectName("IconButton")
+            more.setFixedWidth(28)
+            more.setCursor(Qt.CursorShape.PointingHandCursor)
+            more.setToolTip("주기를 고치거나 반복 업무가 아니라고 표시합니다")
+            menu = QMenu(more)      # 메뉴의 부모는 항상 그 메뉴를 여는 버튼이다
+            menu.addAction("주기 수정", lambda t=row["task_id"]: self._edit(t))
+            menu.addAction(
+                "반복 아님",
+                lambda t=row["task_id"], n=row["task_name"]: self._not_recurring(t, n))
+            more.setMenu(menu)
+            line.row.addWidget(more)
 
             column.addWidget(line)
 
@@ -585,15 +631,16 @@ def _review_reason(row) -> str:
 
 
 def _legend() -> str:
-    """격자 범례. status.label()은 이미 기호+문구라 여기서는 기호만 쓴다."""
-    return "   ".join(
-        f"{status.symbol(state)} {text}"
-        for state, text in (
-            (status.CONFIRMED, "담당자가 확인함"),
-            (status.INFERRED, "자료에서 추정"),
-            (status.WEAK, "자료가 부족"),
-        )
-    )
+    """격자 범례. 기호는 예외에만 찍는다 — 확인한 것과 근거가 약한 것.
+
+    처음 연 날에는 모든 막대가 '자료에서 추정'이라, 그 기호까지 찍으면 막대마다
+    같은 기호가 서서 격자가 글자밭이 된다. 농도가 한 번, 기호가 한 번 말한다.
+    """
+    return "   ".join((
+        f"{status.symbol(status.CONFIRMED)} 담당자가 확인함",
+        "표시 없음 — 자료에서 추정",
+        f"{status.symbol(status.WEAK)} 자료가 부족",
+    ))
 
 
 def _elide(text: str, width: int) -> str:
@@ -684,8 +731,8 @@ def _bar(months: list[bool], month: int, state: str) -> QLabel:
     left = radius if starts else 0
     right = radius if ends else 0
 
-    # 구간의 첫 칸에만 기호를 찍는다. 칸마다 반복하면 막대가 글자밭이 된다.
-    bar.setText(status.symbol(state) if starts else "")
+    # 구간의 첫 칸에만, 그리고 예외(확인함·자료 부족)에만 기호를 찍는다.
+    bar.setText(status.symbol(state) if starts and state != status.INFERRED else "")
     bar.setStyleSheet(
         f"background: {fill}; color: {ink}; font-weight: 700;"
         f"border-top-left-radius: {left}px; border-bottom-left-radius: {left}px;"

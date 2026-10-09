@@ -5,6 +5,7 @@
 """
 
 from .common import (
+    MORE,
     Badge,
     Card,
     ElidedLabel,
@@ -20,7 +21,11 @@ from .common import (
     UnknownBlock,
     WrapLabel,
     body_label,
+<<<<<<< Updated upstream
     center_column,
+=======
+    centered_column,
+>>>>>>> Stashed changes
     clear_layout,
     divider,
     doc_icon,
@@ -34,10 +39,11 @@ from .common import (
 )
 from .evidence_drawer import Evidence, EvidenceDrawer
 from .flow_grid import FlowGrid
-from .task_card import MonthStrip, TaskCard, color_for, month_legend
+from .task_card import MonthStrip, TaskCard, month_legend
 from .timeline_grid import TimelineGrid, legend_text
 
 __all__ = [
+    "MORE",
     "Badge",
     "Card",
     "ElidedLabel",
@@ -59,9 +65,12 @@ __all__ = [
     "UnknownBlock",
     "WrapLabel",
     "body_label",
+<<<<<<< Updated upstream
     "center_column",
+=======
+    "centered_column",
+>>>>>>> Stashed changes
     "clear_layout",
-    "color_for",
     "divider",
     "doc_icon",
     "header_margins",

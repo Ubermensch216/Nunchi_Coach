@@ -207,6 +207,8 @@ class DocumentsView(QWidget):
         find.clicked.connect(self.refresh)
         row.addWidget(find)
         reset = QPushButton("초기화")
+        reset.setObjectName("Quiet")
+        reset.setMinimumHeight(theme.CONTROL_H)
         reset.clicked.connect(self._reset_search)
         row.addWidget(reset)
         return row
@@ -250,11 +252,18 @@ class DocumentsView(QWidget):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setShowGrid(False)
         header = self.table.horizontalHeader()
+<<<<<<< Updated upstream
         # 머리글은 칸의 내용과 같은 쪽에 선다. 가운데에 두면 왼쪽으로 붙은
         # 내용과 어긋나 어느 열의 이름인지 눈이 한 번 더 찾는다.
         header.setDefaultAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
+=======
+        # 머리글은 그 아래 값과 같은 쪽에 붙인다. 가운데에 두면 긴 파일명 칸에서
+        # 머리글과 값의 시작점이 멀어져 어느 칸의 이름인지 다시 찾아야 한다.
+        header.setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+>>>>>>> Stashed changes
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for i in range(1, len(COLUMNS)):
             header.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
@@ -496,6 +505,7 @@ class DocumentsView(QWidget):
             self.detail.addWidget(UnknownBlock(self._summary_error[1]))
 
         button = QPushButton("AI 요약 만들기")
+        button.setObjectName("Quiet")
         button.setEnabled(not self._summaries.running)
         button.clicked.connect(lambda _=False, i=row["id"]: self._start_summary(i))
         self.detail.addWidget(button, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -518,7 +528,10 @@ class DocumentsView(QWidget):
         head = QHBoxLayout()
         head.setSpacing(theme.SP_SM)
         head.addWidget(section_title("시점"))
-        head.addWidget(Badge.state(status.of_document_date(row)))
+        # 표시는 예외에만. '자료에서 추정'은 기본 상태라 적지 않는다.
+        date_state = status.of_document_date(row)
+        if date_state != status.INFERRED:
+            head.addWidget(Badge.state(date_state))
         head.addStretch(1)
         self.detail.addLayout(head)
 

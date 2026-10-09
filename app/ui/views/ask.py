@@ -94,6 +94,7 @@ RECENT_LIMIT = 5
 CHIP_LIMIT = 4
 # 원문에서 처음부터 펼쳐 두는 대목 수. 인용된 대목은 이 수와 무관하게 항상 편다.
 OPEN_SECTIONS = 3
+ASK_INPUT_H = 44
 
 SOURCE, VERSIONS, TASK_DOCS = "source", "versions", "task_docs"
 
@@ -166,22 +167,29 @@ class AskView(QWidget):
             Qt.AlignmentFlag.AlignVCenter,
         )
         title_row.addStretch(1)
+        self.history = QPushButton("내 질문 기록")
+        self.history.setObjectName("Quiet")
+        self.history.setCursor(Qt.CursorShape.PointingHandCursor)
+        title_row.addWidget(self.history)
         head.addLayout(title_row)
 
+        # 묻는 칸이 이 화면에서 가장 먼저 손이 가는 자리다. 다른 입력칸보다
+        # 한 단계 크게 둔다.
         row = QHBoxLayout()
         row.setSpacing(theme.SP_SM)
         self.input = QLineEdit()
-        self.input.setPlaceholderText("작년 행감 때 수질 관련해서 뭘 제출했어?")
-        self.input.setMinimumHeight(theme.CONTROL_H)
+        self.input.setPlaceholderText("예: 작년 행감 때 수질 관련해서 뭘 제출했어?")
+        self.input.setMinimumHeight(ASK_INPUT_H)
         self.input.returnPressed.connect(self._ask)
         row.addWidget(self.input, 1)
         self.send = QPushButton("질문")
         self.send.setObjectName("Primary")
-        self.send.setMinimumHeight(theme.CONTROL_H)
-        self.send.setMinimumWidth(88)
+        self.send.setMinimumHeight(ASK_INPUT_H)
+        self.send.setMinimumWidth(96)
         self.send.clicked.connect(self._ask)
         row.addWidget(self.send)
         self.cancel_question = QPushButton("질문 취소")
+        self.cancel_question.setMinimumHeight(ASK_INPUT_H)
         self.cancel_question.clicked.connect(self._cancel_question)
         self.cancel_question.hide()
         row.addWidget(self.cancel_question)
@@ -199,11 +207,6 @@ class AskView(QWidget):
         self.chip_row.setSpacing(theme.SP_SM)
         chips.addLayout(self.chip_row)
         chips.addStretch(1)
-        self.history = QPushButton("내 질문 기록")
-        self.history.setObjectName("Quiet")
-        self.history.setMinimumHeight(theme.CONTROL_H - 4)
-        self.history.setCursor(Qt.CursorShape.PointingHandCursor)
-        chips.addWidget(self.history)
         head.addLayout(chips)
 
         # 범위 — 화면에서 고른 것이 질문 문장에서 읽어 낸 것을 이긴다.
@@ -284,17 +287,27 @@ class AskView(QWidget):
             ((SOURCE, "근거 원문"), (VERSIONS, "버전 비교"), (TASK_DOCS, "이 업무의 문서"))
         )
         self.reader_tabs.switched.connect(self._switch_reader)
+<<<<<<< Updated upstream
         # 밑줄 탭은 판 안쪽으로 들여 세우고 아래에 줄을 긋는다 — 판의 모서리에
         # 붙으면 밑줄이 테두리와 겹쳐 탭인지 테두리인지 읽히지 않는다.
         self.reader_tabs.layout().setContentsMargins(theme.SP_LG, theme.SP_SM, theme.SP_LG, 0)
         column.addWidget(self.reader_tabs)
         column.addWidget(divider())
+=======
+        tab_row = QHBoxLayout()
+        tab_row.setContentsMargins(theme.SP_LG, theme.SP_SM, theme.SP_LG, 0)
+        tab_row.addWidget(self.reader_tabs)
+        column.addLayout(tab_row)
+>>>>>>> Stashed changes
 
+        # 스크롤 영역이 흰색을 칠하면 판의 둥근 모서리를 덮는다. 바탕을 비운다.
         scroll = QScrollArea()
+        scroll.setObjectName("AnswerPane")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         body = QWidget()
+        body.setObjectName("PaneBody")
         self.reader_column = QVBoxLayout(body)
         self.reader_column.setContentsMargins(
             theme.SP_LG, theme.SP_LG, theme.SP_LG, theme.SP_LG
@@ -636,6 +649,7 @@ class AskView(QWidget):
 
         for label, question in _followup_questions(self._answer):
             button = QPushButton(label)
+            button.setObjectName("Quiet")
             button.setToolTip(f"이렇게 묻습니다: {question}")
             button.clicked.connect(lambda _=False, q=question: self._ask_text(q))
             row.addWidget(button)
@@ -644,6 +658,7 @@ class AskView(QWidget):
         # 사람이 판단할 수 없다 — 고를 수 없는 선택지는 답을 왜곡한다.
         for label, rating in (("맞습니다", "helpful"), ("사실과 다릅니다", "inaccurate")):
             button = QPushButton(label)
+            button.setObjectName("Quiet")
             button.clicked.connect(lambda _=False, r=rating, b=button: self._rate(r, b))
             row.addWidget(button)
         row.addStretch(1)
@@ -700,7 +715,11 @@ class AskView(QWidget):
         if answer.related_docs:
             card.body.addWidget(muted_label("대신 찾은 문서", small=True))
             for related in answer.related_docs:
+<<<<<<< Updated upstream
                 open_btn = doc_icon(QPushButton(related.filename))
+=======
+                open_btn = QPushButton(related.filename)
+>>>>>>> Stashed changes
                 open_btn.setObjectName("Link")
                 open_btn.clicked.connect(lambda _=False, p=related.path: self._open(p))
                 card.body.addWidget(open_btn, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -1123,11 +1142,17 @@ def _linkify_citations(text: str) -> str:
     """
     escaped = html.escape(text or "")
     return _CITATION_MARK.sub(
+<<<<<<< Updated upstream
         # 색을 직접 준다. 맡겨 두면 QLabel은 팔레트의 링크 색을 쓰는데, 그 색이
         # 흰 바탕에서 거의 안 보였다 — 근거 표시는 이 화면에서 가장 잘 보여야 한다.
         lambda m: (
             f'<a href="{m.group(1)}" style="color:{theme.PRIMARY}; font-weight:700; '
             f'text-decoration:none;">[{m.group(1)}]</a>'
+=======
+        lambda m: (
+            f'<a href="{m.group(1)}" style="text-decoration:none; '
+            f'color:{theme.PRIMARY};">[{m.group(1)}]</a>'
+>>>>>>> Stashed changes
         ),
         escaped,
     )

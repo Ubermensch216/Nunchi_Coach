@@ -14,6 +14,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtGui import QAction  # noqa: E402
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton  # noqa: E402
 
 from app.core import reconstruction as rc, workcard, workstate as ws  # noqa: E402
@@ -81,6 +82,11 @@ def button(widget, text: str) -> QPushButton:
     return next(b for b in widget.findChildren(QPushButton) if b.text() == text)
 
 
+def action(widget, text: str) -> QAction:
+    """줄 끝 ⋯ 메뉴 안의 동작."""
+    return next(a for a in widget.findChildren(QAction) if a.text() == text)
+
+
 # ── 카드 ────────────────────────────────────────────────────────────
 
 def test_card_gathers_everything_a_successor_needs_from_the_materials_alone(restored):
@@ -146,9 +152,17 @@ def test_task_opens_on_the_work_tab_with_the_next_action_first(view):
     assert view._tab == tasks_view.WORK
     assert view.stack.currentWidget() is view.pages[tasks_view.WORK]
     shown = texts(view.pages[tasks_view.WORK])
+<<<<<<< Updated upstream
     # 할 수 있는 일이 '다음 행동'의 첫 줄이다 — 이름표 바로 아래에 값으로 선다.
     assert shown.index("지금 할 수 있는 일") + 1 == next(
         i for i, t in enumerate(shown) if t.startswith("'집계 자료 준비'"))
+=======
+    # 맨 위에는 답 하나만 선다 — 지금 할 수 있는 일.
+    assert "지금 할 수 있는 일" in shown
+    assert any(t.startswith("'집계 자료 준비' 단계를 진행할 수 있습니다") for t in shown)
+    # 확인할 일은 '확인이 필요한 정보'가 맡는다. 첫머리에 같은 문장을 또 적지 않는다.
+    assert not any(t.startswith("◐ 확인 —") for t in shown)
+>>>>>>> Stashed changes
     assert "기획예산과" in shown
     assert any(t.startswith("문서에 적힌 절차입니다.") for t in shown)
     assert any("지난 회차에 이렇게 했다는 기록입니다" in t for t in shown)
@@ -174,11 +188,17 @@ def test_steps_are_recorded_only_by_the_user_and_the_next_action_moves_on(view):
     card = workcard.build(db, 1)
     assert card.stated_steps[0]["run_state"] == ws.DONE and card.progress["stated_done"] == 1
     shown = texts(view.pages[tasks_view.WORK])
+<<<<<<< Updated upstream
     assert "지금 할 수 있는 일" in shown
     assert any(t.startswith("'실적표 작성'") for t in shown)
+=======
+    assert any(t.startswith("'실적표 작성' 단계를 진행할 수 있습니다") for t in shown)
+>>>>>>> Stashed changes
     assert "3단계 중 1단계 완료 · 확인할 것 2건" in shown
-    # 되돌릴 수 있다.
-    button(view.pages[tasks_view.WORK], "완료 취소").click()
+    # 단추는 지금 차례인 단계에만 선다. 끝낸 단계는 ⋯ 안에서 되돌린다.
+    assert [b.text() for b in view.pages[tasks_view.WORK].findChildren(QPushButton)
+            ].count("완료로 기록") == 1
+    action(view.pages[tasks_view.WORK], "완료 취소").trigger()
     assert workcard.build(db, 1).stated_steps[0]["run_state"] == ws.IN_PROGRESS
 
 
@@ -191,7 +211,8 @@ def test_blocked_step_says_so_while_other_steps_stay_usable(view):
 
 def test_confirming_a_value_is_optional_and_recorded(view):
     db = view.db
-    button(view.pages[tasks_view.WORK], "맞습니다").click()
+    # 값마다 단추를 늘어놓지 않는다. 확인·고치기는 줄 끝의 ⋯ 안에 있다.
+    action(view.pages[tasks_view.WORK], "맞습니다").trigger()
     confirmed = [i for i in db.task_items(1) if i["human_state"] == ws.SUCCESSOR]
     assert len(confirmed) == 1
     assert db.con.execute("SELECT COUNT(*) FROM reviews").fetchone()[0] == 1

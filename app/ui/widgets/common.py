@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -26,6 +26,9 @@ from ...core import status
 from .. import theme
 
 DETAIL_WIDTH = 520   # 빈 상태 설명문 폭. 한글은 한 줄이 너무 길면 읽기 어렵다.
+# 줄 끝 '더 보기' 단추의 글자. 말줄임표(⋯)는 맑은 고딕에서 점이 너무 작아
+# 단추로 보이지 않는다. 굵은 점 셋을 쓴다.
+MORE = "•••"
 
 
 def open_original(parent: QWidget, db, path: str) -> None:
@@ -172,14 +175,35 @@ class _WrapFrame(QFrame):
         super().__init__(parent)
         fit_wrapped_text(self)
 
+    def event(self, event) -> bool:  # noqa: N802 — Qt 규약
+        if event.type() == QEvent.Type.LayoutRequest:
+            self._sync_height_policy()
+        return super().event(event)
+
+    def _sync_height_policy(self) -> None:
+        """안에 줄바꿈 글자가 있을 때만 '폭에 따른 높이'를 켠다.
+
+        켜 두기만 하면 안 된다. 부모 레이아웃은 그 표시를 보고 이 판의
+        레이아웃에 높이를 직접 묻는데, 안에 줄바꿈 글자가 하나도 없으면
+        레이아웃은 -1을 답하고 판은 **높이 1로 접힌다** — 접어 둔 '인계 준비
+        점검'이 가는 선 하나로 나왔다. 내용이 바뀔 때마다 표시를 맞춘다.
+        """
+        layout = self.layout()
+        wants = bool(layout is not None and layout.hasHeightForWidth())
+        policy = self.sizePolicy()
+        if policy.hasHeightForWidth() != wants:
+            policy.setHeightForWidth(wants)
+            self.setSizePolicy(policy)
+
     def hasHeightForWidth(self) -> bool:  # noqa: N802 — Qt 규약
-        return True
+        layout = self.layout()
+        return bool(layout is not None and layout.hasHeightForWidth())
 
     def heightForWidth(self, width: int) -> int:  # noqa: N802 — Qt 규약
         layout = self.layout()
         if layout is not None and layout.hasHeightForWidth():
             return layout.heightForWidth(width)
-        return super().heightForWidth(width)
+        return self.sizeHint().height()
 
 
 def view_title(text: str) -> QLabel:
@@ -391,7 +415,7 @@ def divider() -> QFrame:
 
 
 class TabBar(QWidget):
-    """화면 안 탭. 사이드바 메뉴와 헷갈리지 않도록 밑줄 형태로 만든다.
+    """화면 안 탭. 글자와 밑줄뿐이다 — 상단 메뉴(칠한 판)와 모양으로 구분된다.
 
     탭 이름에 건수를 달 수 있는 것이 요점이다 — 사용자가 **누르기 전에**
     규모를 안다. 한 줄로 이어 붙였을 때는 끝까지 스크롤해야 알 수 있었다.
@@ -404,9 +428,13 @@ class TabBar(QWidget):
         self.setObjectName("TabBar")
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
+<<<<<<< Updated upstream
         # 밑줄 탭은 테두리가 없어 간격만이 경계다. 좁으면 건수·◐ 표시가 어느
         # 탭의 것인지 읽히지 않는다.
         row.setSpacing(theme.SP_XL)
+=======
+        row.setSpacing(0)
+>>>>>>> Stashed changes
 
         self._group = QButtonGroup(self)
         self._group.setExclusive(True)
@@ -536,6 +564,7 @@ class IconChoice(QWidget):
             button._icon_mark.setPixmap(art)
 
 
+<<<<<<< Updated upstream
 def _center(row: QHBoxLayout, holder: QWidget, max_width: int) -> None:
     """기둥을 줄 가운데에 세운다. 폭 상한이 없으면 줄을 다 쓴다."""
     if not max_width:
@@ -570,14 +599,36 @@ def center_column(max_width: int = 0) -> tuple[QHBoxLayout, QVBoxLayout]:
 def header_margins(top: int, bottom: int = 0) -> tuple[int, int, int, int]:
     """머리 띠의 여백. 오른쪽은 본문의 스크롤바 자리만큼 더 둔다(Page 참고)."""
     return (theme.SP_XL, top, theme.SP_XL + theme.SCROLLBAR_W, bottom)
+=======
+def centered_column(max_width: int = theme.CONTENT_MAX_W) -> tuple[QWidget, QWidget]:
+    """(바깥 그릇, 가운데 기둥). 기둥은 max_width를 넘지 않고 가운데에 선다.
+
+    머리 띠와 본문이 **같은 폭 규칙**을 써야 제목의 왼쪽 끝과 카드의 왼쪽 끝이
+    한 줄에 선다. 둘이 따로 폭을 정하면 창을 넓힐 때 서로 어긋난다.
+    기둥에 레이아웃을 채우는 것은 호출부가 한다.
+    """
+    outer = QWidget()
+    outer.setObjectName("HeaderColumn")
+    row = QHBoxLayout(outer)
+    row.setContentsMargins(theme.SP_XL, 0, theme.SP_XL, 0)
+    row.setSpacing(0)
+    column = QWidget()
+    column.setObjectName("HeaderColumn")
+    column.setMaximumWidth(max_width)
+    row.addStretch(1)
+    row.addWidget(column, 1000)
+    row.addStretch(1)
+    return outer, column
+>>>>>>> Stashed changes
 
 
 class Page(QWidget):
     """탭 하나의 내용. 각자 스크롤한다 — 탭을 바꿔도 남의 스크롤이 따라오지 않는다.
 
     바탕은 흰색이 아니라 한 단계 낮춘 회색이다. 흰 종이 위에 흰 카드를
-    올리면 카드가 카드로 보이지 않는다 — 시인성 문제 절반이 거기서 왔다.
+    올리면 카드가 카드로 보이지 않는다.
 
+<<<<<<< Updated upstream
     max_width를 주면 본문 기둥의 폭을 묶고 **가운데에 세운다.** 창을 넓혔을 때
     한 줄이 끝없이 길어지면 다음 줄 첫 글자를 눈이 못 찾는다. 예전에는 묶은
     기둥을 왼쪽에 붙여서, 넓은 창에서는 오른쪽 3분의 1이 빈 채로 화면이 한쪽으로
@@ -586,9 +637,15 @@ class Page(QWidget):
     기둥이 서는 자리는 스크롤바가 있든 없든 같다. 스크롤바가 없을 때는 그 폭만큼
     오른쪽 여백을 더 둔다 — 그래야 내용이 길어져 스크롤바가 생기는 순간 본문이
     옆으로 밀리지 않고, 머리 띠의 기둥(center_column)과도 왼쪽 끝이 맞는다.
+=======
+    본문 기둥은 max_width를 넘지 않고 **가운데에** 선다. 창을 넓혔을 때 한
+    줄이 끝없이 길어지면 다음 줄 첫 글자를 눈이 못 찾고, 왼쪽에 몰아 두면
+    넓은 화면의 오른쪽이 빈 채로 남는다. 0을 주면 폭을 묶지 않는다.
+>>>>>>> Stashed changes
     """
 
-    def __init__(self, max_width: int = 0, parent: QWidget | None = None):
+    def __init__(self, max_width: int = theme.CONTENT_MAX_W,
+                 parent: QWidget | None = None):
         super().__init__(parent)
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
@@ -599,19 +656,39 @@ class Page(QWidget):
         body = QWidget()
         body.setObjectName("PageBody")
         body.setAutoFillBackground(True)
+<<<<<<< Updated upstream
         self._gutter = QHBoxLayout(body)
         self._gutter.setContentsMargins(
             theme.SP_XL, theme.SP_LG, theme.SP_XL + theme.SCROLLBAR_W, theme.SP_XL
+=======
+        outer_body = QHBoxLayout(body)
+        outer_body.setContentsMargins(
+            theme.SP_XL, theme.SP_XL, theme.SP_XL, theme.SP_2XL
+>>>>>>> Stashed changes
         )
         self._gutter.setSpacing(0)
 
         holder = QWidget()
         holder.setObjectName("PageColumn")
+<<<<<<< Updated upstream
+=======
+        self._holder = holder
+>>>>>>> Stashed changes
         self.column = QVBoxLayout(holder)
         self.column.setContentsMargins(0, 0, 0, 0)
         self.column.setSpacing(theme.SP_LG)
         self.column.setAlignment(Qt.AlignmentFlag.AlignTop)
+<<<<<<< Updated upstream
         _center(self._gutter, holder, max_width)
+=======
+        if max_width:
+            holder.setMaximumWidth(max_width)
+            outer_body.addStretch(1)
+            outer_body.addWidget(holder, 1000)
+            outer_body.addStretch(1)
+        else:
+            outer_body.addWidget(holder, 1)
+>>>>>>> Stashed changes
         scroll.setWidget(body)
         scroll.verticalScrollBar().rangeChanged.connect(self._reserve_gutter)
 
@@ -632,7 +709,12 @@ class Page(QWidget):
 
 
 class Badge(QLabel):
-    """상태 뱃지. 색만으로 구분하지 않도록 항상 기호와 글자를 함께 쓴다."""
+    """상태 뱃지. 색만으로 구분하지 않도록 항상 기호와 글자를 함께 쓴다.
+
+    **예외에만 붙인다.** 처음 연 프로젝트는 모든 값이 '자료에서 추정'이다 —
+    그 기본 상태에 줄마다 뱃지를 붙이면 화면이 뱃지로 덮이고, 정작 사람이
+    확인한 것과 주의할 것이 묻힌다. kind는 neutral·attention·danger·ok·accent.
+    """
 
     def __init__(self, text: str, kind: str = "neutral", parent: QWidget | None = None):
         super().__init__(text, parent)
@@ -667,18 +749,18 @@ class Card(_WrapFrame):
         super().__init__(parent)
         self.setObjectName(f"Card{tone.capitalize()}" if tone else "Card")
         self.body = QVBoxLayout(self)
-        self.body.setContentsMargins(theme.SP_LG, theme.SP_LG, theme.SP_LG, theme.SP_LG)
+        self.body.setContentsMargins(20, theme.SP_LG, 20, theme.SP_LG)
         self.body.setSpacing(theme.SP_MD)
 
 
 class SubPanel(_WrapFrame):
-    """카드 안에서 근거를 묶는 옅은 판. 어디까지가 근거인지 경계를 만든다."""
+    """카드 안에서 한 단계 물린 자리. 테두리 없이 옅은 바탕으로만 묶는다."""
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("SubPanel")
         self.body = QVBoxLayout(self)
-        self.body.setContentsMargins(theme.SP_MD, theme.SP_SM, theme.SP_MD, theme.SP_SM)
+        self.body.setContentsMargins(theme.SP_MD, theme.SP_MD, theme.SP_MD, theme.SP_MD)
         self.body.setSpacing(theme.SP_XS)
 
 
@@ -693,7 +775,7 @@ class ListRow(QFrame):
         super().__init__(parent)
         self.setObjectName("ListRow")
         self.row = QHBoxLayout(self)
-        self.row.setContentsMargins(theme.SP_MD, theme.SP_SM, theme.SP_MD, theme.SP_SM)
+        self.row.setContentsMargins(theme.SP_LG, theme.SP_MD, theme.SP_LG, theme.SP_MD)
         self.row.setSpacing(theme.SP_MD)
 
 
@@ -773,7 +855,7 @@ class EmptyState(QWidget):
     ):
         super().__init__(parent)
         column = QVBoxLayout(self)
-        column.setContentsMargins(0, theme.SP_XL * 2, 0, 0)
+        column.setContentsMargins(0, theme.SP_XL * 2, 0, theme.SP_XL)
         column.setSpacing(theme.SP_MD)
         # 세로 정렬만 건다. AlignHCenter를 레이아웃에 걸면 자식이 제 sizeHint
         # 폭만 차지해서, 설명문이 칸이 넓어져도 좁은 기둥으로 접힌다. 가운데

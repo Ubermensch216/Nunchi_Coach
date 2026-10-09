@@ -144,7 +144,7 @@ def test_the_home_lists_what_is_missing_per_task(db: Database, qapp):
     view = TasksView(db)
     try:
         texts = [w.text() for w in view.findChildren(QLabel) if w.text()]
-        assert any("업무기억 건강도" in t for t in texts)
+        assert any("인계 준비 점검" in t for t in texts)
         assert any("묶인 문서가 없습니다" in t for t in texts)
     finally:
         view.setParent(None)

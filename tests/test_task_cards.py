@@ -16,7 +16,7 @@ from PySide6.QtWidgets import QApplication, QLabel, QWidget  # noqa: E402
 
 from app.core import status  # noqa: E402
 from app.ui import theme  # noqa: E402
-from app.ui.widgets import FlowGrid, MonthStrip, TaskCard, color_for  # noqa: E402
+from app.ui.widgets import FlowGrid, MonthStrip, TaskCard  # noqa: E402
 from app.ui.widgets.flow_grid import MAX_COLUMNS, MIN_CARD_WIDTH  # noqa: E402
 
 
@@ -37,17 +37,16 @@ def _card(**overrides) -> TaskCard:
     return TaskCard(**base)
 
 
-# ── 색 인덱싱 ───────────────────────────────────────────────────────
+# ── 색 ──────────────────────────────────────────────────────────────
 
-def test_same_task_name_always_gets_the_same_color():
-    """색은 장식이 아니라 인덱스다 — 재실행해도 같아야 한다."""
-    assert color_for("행정사무감사") == color_for("행정사무감사")
+def test_cards_do_not_paint_themselves_in_per_task_colors(qapp):
+    """카드마다 다른 색 띠를 두르지 않는다 — 강조색은 하나뿐이다.
 
-
-def test_different_task_names_usually_differ_in_color():
-    names = ["행정사무감사", "예산관리", "수질통계", "계약관리", "업무계획"]
-    colors = {color_for(n) for n in names}
-    assert len(colors) >= 3, "색이 지나치게 겹치면 카드 구분이 안 된다"
+    업무 이름으로 색을 고르던 때에는 아홉 장이 여덟 색으로 늘어섰고, 빨강을
+    받은 업무는 오류처럼 보였다. 색은 '하는 달'만 말하고, 업무 구분은 이름이 한다.
+    """
+    first, second = _card(name="행정사무감사"), _card(name="예산관리")
+    assert first.styleSheet() == second.styleSheet() == ""
 
 
 # ── 카드 내용 ───────────────────────────────────────────────────────
@@ -79,14 +78,31 @@ def test_card_without_cycle_shows_empty_strip_and_says_so(qapp):
 
 
 def test_card_shows_review_badge_only_when_needed(qapp):
+    """표시는 예외에만 붙는다.
+
+    처음 연 프로젝트는 모든 업무가 '자료에서 추정'이다. 그 기본 상태에까지
+    '확인 필요'를 달면 카드 아홉 장이 똑같이 주황색이 되어, 묶음이 느슨해
+    정말 살펴봐야 할 업무가 묻힌다.
+    """
     # 카드를 지역 변수로 붙들어야 한다 — 임시 객체로 두면 findChildren이
     # 도는 사이 파이썬 GC가 카드를 수거해 C++ 쪽 위젯이 먼저 파괴된다.
-    reviewed = _card(review_state=status.INFERRED)
+    loose = _card(review_state=status.WEAK, confidence="low")
+    usual = _card(review_state=status.INFERRED)
     clean = _card(review_state=status.CONFIRMED)
-    texts_review = [l.text() for l in reviewed.findChildren(QLabel) if l.text()]
+    texts_loose = [l.text() for l in loose.findChildren(QLabel) if l.text()]
+    texts_usual = [l.text() for l in usual.findChildren(QLabel) if l.text()]
     texts_clean = [l.text() for l in clean.findChildren(QLabel) if l.text()]
-    assert any("확인 필요" in t for t in texts_review)
+    assert any("확인 필요" in t for t in texts_loose)
+    assert not any("확인 필요" in t for t in texts_usual)
     assert not any("확인 필요" in t for t in texts_clean)
+
+
+def test_card_marks_the_tasks_of_this_month(qapp):
+    """이번 달에 걸린 업무는 카드에서 바로 보인다 — 일정 화면까지 가지 않아도."""
+    now = _card(now=True)
+    later = _card()
+    assert any(l.text() == "이번 달" for l in now.findChildren(QLabel))
+    assert not any(l.text() == "이번 달" for l in later.findChildren(QLabel))
 
 
 def test_confirmed_card_says_it_is_confirmed(qapp):

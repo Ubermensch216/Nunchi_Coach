@@ -1,4 +1,4 @@
-"""애플리케이션 셸 — 상단 상태 바 + 4메뉴 사이드바 + 본문.
+"""애플리케이션 셸 — 상단 띠(메뉴 넷 + 상태) + 본문.
 
 메뉴는 넷뿐이다. 각각 후임자의 질문 하나에 대응한다.
   업무  What + How   내 업무는 뭐고, 뭐부터 읽고, 어떻게 처리하나
@@ -46,21 +46,20 @@ NAV = [
     ("ask", "ask", "질문", "자료에 직접 물어본다"),
 ]
 
-# 가로 띠에서는 메뉴가 글자만으로 선다. 아이콘을 함께 넣으면 넷이 한 줄에
-# 늘어서면서 폭을 두 배로 먹고, 정작 오른쪽 상태 문구가 밀려난다.
-# 아이콘 체계(icons.py)는 설정 창처럼 세로 목록이 있는 곳에서 계속 쓴다.
+# 가로 띠에서는 메뉴가 글자만으로 선다. 아이콘 체계(icons.py)는 설정 창처럼
+# 세로 목록이 있는 곳에서 쓴다.
 
 
 class TopBar(QWidget):
-    """검은 띠 하나에 길과 상태를 모두 담는다 (디자인 개선안 1c).
+    """흰 띠 하나에 길과 상태를 담는다.
 
-    왼쪽부터 제품·프로젝트 → 메뉴 넷 → 오른쪽에 지금 상태. 세로 사이드바를
-    쓰던 것을 가로 띠로 바꾼 이유는 본문이다 — 질문 화면이 '답변 | 근거 원문'
-    두 칸을 쓰는데 왼쪽에 216px 메뉴까지 서면 원문 칸이 대조하기 어려운 폭이
-    된다. 메뉴는 하루에 몇 번 누르고 본문은 내내 읽는다.
+    왼쪽부터 제품·프로젝트 → 메뉴 넷 → 오른쪽에 지금 상태. 세로 사이드바 대신
+    가로 띠를 쓰는 이유는 본문이다 — 질문 화면이 '답변 | 근거 원문' 두 칸을
+    쓰는데 왼쪽에 메뉴 기둥까지 서면 원문 칸이 대조하기 어려운 폭이 된다.
+    메뉴는 하루에 몇 번 누르고 본문은 내내 읽는다.
 
-    띠를 어둡게 두는 것은 색을 늘리는 것이 아니라 **길과 내용을 가르는** 일이다.
-    본문은 그대로 무채색 종이로 남는다.
+    띠는 조용해야 한다. 오른쪽 상태 문구들은 모두 회색 작은 글자로 물러서
+    있고, 눈에 띄는 것은 고른 메뉴 하나뿐이다.
     """
 
     settings_requested = Signal()
@@ -76,7 +75,7 @@ class TopBar(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         row = QHBoxLayout(self)
-        row.setContentsMargins(theme.SP_LG, 0, theme.SP_LG, 0)
+        row.setContentsMargins(theme.SP_XL, 0, theme.SP_LG, 0)
         row.setSpacing(theme.SP_SM)
 
         # 표지는 선으로 다시 그린 것을 쓴다. 흰 바탕째인 logo.png를 줄여 올리면
@@ -84,24 +83,21 @@ class TopBar(QWidget):
         art = icons.brand(theme.NAVBAR_TEXT, theme.TOPBAR_H - 24)
         if art is not None:
             mark = QLabel()
+<<<<<<< Updated upstream
             mark.setPixmap(art)
+=======
+            mark.setPixmap(
+                QPixmap(str(logo_path)).scaledToHeight(
+                    26, Qt.TransformationMode.SmoothTransformation
+                )
+            )
+>>>>>>> Stashed changes
             row.addWidget(mark)
 
         name = QLabel("눈치코치")
         name.setObjectName("AppName")
         row.addWidget(name)
-
-        # 어떤 인수인계를 보고 있는지 항상 적어 둔다. 프로젝트가 여럿이 되면
-        # 화면만 봐서는 구별되지 않는다 — 업무 목록도 문서 목록도 남의 것과
-        # 똑같이 생겼다. 누르면 다른 인수인계로 갈아탄다.
-        self.project = QPushButton(project_name or "프로젝트")
-        self.project.setObjectName("TopLink")
-        self.project.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.project.setToolTip("지금 열려 있는 인수인계 — 눌러서 다른 인수인계로 바꿉니다")
-        self.project.clicked.connect(self.project_requested.emit)
-        row.addWidget(self.project)
-
-        row.addWidget(_bar_divider())
+        row.addSpacing(theme.SP_MD)
 
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
@@ -111,9 +107,8 @@ class TopBar(QWidget):
             button.setObjectName("NavTab")
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
-            # 메뉴 이름 아래 적던 질문은 띠에서는 들어갈 자리가 없다. 버리지
-            # 않고 툴팁으로 옮긴다 — 처음 쓰는 사람에게 이 넷이 각각 무엇에
-            # 답하는지가 이 제품의 뼈대다.
+            # 메뉴가 답하는 질문은 툴팁에 둔다 — 처음 쓰는 사람에게 이 넷이
+            # 각각 무엇에 답하는지가 이 제품의 뼈대다.
             button.setToolTip(f"{label} — {question}  (Ctrl+{index})")
             button.clicked.connect(lambda _=False, k=key: self.navigated.emit(k))
             self.group.addButton(button)
@@ -122,8 +117,22 @@ class TopBar(QWidget):
 
         row.addStretch(1)
 
-        # 인수인계 진행도. 사이드바가 없어진 자리를 대신한다 — 어느 화면에
-        # 있든 "얼마나 남았나"가 보여야 확인 작업이 끝이 있는 일로 느껴진다.
+        self.progress = QProgressBar()
+        self.progress.setObjectName("TopProgress")
+        self.progress.setFixedWidth(120)
+        self.progress.setTextVisible(False)
+        self.progress.hide()
+        row.addWidget(self.progress)
+
+        self.status = QPushButton("자료 폴더를 연결하세요")
+        self.status.setObjectName("TopLink")
+        self.status.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.status.setToolTip("분석 상태 — 눌러서 단계별 진행과 읽지 못한 파일을 봅니다")
+        self.status.clicked.connect(self.status_clicked.emit)
+        row.addWidget(self.status)
+
+        # 인수인계 진행도. 어느 화면에 있든 "얼마나 남았나"가 보여야 확인
+        # 작업이 끝이 있는 일로 느껴진다.
         self.handover = QPushButton("")
         self.handover.setObjectName("TopHandover")
         self.handover.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -131,20 +140,25 @@ class TopBar(QWidget):
         self.handover.hide()
         row.addWidget(self.handover)
 
-        self.progress = QProgressBar()
-        self.progress.setObjectName("TopProgress")
-        self.progress.setFixedWidth(140)
-        self.progress.setTextVisible(False)
-        self.progress.hide()
-        row.addWidget(self.progress)
+        row.addWidget(_bar_divider())
 
-        # 이 도구가 지키는 약속. 상태 문구 앞에 붙여 늘 함께 보이게 한다 —
-        # 원본을 건드리지 않는다는 것이 이 제품 채택의 조건이다.
+        # 어떤 인수인계를 보고 있는지 항상 적어 둔다. 프로젝트가 여럿이 되면
+        # 화면만 봐서는 구별되지 않는다. 누르면 다른 인수인계로 갈아탄다.
+        self.project = QPushButton(f"{project_name or '프로젝트'}  ▾")
+        self.project.setObjectName("TopLink")
+        self.project.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.project.setToolTip("지금 열려 있는 인수인계 — 눌러서 다른 인수인계로 바꿉니다")
+        self.project.clicked.connect(self.project_requested.emit)
+        row.addWidget(self.project)
+
+        # 이 도구가 지키는 약속 — 원본을 건드리지 않는다는 것이 이 제품
+        # 채택의 조건이다. 늘 보이되 소리치지 않는다.
         self.promise = QLabel("읽기 전용")
         self.promise.setObjectName("TopPromise")
         self.promise.setToolTip("원본을 수정·이동·삭제·이름 변경하지 않습니다")
         row.addWidget(self.promise)
 
+<<<<<<< Updated upstream
         self.status = QPushButton("자료원이 없습니다")
         self.status.setObjectName("TopLink")
         self.status.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -160,6 +174,12 @@ class TopBar(QWidget):
         settings.setCursor(Qt.CursorShape.PointingHandCursor)
         settings.setToolTip("설정")
         settings.setAccessibleName("설정")
+=======
+        settings = QPushButton("설정")
+        settings.setObjectName("TopLink")
+        settings.setCursor(Qt.CursorShape.PointingHandCursor)
+        settings.setToolTip("글자 크기·테마·자료 폴더·로컬 AI")
+>>>>>>> Stashed changes
         settings.clicked.connect(self.settings_requested.emit)
         row.addWidget(settings)
 
@@ -196,7 +216,7 @@ class TopBar(QWidget):
             self.handover.hide()
             return
         self.handover.show()
-        self.handover.setText(f"인수인계 {progress.percent}%")
+        self.handover.setText(f"인수인계 확인 {progress.percent}%")
         lines = [area.sentence() for area in progress.measured]
         nxt = progress.next_step()
         if nxt is not None:
@@ -268,6 +288,7 @@ class MainWindow(QMainWindow):
         # 업무 화면에서 확인·교정이 일어나면 상단 띠의 진행도가 그 자리에서 오른다.
         self.views["tasks"].state_changed.connect(self._sync_handover)
         self.views["calendar"].open_task.connect(self._open_task_from_calendar)
+        self.views["calendar"].go_tasks.connect(lambda: self.go("tasks"))
         # 답변의 근거 문서가 어느 업무의 것인지 눌러서 갈 수 있어야 한다.
         # 텍스트로만 적혀 있으면 "그래서 그 업무가 어디 있는데?"로 끝난다.
         self.views["ask"].open_task.connect(self._open_task_from_calendar)
@@ -311,7 +332,7 @@ class MainWindow(QMainWindow):
         self.topbar.setEnabledNav(has_source)
         if not has_source:
             self.stack.setCurrentWidget(self.views["onboarding"])
-            self.topbar.show_idle("자료원이 없습니다")
+            self.topbar.show_idle("자료 폴더를 연결하세요")
             return
 
         self._sync_handover()

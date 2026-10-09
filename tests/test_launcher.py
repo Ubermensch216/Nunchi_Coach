@@ -25,6 +25,7 @@ from app.ui import theme  # noqa: E402
 from app.ui.shell import MainWindow  # noqa: E402
 from app.ui.views import launcher as launcher_view  # noqa: E402
 from app.ui.views.launcher import LauncherDialog, _ProjectRow  # noqa: E402
+from app.ui.widgets import MORE  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -222,7 +223,7 @@ def test_destructive_actions_do_not_sit_next_to_open(make_dialog, tmp_path: Path
     row = _rows(make_dialog(tmp_path))[0]
 
     buttons = [b.text() for b in row.findChildren(launcher_view.QPushButton)]
-    assert buttons == ["⋯", "열기"]
+    assert buttons == [MORE, "열기"]
     assert [a.text() for a in row.menu.actions() if a.text()] == [
         "이름 바꾸기", "목록에서 빼기", "완전 삭제"
     ]
