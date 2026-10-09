@@ -323,3 +323,39 @@ def test_scanner_marks_non_document_extensions_as_skipped(project, tmp_path: Pat
     )
     assert status["사진.jpg"] == "skipped"
     assert status["보고서.txt"] == "pending"
+
+
+def test_scanner_leaves_the_programs_own_files_alone(project, tmp_path: Path):
+    """프로젝트를 자료 폴더 안에 둬도 로그·보관소가 전임자 문서로 잡히지 않는다."""
+    root = tmp_path / "원본"
+    (root / "logs").mkdir(parents=True)
+    (root / "보고서.txt").write_text("내용", encoding="utf-8")
+    (root / "logs" / "diagnostic.log").write_text("x", encoding="utf-8")
+    (root / "project.db.bak-v6").write_bytes(b"db")
+    source_id = project.add_source(root)
+
+    # 예전 판은 이것들을 문서로 올려 뒀다 — 다음 훑기에서 걷어내야 한다.
+    scanner.scan_source(project, source_id, root)
+    own = [root / "logs", root / "project.db.bak-v6"]
+    stats = scanner.scan_source(project, source_id, root, skip=own)
+
+    rows = project.con.execute("SELECT filename, missing_since FROM documents").fetchall()
+    assert [(r["filename"], r["missing_since"]) for r in rows] == [("보고서.txt", None)]
+    assert (stats.found, stats.changed, stats.missing) == (1, 0, 0)
+
+
+def test_reading_an_upload_does_not_reopen_task_analysis(project, tmp_path: Path):
+    """노트북에 파일 하나 올렸다고 다음 실행이 자료 폴더를 전부 다시 훑으면 안 된다."""
+    work = project.add_source(tmp_path / "자료")
+    upload = project.add_source(tmp_path / "uploads", kind="upload")
+    kept = project.upsert_document(upload, {"path": "u.pdf", "filename": "u.pdf", "ext": ".pdf"})
+    changed = project.upsert_document(work, {"path": "w.pdf", "filename": "w.pdf", "ext": ".pdf"})
+    flags = ("cycles_checked", "steps_checked", "items_checked", "chunks_checked")
+
+    for key in flags:
+        project.set_meta(key, "1")
+    project.invalidate_document_analysis(kept)
+    assert all(project.get_meta(key) == "1" for key in flags)
+
+    project.invalidate_document_analysis(changed)
+    assert all(project.get_meta(key) is None for key in flags)

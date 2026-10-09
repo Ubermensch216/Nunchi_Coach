@@ -140,7 +140,14 @@ class Database(WorkStore):
                 self.con.execute("DELETE FROM task_steps WHERE task_id=? AND decided_by='ai'", (task_id,))
                 self.con.execute("DELETE FROM task_reading WHERE task_id=?", (task_id,))
                 self.con.execute("DELETE FROM task_health WHERE task_id=?", (task_id,))
-            self.con.execute("DELETE FROM meta WHERE key IN ('cycles_checked','steps_checked','chunks_checked','items_checked')")
+            # 노트북에 올린 파일은 업무에 속하지 않는다. 그 파일을 읽었다고 '다
+            # 살펴봤다'는 표시를 지우면, 파일 하나 올릴 때마다 다음 실행이 자료
+            # 폴더 전체를 처음부터 다시 훑는다.
+            uploaded = self.con.execute(
+                "SELECT 1 FROM documents d JOIN sources s ON s.id = d.source_id "
+                "WHERE d.id = ? AND s.kind = 'upload'", (doc_id,)).fetchone()
+            if not uploaded:
+                self.con.execute("DELETE FROM meta WHERE key IN ('cycles_checked','steps_checked','chunks_checked','items_checked')")
             self.set_meta("content_revision", str(int(self.get_meta("content_revision") or 0) + 1))
 
     def repair_interrupted(self) -> int:

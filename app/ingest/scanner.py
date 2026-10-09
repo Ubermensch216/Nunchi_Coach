@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -62,10 +62,15 @@ def scan_source(
     excludes: str = "",
     on_progress: Callable[[int, str], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
+    skip: Iterable[Path | str] = (),
 ) -> ScanStats:
     """자료원 하나를 훑어 documents 테이블을 갱신한다.
 
     이미 아는 파일은 크기·수정시각으로 걸러 다시 처리하지 않는다(ING-005).
+
+    skip은 이 프로그램이 만든 파일·폴더다(프로젝트 DB, 로그, 올린 파일 보관소).
+    프로젝트를 자료 폴더 안에 두면 이것들이 전임자 문서로 잡히는데, 실행할
+    때마다 스스로 바뀌므로 매번 '변경된 문서'가 되어 분석을 다시 돌린다.
     """
     root = Path(root)
     stats = ScanStats()
@@ -73,8 +78,17 @@ def scan_source(
     known = db.paths_for_source(source_id)
     seen: set[str] = set()
     user_excludes = _parse_excludes(excludes)
+    own = {_key(p) for p in skip}
 
-    for path, entry_stat, error in _walk(root, user_excludes):
+    # 예전 판이 이미 문서로 올려 둔 것은 걷어낸다. 원본이 아니므로 '원본 없음'
+    # 으로 남기지 않는다.
+    for text_path in [t for t in known if _inside(t, own)]:
+        with db.transaction():
+            db.invalidate_document_analysis(known[text_path]["id"])
+            db.con.execute("DELETE FROM documents WHERE id = ?", (known[text_path]["id"],))
+        del known[text_path]
+
+    for path, entry_stat, error in _walk(root, user_excludes, own):
         if should_stop and should_stop():
             break
         if error:
@@ -143,7 +157,9 @@ def scan_source(
     return stats
 
 
-def _walk(root: Path, user_excludes: list[str]) -> Iterator[tuple[Path, os.stat_result, str]]:
+def _walk(
+    root: Path, user_excludes: list[str], own: set[str] = frozenset(),  # type: ignore[assignment]
+) -> Iterator[tuple[Path, os.stat_result, str]]:
     """디렉터리를 훑는다. 접근 거부 같은 개별 오류는 격리한다 (ING-007)."""
     walk_errors: list[OSError] = []
     for current, dirs, files in os.walk(root, onerror=walk_errors.append):
@@ -152,6 +168,7 @@ def _walk(root: Path, user_excludes: list[str]) -> Iterator[tuple[Path, os.stat_
             if d not in EXCLUDE_DIRS
             and not d.startswith(".")
             and not _matches(d, user_excludes)
+            and _key(os.path.join(current, d)) not in own
         ]
         base = Path(current)
         for name in files:
@@ -160,6 +177,8 @@ def _walk(root: Path, user_excludes: list[str]) -> Iterator[tuple[Path, os.stat_
             if _matches(name, user_excludes):
                 continue
             path = base / name
+            if _key(path) in own:
+                continue
             try:
                 yield path, path.stat(), ""
             except OSError as exc:
@@ -173,6 +192,15 @@ def _matches(name: str, patterns: list[str]) -> bool:
 
     lowered = name.lower()
     return any(fnmatch(lowered, pattern) for pattern in patterns)
+
+
+def _key(path: Path | str) -> str:
+    return os.path.normcase(os.path.normpath(str(path)))
+
+
+def _inside(path: str, own: set[str]) -> bool:
+    key = _key(path)
+    return any(key == entry or key.startswith(entry + os.sep) for entry in own)
 
 
 def _parse_excludes(excludes: str) -> list[str]:

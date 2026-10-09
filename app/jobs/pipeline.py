@@ -139,6 +139,7 @@ class Pipeline(QObject):
         sources = db.work_sources()
         report = StageReport(STAGE_SCAN)
         total = scanner.ScanStats()
+        own = _own_paths(db)
 
         for source in sources:
             if self._stop:
@@ -150,6 +151,7 @@ class Pipeline(QObject):
                 source["excludes"],
                 on_progress=lambda n, name: self.progress.emit(STAGE_SCAN, n, 0, name),
                 should_stop=self._stopped,
+                skip=own,
             )
             total.merge(stats)
 
@@ -685,6 +687,14 @@ class Pipeline(QObject):
         if not self._stop:
             db.set_meta("chunks_checked", "1")
         self.stage_done.emit(report)
+
+
+def _own_paths(db: Database) -> list[Path]:
+    """이 프로그램이 프로젝트 폴더에 만든 것들 — 자료로 훑으면 안 된다."""
+    folder = db.path.parent
+    own = [folder / "logs", *folder.glob(db.path.name + "*")]
+    own += [Path(s["path"]) for s in db.sources() if s["kind"] == "upload"]
+    return own
 
 
 def _embed_text(filename: str, body: str) -> str:
