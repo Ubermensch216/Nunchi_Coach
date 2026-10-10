@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import time
 from tempfile import NamedTemporaryFile
 
 from ..connectors.onnara.contract import (AccessDenied, Asset, AuthenticationRequired,
@@ -28,6 +29,18 @@ def _digest(path: Path):
     return hasher.hexdigest()
 
 
+def _replace(source: Path, target: Path, attempts: int = 8):
+    """Windows에서 백신·색인기가 방금 쓴 파일을 잠시 잡고 있으면 PermissionError가 난다. 짧게 다시 시도한다."""
+    for attempt in range(attempts):
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+
 def _write_json(path: Path, value):
     temporary = None
     try:
@@ -37,7 +50,7 @@ def _write_json(path: Path, value):
             json.dump(value, handle, ensure_ascii=False, indent=2)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        _replace(temporary, path)
     finally:
         if temporary and temporary.exists():
             temporary.unlink()
@@ -245,7 +258,7 @@ class Collection:
                 head = handle.read(1024).lower().lstrip()
             if asset.media_type != "text/html" and (head.startswith(b"<!doctype html") or head.startswith(b"<html")):
                 raise InvalidDownload("문서 대신 HTML 페이지를 받았습니다.")
-            os.replace(temporary, target)
+            _replace(temporary, target)
             entry.update(status="downloaded", path=target.relative_to(self.root).as_posix(),
                          sha256=digest, size=size, downloaded_at=_now())
             entry.pop("error", None)
