@@ -194,10 +194,10 @@ def brief_markdown(db, task_id: int) -> str:
                  f"반복 주기: {_cycle_line(db.task_cycle(task_id))}"]
     section("개요", overview)
 
-    section("해야 할 일", [_item_line(i) for i in group(rc.PURPOSE, rc.DEADLINE, rc.RECIPIENT, rc.AMOUNT)],
-            "목적·기한·제출처·금액")
-    section("시작 준비", [_item_line(i) for i in group(rc.INPUT, rc.FORM, rc.CONTACT)],
-            "준비 자료·서식·담당")
+    section("해야 할 일", [_item_line(i) for i in group(rc.PURPOSE, rc.DEADLINE, rc.RECIPIENT, rc.AMOUNT, rc.OUTPUT)],
+            "목적·기한·제출처·금액·산출물")
+    section("시작 준비", [_item_line(i) for i in group(rc.INPUT, rc.FORM, rc.CONTACT, rc.REGULATION, rc.AGENCY, rc.RISK)],
+            "준비 자료·서식·담당·관련 규정·관계기관·유의사항")
     records = sorted(group(rc.RECORD), key=lambda item: item["slot"] != rc.SLOT_LAST_RECORD)
     section("현재까지의 기록", [_item_line(i) for i in records])
     section("문장에서 찾은 내용", [_item_line(i) for i in group(rc.STATEMENT)], workcard.FOUND_NOTE)

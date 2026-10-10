@@ -212,3 +212,46 @@ def test_executed_and_confirmed_steps_survive_a_changed_procedure(db):
     assert (steps[1]["human_state"], steps[1]["auto_label"]) == (ws.RECHECK, "실적표 작성")
     # 손대지 않은 단계는 새 자료를 따른다.
     assert steps[2]["label"] == "결재" and steps[3]["after_step_id"] == steps[2]["id"]
+
+
+# ── 여러 줄로 적힌 절차 (M6) ────────────────────────────────────────
+
+def test_numbered_lines_under_the_label_become_ordered_steps(db):
+    add(db, "2025_요청.hwpx", "2025-09-01",
+        "처리 절차:\n1. 집계 자료 준비\n2. 실적표 작성\n3. 검토 후 제출\n제출기한: 2025-09-30")
+    assert rc.restore(db, BASIS)["stated_steps"] == 3
+    assert [s["label"] for s in steps_of(db, ws.PROCEDURE_STATED)] == [
+        "집계 자료 준비", "실적표 작성", "검토 후 제출"]
+
+
+def test_circled_lines_after_inline_start_are_joined(db):
+    add(db, "2025_요청.hwpx", "2025-09-01", "절차: ① 취합\n② 작성\n③ 제출")
+    assert [s["label"] for s in rc.restore(db, BASIS) and steps_of(db, ws.PROCEDURE_STATED)] == [
+        "취합", "작성", "제출"]
+
+
+def test_continuation_stops_at_a_line_without_an_order_mark(db):
+    add(db, "2025_요청.hwpx", "2025-09-01",
+        "절차:\n1. 취합\n2. 제출\n문의는 담당자에게 하시기 바랍니다.\n3. 무관한 문장")
+    assert [s["label"] for s in rc.restore(db, BASIS) and steps_of(db, ws.PROCEDURE_STATED)] == [
+        "취합", "제출"]
+
+
+def test_unordered_bullets_under_the_label_are_not_steps(db):
+    add(db, "2025_요청.hwpx", "2025-09-01", "절차:\n- 취합\n- 제출")
+    assert rc.restore(db, BASIS)["stated_steps"] == 0
+
+
+# ── 업무 카드 항목 확장 (M5) ────────────────────────────────────────
+
+def test_output_regulation_risk_and_agency_are_read_only_when_labeled(db):
+    add(db, "2025_요청.hwpx", "2025-09-01",
+        "산출물: 실적 보고서\n관련 규정: 보조금 관리에 관한 법률\n"
+        "유의사항: 증빙 누락 시 감액\n관계기관: 행정안전부\n비고: 위험 많음 규정 참고")
+    rc.restore(db, BASIS)
+    got = {i["kind"]: i["content"] for i in db.task_items(1)}
+    assert got[rc.OUTPUT] == "실적 보고서"
+    assert got[rc.REGULATION] == "보조금 관리에 관한 법률"
+    assert got[rc.RISK] == "증빙 누락 시 감액"
+    assert got[rc.AGENCY] == "행정안전부"
+    assert len([i for i in db.task_items(1) if i["kind"] in (rc.OUTPUT, rc.REGULATION, rc.RISK, rc.AGENCY)]) == 4

@@ -42,10 +42,15 @@ INPUT = "input"
 FORM = "form"
 CONTACT = "contact"
 PROCEDURE = "procedure"
+OUTPUT = "output"
+REGULATION = "regulation"
+RISK = "risk"
+AGENCY = "agency"
 
 KIND_LABEL = {
     DEADLINE: "기한", AMOUNT: "금액", RECIPIENT: "제출처", PURPOSE: "목적",
     INPUT: "준비 자료", FORM: "서식", CONTACT: "담당·문의", PROCEDURE: "절차",
+    OUTPUT: "산출물", REGULATION: "관련 규정", RISK: "유의·위험", AGENCY: "관계기관",
 }
 
 # 이름표 → 종류. 공문·계획서에서 실제로 쓰는 표기만 둔다. 넓히면 '기간'이나
@@ -64,6 +69,11 @@ _LABELS: dict[str, tuple[str, ...]] = {
     CONTACT: ("담당자", "담당 부서", "담당부서", "문의처", "문의", "연락처", "협조 부서", "담당"),
     PROCEDURE: ("처리 절차", "처리절차", "처리 순서", "처리순서", "추진 절차", "추진절차",
                 "진행 순서", "업무 절차", "절차"),
+    OUTPUT: ("최종 산출물", "최종산출물", "산출물", "결과물"),
+    REGULATION: ("관련 규정", "관련규정", "근거 규정", "근거규정", "관련 법령", "관련법령",
+                 "근거 법령", "근거법령"),
+    RISK: ("유의 사항", "유의사항", "주의 사항", "주의사항", "위험 요인", "위험요인", "리스크"),
+    AGENCY: ("관계 기관", "관계기관", "유관 기관", "유관기관", "협조 기관", "협조기관"),
 }
 _KIND_OF = {label: kind for kind, labels in _LABELS.items() for label in labels}
 # 긴 이름표부터 맞춘다 — '기한'이 '제출기한'의 뒷부분을 가로채지 않게.
@@ -122,17 +132,42 @@ def read_section(text: str, doc_id: int, locator: str, doc_year: int | None = No
         return table
 
     found: list[Found] = []
-    for line in lines:
+    for position, line in enumerate(lines):
         matches = list(_LABEL_RE.finditer(line))
         for index, match in enumerate(matches):
-            end = matches[index + 1].start() if index + 1 < len(matches) else len(line)
+            last = index + 1 == len(matches)
+            end = matches[index + 1].start() if not last else len(line)
             raw = line[match.end():end].strip(" .;,·-")
+            quote = line[match.start():end].strip()
+            if last and _KIND_OF[match.group("label")] == PROCEDURE:
+                raw, more = _procedure_continuation(raw, lines[position + 1:])
+                quote = " ".join([quote, *more])    # 값이 인용문 안에 있어야 한다
             label = match.group("label").replace(" ", "")
             item = _build(_KIND_OF[match.group("label")], label, raw, match.group("unit"),
-                          line[match.start():end].strip(), doc_id, locator, doc_year, official)
+                          quote, doc_id, locator, doc_year, official)
             if item is not None:
                 found.append(item)
     return found
+
+
+_STEP_LINE = re.compile(r"^\s*(?:[①-⑳]|\d{1,2}[.)]\s|(?:→|⇒|⇨|➜|➡|▶|->|=>))")
+_MAX_PROCEDURE = 400
+
+
+def _procedure_continuation(first: str, following: list[str]) -> tuple[str, list[str]]:
+    """'절차:' 다음 줄들에 번호·동그라미 숫자·화살표로 이어 적힌 단계를 값에 잇는다.
+
+    순서가 드러나는 줄만 잇는다. 이름표가 붙은 줄이나 순서 표시가 없는 줄에서 멈춘다 —
+    그 뒤의 문장을 절차로 끌어오지 않는다.
+    """
+    taken: list[str] = []
+    for line in following:
+        if not _STEP_LINE.match(line) or _LABEL_RE.search(line):
+            break
+        taken.append(line)
+    if not taken:
+        return first, []
+    return " ".join([first, *taken] if first else taken)[:_MAX_PROCEDURE], taken
 
 
 def _read_table_row(lines, doc_id, locator, doc_year, official) -> list[Found] | None:
@@ -190,7 +225,7 @@ def _kind_of_header(header: str) -> str | None:
 
 
 def _build(kind, slot, raw, unit, quote, doc_id, locator, doc_year, official) -> Found | None:
-    raw = raw[:_MAX_VALUE].strip()
+    raw = raw[:_MAX_PROCEDURE if kind == PROCEDURE else _MAX_VALUE].strip()
     if not raw:
         return None
     when = None
