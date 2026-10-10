@@ -34,3 +34,7 @@ tests/fixtures/sample_tree/
 .analysis_audit/
 data/
 outputs/
+
+# 과부하 합성 자료 (app.tools.make_stress_fixtures 로 재생성 가능, 수백 MB)
+tests/fixtures/전임자업무_샘플/공유폴더_백업/
+tests/fixtures/stress_manifest.json

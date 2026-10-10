@@ -160,7 +160,7 @@ def test_markdown_export_has_lineage_and_cannot_overwrite_original(db,monkeypatc
 def test_v5_upgrade_keeps_existing_data_and_creates_backup(db):
     db.set_meta("schema_version","5")
     db.init()
-    assert db.get_meta("schema_version")=="8"
+    assert db.get_meta("schema_version")=="9"
     assert db.path.with_name("project.db.bak-v5").is_file()
     assert db.document(1)["filename"]=="예산1.txt"
     assert notebook.create(db,"승격 후 노트북")

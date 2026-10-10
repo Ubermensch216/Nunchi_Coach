@@ -219,6 +219,7 @@ class Database(WorkStore):
         self.con.executescript(Path(__file__).with_name("notebook_schema.sql").read_text(encoding="utf-8"))
         add_notebook_columns(self.con)
         self.con.executescript(Path(__file__).with_name("child_schema.sql").read_text(encoding="utf-8"))
+        self.con.executescript(Path(__file__).with_name("coverage_schema.sql").read_text(encoding="utf-8"))
         if self.con.execute("SELECT 1 FROM chunks c WHERE NOT EXISTS "
                             "(SELECT 1 FROM chunk_children s WHERE s.parent_id=c.id) LIMIT 1").fetchone():
             self.con.execute("DELETE FROM meta WHERE key='chunks_checked'")

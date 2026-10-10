@@ -374,3 +374,32 @@ def test_pipeline_treats_exported_outputs_as_its_own(tmp_path: Path):
     finally:
         db.close()
     assert {"logs", "outputs", "project.db"} <= own
+
+
+def test_file_over_the_size_limit_ends_as_too_large_not_pending(tmp_path: Path, project, monkeypatch):
+    """상한을 넘은 파일은 해시도 파싱도 못 한다. pending으로 남으면 실행할 때마다 다시 시도한다."""
+    import app.ingest.hasher as hasher
+    import app.ingest.parsers as parsers
+
+    monkeypatch.setattr(hasher, "MAX_BYTES", 1000)
+    monkeypatch.setattr(parsers, "MAX_BYTES", 1000)
+    folder = tmp_path / "자료"
+    folder.mkdir()
+    (folder / "작은.txt").write_text("2024년 점검 계획", encoding="utf-8")
+    (folder / "큰.csv").write_bytes(b"a,b\n" * 1000)
+
+    db = _run(project, folder)
+    try:
+        status = {r["filename"]: r["parse_status"] for r in db.con.execute(
+            "SELECT filename, parse_status FROM documents")}
+        assert status == {"작은.txt": "ok", "큰.csv": "too_large"}
+    finally:
+        db.close()
+
+    # 다시 돌려도 그대로이고, 시도 횟수만 늘지 않는다.
+    db = _run(Database(project.path), folder)
+    try:
+        assert db.con.execute(
+            "SELECT parse_status FROM documents WHERE filename='큰.csv'").fetchone()[0] == "too_large"
+    finally:
+        db.close()

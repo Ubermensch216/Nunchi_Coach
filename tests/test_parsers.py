@@ -312,3 +312,14 @@ def test_spreadsheet_and_ocr_sections_say_what_they_are(tmp_path):
     book.save(path)
     section, = xlsx_parser.parse(path).sections
     assert section.meta == {"sheet": "집계", "rows": [1, 2], "header": "항목\t금액"}
+
+
+def test_text_parser_reads_utf16_with_and_without_bom(tmp_path: Path):
+    text = "2024년 안전점검 계획\n\n작성일: 2024. 10. 14."
+    with_bom = tmp_path / "bom.txt"
+    with_bom.write_bytes(b"\xff\xfe" + text.encode("utf-16-le"))
+    without_bom = tmp_path / "nobom.txt"
+    without_bom.write_bytes(text.encode("utf-16-le"))
+    for path in (with_bom, without_bom):
+        result = parse(path)
+        assert result.ok and "안전점검 계획" in result.text and "\x00" not in result.text

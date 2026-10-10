@@ -22,7 +22,7 @@ from ..ai import OllamaClient
 from ..ai.settings import project_client
 from ..ai.discover import discover
 from ..core import dating, handover_release, reconstruction, timeline, transfer
-from ..core import diagnostics
+from ..core import diagnostics, coverage
 from ..core import reindex
 from ..core.chunking import build_chunks_with_context
 from ..core.labeling import label_document
@@ -30,9 +30,9 @@ from ..core.workcard import OUTPUT_DIR
 from ..db import Database
 from ..ingest import scanner
 from ..search import pack
-from ..ingest.hasher import sha256
+from ..ingest.hasher import sha256, too_large
 from ..ingest.parsers import parse
-from ..ingest.parsers.base import LOCKED, PARSER_VERSION, ParseResult, outdated_clause
+from ..ingest.parsers.base import LOCKED, PARSER_VERSION, TOO_LARGE, ParseResult, outdated_clause
 
 MAX_ATTEMPTS = 3
 
@@ -68,6 +68,7 @@ class StageReport:
     total: int = 0
     note: str = ""
     errors: list[str] = field(default_factory=list)
+    state: str = ""
 
 
 class Pipeline(QObject):
@@ -101,6 +102,8 @@ class Pipeline(QObject):
         try:
             db.audit("pipeline.start")
             diagnostics.record("pipeline.start")
+            db.con.execute("UPDATE pipeline_stage_results SET state='pending',done=0,total=0,"
+                           "note='',errors='[]',updated_at=datetime('now')")
             # 예전 실행이 문서 하나를 반쯤 쓰다 죽었으면 여기서 되돌린다.
             db.repair_interrupted()
             self._scan(db)
@@ -113,6 +116,8 @@ class Pipeline(QObject):
             if not self._stop:
                 self._embed(db)
             if not self._stop:
+                self._chunks(db)
+            if not self._stop:
                 self._discover(db)
             if not self._stop:
                 self._cycles(db)
@@ -120,8 +125,6 @@ class Pipeline(QObject):
                 self._steps(db)
             if not self._stop:
                 self._restore(db)
-            if not self._stop:
-                self._chunks(db)
             db.audit("pipeline.stop", result="cancelled" if self._stop else "completed")
             diagnostics.record("pipeline.stop")
         except Exception as exc:  # 워커가 조용히 죽으면 사용자는 영문을 모른다
@@ -137,6 +140,14 @@ class Pipeline(QObject):
             self.finished.emit()
 
     # ── 1단계: 찾기 ─────────────────────────────────────────────────
+    def _report(self, db: Database, report: StageReport) -> None:
+        if not report.state:
+            report.state = ("cancelled" if self._stop else "partial" if report.errors else
+                            "pending" if "보류" in report.note or "건너뜀" in report.note or "남음" in report.note
+                            else "completed")
+        coverage.save_stage(db, report, report.state)
+        self.stage_done.emit(report)
+
     def _scan(self, db: Database) -> None:
         sources = db.work_sources()
         report = StageReport(STAGE_SCAN)
@@ -154,6 +165,7 @@ class Pipeline(QObject):
                 on_progress=lambda n, name: self.progress.emit(STAGE_SCAN, n, 0, name),
                 should_stop=self._stopped,
                 skip=own,
+                verify_hash=db.get_meta("scan_verify_hash") == "1",
             )
             total.merge(stats)
 
@@ -164,13 +176,14 @@ class Pipeline(QObject):
             f"문서 {total.documents:,}건 · 새 파일 {total.new:,} · "
             f"변경 {total.changed:,} · 원본 없음 {total.missing:,}"
         )
-        self.stage_done.emit(report)
+        self._report(db, report)
 
     # ── 2단계: 해시 (완전 중복 판정) ────────────────────────────────
     def _hash(self, db: Database) -> None:
         rows = db.con.execute(
             "SELECT id, path FROM documents "
-            "WHERE hash IS NULL AND missing_since IS NULL AND parse_status != 'skipped'"
+            "WHERE hash IS NULL AND missing_since IS NULL "
+            "  AND parse_status NOT IN ('skipped', 'too_large')"
         ).fetchall()
         report = StageReport(STAGE_HASH, total=len(rows))
 
@@ -180,7 +193,15 @@ class Pipeline(QObject):
             digest, error = sha256(row["path"])
             if digest:
                 db.update_document(row["id"], hash=digest)
+                coverage.clear_issue(db, row["id"], "hash")
+            elif error and too_large(row["path"]):
+                # 상한을 넘은 파일은 영영 해시도 파싱도 못 한다. pending으로 두면 실행할 때마다
+                # 다시 시도하고 '열려 있어 건너뜀'으로 보인다 — 크기 초과로 확정한다.
+                db.update_document(row["id"], parse_status=TOO_LARGE, parse_error=error)
+                coverage.issue(db, row["id"], "parse", TOO_LARGE)
+                report.errors.append(f"{Path(row['path']).name}: {error}")
             elif error:
+                coverage.issue(db, row["id"], "hash", "unreadable")
                 report.errors.append(f"{Path(row['path']).name}: {error}")
             report.done = index
             if index % 20 == 0 or index == len(rows):
@@ -188,7 +209,7 @@ class Pipeline(QObject):
 
         extra = db.counts()["duplicate_extra"]
         report.note = f"완전 중복 {extra:,}건" if extra else "중복 없음"
-        self.stage_done.emit(report)
+        self._report(db, report)
 
     # ── 3단계: 내용 읽기 ────────────────────────────────────────────
     def _parse(self, db: Database) -> None:
@@ -221,6 +242,7 @@ class Pipeline(QObject):
             if digest is None:
                 digest, hash_error = sha256(row["path"])
                 if digest is None:
+                    coverage.issue(db, row["id"], "hash", "unreadable")
                     locked += 1
                     report.errors.append(
                         f"{row['filename']}: 중복 확인을 못 해 건너뜀 ({hash_error})")
@@ -236,9 +258,8 @@ class Pipeline(QObject):
                 if row["hash"] is None:
                     db.update_document(row["id"], hash=digest)
 
-                if result.ok:
-                    # 파서 판본 변경으로 재처리한 문서도 옛 질문 조각을 남기면 안 된다.
-                    db.invalidate_document_analysis(row["id"])
+                # A failed reparse must not leave searchable text from the previous parse.
+                db.invalidate_document_analysis(row["id"])
 
                 db.update_document(
                     row["id"],
@@ -255,6 +276,8 @@ class Pipeline(QObject):
                 )
 
                 if result.ok:
+                    coverage.clear_issue(db, row["id"], "parse")
+                    coverage.clear_issue(db, row["id"], "hash")
                     db.replace_sections(
                         row["id"],
                         [(s.kind, s.ordinal, s.locator, s.text, s.meta) for s in result.sections],
@@ -269,9 +292,11 @@ class Pipeline(QObject):
                     # 다음 실행에서 다시 읽고, 재시도 횟수도 세지 않는다 —
                     # 사용자가 문서를 닫기만 하면 정상 처리되어야 한다.
                     db.update_document(row["id"], parse_status="pending")
+                    coverage.issue(db, row["id"], "parse", "locked")
                     locked += 1
                     report.errors.append(f"{row['filename']}: 다른 프로그램이 열고 있어 건너뜀")
                 else:
+                    coverage.issue(db, row["id"], "parse", result.status)
                     failures += 1
                     _record_failure(db, row["id"], "parse", result.error or result.status)
                     report.errors.append(f"{row['filename']}: {result.error or result.status}")
@@ -287,7 +312,7 @@ class Pipeline(QObject):
         if locked:
             report.note += f" · 열려 있어 건너뜀 {locked:,}건"
         report.errors = report.errors[:20]
-        self.stage_done.emit(report)
+        self._report(db, report)
 
 
     # ── 4단계: 시점 확인 ────────────────────────────────────────────
@@ -353,7 +378,7 @@ class Pipeline(QObject):
         report.note = " · ".join(parts) if parts else "시점을 찾지 못함"
         if undated:
             report.note += f" · 단서 없음 {undated:,}"
-        self.stage_done.emit(report)
+        self._report(db, report)
 
 
     # ── 5단계: 의미 색인 ────────────────────────────────────────────
@@ -368,7 +393,7 @@ class Pipeline(QObject):
         client = self._client = project_client(db, OllamaClient)
         health = client.health()
         if not health.embedding_ready:
-            self.stage_done.emit(
+            self._report(db,
                 StageReport(STAGE_EMBED, note=f"건너뜀 — {health.message}")
             )
             return
@@ -395,7 +420,11 @@ class Pipeline(QObject):
             batch = rows[start : start + EMBED_BATCH]
             texts = [_embed_text(r["filename"], r["body"]) for r in batch]
             vectors, error = client.embed(texts)
+            if not error and not _valid_vectors(vectors, len(texts)):
+                error = "임베딩 응답의 개수 또는 벡터가 올바르지 않습니다"
             if error:
+                for row in batch:
+                    coverage.issue(db, row["id"], "document_embedding", "embedding_failed")
                 report.errors.append(error)
                 break   # 연결이 끊긴 상태에서 계속 두드릴 이유가 없다
 
@@ -403,6 +432,7 @@ class Pipeline(QObject):
                 db.save_doc_embedding(
                     row["id"], client.embed_model, len(vector), pack(vector), len(text)
                 )
+                coverage.clear_issue(db, row["id"], "document_embedding")
             report.done = min(start + len(batch), len(rows))
             self.progress.emit(STAGE_EMBED, report.done, len(rows), batch[-1]["filename"])
 
@@ -410,7 +440,7 @@ class Pipeline(QObject):
         report.note = f"색인 {total:,}건"
         if report.errors:
             report.note += " · 중단됨"
-        self.stage_done.emit(report)
+        self._report(db, report)
 
 
     # ── 6단계: 업무 파악 (What) ─────────────────────────────────────
@@ -420,8 +450,8 @@ class Pipeline(QObject):
         문서마다 모델에게 분류를 물으면 1만 건에 7시간이 걸리지만, 묶은 뒤
         묶음당 한 번만 부르면 수십 번으로 끝난다. 이름이 흩어지는 것도 막는다.
         """
-        if db.counts()["embedded"] == 0:
-            self.stage_done.emit(
+        if db.counts()["embedded"] == 0 and not db.con.execute("SELECT 1 FROM embeddings LIMIT 1").fetchone():
+            self._report(db,
                 StageReport(STAGE_DISCOVER, note="건너뜀 — 의미 색인이 없습니다")
             )
             return
@@ -438,7 +468,7 @@ class Pipeline(QObject):
         report.done = report.total
         report.note = result.summary()
         report.errors = result.errors[:20]
-        self.stage_done.emit(report)
+        self._report(db, report)
 
 
     # ── 7단계: 일정 파악 (When) ─────────────────────────────────────
@@ -498,7 +528,7 @@ class Pipeline(QObject):
         # 실행이 이어서 보지 않는다.
         if not self._stop:
             db.set_meta("cycles_checked", "1")
-        self.stage_done.emit(report)
+        self._report(db, report)
 
 
     # ── 8단계: 처리 순서 파악 (How) ─────────────────────────────────
@@ -549,7 +579,7 @@ class Pipeline(QObject):
         report.note = f"{steps_made:,}단계 재구성" if steps_made else "재구성할 자료가 없습니다"
         if not self._stop:
             db.set_meta("steps_checked", "1")
-        self.stage_done.emit(report)
+        self._report(db, report)
 
 
     # ── 9단계: 업무 복원 (항목·근거) ────────────────────────────────
@@ -598,7 +628,7 @@ class Pipeline(QObject):
             saved = handover_release.autosave(db)
             if saved and saved[1]:
                 report.note += " · 복원본 저장"
-        self.stage_done.emit(report)
+        self._report(db, report)
 
 
     # ── 10단계: 질문 준비 (RAG 재료) ────────────────────────────────
@@ -661,7 +691,7 @@ class Pipeline(QObject):
                 report.note = f"{made:,}조각 나눔 · " + report.note
             if reindex_note:
                 report.note = f"{reindex_note} · {report.note}"
-            self.stage_done.emit(report)
+            self._report(db, report)
             return
 
         # '조각은 있는데 임베딩이 빠진' 문서를 집어낸다. 임베딩이 배치 중간에
@@ -680,7 +710,10 @@ class Pipeline(QObject):
                     break
                 batch = pending[start : start + CHUNK_EMBED_BATCH]
                 vectors, error = client.embed([text for _, text in batch])
+                if not error and not _valid_vectors(vectors, len(batch)):
+                    error = "임베딩 응답의 개수 또는 벡터가 올바르지 않습니다"
                 if error:
+                    coverage.issue(db, row["id"], "chunk_embedding", "embedding_failed")
                     report.errors.append(f"{row['filename']}: {error}")
                     break
                 with db.transaction():
@@ -688,6 +721,8 @@ class Pipeline(QObject):
                         db.save_chunk_embedding(
                             chunk_id, client.embed_model, len(vector), pack(vector))
                         embedded += 1
+            if not db.chunks_needing_embedding(row["id"], client.embed_model):
+                coverage.clear_issue(db, row["id"], "chunk_embedding")
 
             report.done = index
             if index % 5 == 0 or index == len(rows):
@@ -713,11 +748,11 @@ class Pipeline(QObject):
             report.note += " · 일부 실패"
         if reindex_note:
             report.note = f"{reindex_note} · {report.note}"
-        if not self._stop and not child_left and not reindex.needed(db):
+        if not self._stop and not left and not report.errors and not reindex.needed(db):
             db.set_meta("chunks_checked", "1")
-        elif child_left:
+        else:
             db.con.execute("DELETE FROM meta WHERE key='chunks_checked'")
-        self.stage_done.emit(report)
+        self._report(db, report)
 
 
 def _own_paths(db: Database) -> list[Path]:
@@ -728,6 +763,16 @@ def _own_paths(db: Database) -> list[Path]:
     own = [folder / "logs", folder / OUTPUT_DIR, *folder.glob(db.path.name + "*")]
     own += [Path(s["path"]) for s in db.sources() if s["kind"] == "upload"]
     return own
+
+
+def _valid_vectors(vectors, expected: int) -> bool:
+    import numpy as np
+    try:
+        matrix = np.asarray(vectors, dtype=np.float32)
+        return bool(matrix.ndim == 2 and matrix.shape[0] == expected and matrix.shape[1] > 0
+                    and np.isfinite(matrix).all() and (np.linalg.norm(matrix, axis=1) > 0).all())
+    except (TypeError, ValueError):
+        return False
 
 
 def _embed_text(filename: str, body: str) -> str:

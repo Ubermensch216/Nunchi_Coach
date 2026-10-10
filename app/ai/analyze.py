@@ -162,15 +162,17 @@ class TaskNaming:
     error: str | None = None
 
 
-def name_task(client: OllamaClient, titles: list[str]) -> TaskNaming:
+def name_task(client: OllamaClient, titles: list[str], evidence: list[dict] | None = None) -> TaskNaming:
     """묶음 하나에 이름을 붙인다. 문서마다 부르지 않고 묶음당 한 번만 부른다."""
     naming = TaskNaming()
     if not titles:
         naming.error = "제목이 없습니다"
         return naming
 
-    listing = "\n".join(f"- {t}" for t in titles[:40])
-    prompt, version = render("name_task", titles=listing)
+    import json
+    listing = json.dumps(titles[:30], ensure_ascii=False)[:1800]
+    excerpts = json.dumps(evidence or [], ensure_ascii=False)
+    prompt, version = render("name_task", titles=listing, evidence=excerpts)
     naming.prompt_version = version
     data, error, _raw = client.generate_json(prompt, schemas.NAME_TASK_SCHEMA, num_predict=200)
     if error:
@@ -179,8 +181,8 @@ def name_task(client: OllamaClient, titles: list[str]) -> TaskNaming:
 
     naming.name = schemas.clean_task_name(data.get("name"))
     naming.description = schemas.clean_summary(data.get("description"), limit=200)
-    naming.coherent = bool(data.get("coherent"))
-    if not naming.name:
+    naming.coherent = data.get("coherent") is True
+    if not naming.name and naming.coherent:
         naming.error = f"쓸 수 없는 업무 이름: {data.get('name')!r}"
     return naming
 

@@ -578,9 +578,13 @@ dist\NunchiCoach\NunchiCoach.exe licenses
 .\.venv\Scripts\python.exe -m app.tools.statement_eval --repeat 3                         # 문장 추출의 정밀도·재현율
 .\.venv\Scripts\python.exe -m app.tools.statement_eval --cases tests/fixtures/statements/precision2.json --repeat 3
 .\.venv\Scripts\python.exe -m app.tools.notices --strict    # 오픈소스 고지문(본문이 빠진 라이선스가 있으면 실패)
+.\.venv\Scripts\python.exe -m app.tools.make_stress_fixtures          # 과부하·시연용 합성 자료 1천여 건(약 300MB)
+.\.venv\Scripts\python.exe -m app.tools.make_stress_fixtures --profile demo   # 작은 판(smoke·demo·hard·extreme)
 ```
 
 질문 평가는 합성 표본(`python -m app.tools.make_fixtures`)과 시나리오 자료를 분석한 프로젝트가 있어야 합니다. `statement_eval`과 `scenario_eval --model`은 기본 모델 이름(`gemma4:e2b`)으로 Ollama를 부릅니다.
+
+과부하 자료는 `tests/fixtures/전임자업무_샘플/공유폴더_백업/`에 생기고 git이 추적하지 않습니다. 파일마다 기대하는 읽기 결과와 시연용 질문·정답은 `tests/fixtures/stress_manifest.json`에 적힙니다. `.hwp`는 여기서도 합성하지 못합니다.
 
 현재 수치와 읽는 법은 [현재 구현 및 검증 현황](docs/현재구현_및_검증현황.md)에 모았습니다. 요약하면 모두 **합성 자료·개발 장비** 기준이며, 시나리오 자동 복원율은 24/28(86%)로 계획 기준 90%에 못 미칩니다.
 

@@ -16,8 +16,8 @@ ENCODINGS = ("utf-8-sig", "utf-8", "cp949", "euc-kr")
 
 def parse(path: Path) -> ParseResult:
     raw = path.read_bytes()
-    text = None
-    for enc in ENCODINGS:
+    text = _decode_utf16(raw)
+    for enc in ENCODINGS if text is None else ():
         try:
             text = raw.decode(enc)
             break
@@ -39,6 +39,25 @@ def parse(path: Path) -> ParseResult:
         sections.append(Section("paragraph", i, f"{i}문단", body))
 
     return ParseResult(status=OK, parser=PARSER, sections=sections, meta=DocMeta())
+
+
+def _decode_utf16(raw: bytes) -> str | None:
+    """메모장의 '유니코드' 저장본. BOM이 있거나, 영문·숫자 사이사이에 널 바이트가 끼어 있다.
+
+    UTF-8·CP949로 억지로 읽으면 깨진 글자가 '정상'으로 색인된다.
+    """
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        encoding = "utf-16"
+    else:
+        sample = raw[:4000]
+        zero = b"\x00"
+        if len(sample) < 4 or sample.count(zero) < len(sample) // 4:
+            return None
+        encoding = "utf-16-le" if sample[1::2].count(zero) > sample[0::2].count(zero) else "utf-16-be"
+    try:
+        return raw.decode(encoding)
+    except UnicodeDecodeError:
+        return raw.decode(encoding, errors="replace")
 
 
 def _blocks(text: str) -> list[str]:

@@ -14,6 +14,14 @@ from .parsers.base import MAX_BYTES
 CHUNK = 1024 * 1024
 
 
+def too_large(path: Path | str) -> bool:
+    """크기 상한을 넘어 읽지도 해시하지도 않는 파일인가."""
+    try:
+        return Path(path).stat().st_size > MAX_BYTES
+    except OSError:
+        return False
+
+
 def sha256(path: Path | str) -> tuple[str | None, str | None]:
     """(해시, 오류) 튜플을 돌려준다. 예외를 던지지 않는다."""
     path = Path(path)

@@ -18,7 +18,8 @@ PARSER_VERSION = "4"
 # 다시 읽고 AI 분석까지 다시 돌지만, 여기 적으면 그 형식의 문서만 다시 읽는다.
 # xlsx 5: 시트를 행 경계에서 나누고(행 중간에서 자르지 않는다) 이어지는 조각에 머리 행을 붙인다.
 # docx 5: 긴 표를 행 경계에서 나누고 이어지는 조각에 첫 행을 붙인다. 제목 계층을 구조 정보로 남긴다.
-PARSER_REVISIONS = {"xlsx": "5", "docx": "5"}
+# text 2: UTF-16(메모장 '유니코드') 저장본을 바르게 읽는다.
+PARSER_REVISIONS = {"xlsx": "5", "docx": "5", "text": "2"}
 
 
 def version_of(parser: str | None) -> str:

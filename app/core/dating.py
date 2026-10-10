@@ -55,9 +55,16 @@ _YM = (
     r"(?P<m>1[0-2]|0?[1-9])\s*(?:월|\.)?(?![\s._\-/]*\d)"
 )
 _YEAR = r"(?<!\d)(?P<y>(?:19|20)\d{2})\s*(?:회계연도|년도|년|학년도)?(?!\d)"
+# 작은따옴표로 줄인 두 자리 연도: '24. 11. 5. · ’24년 11월 5일. 따옴표가 없으면 숫자와 구별할 수 없다.
+_TWO = (
+    r"(?<![\w'’‘])['’‘]\s*(?P<yy>\d{2})\s*(?:년\s*|" + _SEP + r"\s*)"
+    r"(?P<m>1[0-2]|0?[1-9])\s*(?:월\s*|" + _SEP + r"\s*)"
+    r"(?P<d>3[01]|[12]\d|0?[1-9])\s*일?(?!\d)"
+)
 _COMPACT = r"(?<!\d)(?P<y>(?:19|20)\d{2})(?P<m>0[1-9]|1[0-2])(?P<d>0[1-9]|[12]\d|3[01])(?!\d)"
 
 _PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
+    (re.compile(_TWO), DAY),
     (re.compile(_COMPACT), DAY),
     (re.compile(_FULL), DAY),
     (re.compile(_YM), MONTH),
@@ -292,12 +299,18 @@ def _build(
     match: re.Match, precision: str, kind: str, locator: str, labeled: bool
 ) -> DateCandidate | None:
     groups = match.groupdict()
-    year = int(groups["y"])
+    if groups.get("yy"):
+        short = int(groups["yy"])
+        year = 2000 + short if short <= 69 else 1900 + short
+    else:
+        year = int(groups["y"])
     if not _valid_year(year):
         return None
 
     raw = match.group(0).strip()
     if _NOISE.search(text_before(match)):
+        return None
+    if precision == YEAR and _in_numeric_cell(match):
         return None
 
     month = int(groups.get("m") or 1)
@@ -312,6 +325,19 @@ def _build(
 
     value = f"{year:04d}-{month:02d}-{day:02d}"
     return DateCandidate(kind, value, precision, raw, locator, labeled)
+
+
+def _in_numeric_cell(match: re.Match) -> bool:
+    """표의 숫자 칸(…<탭>1992<탭>…)에 든 네 자리 수는 연도가 아니다.
+
+    '년' 같은 말이 붙지 않은 연도는 파일명·표제에서나 쓰인다. 탭으로 나뉜 칸 안의
+    맨몸 숫자까지 연도로 읽으면 실적표의 수치가 문서 시점이 된다.
+    """
+    if match.group(0).strip() != match.group("y"):
+        return False
+    before = match.string[max(0, match.start() - 1):match.start()]
+    after = match.string[match.end():match.end() + 1]
+    return before == "\t" or after == "\t"
 
 
 def text_before(match: re.Match, width: int = 3) -> str:

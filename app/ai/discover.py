@@ -18,8 +18,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+import json
 
-from ..core import scoring
+from ..core import scoring, discovery_index
 from ..core.clustering import DEFAULT_MIN_SIZE, Cluster, _tokenize, cluster, common_tokens
 from ..db import Database
 from ..search.vector import VectorStore
@@ -39,6 +40,9 @@ class Discovery:
     named_by_filename: int = 0
     grouped_by_filename: int = 0     # 벡터로 묶이지 않아 파일명으로 묶은 제안
     errors: list[str] = field(default_factory=list)
+    singleton_candidates: int = 0
+    held_groups: int = 0
+    cancelled: bool = False
 
     def summary(self) -> str:
         parts = [f"업무 {self.tasks}개", f"배정 {self.assigned:,}건"]
@@ -48,10 +52,28 @@ class Discovery:
             parts.append(f"미분류 {self.unassigned:,}건")
         if self.named_by_filename:
             parts.append(f"파일명으로 이름 지음 {self.named_by_filename}개")
+        if self.singleton_candidates:
+            parts.append(f"단일 문서 확인 후보 {self.singleton_candidates}개")
+        if self.held_groups:
+            parts.append(f"동일 업무 판단 보류 {self.held_groups}개")
         return " · ".join(parts)
 
 
-def discover(
+class _Cancelled(Exception):
+    pass
+
+
+def discover(db, client=None, threshold=None, min_size=None, on_progress=None) -> Discovery:
+    # Failed/cancelled rediscovery must not erase the previous proposals.
+    try:
+        with db.transaction():
+            return _discover(db, client, threshold, min_size, on_progress)
+    except _Cancelled:
+        return Discovery(tasks=len(db.tasks()), unassigned=db.unclassified_count(), cancelled=True,
+                         errors=["업무 발견을 중단했습니다. 이전 제안을 보존했습니다."])
+
+
+def _discover(
     db: Database,
     client: OllamaClient | None = None,
     threshold: float | None = None,
@@ -60,9 +82,18 @@ def discover(
 ) -> Discovery:
     result = Discovery()
 
-    store = VectorStore.load(db.con, model=client.embed_model if client else None)
+    model = client.embed_model if client else db.get_meta("embed_model") or "bge-m3"
+    store, contributions = discovery_index.load(db, model)
+    protected = _protected_documents(db)
+    if store.size:
+        import numpy as np
+        keep = np.asarray([int(doc) not in protected for doc in store.ids])
+        store = VectorStore(store.ids[keep], store.matrix[keep])
     if store.size == 0:
-        result.errors.append("의미 색인이 없습니다. 먼저 분석을 끝내세요.")
+        result.tasks = len(db.tasks())
+        result.unassigned = db.unclassified_count()
+        if not protected:
+            result.errors.append("의미 색인이 없습니다. 먼저 분석을 끝내세요.")
         return result
 
     kwargs = {}
@@ -76,15 +107,30 @@ def discover(
     result.unassigned = len(grouping.unassigned)
 
     _clear_proposals(db)
+    db.con.execute("DELETE FROM discovery_holds")
     naming_ready = bool(client and client.health().generation_ready)
+    reviewed: set[int] = set()
+    held: set[int] = set()
 
     for index, group in enumerate(grouping.clusters, start=1):
         if client is not None and getattr(client, "cancelled", False):
-            break
+            raise _Cancelled()
         names = _filenames(db, group.doc_ids)
         tokens = common_tokens(names)
 
-        named = _name(client if naming_ready else None, names, tokens)
+        excerpts = discovery_index.naming_evidence(db, group.doc_ids, contributions)
+        named = _name(client if naming_ready else None, names, tokens, excerpts)
+        if client is not None and getattr(client, "cancelled", False):
+            raise _Cancelled()
+        if naming_ready and not named.error:
+            reviewed.update(e["chunk_id"] for e in excerpts)
+        if named.coherent is False:
+            db.con.execute("INSERT INTO discovery_holds(signature,doc_ids,reason) VALUES(?,?,?)",
+                           (",".join(map(str, sorted(group.doc_ids))), json.dumps(group.doc_ids),
+                            "coherence_rejected"))
+            held.update(group.doc_ids)
+            result.held_groups += 1
+            continue
         if named.error:
             result.errors.append(named.error)
         if named.source == "model":
@@ -102,10 +148,60 @@ def discover(
 
     if not (client is not None and getattr(client, "cancelled", False)):
         _group_leftovers(db, grouping.unassigned, min_size or DEFAULT_MIN_SIZE, result)
+        # A singleton is an explicitly weak candidate, only when real body evidence exists.
+        for doc_id in grouping.unassigned:
+            if doc_id in protected or doc_id in held:
+                continue
+            if db.con.execute("SELECT 1 FROM task_docs WHERE doc_id=?", (doc_id,)).fetchone():
+                continue
+            body = db.con.execute("SELECT id,locator FROM chunks WHERE doc_id=? AND trim(text)!='' "
+                                  "ORDER BY ordinal LIMIT 1", (doc_id,)).fetchone()
+            if not body:
+                continue
+            names = _filenames(db, [doc_id])
+            tokens = _tokenize(names[0]) if names else []
+            group = Cluster(seed_id=doc_id, doc_ids=[doc_id])
+            task_id = _upsert_task(db, Named(_from_tokens(tokens), description=(
+                "본문 근거가 있는 단일 문서 후보입니다. 독립 업무인지 참고자료인지 확인해 주세요.")), group)
+            _attach(db, task_id, [doc_id])
+            _store_reading(db, task_id, [doc_id])
+            result.singleton_candidates += 1
+    else:
+        raise _Cancelled()
+
+    for row in db.con.execute("SELECT td.task_id,td.doc_id FROM task_docs td "
+                              "JOIN tasks t ON t.id=td.task_id WHERE t.origin='ai' AND t.status='proposed'"):
+        doc_id = row["doc_id"]
+        if doc_id in protected:
+            continue
+        for piece in contributions.get(doc_id, []):
+            db.con.execute(
+                "INSERT OR REPLACE INTO discovery_evidence(task_id,doc_id,piece_key,chunk_id,doc_hash,locator,"
+                "basis,score,model,index_version,reviewed_by_model) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (row["task_id"], doc_id, str(piece["chunk_id"] or "prefix"), piece["chunk_id"], piece["doc_hash"], piece["locator"],
+                 piece["basis"], piece["score"], model, discovery_index.VERSION,
+                 int(piece["chunk_id"] in reviewed)))
+
+    candidates = set(map(int, store.ids))
+    assigned = {r[0] for r in db.con.execute("SELECT DISTINCT td.doc_id FROM task_docs td "
+                "JOIN tasks t ON t.id=td.task_id WHERE t.not_a_task=0 AND t.merged_into IS NULL")}
+    result.assigned = len(candidates & assigned)
+    result.unassigned = len(candidates - assigned)
 
     result.tasks = db.con.execute("SELECT COUNT(*) AS n FROM tasks").fetchone()["n"]
     db.audit("task.discover", detail=result.summary(), result="ok")
     return result
+
+
+def _protected_documents(db: Database) -> set[int]:
+    rows = db.con.execute(
+        "SELECT td.doc_id FROM task_docs td JOIN tasks t ON t.id=td.task_id "
+        "WHERE td.origin='user' OR t.origin='user' OR t.status!='proposed' "
+        "OR t.not_a_task=1 OR t.merged_into IS NOT NULL "
+        f"OR t.id IN ({db.HUMAN_WORK_SQL}) "
+        "UNION SELECT doc_id FROM corrections WHERE target='task_docs' AND after_val IS NULL "
+        "AND doc_id IS NOT NULL")
+    return {r[0] for r in rows}
 
 
 # ── 묶이지 않은 문서 ────────────────────────────────────────────────
@@ -161,20 +257,22 @@ class Named:
     description: str | None = None
     source: str = "filename"     # model | filename
     error: str | None = None
+    coherent: bool | None = None
 
 
-def _name(client: OllamaClient | None, names: list[str], tokens: list[str]) -> Named:
+def _name(client: OllamaClient | None, names: list[str], tokens: list[str], evidence=None) -> Named:
     """모델이 없거나 실패하면 파일명 공통 낱말로 대신한다."""
     fallback = _from_tokens(tokens)
     if client is None:
         return Named(fallback)
 
-    naming = name_task(client, names[:MAX_TITLES_FOR_NAMING])
+    naming = (name_task(client, names[:MAX_TITLES_FOR_NAMING], evidence) if evidence else
+              name_task(client, names[:MAX_TITLES_FOR_NAMING]))
     if naming.error:
         return Named(fallback, error=naming.error)
     if not naming.coherent:
         # 모델이 하나의 업무로 보지 않았다. 억지로 이름을 붙이지 않는다.
-        return Named(fallback, description=naming.description)
+        return Named(fallback, description=naming.description, coherent=False)
     return Named(naming.name or fallback, naming.description, source="model")
 
 
@@ -224,11 +322,12 @@ def _clear_proposals(db: Database) -> None:
 
 
 def _upsert_task(db: Database, named: Named, group: Cluster) -> int:
-    """같은 이름이 나오면 하나로 합친다.
-
-    한 업무가 두 묶음으로 갈라졌을 때 이름이 같으면 합치는 것이 옳다 —
-    업무 분류가 흩어지는 것을 막는 장치다.
-    """
+    """Names are labels, not proof of business identity. Keep distinct groups separate."""
+    label = named.label
+    suffix = 0
+    while db.con.execute("SELECT 1 FROM tasks WHERE name=?", (label,)).fetchone():
+        suffix += 1
+        label = f"{named.label} ({group.seed_id}{'-' + str(suffix) if suffix > 1 else ''})"
     description = named.description or (
         f"파일명과 내용이 비슷한 문서 {group.size}건을 묶었습니다. "
         "이름을 짓지 못해 공통 낱말로 대신했습니다."
@@ -236,15 +335,17 @@ def _upsert_task(db: Database, named: Named, group: Cluster) -> int:
     db.con.execute(
         "INSERT INTO tasks(name, description, origin, status, confidence) "
         "VALUES (?, ?, 'ai', 'proposed', ?) ON CONFLICT(name) DO NOTHING",
-        (named.label, description, group.confidence),
+        (label, description, group.confidence),
     )
-    row = db.con.execute("SELECT id FROM tasks WHERE name = ?", (named.label,)).fetchone()
+    row = db.con.execute("SELECT id FROM tasks WHERE name = ?", (label,)).fetchone()
     task_id = row["id"]
     # 사람이 고친 업무의 설명은 덮어쓰지 않는다.
     db.con.execute(
         "UPDATE tasks SET description = ? WHERE id = ? AND status = 'proposed'",
         (description, task_id),
     )
+    if group.confidence == "low":
+        db.con.execute("UPDATE tasks SET review_state='weak' WHERE id=?", (task_id,))
     return task_id
 
 

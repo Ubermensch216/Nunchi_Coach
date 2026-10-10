@@ -42,6 +42,7 @@ class ScanStats:
     unchanged: int = 0
     missing: int = 0        # 이전 스캔에 있었으나 지금 없는 것
     skipped: int = 0
+    cancelled: bool = False
     errors: list[str] = field(default_factory=list)
 
     def merge(self, other: "ScanStats") -> None:
@@ -52,6 +53,7 @@ class ScanStats:
         self.unchanged += other.unchanged
         self.missing += other.missing
         self.skipped += other.skipped
+        self.cancelled = self.cancelled or other.cancelled
         self.errors.extend(other.errors)
 
 
@@ -63,6 +65,7 @@ def scan_source(
     on_progress: Callable[[int, str], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
     skip: Iterable[Path | str] = (),
+    verify_hash: bool = False,
 ) -> ScanStats:
     """자료원 하나를 훑어 documents 테이블을 갱신한다.
 
@@ -79,6 +82,19 @@ def scan_source(
     seen: set[str] = set()
     user_excludes = _parse_excludes(excludes)
     own = {_key(p) for p in skip}
+    excluded: set[str] = set()
+    db.con.execute("UPDATE scan_runs SET state='interrupted',finished_at=datetime('now') "
+                   "WHERE source_id=? AND state='running'", (source_id,))
+    run_id = db.con.execute("INSERT INTO scan_runs(source_id) VALUES(?)", (source_id,)).lastrowid
+
+    def observe(path, kind, state, reason="", doc_id=None):
+        db.con.execute(
+            "INSERT OR REPLACE INTO scan_entries(run_id,path,kind,state,reason,doc_id) "
+            "VALUES(?,?,?,?,?,?)", (run_id, str(path), kind, state, reason, doc_id))
+        if state == "excluded":
+            excluded.add(_key(path))
+            if kind == "file":
+                stats.skipped += 1
 
     # 예전 판이 이미 문서로 올려 둔 것은 걷어낸다. 원본이 아니므로 '원본 없음'
     # 으로 남기지 않는다.
@@ -88,8 +104,9 @@ def scan_source(
             db.con.execute("DELETE FROM documents WHERE id = ?", (known[text_path]["id"],))
         del known[text_path]
 
-    for path, entry_stat, error in _walk(root, user_excludes, own):
+    for path, entry_stat, error in _walk(root, user_excludes, own, observe):
         if should_stop and should_stop():
+            stats.cancelled = True
             break
         if error:
             stats.errors.append(error)
@@ -106,8 +123,20 @@ def scan_source(
 
         mtime = _iso(entry_stat.st_mtime)
         previous = known.get(text_path)
-        if previous and previous["size"] == entry_stat.st_size and previous["fs_mtime"] == mtime:
+        unchanged = bool(previous and previous["size"] == entry_stat.st_size and previous["fs_mtime"] == mtime)
+        if unchanged and verify_hash and is_document:
+            from .hasher import sha256
+            digest, hash_error = sha256(path)
+            old_hash = db.con.execute("SELECT hash FROM documents WHERE id=?", (previous["id"],)).fetchone()[0]
+            if hash_error:
+                stats.errors.append(f"{path.name}: 해시 재검사 실패")
+                observe(path, "file", "error", "hash_recheck_failed", previous["id"])
+                continue
+            unchanged = bool(digest and old_hash == digest)
+        if unchanged:
             db.mark_seen(previous["id"])
+            observe(path, "file", "included" if is_document else "unsupported",
+                    "unchanged" if is_document else "unsupported_extension", previous["id"])
             stats.unchanged += 1
             if on_progress and stats.found % 200 == 0:
                 on_progress(stats.found, path.name)
@@ -135,16 +164,22 @@ def scan_source(
         with db.transaction():
             if previous:
                 db.invalidate_document_analysis(previous["id"])
-            db.upsert_document(source_id, fields)
+            doc_id = db.upsert_document(source_id, fields)
+            observe(path, "file", "included" if is_document else "unsupported",
+                    "changed" if previous else "new" if is_document else "unsupported_extension", doc_id)
 
         if on_progress and stats.found % 100 == 0:
             on_progress(stats.found, path.name)
 
     # 사라진 원본은 지우지 않고 표시만 한다 (ING-008).
-    gone = [row["id"] for text_path, row in known.items() if text_path not in seen]
+    gone = [row["id"] for text_path, row in known.items()
+            if text_path not in seen and not _inside(text_path, excluded)]
     # 탐색에 실패한 범위는 '삭제'로 판정할 수 없다. 접근을 복구한 뒤 다시 판단한다.
-    if gone and not stats.errors and not (should_stop and should_stop()):
+    if gone and not stats.errors and not stats.cancelled:
         stats.missing = db.mark_missing(gone)
+
+    db.con.execute("UPDATE scan_runs SET state=?,finished_at=datetime('now') WHERE id=?",
+                   ("cancelled" if stats.cancelled else "partial" if stats.errors else "completed", run_id))
 
     db.audit(
         "scan.source",
@@ -159,31 +194,47 @@ def scan_source(
 
 def _walk(
     root: Path, user_excludes: list[str], own: set[str] = frozenset(),  # type: ignore[assignment]
+    observe: Callable | None = None,
 ) -> Iterator[tuple[Path, os.stat_result, str]]:
     """디렉터리를 훑는다. 접근 거부 같은 개별 오류는 격리한다 (ING-007)."""
     walk_errors: list[OSError] = []
     for current, dirs, files in os.walk(root, onerror=walk_errors.append):
-        dirs[:] = [
-            d for d in dirs
-            if d not in EXCLUDE_DIRS
-            and not d.startswith(".")
-            and not _matches(d, user_excludes)
-            and _key(os.path.join(current, d)) not in own
-        ]
         base = Path(current)
-        for name in files:
-            if name.startswith(EXCLUDE_PREFIXES) or name.lower().endswith(EXCLUDE_SUFFIXES):
-                continue
-            if _matches(name, user_excludes):
-                continue
+        kept = []
+        for name in dirs:
             path = base / name
-            if _key(path) in own:
+            reason = (
+                "managed_output" if _inside(str(path), own) else
+                "link_not_followed" if path.is_symlink() or path.is_junction() else
+                "default_directory_exclusion" if name.casefold() in {d.casefold() for d in EXCLUDE_DIRS}
+                or name.startswith(".") else
+                "user_exclusion" if _matches(name, user_excludes) else "")
+            if reason:
+                if observe:
+                    observe(path, "directory", "excluded", reason)
+            else:
+                kept.append(name)
+        dirs[:] = kept
+        for name in files:
+            path = base / name
+            reason = (
+                "managed_output" if _inside(str(path), own) else
+                "link_not_followed" if path.is_symlink() else
+                "temporary_file" if name.startswith(EXCLUDE_PREFIXES) or name.lower().endswith(EXCLUDE_SUFFIXES) else
+                "user_exclusion" if _matches(name, user_excludes) else "")
+            if reason:
+                if observe:
+                    observe(path, "file", "excluded", reason)
                 continue
             try:
                 yield path, path.stat(), ""
             except OSError as exc:
+                if observe:
+                    observe(path, "file", "error", "stat_failed")
                 yield path, None, f"{path}: {exc.strerror or exc}"  # type: ignore[misc]
     for exc in walk_errors:
+        if observe:
+            observe(Path(exc.filename or root), "directory", "error", "directory_unreadable")
         yield Path(exc.filename or root), None, "폴더에 접근할 수 없습니다"  # type: ignore[misc]
 
 
@@ -195,7 +246,7 @@ def _matches(name: str, patterns: list[str]) -> bool:
 
 
 def _key(path: Path | str) -> str:
-    return os.path.normcase(os.path.normpath(str(path)))
+    return os.path.normcase(os.path.normpath(str(Path(path).resolve())))
 
 
 def _inside(path: str, own: set[str]) -> bool:
