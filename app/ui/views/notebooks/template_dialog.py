@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog,
+    QAbstractItemView, QAbstractSpinBox, QApplication, QCheckBox, QComboBox, QDialog,
     QDoubleSpinBox, QFileDialog, QFormLayout, QFrame, QGridLayout,
     QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton,
@@ -147,7 +147,7 @@ class TemplateDialog(QDialog):
         self.editor_stack = QStackedWidget()
         column.addWidget(self.editor_stack, 1)
         structure = QVBoxLayout()
-        structure.setSpacing(12)
+        structure.setSpacing(8)
         fields = QGridLayout()
         fields.addWidget(muted_label("서식 이름", small=True), 0, 0)
         fields.addWidget(muted_label("문서 종류", small=True), 0, 1)
@@ -172,11 +172,11 @@ class TemplateDialog(QDialog):
         self.add_section_button = self._button("＋ 항목 추가", self._add_section, "Quiet")
         head.addWidget(self.add_section_button)
         structure.addLayout(head)
-        structure.addWidget(muted_label("위에서부터 문서에 들어갑니다. 제목과 작성 내용을 각각 입력하세요.", small=True))
         self.sections = QTableWidget(0, 2)
         self.sections.setObjectName("TemplateSections")
         self.sections.setHorizontalHeaderLabels(["항목 제목", "이 항목에 담을 내용"])
         self.sections.setAccessibleName("문서 항목과 작성 내용")
+        self.sections.setToolTip("위에서부터 문서에 들어갑니다. 제목과 작성 내용을 각각 편집하세요.")
         self.sections.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.sections.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.sections.setWordWrap(True)
@@ -184,7 +184,7 @@ class TemplateDialog(QDialog):
         self.sections.verticalHeader().hide()
         self.sections.verticalHeader().setDefaultSectionSize(68)
         self.sections.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.sections.setMinimumHeight(230)
+        self.sections.setMinimumHeight(100)
         self.sections.itemChanged.connect(self._changed)
         self.sections.itemSelectionChanged.connect(self._section_actions)
         structure.addWidget(self.sections, 1)
@@ -196,11 +196,13 @@ class TemplateDialog(QDialog):
             actions.addWidget(button)
         actions.addStretch(1)
         structure.addLayout(actions)
-        structure.addWidget(muted_label("문서 전체의 작성 지침", small=True))
+        self.guidance_button = self._button("작성 지침 보기", self._toggle_guidance, "TemplateDisclosure")
+        structure.addWidget(self.guidance_button)
         self.guidance = QPlainTextEdit()
         self.guidance.setAccessibleName("문서 전체 작성 지침")
         self.guidance.setPlaceholderText("예: 사실과 수치를 중심으로 짧게 쓰고, 확인되지 않은 내용은 비워 둡니다.")
         self.guidance.setFixedHeight(80)
+        self.guidance.hide()
         self.guidance.textChanged.connect(self._changed)
         structure.addWidget(self.guidance)
         self._editor_page(structure)
@@ -236,6 +238,9 @@ class TemplateDialog(QDialog):
         self.lead.setRange(0, 40)
         self.lead.setSuffix(" 칸")
         self.lead.valueChanged.connect(self._style_changed)
+        for control in (self.size, self.line, self.lead):
+            control.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+            control.setToolTip("직접 입력하거나 키보드의 ↑·↓로 조정합니다.")
         for label, widget in (("글꼴", self.font), ("글자 크기", self.size),
                               ("강조", self.bold), ("줄 간격", self.line),
                               ("앞 기호", self.glyph), ("들여쓰기", self.lead)):
@@ -246,7 +251,7 @@ class TemplateDialog(QDialog):
         appearance.addWidget(self.glyph_hint)
         self.origin = muted_label("", small=True)
         appearance.addWidget(self.origin)
-        self.notes_button = self._button("가져온 서식의 확인 사항 ▾", self._toggle_notes, "Quiet")
+        self.notes_button = self._button("가져온 서식의 확인 사항 보기", self._toggle_notes, "Quiet")
         appearance.addWidget(self.notes_button)
         self.notes = muted_label("", small=True)
         self.notes.hide()
@@ -362,6 +367,9 @@ class TemplateDialog(QDialog):
             self.sections.setItem(row, 1, QTableWidgetItem(section.instruction))
         self.sections.clearSelection()
         self.guidance.setPlainText(template.guidance)
+        self.guidance.hide()
+        self.guidance_button.setText("작성 지침 보기 · 설정됨" if template.guidance else "작성 지침 추가")
+        self.guidance_button.setToolTip(template.guidance or "문서 전체에 적용할 작성 방법을 입력합니다.")
         self.delete_button.setEnabled(template.id is not None and not template.builtin)
         self.save_button.setText("사본으로 저장" if template.builtin else "저장")
         self.editor_title.setText(template.title)
@@ -384,7 +392,7 @@ class TemplateDialog(QDialog):
         self.notes.setText("\n".join(f"• {note}" for note in notes))
         self.notes.hide()
         self.notes_button.setVisible(bool(notes))
-        self.notes_button.setText("가져온 서식의 확인 사항 ▾")
+        self.notes_button.setText("가져온 서식의 확인 사항 보기")
         self._load_style()
         self._loading = False
         self._dirty = False
@@ -495,6 +503,7 @@ class TemplateDialog(QDialog):
             return
         self._dirty = True
         self.state.setText("저장하지 않은 변경사항이 있습니다.")
+        self.state.setToolTip("")
         self.editor_title.setText(self.name.text().strip() or "새 서식")
         self.preview_timer.start()
 
@@ -502,8 +511,12 @@ class TemplateDialog(QDialog):
         if self._loading or self._current is None:
             return
         self.section_count.setText(f"문서 항목 · {self.sections.rowCount()}개")
-        markdown = layout.sample_markdown(self._titles())
-        markdown = markdown.replace("# ○○ 추진 계획 보고", "# " + (self.name.text().strip() or "새 서식"), 1)
+        lines = ["# " + (self.name.text().strip() or "새 서식"), ""]
+        for title in self._titles() or ["항목 제목"]:
+            lines.extend([f"## {title}", "- 주요 내용을 개조식으로 적습니다",
+                          "  - 세부 사항을 적습니다", "    - 세부 내용", ""])
+        lines.append("> 주석 및 근거")
+        markdown = "\n".join(lines)
         scrollbar = self.preview.verticalScrollBar()
         position = scrollbar.value()
         self.preview.setHtml(output_html(markdown, self._format()))
@@ -513,7 +526,15 @@ class TemplateDialog(QDialog):
     def _toggle_notes(self):
         opened = not self.notes.isVisible()
         self.notes.setVisible(opened)
-        self.notes_button.setText("가져온 서식의 확인 사항 ▴" if opened else "가져온 서식의 확인 사항 ▾")
+        self.notes_button.setText("가져온 서식의 확인 사항 접기" if opened else "가져온 서식의 확인 사항 보기")
+
+    def _toggle_guidance(self):
+        opened = self.guidance.isHidden()
+        self.guidance.setVisible(opened)
+        self.guidance_button.setText("작성 지침 접기" if opened else
+                                     "작성 지침 보기 · 설정됨" if self.guidance.toPlainText().strip() else "작성 지침 추가")
+        if opened:
+            self.guidance.setFocus()
 
     def _new(self):
         if not self._may_leave():
@@ -559,6 +580,10 @@ class TemplateDialog(QDialog):
         self.state.setText("가져온 항목과 모양을 확인한 뒤 [저장]을 누르세요.")
 
     def _save(self):
+        focus = self.focusWidget()
+        if focus and self.sections.isAncestorOf(focus):
+            # Ctrl+S도 현재 셀의 입력을 먼저 확정한 뒤 저장한다.
+            focus.clearFocus()
         template = copy.deepcopy(self._current) if self._current else templates.Template("", "기타")
         template.format = self._format()
         template.title, template.doc_type = self.name.text(), self.kind.text()
@@ -606,7 +631,12 @@ class TemplateDialog(QDialog):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
         if answer != QMessageBox.StandardButton.Yes:
             return
-        templates.delete(self.db, self._current.id)
+        try:
+            templates.delete(self.db, self._current.id)
+        except ValueError as exc:
+            self.state.setText(str(exc))
+            self.state.setToolTip(str(exc))
+            return
         self._dirty = False
         self._reload()
         self.state.setText("서식을 삭제했습니다.")

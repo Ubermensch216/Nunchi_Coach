@@ -27,12 +27,32 @@ from .ui.views.launcher import LauncherDialog
 from .core import diagnostics
 from . import __version__
 
-_LOGO_PATH = Path(__file__).parent / "ui" / "assets" / "logo.png"
+_LOGO_PATH = Path(__file__).parent / "ui" / "assets" / "logo.ico"
+_WINDOWS_APP_ID = "NunchiCoach.Desktop"
+
+
+def _set_windows_app_id() -> None:
+    """작업표시줄에서 Python 대신 눈치코치의 아이콘과 창 묶음을 쓴다."""
+    if sys.platform != "win32":
+        return
+
+    import ctypes
+    from ctypes import wintypes
+
+    # Windows에는 첫 창을 만들기 전에 제품 식별자를 알려야 한다.
+    shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    set_app_id = shell32.SetCurrentProcessExplicitAppUserModelID
+    set_app_id.argtypes = [wintypes.LPCWSTR]
+    set_app_id.restype = ctypes.c_long
+    result = set_app_id(_WINDOWS_APP_ID)
+    if result < 0:
+        print(f"Windows taskbar identity failed: 0x{result & 0xffffffff:08X}", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
 
+    _set_windows_app_id()
     app = QApplication(sys.argv[:1])
     app.setApplicationName("눈치코치")
     app.setOrganizationName("NunchiCoach")

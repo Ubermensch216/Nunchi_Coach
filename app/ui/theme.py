@@ -784,6 +784,11 @@ def stylesheet(text_size: str = "medium") -> str:
     }}
     QListWidget#TemplateShelf::item:hover {{ background: {NAVBAR_HOVER}; }}
     QListWidget#TemplateShelf::item:selected {{ background: {PRIMARY_SOFT}; color: {PRIMARY}; }}
+    QPushButton#TemplateDisclosure {{
+        background: transparent; border: none; color: {TEXT_MUTED};
+        text-align: left; padding: 6px 0;
+    }}
+    QPushButton#TemplateDisclosure:hover {{ color: {PRIMARY}; }}
     QScrollArea#TemplateEditorScroll, QScrollArea#TemplateEditorScroll > QWidget > QWidget {{
         background: {BG}; border: none;
     }}
