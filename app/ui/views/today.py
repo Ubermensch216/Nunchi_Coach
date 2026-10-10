@@ -35,6 +35,7 @@ TILES = (("cases", "진행 중인 수행 건"), ("new", "새 제안"), ("due", "
 class TodayView(QWidget):
     open_task = Signal(int)
     changed = Signal()
+    go_tasks = Signal()
 
     def __init__(self, db: Database, parent: QWidget | None = None, today: date | None = None):
         super().__init__(parent)
@@ -54,7 +55,12 @@ class TodayView(QWidget):
         frame = QVBoxLayout(header)
         frame.setContentsMargins(*header_margins(theme.SP_XL))
         frame.addLayout(head_row)
-        head_column.addWidget(view_title("오늘 챙길 일"))
+        back = QPushButton("← 전체 업무")
+        back.setObjectName("Quiet")
+        back.setCursor(Qt.CursorShape.PointingHandCursor)
+        back.clicked.connect(self.go_tasks.emit)
+        head_column.addWidget(back, 0, Qt.AlignmentFlag.AlignLeft)
+        head_column.addWidget(view_title("챙길 일"))
         self.lead = muted_label("묻기 전에 먼저 챙깁니다. 제안은 과거 자료에서 읽은 것이며, 올해의 의무가 아닙니다.")
         head_column.addWidget(self.lead)
         outer.addWidget(header)

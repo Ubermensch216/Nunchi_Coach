@@ -207,7 +207,7 @@ def studio(tmp_path: Path, monkeypatch):
 
 def test_template_is_registered_from_a_file_and_applied(studio, tmp_path: Path):
     from app.studio import outputs, templates
-    from app.ui.views.notebooks.studio_panel import COL_GLYPH, TemplateDialog
+    from app.ui.views.notebooks.studio_panel import TemplateDialog
 
     panel, db, keys = studio
     dialog = TemplateDialog(db)
@@ -215,11 +215,11 @@ def test_template_is_registered_from_a_file_and_applied(studio, tmp_path: Path):
     dialog.import_file(str(_hwpx(tmp_path / "추진 계획.hwpx", REPORT)))
     # 가져온 것은 초안이다 — 저장을 눌러야 등록된다. 대제목 글이 항목이 된다.
     assert len(templates.all_templates(db)) == before and "[저장]" in dialog.state.text()
-    assert dialog.sections.toPlainText() == "추진 배경\n추진 일정" and dialog.name.text() == "추진 계획"
+    assert dialog._titles() == ["추진 배경", "추진 일정"] and dialog.name.text() == "추진 계획"
     assert "□ 추진 배경" in dialog.preview.toPlainText() and "문서 틀 표" in dialog.notes.text()
     # 저장하기 전에 사람이 고친다: 첫 목록 단계의 기호를 ○에서 1.로.
-    row = dialog._slots.index("levels.0")
-    dialog.look.item(row, COL_GLYPH).setText("1.")
+    dialog.style_slot.setCurrentIndex(dialog.style_slot.findData("levels.0"))
+    dialog.glyph.setText("1.")
     dialog.save_button.click()
     saved = templates.all_templates(db)[-1]
     assert len(templates.all_templates(db)) == before + 1 and not saved.builtin

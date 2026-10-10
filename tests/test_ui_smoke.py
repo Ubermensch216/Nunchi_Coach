@@ -116,14 +116,14 @@ def _ask_view(window: MainWindow):
 
 
 def test_asking_lives_in_the_notebook_not_in_its_own_menu(make_window, db):
-    """묻는 자리는 노트북 하나다. 메뉴는 다섯이고 다섯째가 노트북이다(맨 앞은 ‘오늘’)."""
+    """묻는 자리는 노트북 하나다. 상위 메뉴는 네 개다."""
     from app.ui.shell import NAV
 
     _add_docs(db)
     window = make_window(db)
-    assert [key for key, *_ in NAV] == ["today", "tasks", "calendar", "documents", "notebooks"]
+    assert [key for key, *_ in NAV] == ["tasks", "calendar", "documents", "notebooks"]
     assert "ask" not in window.views and "ask" not in window.topbar._buttons
-    assert "Ctrl+5" in window.topbar._buttons["notebooks"].toolTip()
+    assert "Ctrl+4" in window.topbar._buttons["notebooks"].toolTip()
 
 
 def test_window_starts_on_onboarding_when_no_source(make_window, db):
@@ -131,6 +131,49 @@ def test_window_starts_on_onboarding_when_no_source(make_window, db):
     assert window.stack.currentWidget() is window.views["onboarding"]
     # 자료원이 없으면 메뉴를 누를 수 없어야 한다 — 빈 화면으로 보내지 않는다.
     assert not window.topbar._buttons["tasks"].isEnabled()
+
+
+def test_analysis_message_and_gauge_share_state_and_click_target(qapp):
+    from PySide6.QtCore import QAbstractAnimation, Qt
+    from PySide6.QtTest import QTest
+    from app.ui.shell import TopBar
+
+    bar = TopBar("샘플")
+    bar.resize(1272, theme.TOPBAR_H)
+    clicks = []
+    bar.status_clicked.connect(lambda: clicks.append(True))
+    bar.show()
+    try:
+        bar.show_progress(1, 6, "업무를 파악하는 중")
+        qapp.processEvents()
+        assert bar.progress.parentWidget() is bar.status
+        assert bar.status.text() == "업무를 파악하는 중 · 1 / 6"
+        assert bar.progress.isVisible()
+        assert bar.progress.width() == bar.status.width() - 20
+        # 게이지를 눌러도 같은 상세 화면이 열린다.
+        QTest.mouseClick(bar.status, Qt.MouseButton.LeftButton,
+                         pos=bar.progress.geometry().center())
+        assert clicks == [True]
+        bar.show_progress(5, 6, "업무를 파악하는 중")
+        assert bar.status.animation.state() == QAbstractAnimation.State.Running
+        bar.status.animation.setCurrentTime(bar.status.animation.duration())
+        assert bar.progress.value() == 833
+        # 단계가 바뀌면 이전 단계의 채움이 남지 않는다.
+        bar.show_progress(0, 12, "문서를 읽는 중")
+        assert bar.progress.value() == 0
+        bar.show_progress(3, 0, "파일을 찾는 중")
+        assert bar.progress.maximum() == 0
+        assert bar.status.text() == "파일을 찾는 중 · 3건"
+        bar.show_progress(1, 4, "문서를 읽는 중")
+        assert bar.progress.maximum() == 1000
+        assert bar.progress.value() == 250
+        bar.show_idle("파일 6건 · 업무 2개")
+        assert not bar.progress.isVisible()
+        assert bar.status.animation.state() == QAbstractAnimation.State.Stopped
+        assert bar.status.text() == "파일 6건 · 업무 2개"
+    finally:
+        bar.close()
+        bar.deleteLater()
 
 
 def test_window_switches_to_tasks_once_source_exists(make_window, db):
@@ -1317,7 +1360,7 @@ def test_navigation_lives_in_the_top_bar(make_window, db, qapp):
     qapp.processEvents()
 
     assert [b.text() for b in window.topbar._buttons.values()] == [
-        "오늘", "업무", "일정", "문서", "노트북"
+        "업무", "일정", "문서", "노트북"
     ]
     assert not hasattr(window, "sidebar")
     # 메뉴가 답하는 질문은 버리지 않고 툴팁으로 옮겼다.
@@ -1556,21 +1599,27 @@ def _recurring_this_month(db: Database) -> None:
         "docs": [[today.year - 2, today.month], [today.year - 1, today.month]]})
 
 
-def test_window_opens_on_today_when_something_needs_attention(make_window, db):
-    """챙길 일이 있으면 ‘오늘’로, 메뉴에는 건수가 붙는다."""
+def test_attention_lives_under_tasks_and_keeps_its_actions(make_window, db):
+    """첫 화면은 업무, 챙길 일은 업무 안에서 열고 돌아온다."""
     _add_docs(db)
     _recurring_this_month(db)
     window = make_window(db)
-    assert window.stack.currentWidget() is window.views["today"]
-    assert window.topbar._buttons["today"].text() == "오늘 1"
+    assert window.stack.currentWidget() is window.views["tasks"]
+    assert "today" not in window.topbar._buttons
+    assert window.views["tasks"].attention.text() == "챙길 일 1"
     assert not window.views["today"].data.empty
+    window.views["tasks"].attention.click()
+    assert window.stack.currentWidget() is window.views["today"]
+    assert window.topbar._buttons["tasks"].isChecked()
+    window.views["today"].go_tasks.emit()
+    assert window.stack.currentWidget() is window.views["tasks"]
 
 
 def test_window_still_opens_on_tasks_when_nothing_needs_attention(make_window, db):
     _add_docs(db)
     window = make_window(db)
     assert window.stack.currentWidget() is window.views["tasks"]
-    assert window.topbar._buttons["today"].text() == "오늘"
+    assert window.views["tasks"].attention.text() == "챙길 일"
 
 
 def test_a_failing_scan_does_not_break_the_window(make_window, db, monkeypatch):

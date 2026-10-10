@@ -145,6 +145,7 @@ DETAIL_HINTS = {
 class TasksView(QWidget):
     go_documents = Signal()
     go_calendar = Signal()
+    go_attention = Signal()
     state_changed = Signal()   # 확인·교정이 일어났다 (셸의 진행도가 듣는다)
 
     def __init__(self, db: Database, parent: QWidget | None = None):
@@ -184,6 +185,12 @@ class TasksView(QWidget):
         self.head = QVBoxLayout()
         self.head.setContentsMargins(0, 0, 0, 0)
         self.head.setSpacing(theme.SP_SM)
+        self.attention = QPushButton("챙길 일")
+        self.attention.setObjectName("Quiet")
+        self.attention.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.attention.setToolTip("새 제안·진행 중인 준비 작업·확인할 단계를 봅니다")
+        self.attention.clicked.connect(self.go_attention.emit)
+        head_wrap.addWidget(self.attention, 0, Qt.AlignmentFlag.AlignRight)
         head_wrap.addLayout(self.head)
 
         self.tabs = TabBar(DETAIL_TABS)
@@ -224,13 +231,18 @@ class TasksView(QWidget):
         self.refresh()
 
     # ── 진입점 ──────────────────────────────────────────────────────
+    def set_attention_count(self, count: int) -> None:
+        self.attention.setText(f"챙길 일 {count}" if count else "챙길 일")
+
     def refresh(self) -> None:
         """분석 중에는 1.5초마다 불린다. 보고 있던 탭을 절대 빼앗지 않는다."""
         clear_layout(self.head)
         if self._task_id is not None and self.db.task(self._task_id):
+            self.attention.hide()
             self._render_detail(self._task_id)
         else:
             self._task_id = None
+            self.attention.show()
             self.tabs.setVisible(False)
             self._head_pad.setVisible(True)
             self.stack.setCurrentWidget(self.list_page)

@@ -554,11 +554,26 @@ def stylesheet(text_size: str = "medium") -> str:
         color: {NAVBAR_MUTED};
         font-size: {small}px;
     }}
+    QPushButton#AnalysisStatus {{
+        background: transparent;
+        border: none;
+        border-radius: {RADIUS_SM}px;
+        color: {NAVBAR_MUTED};
+        font-size: {small}px;
+        font-weight: 400;
+        padding: 0px 10px;
+    }}
+    QPushButton#AnalysisStatus[active="true"] {{
+        background: {PRIMARY_SOFT};
+        color: {PRIMARY};
+        padding-bottom: 10px;
+    }}
+    QPushButton#AnalysisStatus:hover {{ background: {NAVBAR_HOVER}; color: {NAVBAR_TEXT}; }}
     QProgressBar#TopProgress {{
         background: {SURFACE_ALT};
         border: none;
         border-radius: 3px;
-        height: 6px;
+        height: 4px;
         text-align: center;
     }}
     QProgressBar#TopProgress::chunk {{
@@ -755,6 +770,40 @@ def stylesheet(text_size: str = "medium") -> str:
     QLabel#OutputRowText {{ color: {TEXT}; background: transparent; }}
     /* 문서 모양으로 보는 판. 종이처럼 안쪽 여백을 넉넉히 둔다. */
     QTextBrowser#DocPreview {{ padding: {SP_MD}px; }}
+    /* 서식 관리: 보관함, 편집, 문서 예시의 역할을 나눈다. */
+    QFrame#TemplateLibrary, QFrame#TemplatePreviewPane {{
+        background: {SURFACE};
+        border: 1px solid {BORDER};
+        border-radius: {RADIUS_LG}px;
+    }}
+    QListWidget#TemplateShelf {{ background: transparent; border: none; outline: none; }}
+    QListWidget#TemplateShelf::item {{
+        padding: 8px 10px;
+        border-radius: {RADIUS_SM}px;
+        color: {TEXT_MUTED};
+    }}
+    QListWidget#TemplateShelf::item:hover {{ background: {NAVBAR_HOVER}; }}
+    QListWidget#TemplateShelf::item:selected {{ background: {PRIMARY_SOFT}; color: {PRIMARY}; }}
+    QScrollArea#TemplateEditorScroll, QScrollArea#TemplateEditorScroll > QWidget > QWidget {{
+        background: {BG}; border: none;
+    }}
+    QTableWidget#TemplateSections {{
+        border: 1px solid {BORDER};
+        border-radius: {RADIUS_SM}px;
+        background: {BG};
+        selection-background-color: {PRIMARY_SOFT};
+        selection-color: {TEXT};
+    }}
+    QTableWidget#TemplateSections::item {{ padding: 8px; border-bottom: 1px solid {BORDER}; }}
+    QTextBrowser#TemplatePreview {{
+        background: {BG}; border: 1px solid {BORDER};
+        border-radius: {RADIUS_SM}px; padding: 20px;
+    }}
+    QDialog#TemplateDialog QSpinBox, QDialog#TemplateDialog QDoubleSpinBox {{
+        background: {BG}; color: {TEXT};
+        border: 1px solid {BORDER_STRONG}; border-radius: {RADIUS}px;
+        padding: 7px 8px; min-height: 20px;
+    }}
     QTextBrowser#DocPage {{ padding: {SP_XL}px {SP_XL}px; }}
     QListWidget#SourceList::item:selected {{ background: {PRIMARY_SOFT}; color: {TEXT}; }}
     /* 여러 줄 입력칸. 맡겨 두면 윈도우의 어두운 모드 바탕을 그대로 써서, 밝은 벌에서

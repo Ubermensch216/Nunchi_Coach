@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -46,7 +46,6 @@ from .views.notebooks import NotebooksView
 # 처음 쓰는 사람에게 "눌러 봐야 아는 것"이지만, 질문이 붙으면 누르기 전에
 # 안다 — 인수인계 도구에서 첫 5분이 그 차이로 갈린다.
 NAV = [
-    ("today", "calendar", "오늘", "지금 먼저 챙길 일은 무엇인가"),
     ("tasks", "tasks", "업무", "내 업무는 무엇인가"),
     ("calendar", "calendar", "일정", "언제 무엇을 하나"),
     ("documents", "documents", "문서", "이 파일이 최신본인가"),
@@ -55,6 +54,72 @@ NAV = [
 
 # 가로 띠에서는 메뉴가 글자만으로 선다. 아이콘 체계(icons.py)는 설정 창처럼
 # 세로 목록이 있는 곳에서 쓴다.
+
+
+class AnalysisStatus(QPushButton):
+    """단계 문구와 그 단계의 진행률을 같은 클릭 영역에 담는다."""
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__("자료원이 없습니다", parent)
+        self.setObjectName("AnalysisStatus")
+        self.setFixedHeight(40)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("눌러서 단계별 진행과 실패 목록을 봅니다")
+        self.progress = QProgressBar(self)
+        self.progress.setObjectName("TopProgress")
+        self.progress.setTextVisible(False)
+        self.progress.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.progress.hide()
+        self.animation = QPropertyAnimation(self.progress, b"value", self)
+        self.animation.setDuration(320)
+        self.animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._stage = None
+        self._target = None
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self.progress.setGeometry(10, self.height() - 9, max(0, self.width() - 20), 4)
+
+    def _active(self, active: bool) -> None:
+        if self.property("active") != active:
+            self.setProperty("active", active)
+            self.style().unpolish(self)
+            self.style().polish(self)
+            self.updateGeometry()
+
+    def show_progress(self, done: int, total: int, note: str = "") -> None:
+        stage = note or "분석 중"
+        self._active(True)
+        self.progress.show()
+        if total <= 0:
+            self.animation.stop()
+            self.progress.setRange(0, 0)
+            self._target = None
+            self.setText(f"{stage} · {done:,}건" if done else stage)
+        else:
+            target = round(max(0, min(done, total)) / total * 1000)
+            reset = self._stage != stage or self.progress.maximum() == 0
+            if reset or target != self._target:
+                self.animation.stop()
+                self.progress.setRange(0, 1000)
+                if reset or target < self.progress.value():
+                    self.progress.setValue(target)
+                else:
+                    self.animation.setStartValue(max(0, self.progress.value()))
+                    self.animation.setEndValue(target)
+                    self.animation.start()
+            self._target = target
+            self.setText(f"{stage} · {done:,} / {total:,}")
+        self._stage = stage
+        self.setAccessibleName(self.text())
+
+    def show_idle(self, text: str) -> None:
+        self.animation.stop()
+        self.progress.hide()
+        self._active(False)
+        self._stage = self._target = None
+        self.setText(text)
+        self.setAccessibleName(text)
 
 
 class TopBar(QWidget):
@@ -115,13 +180,6 @@ class TopBar(QWidget):
 
         row.addStretch(1)
 
-        self.progress = QProgressBar()
-        self.progress.setObjectName("TopProgress")
-        self.progress.setFixedWidth(120)
-        self.progress.setTextVisible(False)
-        self.progress.hide()
-        row.addWidget(self.progress)
-
         # 인수인계 진행도. 어느 화면에 있든 "얼마나 남았나"가 보여야 확인
         # 작업이 끝이 있는 일로 느껴진다.
         self.handover = QPushButton("")
@@ -149,10 +207,8 @@ class TopBar(QWidget):
         self.promise.setToolTip("원본을 수정·이동·삭제·이름 변경하지 않습니다")
         row.addWidget(self.promise)
 
-        self.status = QPushButton("자료원이 없습니다")
-        self.status.setObjectName("TopLink")
-        self.status.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.status.setToolTip("눌러서 단계별 진행과 실패 목록을 봅니다")
+        self.status = AnalysisStatus()
+        self.progress = self.status.progress
         self.status.clicked.connect(self.status_clicked.emit)
         row.addWidget(self.status)
 
@@ -187,19 +243,10 @@ class TopBar(QWidget):
 
     # ── 상태 ────────────────────────────────────────────────────────
     def show_progress(self, done: int, total: int, note: str = "") -> None:
-        if total <= 0:
-            self.progress.hide()
-            self.status.setText(note or "대기 중")
-            return
-        self.progress.show()
-        self.progress.setMaximum(total)
-        self.progress.setValue(done)
-        suffix = f" · {note}" if note else ""
-        self.status.setText(f"{done:,} / {total:,} 분석 중{suffix}")
+        self.status.show_progress(done, total, note)
 
     def show_idle(self, text: str) -> None:
-        self.progress.hide()
-        self.status.setText(text)
+        self.status.show_idle(text)
 
     def show_promise(self, law_on: bool) -> None:
         """원본을 건드리지 않는다는 약속 옆에, PC 밖과 통신하는 기능이 켜져 있는지 적는다."""
@@ -292,6 +339,8 @@ class MainWindow(QMainWindow):
         self.views["tasks"].go_calendar.connect(lambda: self.go("calendar"))
         self.views["today"].open_task.connect(self._open_task_from_calendar)
         self.views["today"].changed.connect(self._sync_today)
+        self.views["today"].go_tasks.connect(lambda: self.go("tasks"))
+        self.views["tasks"].go_attention.connect(lambda: self.go("today"))
         # 업무 화면에서 확인·교정이 일어나면 상단 띠의 진행도가 그 자리에서 오른다.
         self.views["tasks"].state_changed.connect(self._sync_handover)
         self.views["calendar"].open_task.connect(self._open_task_from_calendar)
@@ -326,7 +375,7 @@ class MainWindow(QMainWindow):
         if view is None:
             return
         self.stack.setCurrentWidget(view)
-        self.topbar.select(key)
+        self.topbar.select("tasks" if key == "today" else key)
         if hasattr(view, "refresh"):
             view.refresh()
         self._sync_handover()
@@ -353,8 +402,7 @@ class MainWindow(QMainWindow):
         if not self.runner.running:
             self._show_idle_status()
         if self.stack.currentWidget() is self.views["onboarding"]:
-            # 챙길 일이 있으면 ‘오늘’로, 없으면 지금처럼 ‘업무’로 연다.
-            self.go("today" if not self.views["today"].data.empty else "tasks")
+            self.go("tasks")
 
     def _show_idle_status(self) -> None:
         counts = self.db.counts()
@@ -427,10 +475,7 @@ class MainWindow(QMainWindow):
     def _on_progress(self, stage: str, done: int, total: int, note: str) -> None:
         # 상시 화면에는 일감 이름이 아니라 지금 무엇이 일어나는지를 적는다
         # (계획서 §24). 기술 이름은 상태 상세에만 둔다.
-        if total:
-            self.topbar.show_progress(done, total, stages.running(stage))
-        else:
-            self.topbar.show_idle(f"{stages.running(stage)} · {done:,}건")
+        self.topbar.show_progress(done, total, stages.running(stage))
 
     # ── 선제 감지 ───────────────────────────────────────────────────
     def _scan_proactive(self) -> None:
@@ -453,7 +498,8 @@ class MainWindow(QMainWindow):
     def _sync_today(self) -> None:
         view = self.views["today"]
         view.refresh()
-        self.topbar.set_count("today", view.data.tiles["new"])
+        self.views["tasks"].set_attention_count(
+            view.data.tiles["new"] + view.data.tiles["cases"] + len(view.data.gaps))
 
     def _on_pipeline_finished(self) -> None:
         self._tick.stop()
