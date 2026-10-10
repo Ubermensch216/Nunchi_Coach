@@ -110,3 +110,62 @@ def run_verify(context, params: dict) -> dict:
 
 
 REGISTRY.register(Tool("verify", "1", policy.DRAFT, run_verify, label="결과 검증"))
+
+
+# ── 후속 실행의 검증 ────────────────────────────────────────────────
+# 준비 작업과 달리 산출물이 단계 출력에 묶여 있지 않다. 이 실행이 만든 산출물을 원장에서 찾는다.
+
+FOLLOWUP_TITLE = {"collection_request": "요청문 검증 결과", "collection_intake": "회신 취합 검증 결과"}
+DRAFT_KINDS = ("request_draft", "report_draft", "collection_book")      # 사전조사용 표기가 있어야 하는 것
+DATED_KINDS = ("request_draft",)                                          # 올해 날짜를 값으로 쓰면 안 되는 것
+
+
+def run_verify_run(context, params: dict) -> dict:
+    from . import followup
+
+    db = context.db
+    inputs = followup.case_inputs(context)
+    year, official = inputs.target.year, inputs.target.official
+    allowed = {context.today.isoformat()} | ({inputs.target.due.isoformat()} if inputs.target.due else set())
+    rows = [row for row in db.artifacts(run_id=context.run_id) if row["kind"] != "run_check"]
+    failures, warnings, personal = [], [], {}
+    evidence = db.evidence_for("artifact", [row["id"] for row in rows])
+    for row in rows:
+        label = row["title"]
+        if not ledger.current(db, row):
+            failures.append(f"{label}: 파일이 만든 뒤 바뀌었거나 없어졌습니다")
+            continue
+        if row["format"] == "hwpx":
+            continue
+        text = artifact_text(row)
+        personal = pii.merge(personal, pii.scan(text))
+        if not official and row["kind"] in DRAFT_KINDS and "사전조사용" not in text:
+            failures.append(f"{label}: 올해 공식 기준 미확인 표기(사전조사용)가 없습니다")
+        if not official and row["kind"] in DATED_KINDS:
+            stray = unfounded_dates(text, year, allowed)
+            if stray:
+                failures.append(f"{label}: 올해 공식 근거가 없는데 {year}년 날짜 {len(stray)}개가 실려 있습니다")
+        stale = [e for e in evidence.get(row["id"], []) if not e["current"]]
+        if stale:
+            warnings.append(f"{label}: 근거 {len(stale)}건의 원문이 그 사이 바뀌었거나 보이지 않습니다")
+    if personal:
+        warnings.append(f"개인정보 꼴이 있습니다 — {pii.describe(personal)}. 값은 적지 않았습니다")
+
+    plan = db.run(context.run_id)["plan_key"]
+    title = FOLLOWUP_TITLE.get(plan, "후속 실행 검증 결과")
+    lines = [f"# {title}", "", f"검증한 산출물 {len(rows)}건 · 대상 연도 {year}년 "
+             f"({'공식 기준 확인됨' if official else '공식 기준 미확인'})", "",
+             "## 실패", *(f"- {f}" for f in failures or ["없음"]), "",
+             "## 경고", *(f"- {w}" for w in warnings or ["없음"]), "",
+             "## 한계", "- 개인정보 점검은 주민등록번호·전화번호·전자우편 꼴만 찾습니다.",
+             "- 증빙 대조는 파일 이름과 낱말 겹침으로 본 것이며 뒷받침 여부를 판단하지 않습니다.", ""]
+    report_id = context.artifacts.save("run_check", title, f"{year}_{title}.md".replace(" ", "_"),
+                                       "\n".join(lines).encode("utf-8"),
+                                       mode="official" if official else "preliminary", basis_year=year)
+    if failures:
+        raise ToolError("검증에서 걸렸습니다: " + "; ".join(failures))
+    return {"artifact_id": report_id, "failures": 0, "warnings": len(warnings),
+            "pii": sum(personal.values()), "checked": len(rows)}
+
+
+REGISTRY.register(Tool("verify_run", "1", policy.DRAFT, run_verify_run, label="결과 검증"))

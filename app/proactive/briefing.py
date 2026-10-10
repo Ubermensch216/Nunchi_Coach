@@ -83,8 +83,8 @@ def _months_text(months: list[int]) -> str:
     return "·".join(f"{m}월" for m in sorted(months))
 
 
-def _what_it_does() -> list[str]:
-    plan = catalog.PLANS.get(catalog.RECURRING_PREP)
+def _what_it_does(plan_key: str = catalog.RECURRING_PREP) -> list[str]:
+    plan = catalog.PLANS.get(plan_key)
     by_risk: dict[str, list[str]] = {}
     for step in plan.steps:
         tool = REGISTRY.get(step.tool)
@@ -108,6 +108,10 @@ def card_for(db, rec) -> Card:
     elif kind == "official":
         title = f"{name}: 올해 공식 문서가 등록되었습니다"
         why.append(f"평가 연도가 {year}년으로 적힌 시행문·평가지표가 업무에 묶여 있습니다. 과거와 달라진 점을 확인하며 준비할 수 있습니다.")
+    elif kind == "collection_request":
+        title = f"{name}: 부서에 보낼 자료 요청문 초안을 만들 수 있습니다"
+        why.append("준비 작업이 끝나 취합 서식 초안이 있습니다. 서식을 배포본으로 확정하고, 부서에 보낼 요청문 초안을 만들 수 있습니다.")
+        why.append("실제 발송은 이 프로그램이 하지 않습니다. 기한은 확인된 것만 채우고, 수신처·관련 공문은 빈칸으로 둡니다.")
     else:
         title = f"{name}: 준비해 둔 초안을 다시 만들어야 합니다"
         why.append(f"{year}년 공식 문서가 들어와, 그 전에 만들어 둔 서식·체크리스트는 올해 기준이 아닌 것이 되었습니다. "
@@ -115,7 +119,7 @@ def card_for(db, rec) -> Card:
     docs = [{"doc_id": e["doc_id"], "filename": e["filename"]}
             for e in db.evidence_for("rec", [rec["id"]]).get(rec["id"], []) if e["doc_id"]]
     return Card(rec["id"], rec["task_id"], name, year, rec["certainty"], kind, rec["state"], title, why,
-                docs, _what_it_does(), detail.get("days_away"))
+                docs, _what_it_does(rec["plan_key"]), detail.get("days_away"))
 
 
 def cases_confidence(value: str | None) -> str:

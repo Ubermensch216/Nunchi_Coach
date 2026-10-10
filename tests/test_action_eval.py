@@ -77,3 +77,15 @@ def test_workflow_scores_hold(tmp_path):
                  "official_basis", "official_form_mode", "old_artifacts_superseded",
                  "official_due_in_checklist", "originals"):
         assert result.ratio(name) == 1.0, (name, result.problems)
+
+
+def test_followup_scores_hold(tmp_path):
+    """4단계 — 요청문 초안·서식 확정·회신 취합. 점검·증빙 건수가 정답과 다르면 안 되고, 인정이라는 말이 없어야 한다."""
+    [result] = action_eval.run(tmp_path)
+    for name in ("request_waits", "request_text", "request_due_blank", "request_hwpx_opens",
+                 "form_not_final_before_approval", "request_completes", "form_final_after_approval",
+                 "intake_completes", "intake_rows", "intake_files", "intake_problem_files",
+                 "duplicate_groups", "depts", "replies_untouched", "intake_idempotent"):
+        assert result.ratio(name) == 1.0, (name, result.problems)
+    for name in ("wrong_issue_counts", "wrong_evidence_counts", "approval_words"):
+        assert result.counts[name] == 0, (name, result.problems)

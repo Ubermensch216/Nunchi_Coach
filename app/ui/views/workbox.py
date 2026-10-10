@@ -20,11 +20,12 @@ from datetime import date
 
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import (
-    QCheckBox, QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollArea, QSpinBox,
-    QVBoxLayout, QWidget,
+    QCheckBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollArea,
+    QSpinBox, QVBoxLayout, QWidget,
 )
 
 from ...actions import catalog
+from ...actions.plans import PLANS
 from ...actions.registry import REGISTRY
 from ...actions.runner import (COMPLETED, FAILED, PARTIAL, RUN_LABEL, STEP_LABEL, WAITING, CANCELLED,
                                Runner)
@@ -39,6 +40,23 @@ SOURCE_LABEL = {"official": "공식", "stated": "문서에 적힘", "precedent":
                 "suggested": "추천", "user": "직접 추가"}
 MODE_LABEL = {"preliminary": "초안 · 사전조사용", "official": "공식 기준 반영"}
 CONTINUE_STATES = (PARTIAL, FAILED, WAITING)
+
+
+def choose_folder(parent: QWidget) -> str:
+    """부서 회신이 들어 있는 폴더. 시험에서는 이 함수를 바꿔 끼운다."""
+    return QFileDialog.getExistingDirectory(parent, "부서 회신 파일이 들어 있는 폴더를 고르세요")
+
+
+def approval_text(pending: dict) -> tuple[str, str, str]:
+    """(설명, 승인 단추, 거절 단추). 승인할 내용을 도구마다 사람의 말로 적는다."""
+    scope = pending["scope"] if isinstance(pending["scope"], dict) else {}
+    if pending["tool"] == "finalize_form":
+        return (f"‘{pending['label']}’ — 취합 서식 ‘{scope.get('title', '')}’을(를) 부서에 나눌 배포본으로 확정합니다. "
+                "확정한 뒤 서식 파일이 달라지면 이 승인은 쓸 수 없습니다. 부서에 나누는 일은 사람이 합니다.",
+                "승인하고 확정", "확정하지 않기")
+    return (f"‘{pending['label']}’ — 체크리스트 초안의 항목 {scope.get('items', 0)}개를 이 수행 건에 올립니다. "
+            "이미 직접 고치거나 진행한 항목은 덮어쓰지 않습니다. 승인하지 않아도 만든 파일은 그대로 남습니다.",
+            "승인하고 올리기", "올리지 않기")
 
 
 class WorkboxDialog(QDialog):
@@ -159,6 +177,8 @@ class WorkboxDialog(QDialog):
         self._run_id = run["id"]
         case = self.db.case(run["case_id"]) if run["case_id"] else None
         self.column.addWidget(self._case_card(run, case))
+        if case is not None:
+            self.column.addWidget(self._runs_card(case, run))
         pending = Runner(self.db, today=self.today).pending_approval(run["id"])
         if pending is not None and not self._busy:
             self.column.addWidget(self._approval_card(pending))
@@ -178,7 +198,8 @@ class WorkboxDialog(QDialog):
         card = Card(tone="attention" if case is not None and case["basis_state"] == "unconfirmed" else "")
         title = cases.title(case) if case is not None else "수행 건 없음"
         card.body.addWidget(section_title(title))
-        card.body.addWidget(muted_label(f"실행 상태: {RUN_LABEL.get(run['state'], run['state'])}"))
+        plan = PLANS.get(run["plan_key"]).title if run["plan_key"] in PLANS.keys() else run["plan_key"]
+        card.body.addWidget(muted_label(f"{plan} — {RUN_LABEL.get(run['state'], run['state'])}"))
         if case is not None:
             card.body.addWidget(muted_label(
                 f"올해 기준: {cases.BASIS_LABEL[case['basis_state']]} · {cases.due_text(case)}"))
@@ -189,6 +210,54 @@ class WorkboxDialog(QDialog):
             warn.setWordWrap(True)
             card.body.addWidget(warn)
         return card
+
+    def _runs_card(self, case, current) -> QWidget:
+        """이 수행 건의 실행들과 후속 작업. 준비 작업이 끝나야 후속 작업을 열 수 있다."""
+        runs = self.db.runs(case_id=case["id"])
+        card = Card()
+        card.body.addWidget(section_title("이 수행 건의 작업"))
+        for run in runs:
+            title = PLANS.get(run["plan_key"]).title if run["plan_key"] in PLANS.keys() else run["plan_key"]
+            button = QPushButton(f"{title} · {RUN_LABEL.get(run['state'], run['state'])}")
+            button.setObjectName("Link")
+            button.setEnabled(run["id"] != current["id"] and not self._busy)
+            button.setToolTip("누르면 이 작업의 진행과 만든 파일을 봅니다")
+            button.clicked.connect(lambda _=False, r=run["id"]: self._select(r))
+            card.body.addWidget(button, 0, Qt.AlignmentFlag.AlignLeft)
+        prepared = any(r["plan_key"] == catalog.RECURRING_PREP and r["state"] in (COMPLETED, WAITING) for r in runs)
+        row = QHBoxLayout()
+        request = QPushButton("요청문 초안 만들기")
+        request.setEnabled(prepared and not self._busy)
+        request.setToolTip("취합 서식을 배포본으로 확정(승인)하고 부서에 보낼 요청문 초안을 만듭니다. 발송은 하지 않습니다")
+        request.clicked.connect(lambda _=False: self._request(case["id"]))
+        intake = QPushButton("회신 취합…")
+        intake.setEnabled(prepared and not self._busy)
+        intake.setToolTip("부서가 채워 보낸 서식을 읽어 점검하고 취합본과 보고서 초안을 만듭니다. 회신 파일은 바뀌지 않습니다")
+        intake.clicked.connect(lambda _=False: self._intake(case["id"]))
+        row.addWidget(request)
+        row.addWidget(intake)
+        row.addStretch(1)
+        card.body.addLayout(row)
+        if not prepared:
+            card.body.addWidget(muted_label("준비 작업(서식·체크리스트)을 마친 뒤에 열립니다.", small=True))
+        return card
+
+    def _select(self, run_id: int) -> None:
+        self._run_id = run_id
+        self.refresh()
+
+    def _request(self, case_id: int) -> None:
+        _, run_id = catalog.prepare_request(self.db, case_id, today=self.today)
+        self._run_id = run_id
+        self._run(run_id)
+
+    def _intake(self, case_id: int) -> None:
+        folder = choose_folder(self)
+        if not folder:
+            return
+        _, run_id = catalog.prepare_intake(self.db, case_id, folder, today=self.today)
+        self._run_id = run_id
+        self._run(run_id)
 
     def _steps_card(self, run) -> QWidget:
         card = Card()
@@ -205,14 +274,12 @@ class WorkboxDialog(QDialog):
     def _approval_card(self, pending: dict) -> QWidget:
         card = Card(tone="primary")
         card.body.addWidget(section_title("승인이 필요합니다"))
-        count = pending["scope"].get("items", 0) if isinstance(pending["scope"], dict) else 0
-        card.body.addWidget(muted_label(
-            f"‘{pending['label']}’ — 체크리스트 초안의 항목 {count}개를 이 수행 건에 올립니다. "
-            "이미 직접 고치거나 진행한 항목은 덮어쓰지 않습니다. 승인하지 않아도 만든 파일은 그대로 남습니다."))
+        text, approve_label, reject_label = approval_text(pending)
+        card.body.addWidget(muted_label(text))
         buttons = QHBoxLayout()
-        approve = QPushButton("승인하고 올리기")
+        approve = QPushButton(approve_label)
         approve.clicked.connect(lambda _=False: self._decide(pending["step_id"], True))
-        reject = QPushButton("올리지 않기")
+        reject = QPushButton(reject_label)
         reject.setObjectName("Quiet")
         reject.clicked.connect(lambda _=False: self._decide(pending["step_id"], False))
         buttons.addWidget(approve)

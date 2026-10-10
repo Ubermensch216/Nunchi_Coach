@@ -64,17 +64,18 @@ class Runner:
     def start(self, plan_key: str, task_id: int | None = None, target_year: int | None = None,
               params: dict | None = None, case_id: int | None = None,
               recommendation_id: int | None = None,
-              inputs: Sequence[str] | None = None) -> int:
+              inputs: Sequence[str] | None = None, extra_inputs: Sequence[str] = ()) -> int:
         """실행을 만든다. 같은 일이 이미 있으면 그 실행의 id를 돌려준다.
 
         inputs는 이 실행이 딛고 선 문서의 판(해시)이다. 주지 않으면 그 업무에 묶인
-        문서 전부다 — 자료가 달라지면 다른 실행이 된다.
+        문서 전부다 — 자료가 달라지면 다른 실행이 된다. extra_inputs는 거기에 더 얹는 자료의 판이다
+        (회신 파일, 만들어 둔 서식 등).
         """
         plan = self.plans.get(plan_key)
         tools = [self.registry.get(step.tool) for step in plan.steps]
         params = {**(params or {}), "task_id": task_id, "target_year": target_year}
         if inputs is None:
-            inputs = self._task_hashes(task_id)
+            inputs = [*self._task_hashes(task_id), *extra_inputs]
         key = policy.digest({"plan": plan.key, "version": plan.version, "task": task_id,
                              "year": target_year, "inputs": sorted(inputs), "params": params,
                              "tools": [(tool.name, tool.version) for tool in tools]})

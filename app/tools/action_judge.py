@@ -6,14 +6,16 @@ action_eval.py가 자료를 만들고 분석한 뒤 여기를 부른다. 정답�
 
 from __future__ import annotations
 
+import hashlib
 import json
-from datetime import date
+import zipfile
+from datetime import date, datetime
 from pathlib import Path
 
 import openpyxl
 
 from ..actions import catalog
-from ..actions.runner import WAITING
+from ..actions.runner import COMPLETED, WAITING
 from ..actions.tools.checks import artifact_text, unfounded_dates
 from ..core import yearcompare as yc
 
@@ -171,3 +173,96 @@ def judge_official(db, task_id: int, source: Path, scenario: dict, by_path: dict
     due = [i for i in items if i.get("due_date")]
     result.score("official_due_in_checklist", int(bool(due) and all(
         i["due_date"] == official["due_date"] and i["due_state"] == "official" for i in due)), 1)
+
+
+# ── 후속 실행: 요청문 초안 · 서식 확정 · 회신 취합 ──────────────────
+
+def write_replies(root: Path, spec: dict) -> list[Path]:
+    """합성한 회신 폴더. 부서 엑셀·깨진 파일·시트 없는 파일·증빙 텍스트."""
+    made = []
+    for item in spec["files"]:
+        path = root / item["path"]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if item["kind"] == "workbook":
+            book = openpyxl.Workbook()
+            sheet = book.active
+            sheet.title = "03_부서별실적"
+            sheet.append(spec["header"])
+            for row in item["rows"]:
+                sheet.append([datetime.fromisoformat(v[5:]) if isinstance(v, str) and v.startswith("date:") else v
+                              for v in row])
+            book.save(path)
+        elif item["kind"] == "memo":
+            book = openpyxl.Workbook()
+            book.active.title = "메모"
+            book.active.append(["이 파일에는 실적표가 없습니다"])
+            book.save(path)
+        else:
+            path.write_text(item["text"], encoding="utf-8")
+        made.append(path)
+    return made
+
+
+def _fingerprint(root: Path) -> dict[str, str]:
+    return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def judge_followup(db, case_id: int, work: Path, spec: dict, result, basis: date) -> None:
+    """요청문 초안·서식 확정·회신 취합을 돌려 정답과 견준다."""
+    expect = spec["expect"]
+    runner, run_id = catalog.prepare_request(db, case_id, today=basis)
+    state = runner.execute(run_id)
+    result.score("request_waits", int(state == WAITING), 1)
+    if state != WAITING:
+        result.problems.append(f"요청문 실행: 승인 대기까지 가야 하는데 {state}")
+        result.problems += [f"  {s['tool']}: {s['error']}" for s in db.run_steps(run_id) if s["error"]]
+        return
+    steps = step_outputs(db, run_id)
+    draft = next(r for r in db.artifacts(run_id=run_id) if r["kind"] == "request_draft")
+    text = artifact_text(draft)
+    result.score("request_text", sum(phrase in text for phrase in expect["request"]["must_contain"]),
+                 len(expect["request"]["must_contain"]))
+    result.score("request_due_blank", int(steps["request_draft"]["due_filled"] == expect["request"]["due_filled"]), 1)
+    hwpx = next(r for r in db.artifacts(run_id=run_id) if r["kind"] == "request_draft_hwpx")
+    with zipfile.ZipFile(hwpx["path"]) as archive:
+        result.score("request_hwpx_opens", int(archive.testzip() is None and "Contents/section0.xml" in archive.namelist()), 1)
+    form_id = steps["request_draft"]["form_id"]
+    result.score("form_not_final_before_approval", int(db.artifact(form_id)["state"] != "final"), 1)
+    runner.decide(runner.pending_approval(run_id)["step_id"], True)
+    result.score("request_completes", int(runner.execute(run_id) == COMPLETED), 1)
+    result.score("form_final_after_approval", int(db.artifact(form_id)["state"] == "final"), 1)
+
+    folder = work / "회신폴더"
+    write_replies(folder, spec)
+    before = _fingerprint(folder)
+    runner, run_id = catalog.prepare_intake(db, case_id, folder, today=basis)
+    state = runner.execute(run_id)
+    result.score("intake_completes", int(state == COMPLETED), 1)
+    if state != COMPLETED:
+        result.problems.append(f"회신 취합 실행: {state}")
+        result.problems += [f"  {s['tool']}: {s['error']}" for s in db.run_steps(run_id) if s["error"]]
+        return
+    steps = step_outputs(db, run_id)
+    rows_ok = steps["read_replies"]["rows"] == expect["rows"]
+    result.score("intake_rows", int(rows_ok), 1)
+    result.score("intake_files", int(steps["read_replies"]["files"] == expect["files"]
+                                      and steps["read_replies"]["problem_files"] == len(expect["files_with_problems"])), 1)
+    data = json.loads(Path(db.artifact(steps["check_evidence"]["artifact_id"])["path"]).read_text(encoding="utf-8"))
+    problem_files = sorted(f["name"] for f in data["files"] if f["problems"])
+    result.score("intake_problem_files", int(problem_files == sorted(expect["files_with_problems"])), 1)
+    issues = steps["read_replies"]["issues"]
+    wrong = {k: (issues.get(k, 0), v) for k, v in expect["issues"].items() if issues.get(k, 0) != v}
+    result.count("wrong_issue_counts", len(wrong))
+    result.problems += [f"점검 건수: {k} — {got} ≠ {want}" for k, (got, want) in wrong.items()]
+    result.score("duplicate_groups", int(steps["read_replies"]["groups"] == expect["duplicate_groups"]), 1)
+    got = steps["check_evidence"]["by_status"]
+    bad = {k: (got.get(k, 0), v) for k, v in expect["evidence"].items() if got.get(k, 0) != v}
+    result.count("wrong_evidence_counts", len(bad))
+    result.problems += [f"증빙 대조: {k} — {g} ≠ {w}" for k, (g, w) in bad.items()]
+    result.score("depts", int(sorted({r["dept"] for r in data["rows"]}) == expect["departments"]), 1)
+    texts = artifact_texts(db, [run_id])
+    result.count("approval_words", sum(1 for t in texts.values() for word in expect["never"] if word in t))
+    result.score("replies_untouched", int(_fingerprint(folder) == before), 1)
+    again, same = catalog.prepare_intake(db, case_id, folder, today=basis)
+    result.score("intake_idempotent", int(same == run_id), 1)

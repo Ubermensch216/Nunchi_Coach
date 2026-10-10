@@ -39,7 +39,9 @@ def collect(tmp_path, edit=None):
 def test_every_collected_file_carries_its_official_document(tmp_path):
     state, _output, result, db = collect(tmp_path)
     try:
-        assert (result["records"], result["linked"], result["unlinked"]) == (2, 6, 0)
+        # 간헐적으로 전체 실행에서만 linked가 1로 떨어졌다. 다시 나타나면 이유가 보이게 남긴다.
+        why = [(a["status"], a.get("error"), a.get("attempts")) for a in state["assets"].values()]
+        assert (result["records"], result["linked"], result["unlinked"]) == (2, 6, 0), why
         ids = [r["id"] for r in db.con.execute("SELECT id FROM documents")]
         context = db.document_context(ids)
         assert len(context) == 6 and all("official" in item for item in context.values())

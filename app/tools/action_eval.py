@@ -201,6 +201,7 @@ def run(work: Path | None = None) -> list[Result]:
     answers = json.loads((FIXTURES / "answers.json").read_text(encoding="utf-8"))["scenarios"]
     basis = date.fromisoformat(corpus["basis"])
     root = work or Path(tempfile.mkdtemp(prefix="nunchi-action-eval-"))
+    replies = json.loads((FIXTURES / "replies.json").read_text(encoding="utf-8"))
     results = []
     try:
         for scenario in corpus["scenarios"]:
@@ -215,6 +216,7 @@ def run(work: Path | None = None) -> list[Result]:
                 judge_memory(db, answers[scenario["id"]], by_path, result)
                 first = action_judge.judge_workflow(db, task_id, by_path, answers[scenario["id"]],
                                                     result, basis)
+                action_judge.judge_followup(db, db.run(first)["case_id"], folder, replies, result, basis)
                 # 올해 공식 문서를 뒤늦게 넣기 전에 본다 — 그 뒤에는 폴더에 파일이 는다.
                 result.score("originals", int(scenario_eval._fingerprint(source) == before), 1)
                 action_judge.judge_official(db, task_id, source, scenario, by_path, answers[scenario["id"]],
