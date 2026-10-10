@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+import json
+
 import os
 import re
 import shutil
@@ -28,7 +30,7 @@ from ..ai import analyze
 from ..ingest import vision
 from ..ingest.hasher import sha256
 from ..ingest.parsers import parse, supported_extensions
-from ..ingest.parsers.base import EMPTY, MAX_BYTES, PARTIAL, ParseResult, outdated_clause
+from ..ingest.parsers.base import EMPTY, MAX_BYTES, PARTIAL, ParseResult, outdated_clause, version_of
 from ..search import pack
 from . import dating, notebook
 from .chunking import build_chunks_with_context
@@ -142,6 +144,7 @@ def write_parse(db, doc_id: int, filename: str, path: str, result: ParseResult) 
             db.invalidate_document_analysis(doc_id)
         db.update_document(
             doc_id, parse_status=result.status, parse_error=result.error, parse_note=result.note,
+            extraction_coverage=json.dumps(result.coverage, ensure_ascii=False),
             parser=result.parser, parser_version=result.parser_version, char_count=result.char_count,
             author=result.meta.author, doc_title=result.meta.title,
             meta_created=result.meta.created, meta_modified=result.meta.modified)
@@ -277,18 +280,30 @@ def ingest_file(db, notebook_id: int, path: str | Path, client=None,
     return outcome
 
 
-def outdated_uploads(db) -> list[int]:
+def outdated_uploads(db, notebook_id: int | None = None) -> list[int]:
     """다시 읽어야 하는 올린 파일 — 읽다 멈췄거나 파서가 바뀐 것."""
     return [row[0] for row in db.con.execute(
         "SELECT d.id FROM documents d JOIN sources s ON s.id=d.source_id AND s.kind='upload' "
         "WHERE d.missing_since IS NULL AND (d.parse_status='pending' "
-        "OR (d.parse_status IN ('ok','partial') AND " + outdated_clause("d") + "))")]
+        "OR (d.parse_status IN ('ok','partial') AND " + outdated_clause("d") + ")) "
+        "AND (? IS NULL OR EXISTS (SELECT 1 FROM notebook_sources ns "
+        "WHERE ns.doc_id=d.id AND ns.notebook_id=? AND ns.allowed=1)) ORDER BY d.id",
+        (notebook_id, notebook_id))]
 
 
 def reprocess(db, doc_id: int, client=None, on_phase=lambda phase: None,
               should_stop: Callable[[], bool] = lambda: False) -> Ingested:
     row = db.document(doc_id)
     outcome = Ingested(row["path"], row["filename"], doc_id)
+    # A queued document may already have been completed by another notebook.
+    # Recheck persisted state before parsing, embedding or summarizing it again.
+    if (row["parse_status"] in ("ok", "partial")
+            and row["parser_version"] == version_of(row["parser"])
+            and db.con.execute("SELECT 1 FROM document_index WHERE doc_id=?", (doc_id,)).fetchone()
+            and db.con.execute("SELECT 1 FROM document_sections WHERE doc_id=? LIMIT 1", (doc_id,)).fetchone()):
+        outcome.status = "reused"
+        outcome.note = "이미 준비된 문서의 기존 분석 결과를 사용합니다."
+        return outcome
     result = read_document(client, Path(row["path"]), on_phase, should_stop)
     write_parse(db, doc_id, row["filename"], row["path"], result)
     outcome.status, outcome.note, outcome.error = result.status, result.note or "", result.error or ""

@@ -25,6 +25,7 @@ SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
 # 스키마가 자란 뒤에 열린 옛 DB에 붙일 열들. (표, 열, DDL)
 ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("documents", "extraction_coverage", "extraction_coverage TEXT NOT NULL DEFAULT '{}'"),
     ("documents", "meta_created", "meta_created TEXT"),
     ("documents", "meta_modified", "meta_modified TEXT"),
     # v5 안에서 나중에 붙은 열. 그 전에 v5로 올라간 프로젝트가 있다.
@@ -141,7 +142,7 @@ class Database(WorkStore, ActionStore):
             self.con.execute(
                 "UPDATE documents SET eff_date=NULL,eff_date_kind=NULL,eff_precision=NULL,"
                 "eff_year=NULL,eff_month=NULL WHERE id=? AND date_decided_by!='user'", (doc_id,))
-            self.con.execute("UPDATE documents SET analysis_status='pending' WHERE id=?", (doc_id,))
+            self.con.execute("UPDATE documents SET analysis_status='pending',extraction_coverage='{}' WHERE id=?", (doc_id,))
             for task_id in task_ids:
                 self.con.execute("DELETE FROM task_cycles WHERE task_id=? AND decided_by='ai'", (task_id,))
                 self.con.execute("DELETE FROM task_steps WHERE task_id=? AND decided_by='ai'", (task_id,))

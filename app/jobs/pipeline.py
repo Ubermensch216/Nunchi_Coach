@@ -12,6 +12,8 @@ jobs 테이블은 재시도 횟수를 세는 데만 쓴다. 실패한 파일을 
 
 from __future__ import annotations
 
+import json
+
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -270,6 +272,7 @@ class Pipeline(QObject):
                     parse_status=result.status,
                     parse_error=result.error,
                     parse_note=result.note,
+                    extraction_coverage=json.dumps(result.coverage, ensure_ascii=False),
                     parser=result.parser,
                     parser_version=result.parser_version,
                     char_count=result.char_count,

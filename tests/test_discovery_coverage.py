@@ -100,6 +100,26 @@ def test_cancelled_rediscovery_keeps_previous_tasks_and_assignments(db, tmp_path
     assert [tuple(r) for r in db.con.execute("SELECT * FROM task_docs")] == links
 
 
+def test_user_can_edit_during_model_call_and_new_proposals_do_not_overwrite_it(db, tmp_path, monkeypatch):
+    for i in range(3):
+        add(db, tmp_path, f"업무_{i}.txt", "같은 업무" + str(i), (0., 1., 0.))
+    discover(db)
+    task = db.tasks()[0]["id"]
+    client = SimpleNamespace(embed_model="fake", health=lambda: SimpleNamespace(generation_ready=True))
+    def naming(*args):
+        other = Database(db.path)
+        try:
+            other.rename_task(task, "사람이 고친 업무")
+        finally:
+            other.close()
+        return TaskNaming("AI 이름", "", True)
+    monkeypatch.setattr("app.ai.discover.name_task", naming)
+    result = discover(db, client)
+    assert result.errors and "교정" in result.errors[0]
+    assert db.task(task)["name"] == "사람이 고친 업무"
+    assert len(db.task_documents(task)) == 3
+
+
 def test_human_detachment_does_not_return_as_a_new_singleton(db, tmp_path):
     doc = add(db, tmp_path, "유일업무.txt", "업무", (0., 1., 0.))
     discover(db)
@@ -137,3 +157,71 @@ def test_uploads_are_not_discovered_as_predecessor_businesses(db, tmp_path):
     db.con.execute("UPDATE sources SET kind='upload'")
     store, _ = discovery_index.load(db, "fake")
     assert store.size == 0
+
+
+def test_task_drawer_uses_contributing_tail_and_marks_changed_source(db, tmp_path):
+    from app.ui.views.evidence import for_task
+    doc = add(db, tmp_path, "업무.txt", "후반부 예산 정산 근거", (0., 1., 0.))
+    discover(db)
+    task = db.tasks()[0]
+    shown = for_task(db, task, db.task_documents(task["id"]))
+    assert any("후반부 예산" in item.snippet for item in shown)
+    db.update_document(doc, hash="changed")
+    stale = for_task(db, task, db.task_documents(task["id"]))
+    assert stale and all(not item.snippet and "다시 확인" in item.note for item in stale)
+
+
+def test_rejected_or_detached_tasks_are_not_counted_as_current_classification_evidence(db, tmp_path):
+    from app.core.coverage import snapshot
+    add(db, tmp_path, "업무.txt", "예산 정산 근거", (0., 1., 0.))
+    discover(db)
+    assert snapshot(db)["classification_evidence_documents"] == 1
+    task = db.tasks()[0]["id"]
+    db.mark_not_a_task(task)
+    assert snapshot(db)["classification_evidence_documents"] == 0
+    db.mark_not_a_task(task, False)
+    assert snapshot(db)["classification_evidence_documents"] == 1
+    db.detach_document(task, db.task_documents(task)[0]["id"])
+    assert snapshot(db)["classification_evidence_documents"] == 0
+
+
+def test_cluster_means_match_pairwise_calculation_without_large_matrix():
+    import numpy as np
+    from app.core.clustering import _mean_within, _mean_between
+    from app.search.vector import normalize
+    matrix = normalize(np.random.default_rng(42).normal(size=(31, 7)).astype(np.float32))
+    left, right = np.arange(20), np.arange(20, 31)
+    brute = matrix[left] @ matrix[left].T
+    expected = (brute.sum() - np.trace(brute)) / (20 * 19)
+    assert _mean_within(matrix, left) == pytest.approx(float(expected), abs=1e-7)
+    assert _mean_between(matrix, left, right) == pytest.approx(float((matrix[left] @ matrix[right].T).mean()), abs=1e-7)
+
+
+def test_near_identical_table_rows_do_not_merge_different_businesses(db, tmp_path):
+    """표를 행마다 조각으로 내는 형식은 조각 대부분이 같은 틀의 행이다. 글자는 숫자만 달라
+    '똑같은 조각'으로는 걸러지지 않는다 — 그대로 평균하면 업무가 아니라 형식으로 묶인다."""
+    sid = db.add_source(tmp_path / "source")
+    db.set_meta("embed_model", "fake")
+    expected = []
+    names = ("예산", "감사", "계약", "민원", "기록", "교육")
+    row_axis = (1.,) + (0.,) * len(names)
+    for number, name in enumerate(names, start=1):
+        axis = tuple(1. if k == number else 0. for k in range(len(names) + 1))
+        group = set()
+        for i in range(3):
+            filename = f"{name}_{i}.hwpx"
+            doc = db.upsert_document(sid, {"path": str(tmp_path / "source" / filename), "filename": filename,
+                "ext": ".hwpx", "parse_status": "ok", "hash": filename, "char_count": 500})
+            db.save_doc_embedding(doc, "fake", len(axis), pack(axis), 1200)
+            pieces = [(1, "1문단", f"{name} 업무의 추진 계획과 제출 기한을 적은 본문 {i}")]
+            pieces += [(n + 2, f"표 1 · {n + 1}행", f"머리글: 항목 | 계획 | 실적\n1열: {name}{i} | 2열: {n}{i}")
+                       for n in range(6)]
+            chunks = db.replace_document_chunks(doc, pieces)
+            db.save_chunk_embedding(chunks[0][0], "fake", len(axis), pack(axis))
+            for chunk in chunks[1:]:
+                db.save_chunk_embedding(chunk[0], "fake", len(axis), pack(row_axis))
+            group.add(doc)
+        expected.append(group)
+    discover(db)
+    actual = [{r["id"] for r in db.task_documents(t["id"])} for t in db.tasks()]
+    assert len(actual) == len(names) and all(group in actual for group in expected)

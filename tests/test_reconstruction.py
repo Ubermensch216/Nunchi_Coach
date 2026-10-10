@@ -263,3 +263,23 @@ def test_pipeline_stage_fills_items_without_a_model(project, monkeypatch):
     # 문서가 바뀌면 다음 실행이 다시 읽는다.
     db.invalidate_document_analysis(1)
     assert db.get_meta("items_checked") is None
+
+
+def test_table_rows_that_share_a_first_column_are_not_one_item():
+    """첫 열이 여러 행에 되풀이되는 표(정책사업 아래 세부사업)에서 행마다 다른 금액은
+    엇갈리는 자료가 아니다. 첫 열만 이름으로 쓰면 한 항목으로 합쳐져 가짜 엇갈림이 된다."""
+    header = "머리글: 정책사업 | 세부사업 | 예산액 | 증감"
+    rows = [
+        read(f"{header}\n1열: 정책사업 1 | 2열: 세부사업 {n} | 3열: {n}00 | 4열: 0\n단위: 천원", doc=n)
+        for n in (1, 2, 3)
+    ]
+    found = [item for chunk in rows for item in chunk]
+    assert len({item.slot for item in found}) == 3
+    assert {item.slot for item in found} == {f"예산액 · 정책사업 1 / 세부사업 {n}" for n in (1, 2, 3)}
+    chosen = [c for c in rc.choose(found, BASIS) if c["kind"] == rc.AMOUNT]
+    assert len(chosen) == 3 and all(c["basis_state"] == ws.STATED for c in chosen)
+
+
+def test_table_row_name_stays_the_first_column_when_values_start_at_the_second():
+    item = one("첫 행: 사업 | 예산(백만원) | 비고\n1열: 시범사업 3 | 2열: 820 | 3열: 계속")
+    assert item.slot == "예산 · 시범사업 3"

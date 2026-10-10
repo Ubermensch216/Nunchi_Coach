@@ -66,8 +66,7 @@ class _Cancelled(Exception):
 def discover(db, client=None, threshold=None, min_size=None, on_progress=None) -> Discovery:
     # Failed/cancelled rediscovery must not erase the previous proposals.
     try:
-        with db.transaction():
-            return _discover(db, client, threshold, min_size, on_progress)
+        return _discover(db, client, threshold, min_size, on_progress)
     except _Cancelled:
         return Discovery(tasks=len(db.tasks()), unassigned=db.unclassified_count(), cancelled=True,
                          errors=["업무 발견을 중단했습니다. 이전 제안을 보존했습니다."])
@@ -81,6 +80,7 @@ def _discover(
     on_progress: Callable[[int, int, str], None] | None = None,
 ) -> Discovery:
     result = Discovery()
+    revision = (db.get_meta("content_revision"), db.get_meta("chunking_version"))
 
     model = client.embed_model if client else db.get_meta("embed_model") or "bge-m3"
     store, contributions = discovery_index.load(db, model)
@@ -106,12 +106,9 @@ def _discover(
     result.clusters = len(grouping.clusters)
     result.unassigned = len(grouping.unassigned)
 
-    _clear_proposals(db)
-    db.con.execute("DELETE FROM discovery_holds")
     naming_ready = bool(client and client.health().generation_ready)
-    reviewed: set[int] = set()
-    held: set[int] = set()
-
+    prepared = []
+    # Model calls hold no write transaction: the user can still correct tasks.
     for index, group in enumerate(grouping.clusters, start=1):
         if client is not None and getattr(client, "cancelled", False):
             raise _Cancelled()
@@ -122,6 +119,27 @@ def _discover(
         named = _name(client if naming_ready else None, names, tokens, excerpts)
         if client is not None and getattr(client, "cancelled", False):
             raise _Cancelled()
+        prepared.append((group, named, excerpts))
+        if on_progress:
+            on_progress(index, len(grouping.clusters), named.label)
+    with db.transaction():
+        current = (db.get_meta("content_revision"), db.get_meta("chunking_version"))
+        if current != revision or _protected_documents(db) != protected:
+            return Discovery(tasks=len(db.tasks()), unassigned=db.unclassified_count(),
+                             errors=["검토 중 자료나 사용자 교정이 변경되어 이전 제안을 보존했습니다. 다시 실행해 주세요."])
+        return _save_discovery(db, client, result, grouping, store, contributions, model,
+                               prepared, naming_ready, protected, min_size)
+
+
+def _save_discovery(db, client, result, grouping, store, contributions, model,
+                    prepared, naming_ready, protected, min_size):
+    if client is not None and getattr(client, "cancelled", False):
+        raise _Cancelled()
+    _clear_proposals(db)
+    db.con.execute("DELETE FROM discovery_holds")
+    reviewed: set[int] = set()
+    held: set[int] = set()
+    for group, named, excerpts in prepared:
         if naming_ready and not named.error:
             reviewed.update(e["chunk_id"] for e in excerpts)
         if named.coherent is False:
@@ -142,9 +160,6 @@ def _discover(
         assigned = _attach(db, task_id, group.doc_ids)
         result.assigned += assigned
         _store_reading(db, task_id, group.doc_ids)
-
-        if on_progress:
-            on_progress(index, len(grouping.clusters), named.label)
 
     if not (client is not None and getattr(client, "cancelled", False)):
         _group_leftovers(db, grouping.unassigned, min_size or DEFAULT_MIN_SIZE, result)

@@ -111,6 +111,30 @@ def for_task(db: Database, task: sqlite3.Row, docs) -> list[Evidence]:
     if (task["origin"] or "") == "user" or (task["status"] or "") == "edited":
         # 사람이 적은 설명에 AI의 근거를 붙이면 거짓말이 된다.
         return []
+    recorded = db.con.execute(
+        "SELECT e.*,d.filename,d.path,d.hash current_hash,d.missing_since,c.text "
+        "FROM discovery_evidence e JOIN documents d ON d.id=e.doc_id "
+        "JOIN task_docs td ON td.task_id=e.task_id AND td.doc_id=e.doc_id "
+        "LEFT JOIN chunks c ON c.id=e.chunk_id AND c.doc_id=e.doc_id "
+        "WHERE e.task_id=? ORDER BY e.score DESC,e.doc_id,e.piece_key LIMIT ?",
+        (task["id"], MAX_TASK_DOCS)).fetchall()
+    if recorded:
+        out = []
+        for row in recorded:
+            current = bool(row["doc_hash"] and row["doc_hash"] == row["current_hash"]
+                           and row["missing_since"] is None)
+            if not current or (row["basis"] == "full_chunks" and row["text"] is None):
+                note, text = "원문 또는 색인이 변경되어 분류 근거를 다시 확인해야 합니다.", ""
+            elif row["basis"] == "full_chunks":
+                note = "전체 본문 조각으로 업무 후보를 만들 때 사용한 대목입니다."
+                if row["reviewed_by_model"]:
+                    note += " 이 조각의 일부 발췌를 이름·일치성 검토 모델에 제공했습니다."
+                text = _clip(row["text"])
+            else:
+                note, text = "전체 조각 색인이 준비되지 않아 파일명·본문 앞부분 벡터를 사용했습니다.", ""
+            out.append(Evidence(label=row["filename"], locator=row["locator"], snippet=text,
+                                path=row["path"], note=note))
+        return out
     return from_documents(db, [row["id"] for row in docs][:MAX_TASK_DOCS])
 
 

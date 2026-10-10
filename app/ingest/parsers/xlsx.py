@@ -56,8 +56,18 @@ def parse(path: Path) -> ParseResult:
         out: list[Section] = []
         ordinal = 0
         truncated: list[str] = []
+        sheets = []
+        omissions = []
+        char_limited = False
 
         for ws in wb.worksheets:
+            if budget[0] <= 0:
+                omissions.append({"reason": "character_limit", "sheet": ws.title,
+                                  "unit": "unvisited_sheet", "count": 1})
+                continue
+            info = {"sheet": ws.title, "declared_rows": ws.max_row, "declared_columns": ws.max_column,
+                    "rows_visited": 0, "cells_visited": 0, "nonempty_cells": 0}
+            sheets.append(info)
             cells_seen = 0
             buffer: list[str] = []
             first_row = None
@@ -68,20 +78,48 @@ def parse(path: Path) -> ParseResult:
             continued = False
 
             def close_section() -> None:
-                nonlocal ordinal, buffer, first_row, max_col, continued
+                nonlocal ordinal, buffer, first_row, max_col, continued, char_limited
                 if not buffer:
                     return
                 ordinal += 1
                 lines = [header, *buffer] if continued and header else buffer
-                out.append(_section(ws.title, ordinal, first_row, last_row, max_col, lines, budget, header))
+                requested = len(f"[{ws.title}]\n" + "\n".join(lines))
+                section = _section(ws.title, ordinal, first_row, last_row, max_col, lines, budget, header)
+                if len(section.text) < requested:
+                    char_limited = True
+                    omissions.append({"reason": "character_limit", "sheet": ws.title,
+                                      "unit": "section", "rows": [first_row, last_row],
+                                      "characters_omitted": requested - len(section.text)})
+                out.append(section)
                 buffer, first_row, max_col, continued = [], None, 0, True
 
-            for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
+            # A forged huge sheet width must not allocate an unbounded row tuple.
+            width = min(ws.max_column or 1, MAX_CELLS_PER_SHEET)
+            for row_idx, row in enumerate(ws.iter_rows(values_only=True, max_col=width), start=1):
+                if budget[0] <= 0:
+                    char_limited = True
+                    omissions.append({"reason": "character_limit", "sheet": ws.title,
+                                      "unit": "remaining_rows", "first_row": row_idx,
+                                      "count": None})
+                    break
                 if cells_seen >= MAX_CELLS_PER_SHEET:
                     truncated.append(ws.title)
+                    omissions.append({"reason": "cell_limit", "sheet": ws.title,
+                                      "unit": "remaining_rows", "first_row": row_idx, "count": None})
                     break
-                values = [_fmt(v) for v in row]
+                room = MAX_CELLS_PER_SHEET - cells_seen
+                bounded = row[:room]
+                values = [_fmt(v) for v in bounded]
                 cells_seen += len(values)
+                info["rows_visited"] = row_idx
+                info["cells_visited"] = cells_seen
+                info["nonempty_cells"] += sum(bool(v) for v in values)
+                if len(bounded) < len(row) or (ws.max_column or 1) > width:
+                    if ws.title not in truncated:
+                        truncated.append(ws.title)
+                    omissions.append({"reason": "cell_limit", "sheet": ws.title, "unit": "row_tail",
+                                      "row": row_idx, "first_column": len(bounded) + 1,
+                                      "last_column_declared": ws.max_column})
                 if not any(values):
                     continue
                 line = "\t".join(values).rstrip()
@@ -89,6 +127,11 @@ def parse(path: Path) -> ParseResult:
                 if buffer and (len(buffer) >= ROWS_PER_SECTION
                                or sum(map(len, buffer)) + len(buffer) + len(line) > SECTION_CHARS):
                     close_section()
+                    if budget[0] <= 0:
+                        char_limited = True
+                        omissions.append({"reason": "character_limit", "sheet": ws.title,
+                                          "unit": "remaining_rows", "first_row": row_idx, "count": None})
+                        break
                 if header is None and not continued and _is_header(row, line):
                     header = line
                 max_col = max(max_col, len(values))
@@ -102,17 +145,22 @@ def parse(path: Path) -> ParseResult:
         wb.close()
 
     out = [s for s in out if s.text]
-    if not out:
-        return ParseResult(status=EMPTY, parser=PARSER, meta=meta)
-
-    note = f"{', '.join(truncated)} 시트는 셀 상한으로 일부만 읽음" if truncated else None
-    return ParseResult(
-        status=PARTIAL if truncated else OK,
-        parser=PARSER,
-        sections=out,
-        meta=meta,
-        note=note,
-    )
+    coverage = {"version": 1, "scope": "xlsx_cached_values", "completeness": "unverified",
+                "sheets_total": len(wb.worksheets), "sheets_visited": len(sheets), "sheets": sheets,
+                "cells_visited": sum(s["cells_visited"] for s in sheets),
+                "characters_emitted": sum(len(s.text) for s in out),
+                "character_limit": MAX_CHARS, "cell_limit_per_sheet": MAX_CELLS_PER_SHEET,
+                "omissions": omissions,
+                "limitations": ["dimensions_are_declared_not_verified", "formula_cache_not_verified",
+                                "charts_images_and_formatting_not_extracted"]}
+    notes = []
+    if truncated:
+        notes.append(f"{', '.join(truncated)} 시트는 셀 상한으로 일부만 읽음")
+    if char_limited or any(o["unit"] == "unvisited_sheet" for o in omissions):
+        notes.append("글자 상한으로 일부만 읽음")
+    return ParseResult(status=(PARTIAL if omissions else OK) if out else EMPTY,
+                       parser=PARSER, sections=out, meta=meta, coverage=coverage,
+                       note="; ".join(notes) or None)
 
 
 def _section(sheet, ordinal, first_row, last_row, max_col, buffer, budget, header=None) -> Section:

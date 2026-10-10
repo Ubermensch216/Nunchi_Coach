@@ -5,10 +5,22 @@
 """
 
 import json
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+import pytest
+from PySide6.QtWidgets import QApplication
 
 from app.core import docrole
 from app.jobs.pipeline import STAGE_ROLES, Pipeline
 from app.tools import action_eval
+
+
+@pytest.fixture(scope="module", autouse=True)
+def qapp():
+    # 평가 도구는 앱이 없으면 QCoreApplication을 만든다. 그것이 먼저 생기면 뒤의
+    # 화면 시험이 QApplication을 얻지 못한다 — 여기서 먼저 만들어 둔다.
+    return QApplication.instance() or QApplication([])
 
 
 def test_memory_scores_hold(tmp_path):
@@ -47,3 +59,21 @@ def test_role_stage_is_incremental_and_follows_changed_documents(tmp_path):
         assert changed not in docrole.roles(db, [changed])
     finally:
         db.close()
+
+
+def test_workflow_scores_hold(tmp_path):
+    """2단계 — 문턱은 answers.json의 thresholds. 틀린 비교와 근거 없는 올해 값은 0건이어야 한다."""
+    [result] = action_eval.run(tmp_path)
+    thresholds = json.loads((action_eval.FIXTURES / "answers.json").read_text(
+        encoding="utf-8"))["thresholds"]
+    assert result.ratio("discover_recall") >= thresholds["discover_recall"], result.problems
+    assert result.ratio("discover_precision") >= thresholds["discover_precision"], result.problems
+    assert result.counts["wrong_comparisons"] == thresholds["wrong_comparisons"], result.problems
+    assert result.counts["unfounded_current_values"] == thresholds["unfounded_current_values"], result.problems
+    assert result.counts["official_wrong_comparisons"] == 0, result.problems
+    for name in ("run_state", "discover_suspect", "target_unconfirmed", "form_mode", "must_say",
+                 "form_sheets", "form_columns", "checklist_no_due", "checklist_first",
+                 "procedure_added", "injection_ignored", "official_new_run", "official_run_state",
+                 "official_basis", "official_form_mode", "old_artifacts_superseded",
+                 "official_due_in_checklist", "originals"):
+        assert result.ratio(name) == 1.0, (name, result.problems)

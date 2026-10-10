@@ -143,7 +143,7 @@ def _read_table_row(lines, doc_id, locator, doc_year, official) -> list[Found] |
     headers = [part.strip() for part in head.group(1).split(" | ")]
     cells = {int(number): value.strip() for number, value in _TABLE_CELL.findall(lines[1])}
     unit = next((m.group(1).strip() for m in map(_UNIT_LINE.match, lines[2:]) if m), "")
-    row_name = cells.get(1, "")
+    row_name = _row_name(headers, cells)
     quote = " ".join(lines[:3])
 
     found: list[Found] = []
@@ -164,6 +164,29 @@ def _read_table_row(lines, doc_id, locator, doc_year, official) -> list[Found] |
         if item is not None:
             found.append(item)
     return found
+
+
+_ROW_NAME_COLUMNS = 3
+
+
+def _row_name(headers: list[str], cells: dict[int, str]) -> str:
+    """표 행의 이름 — 첫 값 열 앞에 있는 열들을 잇는다.
+
+    첫 열만 쓰면, 첫 열이 여러 행에 되풀이되는 표(정책사업 아래 세부사업 여럿)에서 서로 다른
+    행의 값이 한 항목으로 합쳐져 가짜 '자료가 엇갈림'이 된다. 병합된 첫 열은 파서가 덮는
+    모든 행에 같은 값을 채운다. 값 열이 두 번째 열이면 지금까지처럼 첫 열 하나다.
+    """
+    value_column = next((number for number, header in enumerate(headers, start=1)
+                         if number > 1 and _kind_of_header(header) is not None), 0)
+    last = value_column - 1 if value_column else 1
+    names = [cells.get(number, "") for number in range(1, min(last, _ROW_NAME_COLUMNS) + 1)]
+    return " / ".join(name for name in names if name)
+
+
+def _kind_of_header(header: str) -> str | None:
+    labeled = re.match(r"^(?P<name>[^()]+?)\s*(?:\((?P<unit>[^)]{1,12})\))?$", header or "")
+    name = (labeled.group("name") if labeled else header or "").replace(" ", "")
+    return next((kind for label, kind in _KIND_OF.items() if label.replace(" ", "") == name), None)
 
 
 def _build(kind, slot, raw, unit, quote, doc_id, locator, doc_year, official) -> Found | None:

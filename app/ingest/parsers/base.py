@@ -19,7 +19,9 @@ PARSER_VERSION = "4"
 # xlsx 5: 시트를 행 경계에서 나누고(행 중간에서 자르지 않는다) 이어지는 조각에 머리 행을 붙인다.
 # docx 5: 긴 표를 행 경계에서 나누고 이어지는 조각에 첫 행을 붙인다. 제목 계층을 구조 정보로 남긴다.
 # text 2: UTF-16(메모장 '유니코드') 저장본을 바르게 읽는다.
-PARSER_REVISIONS = {"xlsx": "5", "docx": "5", "text": "2"}
+# pdf 5 / xlsx 6: 방문 범위와 생략 이유를 계측하고 추출 상한 누락을 부분 추출로 표시한다.
+# hwp/hwpx 5: 스트림·XML·셀·병합 범위를 계측하고 HWPX 속성의 생성/수정일을 구분한다.
+PARSER_REVISIONS = {"xlsx": "6", "pdf": "5", "hwpx": "5", "hwp": "5", "docx": "5", "text": "2"}
 
 
 def version_of(parser: str | None) -> str:
@@ -97,6 +99,8 @@ class ParseResult:
     note: str | None = None
     elapsed_ms: int = 0
     parser_version: str = ""
+    # Observed extraction scope, not a guarantee of semantic or visual completeness.
+    coverage: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.parser_version = self.parser_version or version_of(self.parser)

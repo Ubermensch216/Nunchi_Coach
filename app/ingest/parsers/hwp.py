@@ -83,8 +83,32 @@ def parse(path: Path) -> ParseResult:
         out: list[Section] = []
         ordinal = 0
         errors: list[str] = []
+        visited = 0
+        limited = False
+        def scope(preview=False, preview_chars=0):
+            omissions = []
+            if errors:
+                omissions.append({"reason": "body_stream_error", "count": len(errors)})
+            if limited:
+                omissions.append({"reason": "character_limit"})
+            if preview:
+                omissions.append({"reason": "preview_fallback_body_unavailable"})
+            return {"version": 1, "scope": "hwp_preview" if preview else "hwp_paragraph_records",
+                    "completeness": "unverified", "body_streams_total": len(streams),
+                    "body_streams_visited": visited, "body_streams_failed": len(errors),
+                    "body_streams_unvisited": len(streams) - visited,
+                    "paragraphs_emitted": len(out),
+                    "characters_emitted": preview_chars if preview else sum(len(s.text) for s in out),
+                    "character_limit": MAX_CHARS, "preview_fallback": preview,
+                    "omissions": omissions,
+                    "limitations": ["table_structure_not_preserved", "record_completeness_not_verified",
+                                    "images_and_layout_not_extracted"]}
 
         for entry in streams:
+            if budget[0] <= 0:
+                limited = True
+                break
+            visited += 1
             try:
                 data = ole.openstream(entry).read()
                 if compressed:
@@ -100,6 +124,8 @@ def parse(path: Path) -> ParseResult:
                 if not para.strip():
                     continue
                 body = clip(para, budget)
+                if len(body) < len(para):
+                    limited = True
                 if not body:
                     break
                 ordinal += 1
@@ -107,26 +133,32 @@ def parse(path: Path) -> ParseResult:
 
         if out:
             note = f"일부 스트림 실패: {'; '.join(errors)}" if errors else None
-            status = PARTIAL if errors else OK
+            if limited:
+                note = (note + "; " if note else "") + "글자 상한으로 일부만 읽음"
+            status = PARTIAL if errors or limited else OK
             return ParseResult(
-                status=status, parser=PARSER, sections=out, meta=meta, note=note
+                status=status, parser=PARSER, sections=out, meta=meta, note=note, coverage=scope()
             )
 
         # 본문을 못 읽으면 미리보기 텍스트로 폴백한다.
         preview = _preview_text(ole)
         if preview:
             body = clip(preview, [MAX_CHARS])
+            limited = len(body) < len(preview)
             return ParseResult(
                 status=PARTIAL,
                 parser=PARSER,
                 sections=[Section("preview", 1, "미리보기", body)],
                 meta=meta,
                 note="본문 스트림 추출 실패 — PrvText 미리보기로 폴백",
+                coverage=scope(preview=True, preview_chars=len(body)),
             )
 
     if errors:
-        return failed(PARSER, "; ".join(errors))
-    return ParseResult(status=EMPTY, parser=PARSER, meta=meta)
+        result = failed(PARSER, "; ".join(errors))
+        result.coverage = scope()
+        return result
+    return ParseResult(status=EMPTY, parser=PARSER, meta=meta, coverage=scope())
 
 
 def _records(buf: bytes):

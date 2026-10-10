@@ -234,11 +234,11 @@ def test_only_documents_of_a_revised_parser_are_read_again():
     con.execute("CREATE TABLE documents (name TEXT, parser TEXT, parser_version TEXT)")
     con.executemany("INSERT INTO documents VALUES (?,?,?)", [
         ("옛 엑셀", "xlsx", PARSER_VERSION), ("새 엑셀", "xlsx", version_of("xlsx")),
-        ("PDF", "pdf", PARSER_VERSION), ("옛 PDF", "pdf", "1"), ("판본 없음", None, None)])
+        ("PDF", "pdf", version_of("pdf")), ("옛 PDF", "pdf", "1"), ("판본 없음", None, None)])
     stale = [row[0] for row in con.execute(f"SELECT name FROM documents d WHERE {outdated_clause('d')}")]
     assert stale == ["옛 엑셀", "옛 PDF", "판본 없음"]
     assert ParseResult(OK, "xlsx").parser_version == version_of("xlsx") != PARSER_VERSION
-    assert ParseResult(OK, "pdf").parser_version == PARSER_VERSION
+    assert ParseResult(OK, "pdf").parser_version == version_of("pdf")
 
 
 # ── DOCX 구조 보존 (노트북 RAG 2단계) ──────────────────────────────

@@ -19,6 +19,11 @@
 
 ## 현행 문서 (`docs/`)
 
+전임자 업무 복원 개선은 [파이프라인 감사](NUNCHI_FULL_PIPELINE_AUDIT.md),
+[파일 처리 범위](NUNCHI_DOCUMENT_COVERAGE_REPORT.md), [업무 발견 평가](NUNCHI_TASK_DISCOVERY_EVALUATION.md),
+[변경·승격·롤백 기록](NUNCHI_ARCHITECTURE_CHANGELOG.md), [잔여 위험](NUNCHI_REMAINING_RISKS.md)에 정리한다.
+직전 노트북 RAG 개선과 후속 실행 엔진 변경을 보존한 작업이다. 합성 반례 결과를 기관 자료 정확도로 해석하지 않는다.
+
 2026-10-09의 진단·단계별 구현·업무 노트북 데이터 계약은 [통합 구현 현황](INTEGRATION_IMPLEMENTATION_2026-10-09.md), 반영한 사용자 보고서 원문은 [통합 종합보고서](INTEGRATION_REFERENCE_2026-10-08.md)에 보존한다.
 
 이어 진행한 상충 항목 대조·산문 질문의 과잉 보류 개선과 동결 평가 결과는 [질문 품질 후속 기록](QUESTION_QUALITY_STAGE_2026-10-09.md)에 정리한다.

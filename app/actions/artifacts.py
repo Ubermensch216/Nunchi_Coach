@@ -17,6 +17,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from ..core.output_policy import UnsafeOutputError, validate_output
+from ..core.paths import relative_to_source
 from ..core.workcard import default_output_dir
 
 ACTIONS_DIR = "actions"
@@ -48,8 +49,12 @@ class ArtifactWriter:
 
     def save(self, kind: str, title: str, filename: str, data: bytes, *,
              mode: str = "preliminary", basis_year: int | None = None,
-             sources=()) -> int:
-        """산출물 id를 돌려준다. sources는 만들 때 본 문서의 판 — [{doc_id, hash}]."""
+             sources=(), evidence=()) -> int:
+        """산출물 id를 돌려준다.
+
+        sources는 만들 때 본 문서의 판 — [{doc_id, hash}]. evidence는 이 산출물의 결론이
+        기댄 대목 — [{doc_id, locator, quote}]. 같은 내용을 다시 저장하면 새로 적지 않는다.
+        """
         if not isinstance(data, (bytes, bytearray)):
             raise TypeError("산출물은 바이트로 넘겨야 합니다.")
         db = self._db
@@ -65,11 +70,13 @@ class ArtifactWriter:
         with db.transaction():
             if previous is not None:
                 db.set_artifact_state(previous["id"], "superseded")
-            return db.add_artifact(
+            artifact_id = db.add_artifact(
                 kind, title, target.suffix.lower().lstrip("."), str(target), digest,
                 run_id=self._run_id, step_id=self._step_id, case_id=self._case_id,
                 mode=mode, basis_year=basis_year, sources=sources, version=version,
                 supersedes_id=previous["id"] if previous is not None else None)
+            _add_evidence(db, artifact_id, evidence)
+            return artifact_id
 
     def _target(self, filename: str, version: int, digest: str) -> Path:
         folder = run_dir(self._db, self._case_id, self._run_id)
@@ -80,6 +87,22 @@ class ArtifactWriter:
             stem, suffix = Path(name).stem, Path(name).suffix
             target = folder / f"{stem}_v{version}{suffix}"
         return target
+
+
+def _add_evidence(db, artifact_id: int, evidence) -> None:
+    seen: set[tuple] = set()
+    for item in evidence:
+        key = (item["doc_id"], item["locator"], item["quote"])
+        if key in seen:
+            continue
+        seen.add(key)
+        document = db.con.execute(
+            "SELECT d.hash, d.filename, d.path, s.path AS root FROM documents d "
+            "JOIN sources s ON s.id = d.source_id WHERE d.id = ?", (item["doc_id"],)).fetchone()
+        db.add_evidence(
+            "artifact", artifact_id, item["doc_id"], document["hash"] if document else None,
+            item["locator"], item["quote"], document["filename"] if document else None,
+            relative_to_source(document["path"], document["root"] or "") if document else None)
 
 
 def _write(db, target: Path, data: bytes) -> None:

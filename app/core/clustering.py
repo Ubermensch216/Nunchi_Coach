@@ -177,8 +177,11 @@ def _count_neighbours(matrix: np.ndarray, threshold: float) -> np.ndarray:
 def _mean_within(matrix: np.ndarray, members: np.ndarray) -> float:
     if members.size < 2:
         return 1.0
-    block = matrix[members] @ matrix[members].T
-    total = float(block.sum()) - members.size    # 대각선(자기 자신) 제거
+    # The sum of pairwise dot products equals the dot product of vector sums.
+    # Avoid an n*n allocation for one large group (10,000 members was 400 MB).
+    values = matrix[members].astype(np.float64)
+    summed = values.sum(axis=0)
+    total = float(summed @ summed - np.square(values).sum())
     pairs = members.size * members.size - members.size
     return total / pairs if pairs else 1.0
 
@@ -186,7 +189,8 @@ def _mean_within(matrix: np.ndarray, members: np.ndarray) -> float:
 def _mean_between(matrix: np.ndarray, members: np.ndarray, others: np.ndarray | None) -> float:
     if others is None or others.size == 0:
         return 0.0
-    return float((matrix[members] @ matrix[others].T).mean())
+    return float(matrix[members].mean(axis=0, dtype=np.float64)
+                 @ matrix[others].mean(axis=0, dtype=np.float64))
 
 
 def common_tokens(names: list[str], top: int = 6, min_share: float = 0.4) -> list[str]:

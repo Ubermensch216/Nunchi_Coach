@@ -16,6 +16,8 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Sequence
 
+from ..core.paths import relative_to_source
+
 CASE_STATES = ("open", "closed", "not_this_year")
 CONFIRMED_SOURCES = ("official", "user")
 RUN_STATES = ("planned", "running", "waiting_for_approval", "completed", "failed",
@@ -252,3 +254,197 @@ class ActionStore:
         _require(state, ARTIFACT_STATES, "산출물 상태")
         self.con.execute("UPDATE artifacts SET state = ? WHERE id = ?", (state, artifact_id))
         self.audit("artifact.state", str(artifact_id), result=state)
+
+    # ── 체크 항목 ───────────────────────────────────────────────────
+    def checklist(self, case_id: int) -> list:
+        return self.con.execute(
+            "SELECT * FROM checklist_items WHERE case_id = ? ORDER BY ordinal, id",
+            (case_id,)).fetchall()
+
+    def sync_checklist(self, case_id: int, run_id: int | None, items: Iterable[dict]) -> dict:
+        """자동으로 만든 체크 항목을 반영한다. 사람이 손댄 것은 덮지 않는다.
+
+        같은 항목은 slot으로 찾는다. 사람이 더했거나 고친 항목(origin='user')과
+        이미 손을 댄 항목(진행·완료·건너뜀)의 상태는 그대로 둔다. 이번에 나오지 않은
+        자동 항목은 아직 손대지 않았을 때만 지운다.
+        """
+        counts = {"added": 0, "updated": 0, "kept": 0, "removed": 0}
+        existing = {row["slot"]: row for row in self.checklist(case_id)}
+        seen: set[str] = set()
+        ids: dict[str, int] = {}
+        with self.transaction():
+            for ordinal, item in enumerate(items):
+                slot = item["slot"]
+                seen.add(slot)
+                _require(item["source_type"], CHECK_SOURCES, "체크 항목의 출처")
+                due = item.get("due_date")
+                due_state = _require(item.get("due_state", "official"), CONFIRMED_SOURCES,
+                                     "기한의 출처") if due else "unknown"
+                state = item.get("state", "todo")
+                row = existing.get(slot)
+                values = (run_id, item.get("work_step_id"), item.get("code", ""), ordinal,
+                          item.get("phase", ""), item["title"], item.get("description", ""),
+                          item["source_type"], due, due_state,
+                          int(bool(item.get("approval_required"))),
+                          item.get("completion_kind"), item.get("completion_ref"))
+                if row is None:
+                    ids[slot] = self.con.execute(
+                        "INSERT INTO checklist_items(case_id, slot, run_id, work_step_id, code, "
+                        "ordinal, phase, title, description, source_type, due_date, due_state, "
+                        "approval_required, completion_kind, completion_ref, state) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (case_id, slot, *values, state)).lastrowid
+                    counts["added"] += 1
+                    continue
+                ids[slot] = row["id"]
+                if row["origin"] == "user":
+                    counts["kept"] += 1
+                    continue
+                touched = row["state"] in CHECK_TOUCHED
+                self.con.execute(
+                    "UPDATE checklist_items SET run_id = ?, work_step_id = ?, code = ?, "
+                    "ordinal = ?, phase = ?, title = ?, description = ?, source_type = ?, "
+                    "due_date = ?, due_state = ?, approval_required = ?, completion_kind = ?, "
+                    "completion_ref = ?, state = ?, updated_at = datetime('now') WHERE id = ?",
+                    (*values, row["state"] if touched else state, row["id"]))
+                counts["kept" if touched else "updated"] += 1
+            for slot, row in existing.items():
+                if slot not in seen and row["origin"] == "auto" and row["state"] not in CHECK_TOUCHED:
+                    self.con.execute("DELETE FROM checklist_items WHERE id = ?", (row["id"],))
+                    counts["removed"] += 1
+            for item in items:
+                after = item.get("after")
+                if after in ids:
+                    self.con.execute(
+                        "UPDATE checklist_items SET depends_on = ? WHERE id = ? AND origin = 'auto'",
+                        (ids[after], ids[item["slot"]]))
+        self.audit("checklist.sync", str(case_id),
+                   detail=" ".join(f"{key}={value}" for key, value in counts.items()))
+        return counts
+
+    def set_check_state(self, item_id: int, state: str, note: str = "") -> None:
+        """사람이 체크 항목의 상태를 바꾼다. 연결된 수행 단계가 있으면 함께 적는다."""
+        _require(state, CHECK_STATES, "체크 항목 상태")
+        row = self.con.execute("SELECT * FROM checklist_items WHERE id = ?", (item_id,)).fetchone()
+        if row is None:
+            raise ValueError("없는 체크 항목입니다.")
+        with self.transaction():
+            self.con.execute(
+                "UPDATE checklist_items SET state = ?, completion_kind = ?, "
+                "updated_at = datetime('now') WHERE id = ?",
+                (state, "user" if state == "done" else row["completion_kind"], item_id))
+            if row["work_step_id"] and state in _RUN_OF_CHECK:
+                self.set_step_run(row["work_step_id"], _RUN_OF_CHECK[state], note=note or None)
+        self.audit("checklist.state", str(item_id), result=state)
+
+    def add_check_item(self, case_id: int, title: str, description: str = "",
+                       phase: str = "") -> int:
+        """사람이 더한 항목. 다시 만들어도 남는다."""
+        title = " ".join((title or "").split())
+        if not title:
+            raise ValueError("항목의 이름을 적어 주세요.")
+        ordinal = self.con.execute(
+            "SELECT COALESCE(MAX(ordinal), -1) + 1 FROM checklist_items WHERE case_id = ?",
+            (case_id,)).fetchone()[0]
+        slot = f"user:{ordinal}:{title[:40]}"
+        item_id = self.con.execute(
+            "INSERT INTO checklist_items(case_id, slot, ordinal, phase, title, description, "
+            "source_type, origin) VALUES (?, ?, ?, ?, ?, ?, 'user', 'user')",
+            (case_id, slot, ordinal, phase, title, description)).lastrowid
+        self.audit("checklist.add", str(item_id), detail=f"case={case_id}")
+        return item_id
+
+    # ── 신호와 제안 ─────────────────────────────────────────────────
+    def add_signal(self, kind: str, task_id: int | None, key: str, detail: dict) -> tuple[int, bool]:
+        """(신호 id, 새로 적었는가). 같은 열쇠의 신호는 한 번만 적는다."""
+        _require(kind, SIGNAL_KINDS, "신호의 갈래")
+        row = self.con.execute("SELECT id FROM signals WHERE signal_key = ?", (key,)).fetchone()
+        if row:
+            return row["id"], False
+        signal_id = self.con.execute(
+            "INSERT INTO signals(kind, task_id, signal_key, detail) VALUES (?, ?, ?, ?)",
+            (kind, task_id, key, json.dumps(detail, ensure_ascii=False, sort_keys=True))).lastrowid
+        self.audit("signal.add", str(signal_id), detail=f"{kind} task={task_id}")
+        return signal_id, True
+
+    def recommendation(self, rec_id: int):
+        return self.con.execute(
+            "SELECT r.*, t.name AS task_name FROM recommendations r "
+            "LEFT JOIN tasks t ON t.id = r.task_id WHERE r.id = ?", (rec_id,)).fetchone()
+
+    def recommendation_by_key(self, key: str):
+        return self.con.execute("SELECT * FROM recommendations WHERE rec_key = ?", (key,)).fetchone()
+
+    def recommendations(self, states: Sequence[str] | None = None) -> list:
+        where, params = "", []
+        if states:
+            where = "WHERE r.state IN (%s)" % ", ".join("?" * len(states))
+            params = [_require(state, REC_STATES, "제안 상태") for state in states]
+        return self.con.execute(
+            "SELECT r.*, t.name AS task_name, g.detail AS signal_detail FROM recommendations r "
+            "LEFT JOIN tasks t ON t.id = r.task_id LEFT JOIN signals g ON g.id = r.signal_id "
+            f"{where} ORDER BY r.id", params).fetchall()
+
+    def add_recommendation(self, signal_id: int | None, task_id: int, target_year: int, plan_key: str,
+                           rec_key: str, certainty: str) -> int:
+        _require(certainty, CERTAINTIES, "제안의 확실성")
+        rec_id = self.con.execute(
+            "INSERT INTO recommendations(signal_id, task_id, target_year, plan_key, rec_key, certainty) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (signal_id, task_id, target_year, plan_key, rec_key, certainty)).lastrowid
+        self.audit("recommendation.add", str(rec_id), detail=f"{plan_key} task={task_id} year={target_year}",
+                   result=certainty)
+        return rec_id
+
+    def update_recommendation(self, rec_id: int, **fields) -> None:
+        unknown = set(fields) - {"signal_id", "certainty"}
+        if unknown:
+            raise ValueError(f"제안에 없는 열입니다: {sorted(unknown)}")
+        if "certainty" in fields:
+            _require(fields["certainty"], CERTAINTIES, "제안의 확실성")
+        columns = ", ".join(f"{name} = ?" for name in fields)
+        self.con.execute(f"UPDATE recommendations SET {columns} WHERE id = ?", (*fields.values(), rec_id))
+
+    def set_recommendation_state(self, rec_id: int, state: str, reason: str | None = None,
+                                 snooze_until: str | None = None) -> None:
+        _require(state, REC_STATES, "제안 상태")
+        decided = state in ("accepted", "dismissed", "snoozed", "superseded", "expired")
+        self.con.execute(
+            "UPDATE recommendations SET state = ?, dismiss_reason = COALESCE(?, dismiss_reason), "
+            "snooze_until = ?, decided_at = CASE WHEN ? THEN datetime('now') ELSE decided_at END "
+            "WHERE id = ?", (state, reason, snooze_until, int(decided), rec_id))
+        self.audit("recommendation.state", str(rec_id), result=state)
+
+    def replace_recommendation_evidence(self, rec_id: int, items: Iterable[dict]) -> None:
+        """제안의 근거를 통째로 바꾼다. 같은 지문의 제안이 다시 계산될 때 쓴다."""
+        with self.transaction():
+            self.con.execute("DELETE FROM evidence WHERE owner_kind = 'rec' AND owner_id = ?", (rec_id,))
+            for item in items:
+                document = self.con.execute(
+                    "SELECT d.hash, d.filename, d.path, s.path AS root FROM documents d "
+                    "JOIN sources s ON s.id = d.source_id WHERE d.id = ?", (item["doc_id"],)).fetchone()
+                if document is None:
+                    continue
+                self.add_evidence("rec", rec_id, item["doc_id"], document["hash"], item.get("locator", ""),
+                                  item.get("quote", ""), document["filename"],
+                                  relative_to_source(document["path"], document["root"] or ""))
+
+    def mark_artifacts_stale(self, case_id: int, modes: Sequence[str]) -> int:
+        """입력이 달라져 더는 최신이 아닌 산출물을 ‘낡음’으로 표시한다. 파일은 지우지 않는다."""
+        rows = self.con.execute(
+            "SELECT id FROM artifacts WHERE case_id = ? AND state IN ('draft', 'reviewed') "
+            f"AND mode IN ({', '.join('?' * len(modes))})", (case_id, *modes)).fetchall()
+        for row in rows:
+            self.con.execute("UPDATE artifacts SET state = 'stale' WHERE id = ?", (row["id"],))
+        if rows:
+            self.audit("artifact.stale", str(case_id), detail=f"n={len(rows)}", result=",".join(modes))
+        return len(rows)
+
+
+SIGNAL_KINDS = ("time", "event", "gap", "conversation")
+REC_STATES = ("new", "seen", "accepted", "dismissed", "snoozed", "expired", "superseded")
+CERTAINTIES = ("official", "precedent", "suggested")
+CHECK_SOURCES = ("official", "stated", "precedent", "suggested", "user")
+CHECK_STATES = ("todo", "doing", "review", "done", "skipped")
+CHECK_TOUCHED = ("doing", "done", "skipped")
+_RUN_OF_CHECK = {"todo": "not_started", "doing": "in_progress", "done": "done"}

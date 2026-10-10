@@ -28,7 +28,7 @@ from datetime import date
 from pathlib import Path
 
 from ..core import docrole, docyears, indicators, reconstruction as rc, versions
-from . import scenario_eval
+from . import action_judge, scenario_eval
 
 FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "action_scenarios"
 
@@ -37,10 +37,14 @@ FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "action_
 class Result:
     scenario: str
     scores: dict[str, tuple[int, int]] = field(default_factory=dict)   # 이름 → (맞은 수, 전체)
+    counts: dict[str, int] = field(default_factory=dict)               # 0이어야 하는 것의 건수
     problems: list[str] = field(default_factory=list)
 
     def score(self, name: str, hit: int, total: int) -> None:
         self.scores[name] = (hit, total)
+
+    def count(self, name: str, n: int) -> None:
+        self.counts[name] = n
 
     def ratio(self, name: str) -> float:
         hit, total = self.scores.get(name, (0, 0))
@@ -204,12 +208,17 @@ def run(work: Path | None = None) -> list[Result]:
             source = folder / "자료"
             write_corpus(source, scenario["documents"])
             before = scenario_eval._fingerprint(source)
-            db, _task_id, by_path = analyse(folder / "project", source, scenario, basis,
+            db, task_id, by_path = analyse(folder / "project", source, scenario, basis,
                                             scenario["documents"])
             result = Result(scenario["id"])
             try:
                 judge_memory(db, answers[scenario["id"]], by_path, result)
+                first = action_judge.judge_workflow(db, task_id, by_path, answers[scenario["id"]],
+                                                    result, basis)
+                # 올해 공식 문서를 뒤늦게 넣기 전에 본다 — 그 뒤에는 폴더에 파일이 는다.
                 result.score("originals", int(scenario_eval._fingerprint(source) == before), 1)
+                action_judge.judge_official(db, task_id, source, scenario, by_path, answers[scenario["id"]],
+                                            result, basis, first, write_corpus)
             finally:
                 db.close()
             results.append(result)
@@ -224,7 +233,9 @@ def to_text(results: list[Result]) -> str:
     for result in results:
         lines.append(f"  [{result.scenario}]")
         for name, (hit, total) in result.scores.items():
-            lines.append(f"    {name:<16} {hit}/{total}")
+            lines.append(f"    {name:<26} {hit}/{total}")
+        for name, n in result.counts.items():
+            lines.append(f"    {name:<26} {n}건 (0이어야 함)")
         lines.extend(f"    ✕ {problem}" for problem in result.problems)
     return "\n".join(lines)
 
@@ -243,7 +254,8 @@ def main(argv: list[str] | None = None) -> int:
     print(to_text(results))
     if args.json:
         args.json.write_text(json.dumps(
-            [{"scenario": r.scenario, "scores": r.scores, "problems": r.problems} for r in results],
+            [{"scenario": r.scenario, "scores": r.scores, "counts": r.counts, "problems": r.problems}
+             for r in results],
             ensure_ascii=False, indent=2), encoding="utf-8")
     return 0
 

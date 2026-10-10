@@ -78,6 +78,8 @@ class StatusDialog(QDialog):
             card.body.addWidget(muted_label(
                 f"등록 {view['registered_files']:,}건 · 원본 없음 {view['missing_files']:,}건\n"
                 f"본문 추출 성공 {states.get('ok', 0):,}건 · 부분 추출 {states.get('partial', 0):,}건\n"
+                f"추출 범위를 계측한 문서 {view['extraction_scope_measured_documents']:,}건 · "
+                f"누락이 확인된 문서 {view['extraction_known_omission_documents']:,}건\n"
                 f"의미 색인이 준비된 문서 {view['fully_indexed_documents']:,}건\n"
                 f"업무 배정 {view['assigned_documents']:,}건 · 미배정 {view['unassigned_documents']:,}건"))
             card.body.addWidget(muted_label(

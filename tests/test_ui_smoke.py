@@ -116,14 +116,14 @@ def _ask_view(window: MainWindow):
 
 
 def test_asking_lives_in_the_notebook_not_in_its_own_menu(make_window, db):
-    """묻는 자리는 노트북 하나다. 메뉴는 넷이고 넷째가 노트북이다."""
+    """묻는 자리는 노트북 하나다. 메뉴는 다섯이고 다섯째가 노트북이다(맨 앞은 ‘오늘’)."""
     from app.ui.shell import NAV
 
     _add_docs(db)
     window = make_window(db)
-    assert [key for key, *_ in NAV] == ["tasks", "calendar", "documents", "notebooks"]
+    assert [key for key, *_ in NAV] == ["today", "tasks", "calendar", "documents", "notebooks"]
     assert "ask" not in window.views and "ask" not in window.topbar._buttons
-    assert "Ctrl+4" in window.topbar._buttons["notebooks"].toolTip()
+    assert "Ctrl+5" in window.topbar._buttons["notebooks"].toolTip()
 
 
 def test_window_starts_on_onboarding_when_no_source(make_window, db):
@@ -1317,7 +1317,7 @@ def test_navigation_lives_in_the_top_bar(make_window, db, qapp):
     qapp.processEvents()
 
     assert [b.text() for b in window.topbar._buttons.values()] == [
-        "업무", "일정", "문서", "노트북"
+        "오늘", "업무", "일정", "문서", "노트북"
     ]
     assert not hasattr(window, "sidebar")
     # 메뉴가 답하는 질문은 버리지 않고 툴팁으로 옮겼다.
@@ -1540,3 +1540,46 @@ def test_empty_state_text_fits_a_narrow_pane(qapp):
         assert state._detail.width() == DETAIL_WIDTH
     finally:
         state.setParent(None)
+
+
+def _recurring_this_month(db: Database) -> None:
+    """지금 달에 반복되는 업무를 하나 넣는다(실제 오늘 날짜 기준)."""
+    from datetime import date
+
+    from app.tools import proactive_eval
+
+    today = date.today()
+    months = ",".join(str(m) for m in sorted({today.month, today.month % 12 + 1}))
+    proactive_eval.seed(db, {
+        "name": "해마다 하는 일", "expect": "fire", "why": "",
+        "cycle": {"kind": "yearly", "months": months, "years_observed": 2, "confidence": "high"},
+        "docs": [[today.year - 2, today.month], [today.year - 1, today.month]]})
+
+
+def test_window_opens_on_today_when_something_needs_attention(make_window, db):
+    """챙길 일이 있으면 ‘오늘’로, 메뉴에는 건수가 붙는다."""
+    _add_docs(db)
+    _recurring_this_month(db)
+    window = make_window(db)
+    assert window.stack.currentWidget() is window.views["today"]
+    assert window.topbar._buttons["today"].text() == "오늘 1"
+    assert not window.views["today"].data.empty
+
+
+def test_window_still_opens_on_tasks_when_nothing_needs_attention(make_window, db):
+    _add_docs(db)
+    window = make_window(db)
+    assert window.stack.currentWidget() is window.views["tasks"]
+    assert window.topbar._buttons["today"].text() == "오늘"
+
+
+def test_a_failing_scan_does_not_break_the_window(make_window, db, monkeypatch):
+    from app.proactive import recommend
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("감지 실패")
+
+    monkeypatch.setattr(recommend, "scan", broken)
+    _add_docs(db)
+    window = make_window(db)
+    assert window.stack.currentWidget() is window.views["tasks"]

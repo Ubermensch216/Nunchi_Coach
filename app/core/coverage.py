@@ -30,7 +30,7 @@ def documents(db, model: str | None = None, source_id: int | None = None) -> lis
     model = model or db.get_meta("embed_model") or "bge-m3"
     rows = db.con.execute(
         """WITH sections AS (
-               SELECT doc_id, COUNT(*) n FROM document_sections GROUP BY doc_id
+               SELECT doc_id, COUNT(*) n FROM document_sections WHERE trim(text)!='' GROUP BY doc_id
            ), pieces AS (
                SELECT c.doc_id,COUNT(*) n,
                       SUM(CASE WHEN e.model=? THEN 1 ELSE 0 END) embedded
@@ -54,9 +54,18 @@ def documents(db, model: str | None = None, source_id: int | None = None) -> lis
     issues: dict[int, list[dict]] = {}
     for row in db.con.execute("SELECT doc_id,stage,reason,attempts FROM processing_issues"):
         issues.setdefault(row["doc_id"], []).append(dict(row))
+    measured = {}
+    if "extraction_coverage" in {r[1] for r in db.con.execute("PRAGMA table_info(documents)")}:
+        for r in db.con.execute("SELECT id,extraction_coverage FROM documents"):
+            try:
+                value = json.loads(r[1] or "{}")
+                measured[r[0]] = value if isinstance(value, dict) else {}
+            except (ValueError, TypeError):
+                measured[r[0]] = {}
     result = []
     for raw in rows:
         row = dict(raw)
+        row["extraction_coverage"] = measured.get(row["id"], {})
         row["hash_success"] = bool(row.pop("hash"))
         row["classifiable"] = (
             row["source_kind"] != "upload" and row["missing_since"] is None
@@ -75,6 +84,7 @@ def snapshot(db, model: str | None = None, *, include_documents: bool = False) -
     current = [r for r in files if r["missing_since"] is None]
     eligible = [r for r in current if r["classifiable"]]
     assigned = sum(r["assignments"] > 0 for r in eligible)
+    unassigned = sum(r["assignments"] == 0 for r in eligible)
     scans = []
     for source in db.work_sources():
         run = db.con.execute("SELECT * FROM scan_runs WHERE source_id=? ORDER BY id DESC LIMIT 1",
@@ -112,8 +122,10 @@ def snapshot(db, model: str | None = None, *, include_documents: bool = False) -
         "embedded_chunks": sum(r["embedded_chunks"] for r in current),
         "fully_indexed_documents": sum(r["chunk_index_complete"] for r in current),
         "classifiable_documents": len(eligible), "assigned_documents": assigned,
-        "unassigned_documents": len(eligible) - assigned,
-        "assignment_invariant": assigned + (len(eligible) - assigned) == len(eligible),
+        "unassigned_documents": unassigned,
+        "assignment_invariant": assigned + unassigned == len(eligible),
+        "extraction_scope_measured_documents": sum(bool(r["extraction_coverage"]) for r in current),
+        "extraction_known_omission_documents": sum(bool(r["extraction_coverage"].get("omissions")) for r in current),
         "extraction_complete_documents": None,
         "extraction_completeness_note": "파서 성공은 완전 추출을 보장하지 않습니다.",
         "limits": {"max_bytes": MAX_BYTES, "max_chars": MAX_CHARS,
@@ -122,13 +134,23 @@ def snapshot(db, model: str | None = None, *, include_documents: bool = False) -
         "stages": [dict(r) for r in db.con.execute("SELECT * FROM pipeline_stage_results")],
         "holds": [dict(r) for r in db.con.execute("SELECT * FROM discovery_holds")],
         "classification_evidence_documents": db.con.execute(
-            "SELECT COUNT(DISTINCT doc_id) FROM discovery_evidence").fetchone()[0],
-        "model_reviewed_documents": db.con.execute(
-            "SELECT COUNT(DISTINCT doc_id) FROM discovery_evidence WHERE reviewed_by_model=1"
-        ).fetchone()[0],
+            "SELECT COUNT(DISTINCT e.doc_id) FROM discovery_evidence e JOIN documents d ON d.id=e.doc_id "
+            "JOIN tasks t ON t.id=e.task_id JOIN task_docs td ON td.task_id=e.task_id AND td.doc_id=e.doc_id "
+            "WHERE t.not_a_task=0 AND t.merged_into IS NULL AND e.doc_hash=d.hash "
+            "AND d.parse_status IN ('ok','partial') AND d.missing_since IS NULL AND e.model=? "
+            "AND (e.basis='document_prefix' OR e.chunk_id IS NOT NULL)",
+            (model or db.get_meta("embed_model") or "bge-m3",)).fetchone()[0],
+        "model_reviewed_excerpt_documents": db.con.execute(
+            "SELECT COUNT(DISTINCT e.doc_id) FROM discovery_evidence e JOIN documents d ON d.id=e.doc_id "
+            "JOIN tasks t ON t.id=e.task_id JOIN task_docs td ON td.task_id=e.task_id AND td.doc_id=e.doc_id "
+            "WHERE t.not_a_task=0 AND t.merged_into IS NULL AND e.reviewed_by_model=1 "
+            "AND d.parse_status IN ('ok','partial') AND e.doc_hash=d.hash AND d.missing_since IS NULL "
+            "AND e.chunk_id IS NOT NULL AND e.model=?",
+            (model or db.get_meta("embed_model") or "bge-m3",)).fetchone()[0],
     }
     if include_documents:
         result["documents"] = files
+        result["classification_evidence"] = [dict(r) for r in db.con.execute("SELECT * FROM discovery_evidence")]
     return result
 
 

@@ -63,7 +63,7 @@ def source_state(row) -> str:
     if not row["allowed"] or row["missing_since"]:
         return "이용 불가"
     if row["parse_status"] == "pending":
-        return "읽는 중"
+        return "처리 대기"
     if row["parse_status"] not in ("ok", "partial"):
         return "읽지 못함"
     if row["hash"] != row["version_hash"]:
@@ -100,6 +100,7 @@ class SourcesPanel(Panel):
         self.reader_doc_id: int | None = None
         self._report = ""            # 마지막으로 올린 묶음의 결과 한마디
         self._signature = None
+        self._reprocessing = False
         self._expanded: set[int] = set()
         self._citation: Citation | None = None
         self._stale_briefs: dict[int, int] = {}   # 문서 → 업무. 노트북을 열 때와 자료가 바뀔 때만 다시 잰다
@@ -131,6 +132,12 @@ class SourcesPanel(Panel):
         self.add_menu.addAction("온나라 수집본 가져오기…", lambda: self._safe(self._pick_collection))
         self.add_button.setMenu(self.add_menu)
         column.addWidget(self.add_button)
+        self.resume_button = QPushButton("자료 처리 이어서")
+        self.resume_button.setObjectName("Quiet")
+        self.resume_button.setToolTip("중단된 처리나 자료 업데이트를 실행합니다. 기존 결과는 열 때 그대로 사용합니다.")
+        self.resume_button.clicked.connect(lambda: self._safe(self._resume_uploads))
+        self.resume_button.hide()
+        column.addWidget(self.resume_button)
 
         # 올리는 동안의 진행. 남은 시간을 아는 척하지 않는다 — 그림 판독은 쪽마다 다르다.
         self.progress_box = QWidget()
@@ -147,7 +154,7 @@ class SourcesPanel(Panel):
         line.setSpacing(theme.SP_SM)
         self.progress_label = muted_label("", small=True)
         line.addWidget(self.progress_label, 1)
-        self.cancel_ingest = QPushButton("올리기 취소")
+        self.cancel_ingest = QPushButton("처리 취소")
         self.cancel_ingest.setObjectName("Quiet")
         self.cancel_ingest.clicked.connect(self._ingest.cancel)
         line.addWidget(self.cancel_ingest)
@@ -210,8 +217,6 @@ class SourcesPanel(Panel):
         self._check_briefs()
         self.show_list()
         self.refresh()
-        if notebook_id is not None and editable:
-            self._resume_uploads()
 
     def rows(self):
         return notebook.sources(self.db, self.notebook_id) if self.notebook_id is not None else []
@@ -223,9 +228,14 @@ class SourcesPanel(Panel):
         동안 셸이 1.5초마다 refresh를 부르므로 매번 읽으면 화면이 굳는다.
         """
         rows = self.rows()
+        stale = notebook_ingest.outdated_uploads(self.db, self.notebook_id) if self.notebook_id is not None else []
+        self.resume_button.setVisible(self.editable and bool(stale))
+        self.resume_button.setEnabled(self.editable and bool(stale) and not self._ingest.running)
+        pending = any(r["doc_id"] in stale and r["parse_status"] == "pending" for r in rows)
+        self.resume_button.setText(("자료 처리 이어서" if pending else "자료 업데이트") + f" ({len(stale)}건)")
         signature = (self.notebook_id, self.editable, tuple(
             (r["doc_id"], r["hash"], r["version_hash"], r["selected"], r["allowed"],
-             r["missing_since"], r["parse_status"]) for r in rows), tuple(sorted(self._stale_briefs)))
+             r["missing_since"], r["parse_status"]) for r in rows), tuple(sorted(self._stale_briefs)), tuple(stale), self._ingest.running)
         if not force and signature == self._signature:
             return
         self._signature = signature
@@ -408,12 +418,15 @@ class SourcesPanel(Panel):
 
     def _resume_uploads(self) -> None:
         """읽다 멈췄거나 파서가 바뀐 올린 파일을 이어서 읽는다."""
-        linked = {row["doc_id"] for row in self.rows()}
-        stale = [key for key in notebook_ingest.outdated_uploads(self.db) if key in linked]
+        if self.notebook_id is None or not self.editable:
+            return
+        stale = notebook_ingest.outdated_uploads(self.db, self.notebook_id)
         if stale and not self._ingest.running and self._ingest.start(self.notebook_id, [], stale):
-            self._show_progress(f"올린 파일 {len(stale)}건을 다시 읽는 중")
+            self._show_progress(f"기존 자료 {len(stale)}건을 처리하는 중", reprocessing=True)
 
-    def _show_progress(self, text: str) -> None:
+    def _show_progress(self, text: str, *, reprocessing: bool = False) -> None:
+        self._reprocessing = reprocessing
+        self.resume_button.setEnabled(False)
         self.progress_label.setText(text)
         self.cancel_ingest.setEnabled(True)
         self.progress_box.show()
@@ -434,9 +447,10 @@ class SourcesPanel(Panel):
         done = len(results) - len(failed)
         parts = [self._report] if self._report else []
         if done:
-            parts.append(f"{done}건을 추가했습니다.")
+            parts.append(f"{done}건을 처리했습니다." if self._reprocessing else f"{done}건을 추가했습니다.")
         if reused:
-            parts.append(f"{reused}건은 이미 읽어 둔 같은 내용의 문서를 연결했습니다.")
+            parts.append(f"{reused}건은 기존 분석 결과를 사용했습니다." if self._reprocessing
+                         else f"{reused}건은 이미 읽어 둔 같은 내용의 문서를 연결했습니다.")
         for outcome in failed[:3]:
             parts.append(f"읽지 못함 — {outcome.filename}: {outcome.error}")
         if len(failed) > 3:

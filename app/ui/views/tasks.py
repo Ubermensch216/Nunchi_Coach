@@ -1751,11 +1751,13 @@ class TasksView(QWidget):
             column.addWidget(UnknownBlock(
                 "이 업무의 문서에서 기한·절차 같은 항목을 아직 읽어 내지 못했습니다. "
                 "분석이 끝나면 여기에 채워집니다. 그동안 ‘먼저 읽을 문서’부터 볼 수 있습니다."))
+            column.addWidget(self._prep_button(task_id), 0, Qt.AlignmentFlag.AlignLeft)
             return
 
         top = QHBoxLayout()
         top.setSpacing(theme.SP_SM)
         top.addWidget(muted_label(card.headline(), small=True), 1)
+        top.addWidget(self._prep_button(task_id))
         draft = QPushButton("결과 초안 저장")
         draft.setObjectName("Quiet")
         draft.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -2222,6 +2224,22 @@ class TasksView(QWidget):
         name, role = self.db.reviewer()
         who = workstate.ROLE_LABEL[role] + (f" {name}" if name else "")
         self.db.resolve_info_gap(gap_id, f"{who} 확인 — {text.strip()}".rstrip(" —"))
+        self.refresh()
+
+    def _prep_button(self, task_id: int) -> QPushButton:
+        button = QPushButton("준비 작업")
+        button.setObjectName("Quiet")
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolTip("과거 자료를 비교하고 올해 취합 서식·체크리스트 초안을 만듭니다. "
+                          "승인 없이는 아무것도 확정하지 않고, 발송은 하지 않습니다")
+        button.clicked.connect(lambda _=False: self._open_workbox(task_id))
+        return button
+
+    def _open_workbox(self, task_id: int) -> None:
+        from .workbox import WorkboxDialog
+
+        dialog = WorkboxDialog(self, self.db, task_id)
+        dialog.exec()
         self.refresh()
 
     def _export_draft(self, task_id: int) -> None:

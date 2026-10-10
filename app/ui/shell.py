@@ -39,12 +39,14 @@ from .views.calendar import CalendarView
 from .views.documents import DocumentsView
 from .views.onboarding import OnboardingView
 from .views.tasks import TasksView
+from .views.today import TodayView
 from .views.notebooks import NotebooksView
 
 # 메뉴마다 그 메뉴가 답하는 질문을 함께 적는다. 이름만 있는 메뉴는
 # 처음 쓰는 사람에게 "눌러 봐야 아는 것"이지만, 질문이 붙으면 누르기 전에
 # 안다 — 인수인계 도구에서 첫 5분이 그 차이로 갈린다.
 NAV = [
+    ("today", "calendar", "오늘", "지금 먼저 챙길 일은 무엇인가"),
     ("tasks", "tasks", "업무", "내 업무는 무엇인가"),
     ("calendar", "calendar", "일정", "언제 무엇을 하나"),
     ("documents", "documents", "문서", "이 파일이 최신본인가"),
@@ -171,6 +173,13 @@ class TopBar(QWidget):
         if button:
             button.setChecked(True)
 
+    def set_count(self, key: str, count: int) -> None:
+        """메뉴 이름 뒤에 건수를 붙인다. 누르기 전에 규모를 알린다."""
+        button = self._buttons.get(key)
+        if button is not None:
+            label = next(label for k, _icon, label, _question in NAV if k == key)
+            button.setText(f"{label} {count}" if count else label)
+
     def setEnabledNav(self, enabled: bool) -> None:
         # 노트북은 자료 폴더 없이도 쓴다 — 파일을 직접 올려 시작할 수 있다.
         for key, button in self._buttons.items():
@@ -260,6 +269,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.views: dict[str, QWidget] = {
             "onboarding": OnboardingView(self.db),
+            "today": TodayView(self.db),
             "tasks": TasksView(self.db),
             "notebooks": NotebooksView(self.db),
             "calendar": CalendarView(self.db),
@@ -280,6 +290,8 @@ class MainWindow(QMainWindow):
         # When(일정)과 What(업무)은 서로 되돌아간다 — 일정에서 업무를 열고,
         # 업무 상세에서 일정으로 넘어간다.
         self.views["tasks"].go_calendar.connect(lambda: self.go("calendar"))
+        self.views["today"].open_task.connect(self._open_task_from_calendar)
+        self.views["today"].changed.connect(self._sync_today)
         # 업무 화면에서 확인·교정이 일어나면 상단 띠의 진행도가 그 자리에서 오른다.
         self.views["tasks"].state_changed.connect(self._sync_handover)
         self.views["calendar"].open_task.connect(self._open_task_from_calendar)
@@ -297,9 +309,16 @@ class MainWindow(QMainWindow):
         self._tick.setInterval(1500)
         self._tick.timeout.connect(self._refresh_current)
 
+        # 날짜가 바뀌면 지금 챙길 일도 달라진다. 켜 둔 채로 자정을 넘겨도 놓치지 않게 한 시간마다 본다.
+        self._daily = QTimer(self)
+        self._daily.setInterval(3_600_000)
+        self._daily.timeout.connect(self._scan_if_new_day)
+
         self._install_shortcuts()
+        self._scan_proactive()
         self.refresh()
         self._resume_if_pending()
+        self._daily.start()
 
     # ── 내비게이션 ──────────────────────────────────────────────────
     def go(self, key: str) -> None:
@@ -334,7 +353,8 @@ class MainWindow(QMainWindow):
         if not self.runner.running:
             self._show_idle_status()
         if self.stack.currentWidget() is self.views["onboarding"]:
-            self.go("tasks")
+            # 챙길 일이 있으면 ‘오늘’로, 없으면 지금처럼 ‘업무’로 연다.
+            self.go("today" if not self.views["today"].data.empty else "tasks")
 
     def _show_idle_status(self) -> None:
         counts = self.db.counts()
@@ -352,6 +372,8 @@ class MainWindow(QMainWindow):
         남은 일은 별도 큐가 아니라 문서 상태로 판단하므로, 강제 종료 뒤에도
         같은 질의가 그대로 집어낸다.
         """
+        # 준비 작업을 하다 프로그램이 죽은 흔적은 ‘일부만 완료’로 되돌린다(이어서 할 수 있다).
+        self.db.recover_actions()
         if not self.db.work_sources():
             return
         from ..ai.settings import model_names
@@ -410,8 +432,32 @@ class MainWindow(QMainWindow):
         else:
             self.topbar.show_idle(f"{stages.running(stage)} · {done:,}건")
 
+    # ── 선제 감지 ───────────────────────────────────────────────────
+    def _scan_proactive(self) -> None:
+        """과거 주기와 새 문서에서 지금 챙길 일을 찾는다. 모델을 부르지 않는 짧은 계산이다."""
+        from ..core import diagnostics
+        from ..proactive import recommend
+
+        try:
+            recommend.scan(self.db)
+        except Exception as exc:        # 감지가 실패해도 화면은 그대로 쓸 수 있어야 한다
+            diagnostics.record("proactive.error", exc)
+        self._sync_today()
+
+    def _scan_if_new_day(self) -> None:
+        from datetime import date
+
+        if self.db.get_meta("proactive_scanned") != date.today().isoformat():
+            self._scan_proactive()
+
+    def _sync_today(self) -> None:
+        view = self.views["today"]
+        view.refresh()
+        self.topbar.set_count("today", view.data.tiles["new"])
+
     def _on_pipeline_finished(self) -> None:
         self._tick.stop()
+        self._scan_proactive()
         self._show_idle_status()
         self._refresh_current()
 

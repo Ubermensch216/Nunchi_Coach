@@ -42,9 +42,11 @@ def test_corpus_holds_no_answers_and_answers_are_not_product_input():
     assert "forbidden" not in corpus and "first_action" not in corpus
     # 제품 코드는 정답 파일을 읽지 않는다. 평가 도구만 읽는다.
     app = Path(scenario_eval.__file__).resolve().parents[1]
-    readers = [path.name for path in app.rglob("*.py")
-               if "answers.json" in path.read_text(encoding="utf-8")]
-    assert readers == ["scenario_eval.py"]
+    readers = {path.relative_to(app).as_posix() for path in app.rglob("*.py")
+               if "answers.json" in path.read_text(encoding="utf-8")}
+    # Both independent evaluators may read their own answers. Production modules,
+    # including an identically named file outside tools/, remain prohibited.
+    assert readers == {"tools/scenario_eval.py", "tools/action_eval.py"}
 
 
 def test_every_scenario_runs_without_a_predecessor_or_a_model(results):
