@@ -59,3 +59,5 @@
 2026-10-10 22:16:33,727 {"event": "app.start", "version": "0.1.0"}
 2026-10-10 22:18:28,473 {"event": "app.unhandled", "error_type": "AttributeError", "frames": [{"file": "shell.py", "line": 556, "function": "_open_notebook_for_task"}]}
 2026-10-10 22:19:29,925 {"event": "app.stop"}
+2026-10-10 22:25:59,561 {"event": "app.start", "version": "0.1.0"}
+2026-10-10 22:26:34,985 {"event": "app.stop"}

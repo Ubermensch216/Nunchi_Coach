@@ -552,17 +552,39 @@ class MainWindow(QMainWindow):
         if not task:
             return
         from ..core import notebook, notebook_tasks
-        # 업무명과 일치하거나 관련된 기존 노트북 조회
-        notebooks = self.db.notebooks()
-        target_nb = next((nb for nb in notebooks if nb["title"] == task["name"]), None)
+        # 업무와 연결되었거나 이름이 일치하는 열려 있는 노트북 조회
+        notebooks = self.db.notebooks() if hasattr(self.db, "notebooks") else notebook.overview(self.db)
+        target_nb = next(
+            (nb for nb in notebooks if nb["task_id"] == task_id and not nb["archived"]),
+            None,
+        )
         if not target_nb:
-            target_nb_id = notebook.create(self.db, title=task["name"])
+            target_nb = next(
+                (nb for nb in notebooks if nb["title"] == task["name"] and not nb["archived"]),
+                None,
+            )
+        if not target_nb:
+            target_nb_id = notebook.create(self.db, title=task["name"], task_id=task_id)
             try:
                 notebook_tasks.add_brief(self.db, target_nb_id, task_id)
             except Exception:
                 pass
+            try:
+                doc_ids = [
+                    row["id"] for row in self.db.task_documents(task_id)
+                    if row["hash"] and not row["missing_since"] and row["parse_status"] in ("ok", "partial")
+                ]
+                if doc_ids:
+                    notebook_tasks.add_documents(self.db, target_nb_id, doc_ids)
+            except Exception:
+                pass
         else:
             target_nb_id = target_nb["id"]
+            if not target_nb["task_id"]:
+                try:
+                    self.db.con.execute("UPDATE notebooks SET task_id=? WHERE id=?", (task_id, target_nb_id))
+                except Exception:
+                    pass
 
         self.go("notebooks")
         self.views["notebooks"].open_notebook(target_nb_id)

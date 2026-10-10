@@ -177,3 +177,20 @@ def test_long_passage_with_same_locator_keeps_the_cited_chunk(db,monkeypatch):
     proofs=json.loads(db.con.execute("SELECT citations FROM notebook_messages WHERE id=?",(message,)).fetchone()[0])
     assert proofs[0]["exact_quote"]=="둘째 조각의 근거"
     assert proofs[0]["chunk_id"]==chunks[1][0]
+
+
+def test_database_notebooks_and_notebook(db):
+    assert db.notebooks() == []
+    key1 = notebook.create(db, "노트북 1")
+    key2 = notebook.create(db, "노트북 2")
+    rows = db.notebooks()
+    assert len(rows) == 2
+    assert {r["id"] for r in rows} == {key1, key2}
+
+    nb = db.notebook(key1)
+    assert nb is not None
+    assert nb["title"] == "노트북 1"
+
+    notebook.archive(db, key1, archived=True)
+    assert len(db.notebooks(include_archived=False)) == 1
+    assert len(db.notebooks(include_archived=True)) == 2

@@ -1657,3 +1657,33 @@ def test_work_folder_cards_and_sidebar_in_tasks_home(make_window, db):
     tasks_view.sidebar.back_to_home.emit()
     assert tasks_view._task_id is None
     assert tasks_view.sidebar.isHidden()
+
+
+def test_open_notebook_for_task(make_window, db):
+    """업무 화면에서 '노트북에서 묻기'를 호출하면 노트북 화면으로 전환되고 전용 노트북이 열린다."""
+    _add_docs(db)
+    task_id = db.con.execute(
+        "INSERT INTO tasks(name, description) VALUES ('예산 편성', '예산안을 작성한다.')"
+    ).lastrowid
+    window = make_window(db)
+
+    # _open_notebook_for_task 호출
+    window._open_notebook_for_task(task_id)
+
+    # 1. 노트북 뷰로 전환되었는지 확인
+    assert window.stack.currentWidget() is window.views["notebooks"]
+    notebooks_view = window.views["notebooks"]
+    # 2. 작업공간이 열렸는지 확인
+    assert notebooks_view.stack.currentWidget() is notebooks_view.workspace
+    assert notebooks_view.notebook_id is not None
+
+    nb_row = db.notebook(notebooks_view.notebook_id)
+    assert nb_row is not None
+    assert nb_row["title"] == "예산 편성"
+    assert nb_row["task_id"] == task_id
+
+    # 다시 호출했을 때 새 노트북이 만들어지지 않고 기존 노트북이 열리는지 확인
+    nb_id_before = notebooks_view.notebook_id
+    window._open_notebook_for_task(task_id)
+    assert notebooks_view.notebook_id == nb_id_before
+    assert len([nb for nb in db.notebooks() if nb["task_id"] == task_id]) == 1

@@ -55,6 +55,8 @@ def create(db, title, purpose="", task_id=None, icon=""):
 
 def overview(db, include_archived=False):
     """홈 화면의 카드 한 장에 필요한 것 — 이름·표지·자료 수·마지막으로 쓴 때."""
+    if hasattr(db, "notebooks"):
+        return db.notebooks(include_archived=include_archived)
     return db.con.execute(
         "SELECT b.*, COALESCE(b.updated_at, b.created_at) AS touched_at, "
         "(SELECT COUNT(*) FROM notebook_sources s WHERE s.notebook_id=b.id) AS source_count "

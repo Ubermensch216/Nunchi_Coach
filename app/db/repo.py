@@ -608,6 +608,26 @@ class Database(WorkStore, ActionStore):
     def task(self, task_id: int) -> sqlite3.Row | None:
         return self.con.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
 
+    # ── 노트북 ──────────────────────────────────────────────────────
+    def notebooks(self, include_archived: bool = False) -> list[sqlite3.Row]:
+        """노트북 목록. 최근 사용/수정 순으로 정렬한다."""
+        return self.con.execute(
+            "SELECT b.*, COALESCE(b.updated_at, b.created_at) AS touched_at, "
+            "(SELECT COUNT(*) FROM notebook_sources s WHERE s.notebook_id = b.id) AS source_count "
+            "FROM notebooks b WHERE (? OR b.archived = 0) "
+            "ORDER BY COALESCE(b.last_opened_at, b.updated_at, b.created_at) DESC, b.id DESC",
+            (int(include_archived),),
+        ).fetchall()
+
+    def notebook(self, notebook_id: int) -> sqlite3.Row | None:
+        """노트북 단건."""
+        return self.con.execute(
+            "SELECT b.*, COALESCE(b.updated_at, b.created_at) AS touched_at, "
+            "(SELECT COUNT(*) FROM notebook_sources s WHERE s.notebook_id = b.id) AS source_count "
+            "FROM notebooks b WHERE b.id = ?",
+            (notebook_id,),
+        ).fetchone()
+
     def task_reading(self, task_id: int) -> list[sqlite3.Row]:
         return self.con.execute(
             "SELECT r.*, d.filename, d.path, d.eff_date, d.eff_precision, d.eff_date_kind "
