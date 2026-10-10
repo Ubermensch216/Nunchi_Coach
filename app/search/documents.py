@@ -16,6 +16,7 @@ class DocumentPage:
 
 def find_documents(db: Database, term: str = "", *, documents_only: bool = True,
                    collapse: bool = True, unclassified: bool = False,
+                   task_id: int | None = None,
                    page: int = 0, page_size: int = 100) -> DocumentPage:
     page_size = max(1, min(500, page_size))
     where, params = [], []
@@ -23,7 +24,10 @@ def find_documents(db: Database, term: str = "", *, documents_only: bool = True,
         where.append("d.parse_status != 'skipped'")
     if collapse:
         where.append("(d.missing_since IS NOT NULL OR " + representative_predicate("d") + ")")
-    if unclassified:
+    if task_id is not None:
+        where.append("EXISTS(SELECT 1 FROM task_docs td WHERE td.doc_id = d.id AND td.task_id = ?)")
+        params.append(task_id)
+    elif unclassified:
         where.append("NOT EXISTS(SELECT 1 FROM task_docs td WHERE td.doc_id = d.id)")
     term = term.strip()
     if term:
@@ -47,7 +51,11 @@ def find_documents(db: Database, term: str = "", *, documents_only: bool = True,
         "SELECT d.*, (SELECT COUNT(*) FROM documents y WHERE y.hash = d.hash "
         "AND d.hash IS NOT NULL AND y.missing_since IS NULL) AS dup_n, "
         "(SELECT t.name FROM task_docs td JOIN tasks t ON t.id = td.task_id "
-        "WHERE td.doc_id = d.id ORDER BY td.is_primary DESC, t.id LIMIT 1) AS task_name "
+        "WHERE td.doc_id = d.id ORDER BY td.is_primary DESC, t.id LIMIT 1) AS task_name, "
+        "(SELECT td.task_id FROM task_docs td WHERE td.doc_id = d.id "
+        "ORDER BY td.is_primary DESC, td.task_id LIMIT 1) AS primary_task_id, "
+        "(SELECT td.origin FROM task_docs td WHERE td.doc_id = d.id "
+        "ORDER BY td.is_primary DESC, td.task_id LIMIT 1) AS task_origin "
         f"{source} WHERE {clause} "
         "ORDER BY d.eff_date DESC NULLS LAST, d.filename, d.id LIMIT ? OFFSET ?",
         [*params, page_size, page * page_size],

@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QPushButton,
     QRadioButton,
     QScrollArea,
@@ -114,6 +115,10 @@ class DocumentsView(QWidget):
         self._page = 0
         self._filter_key = None
         self._current_id: int | None = None
+        # 기본 보기: 업무 분류가 존재하면 첫 번째 업무의 문서를 보는 것이 기본 보기다.
+        # 업무가 없을 때는 전체 문서를 보여준다.
+        tasks = self.db.tasks()
+        self._selected_task_id: int | None = tasks[0]["id"] if tasks else None
         self._summary_doc_id: int | None = None      # 요약 중인 문서
         self._summary_error: tuple[int, str] | None = None
         self._summaries = SummaryRunner(db.path, self)
@@ -142,9 +147,9 @@ class DocumentsView(QWidget):
         title_row.addWidget(view_title("문서"))
         title_row.addWidget(
             InfoDot(
-                "찾은 파일을 그대로 보여 줍니다. 줄을 고르면 오른쪽에 그 파일의 "
-                "시점을 무엇으로 판정했는지와 근거가 나옵니다. 원본은 열어서 "
-                "읽기만 하고 고치지 않습니다."
+                "찾은 파일을 업무 분류별로 모아 확인하고 관리합니다. "
+                "AI가 분류한 업무가 올바른지 확인하고, 필요 시 사용자가 직접 업무 분류를 "
+                "변경하거나 미분류 문서에 업무를 매핑할 수 있습니다."
             ),
             0,
             Qt.AlignmentFlag.AlignVCenter,
@@ -164,12 +169,16 @@ class DocumentsView(QWidget):
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setChildrenCollapsible(False)
+        self.category_sidebar = self._build_category_sidebar()
+        self.splitter.addWidget(self.category_sidebar)
         listing = QWidget()
         listing.setLayout(self._build_table())
         self.splitter.addWidget(listing)
         self.splitter.addWidget(self._build_detail())
-        self.splitter.setStretchFactor(0, 1)
-        self.splitter.setSizes([700, theme.DETAIL_PANEL_W])
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setStretchFactor(2, 0)
+        self.splitter.setSizes([220, 680, theme.DETAIL_PANEL_W])
         body_wrap.addWidget(self.splitter, 1)
         body_holder = QWidget()
         body_holder.setLayout(body_wrap)
@@ -237,9 +246,162 @@ class DocumentsView(QWidget):
         row.addStretch(1)
         return row
 
+    def _build_category_sidebar(self) -> QWidget:
+        frame = QFrame()
+        frame.setObjectName("CategoryFrame")
+        frame.setMinimumWidth(190)
+        frame.setMaximumWidth(280)
+        vbox = QVBoxLayout(frame)
+        vbox.setContentsMargins(theme.SP_MD, theme.SP_MD, theme.SP_MD, theme.SP_MD)
+        vbox.setSpacing(theme.SP_SM)
+
+        head = QHBoxLayout()
+        head.addWidget(section_title("업무 분류"))
+        head.addStretch(1)
+        vbox.addLayout(head)
+
+        self.category_search = QLineEdit()
+        self.category_search.setPlaceholderText("업무 검색…")
+        self.category_search.setClearButtonEnabled(True)
+        self.category_search.textChanged.connect(self._filter_categories)
+        vbox.addWidget(self.category_search)
+
+        self.category_list = QListWidget()
+        self.category_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.category_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.category_list.itemSelectionChanged.connect(self._on_category_selected)
+        vbox.addWidget(self.category_list, 1)
+
+        return frame
+
+    def _filter_categories(self, text: str) -> None:
+        needle = text.strip().lower()
+        for i in range(self.category_list.count()):
+            item = self.category_list.item(i)
+            data = item.data(Qt.ItemDataRole.UserRole)
+            if data in ("all", "unclassified", "separator"):
+                continue
+            name = (item.data(Qt.ItemDataRole.UserRole + 1) or "").lower()
+            item.setHidden(bool(needle) and needle not in name)
+
+    def _on_category_selected(self) -> None:
+        items = self.category_list.selectedItems()
+        if not items:
+            return
+        data = items[0].data(Qt.ItemDataRole.UserRole)
+        if data == "separator":
+            return
+        if data == "all":
+            self._selected_task_id = None
+            self.unclassified_only.blockSignals(True)
+            self.unclassified_only.setChecked(False)
+            self.unclassified_only.blockSignals(False)
+        elif data == "unclassified":
+            self._selected_task_id = None
+            self.unclassified_only.blockSignals(True)
+            self.unclassified_only.setChecked(True)
+            self.unclassified_only.blockSignals(False)
+        elif isinstance(data, int):
+            self._selected_task_id = data
+            self.unclassified_only.blockSignals(True)
+            self.unclassified_only.setChecked(False)
+            self.unclassified_only.blockSignals(False)
+
+        self._page = 0
+        self.refresh()
+
+    def _populate_categories(self) -> None:
+        self.category_list.blockSignals(True)
+        self.category_list.clear()
+
+        counts = self.db.counts()
+        unclass_count = self.db.unclassified_count()
+        tasks = self.db.tasks()
+
+        all_item = QListWidgetItem(f"📂 전체 문서   ({counts['total']:,}건)")
+        all_item.setData(Qt.ItemDataRole.UserRole, "all")
+        self.category_list.addItem(all_item)
+
+        unclass_item = QListWidgetItem(f"❓ 미분류 문서   ({unclass_count:,}건)")
+        unclass_item.setData(Qt.ItemDataRole.UserRole, "unclassified")
+        if unclass_count > 0:
+            unclass_item.setForeground(QColor(theme.color("ATTENTION")))
+        self.category_list.addItem(unclass_item)
+
+        sep = QListWidgetItem("── 업무별 분류 ──")
+        sep.setData(Qt.ItemDataRole.UserRole, "separator")
+        sep.setFlags(Qt.ItemFlag.NoItemFlags)
+        sep.setForeground(QColor(theme.color("TEXT_DISABLED")))
+        self.category_list.addItem(sep)
+
+        target_item = None
+        for task in tasks:
+            t_item = QListWidgetItem(f"📁 {task['name']}   ({task['doc_count']:,}건)")
+            t_item.setData(Qt.ItemDataRole.UserRole, task["id"])
+            t_item.setData(Qt.ItemDataRole.UserRole + 1, task["name"])
+            self.category_list.addItem(t_item)
+            if self._selected_task_id == task["id"]:
+                target_item = t_item
+
+        if self.unclassified_only.isChecked():
+            self.category_list.setCurrentItem(unclass_item)
+        elif self._selected_task_id is not None and target_item:
+            self.category_list.setCurrentItem(target_item)
+        elif not tasks or self._selected_task_id is None:
+            self.category_list.setCurrentItem(all_item)
+
+        self.category_list.blockSignals(False)
+
+    def _update_banner(self, count: int) -> None:
+        if self._selected_task_id is not None:
+            tasks = self.db.tasks()
+            task = next((t for t in tasks if t["id"] == self._selected_task_id), None)
+            task_name = task["name"] if task else f"업무 #{self._selected_task_id}"
+            self.banner_title.setText(f"📁 {task_name}   ({count:,}건)")
+            self.banner_desc.setText(
+                "이 업무에 속한 문서들입니다. 잘못 분류된 문서는 [업무 분류 변경]이나 마우스 우클릭으로 변경할 수 있습니다."
+            )
+        elif self.unclassified_only.isChecked():
+            self.banner_title.setText(f"❓ 미분류 문서   ({count:,}건)")
+            self.banner_desc.setText(
+                "어느 업무에도 분류되지 않은 문서입니다. 문서를 선택한 뒤 업무를 지정(매핑)해 주세요."
+            )
+        else:
+            self.banner_title.setText(f"📂 전체 문서   ({count:,}건)")
+            self.banner_desc.setText(
+                "등록된 전체 문서 목록입니다. 좌측의 업무 분류를 선택하면 각 업무별 문서를 볼 수 있습니다."
+            )
+
     def _build_table(self) -> QVBoxLayout:
         column = QVBoxLayout()
         column.setSpacing(theme.SP_SM)
+
+        # 상단 업무 분류 배너 및 빠른 변경 조작
+        banner = QFrame()
+        banner.setObjectName("CategoryBanner")
+        b_layout = QHBoxLayout(banner)
+        b_layout.setContentsMargins(theme.SP_MD, theme.SP_SM, theme.SP_MD, theme.SP_SM)
+        b_layout.setSpacing(theme.SP_MD)
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(2)
+        self.banner_title = QLabel("업무 분류")
+        self.banner_title.setObjectName("SubTitle")
+        f = self.banner_title.font()
+        f.setBold(True)
+        self.banner_title.setFont(f)
+        self.banner_desc = muted_label("", small=True)
+        title_col.addWidget(self.banner_title)
+        title_col.addWidget(self.banner_desc)
+        b_layout.addLayout(title_col, 1)
+
+        self.btn_change_category = QPushButton("업무 분류 변경…")
+        self.btn_change_category.setObjectName("Quiet")
+        self.btn_change_category.setEnabled(False)
+        self.btn_change_category.setToolTip("선택한 문서의 업무 분류를 다른 업무로 변경(매핑)합니다")
+        self.btn_change_category.clicked.connect(self._change_selected_category)
+        b_layout.addWidget(self.btn_change_category)
+        column.addWidget(banner)
 
         self.table = QTableWidget(0, len(COLUMNS))
         self.table.setHorizontalHeaderLabels(COLUMNS)
@@ -250,6 +412,8 @@ class DocumentsView(QWidget):
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setShowGrid(False)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._show_context_menu)
         header = self.table.horizontalHeader()
         # 머리글은 칸의 내용과 같은 쪽에 선다. 가운데에 두면 왼쪽으로 붙은
         # 내용과 어긋나 어느 열의 이름인지 눈이 한 번 더 찾는다.
@@ -377,6 +541,10 @@ class DocumentsView(QWidget):
         self.table.blockSignals(False)
         self._show_detail(self._current_id)
 
+        # 업무 분류 사이드바 건수 동기화 및 상단 배너 갱신
+        self._populate_categories()
+        self._update_banner(result.total)
+
     def _turn_page(self, delta: int) -> None:
         self._page += delta
         self.refresh()
@@ -394,14 +562,16 @@ class DocumentsView(QWidget):
         self.search.setFocus()
 
     def _query(self, term: str) -> list:
+        task_id = None if self.unclassified_only.isChecked() else self._selected_task_id
+        unclassified = self.unclassified_only.isChecked()
         key = (term, self.documents_only.isChecked(), self.collapse_dups.isChecked(),
-               self.unclassified_only.isChecked(), self.page_size.currentData())
+               unclassified, task_id, self.page_size.currentData())
         if key != self._filter_key:
             self._page = 0
             self._filter_key = key
         self._result = find_documents(
             self.db, term, documents_only=key[1], collapse=key[2], unclassified=key[3],
-            page=self._page, page_size=key[4],
+            task_id=key[4], page=self._page, page_size=key[5],
         )
         self._page = self._result.page
         return self._result.rows
@@ -413,7 +583,18 @@ class DocumentsView(QWidget):
             name = f"▸ {name}   ({dup_n}개 묶음)"
         self.table.setItem(r, 0, _cell(name, row["id"], row["path"]))
 
-        self.table.setItem(r, 1, _cell(row["task_name"] or "—"))
+        task_label = row["task_name"] or "미분류"
+        cell_task = _cell(task_label)
+        origin = row["task_origin"] if "task_origin" in row.keys() else None
+        if origin == "user":
+            cell_task.setToolTip(f"업무: {row['task_name']}\n(담당자가 직접 매핑한 업무입니다)")
+        elif row["task_name"]:
+            cell_task.setToolTip(f"업무: {row['task_name']}\n(AI가 자동 분류한 업무입니다. 틀렸다면 변경하세요)")
+        else:
+            cell_task.setForeground(QColor(theme.color("ATTENTION")))
+            cell_task.setToolTip("어느 업무에도 분류되지 않은 미분류 문서입니다.\n우클릭 또는 [업무 분류 지정]으로 배정하세요.")
+        self.table.setItem(r, 1, cell_task)
+
         self.table.setItem(r, 2, _cell(_when(row)))
         self.table.setItem(r, 3, _cell((row["ext"] or "").lstrip(".").upper()))
         self.table.setItem(r, 4, _cell(_human(row["size"] or 0)))
@@ -433,6 +614,7 @@ class DocumentsView(QWidget):
     # ── 상세 (시점 근거) ────────────────────────────────────────────
     def _on_selection(self) -> None:
         items = self.table.selectedItems()
+        self.btn_change_category.setEnabled(bool(items))
         if not items:
             return
         doc_id = self.table.item(items[0].row(), 0).data(Qt.ItemDataRole.UserRole)
@@ -687,10 +869,18 @@ class DocumentsView(QWidget):
         if not links:
             self.detail.addWidget(
                 UnknownBlock(
-                    "어느 업무에도 배정되지 않았습니다. 업무와 무관한 문서라면 "
-                    "'업무 없음'으로 표시해 두세요."
+                    "어느 업무에도 배정되지 않았습니다. AI가 분류하지 못했거나 "
+                    "새로 추가된 문서입니다. 업무와 무관한 문서라면 '업무 없음'으로 표시해 두세요."
                 )
             )
+            # 업무 직접 지정 버튼
+            btn_map = QPushButton("👉 업무 분류 지정(매핑)")
+            btn_map.setObjectName("Primary")
+            btn_map.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_map.setToolTip("이 문서를 특정 업무에 배정(매핑)합니다")
+            btn_map.clicked.connect(lambda _=False, i=row["id"]: self._assign_task(i))
+            self.detail.addWidget(btn_map, alignment=Qt.AlignmentFlag.AlignLeft)
+
             # 인수인계 가이드(계획서 §18)의 '미분류 최근 문서'는 여기서
             # 끝난다. 배정하면 미분류에서 빠지고, 무관한 문서면 표시로
             # 끝난다 — 둘 다 아니면 그 문서는 영원히 할 일로 남는다.
@@ -711,8 +901,26 @@ class DocumentsView(QWidget):
             name = muted_label(link["name"])
             name.setToolTip(link["name"])
             line.addWidget(name, 1)
+
+            # 분류 출처 뱃지: AI 자동 분류 vs 담당자 직접 매핑
+            if link["origin"] == "user":
+                line.addWidget(Badge("직접지정", "ok"))
+            else:
+                line.addWidget(Badge("AI분류", "attention"))
+
             if link["is_primary"]:
                 line.addWidget(Badge("대표", "ok"))
+
+            # 업무 변경 버튼
+            btn_change = QPushButton("업무 변경")
+            btn_change.setObjectName("Quiet")
+            btn_change.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_change.setToolTip("AI가 잘못 분류했거나 다른 업무로 변경(재매핑)합니다")
+            btn_change.clicked.connect(
+                lambda _=False, d=row["id"], t=link["id"]: self._prompt_move_task(d, t)
+            )
+            line.addWidget(btn_change)
+
             drop = QPushButton("배정 해제")
             drop.setObjectName("Quiet")
             drop.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -743,6 +951,9 @@ class DocumentsView(QWidget):
         if task_id is None:
             return
         self.db.assign_document(task_id, doc_id)
+        row = self.db.document(doc_id)
+        target_name = next((t["name"] for t in choices if t["id"] == task_id), "")
+        self.summary.setText(f"✓ '{row['filename'] if row else ''}' 문서를 '{target_name}' 업무에 배정했습니다.")
         self.refresh()
 
     def _mark_stray(self, doc_id: int, done: bool) -> None:
@@ -752,6 +963,101 @@ class DocumentsView(QWidget):
     def _detach_task(self, task_id: int, doc_id: int) -> None:
         self.db.detach_document(task_id, doc_id)
         self.refresh()
+
+    def _prompt_move_task(self, doc_id: int, from_task_id: int) -> None:
+        row = self.db.document(doc_id)
+        if row is None:
+            return
+        tasks = self.db.tasks()
+        current_tasks = [t for t in tasks if t["id"] == from_task_id]
+        target_task_id = _TaskMoveDialog.run(
+            self,
+            row["filename"],
+            current_tasks,
+            tasks,
+        )
+        if target_task_id is None or target_task_id == from_task_id:
+            return
+
+        self.db.move_document(from_task_id, target_task_id, doc_id)
+        target_name = next((t["name"] for t in tasks if t["id"] == target_task_id), f"#{target_task_id}")
+        self.summary.setText(f"✓ '{row['filename']}' 문서를 '{target_name}' 업무로 분류를 변경했습니다.")
+        self.refresh()
+
+    def _prompt_change_category(self, doc_id: int) -> None:
+        row = self.db.document(doc_id)
+        if row is None:
+            return
+        tasks = self.db.tasks()
+        if not tasks:
+            self.summary.setText("⚠ 등록된 업무가 없습니다. 먼저 업무를 생성해 주세요.")
+            return
+
+        current_tasks = self.db.document_tasks(doc_id)
+        current_task_ids = {t["id"] for t in current_tasks}
+
+        target_task_id = _TaskMoveDialog.run(
+            self,
+            row["filename"],
+            current_tasks,
+            tasks,
+        )
+        if target_task_id is None:
+            return
+
+        target_task = next((t for t in tasks if t["id"] == target_task_id), None)
+        target_name = target_task["name"] if target_task else f"업무 #{target_task_id}"
+
+        if current_tasks:
+            from_task = self._selected_task_id if self._selected_task_id in current_task_ids else current_tasks[0]["id"]
+            self.db.move_document(from_task, target_task_id, doc_id)
+            self.summary.setText(f"✓ '{row['filename']}' 문서를 '{target_name}' 업무로 분류를 변경했습니다.")
+        else:
+            self.db.assign_document(target_task_id, doc_id)
+            self.summary.setText(f"✓ '{row['filename']}' 문서를 '{target_name}' 업무로 배정했습니다.")
+
+        self.refresh()
+
+    def _change_selected_category(self) -> None:
+        items = self.table.selectedItems()
+        if not items:
+            return
+        doc_id = self.table.item(items[0].row(), 0).data(Qt.ItemDataRole.UserRole)
+        if doc_id is None:
+            return
+        self._prompt_change_category(doc_id)
+
+    def _show_context_menu(self, pos) -> None:
+        item = self.table.itemAt(pos)
+        if not item:
+            return
+        row = item.row()
+        self.table.selectRow(row)
+        doc_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+        if doc_id is None:
+            return
+
+        menu = QMenu(self)
+        current_tasks = self.db.document_tasks(doc_id)
+        if current_tasks:
+            act_change = menu.addAction("🏷 업무 분류 변경...")
+            act_change.triggered.connect(lambda: self._prompt_change_category(doc_id))
+            act_assign = menu.addAction("＋ 다른 업무에 추가 배정...")
+            act_assign.triggered.connect(lambda: self._assign_task(doc_id))
+            act_detach = menu.addAction("✕ 업무 배정 해제")
+            from_t = self._selected_task_id if self._selected_task_id in {t["id"] for t in current_tasks} else current_tasks[0]["id"]
+            act_detach.triggered.connect(lambda: self._detach_task(from_t, doc_id))
+        else:
+            act_assign = menu.addAction("👉 업무 분류 지정...")
+            act_assign.triggered.connect(lambda: self._assign_task(doc_id))
+
+        menu.addSeparator()
+        act_open = menu.addAction("📄 원본 파일 열기")
+        act_open.triggered.connect(self._open_selected)
+        act_folder = menu.addAction("📁 폴더 열기")
+        act_folder.triggered.connect(self._reveal_selected)
+
+        menu.exec(self.table.viewport().mapToGlobal(pos))
 
     def _add_facts(self, row) -> None:
         self.detail.addWidget(_divider())
@@ -966,6 +1272,85 @@ class _TaskPicker(QDialog):
     @classmethod
     def run(cls, parent: QWidget, tasks) -> int | None:
         dialog = cls(parent, tasks)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        items = dialog.list.selectedItems()
+        return items[0].data(Qt.ItemDataRole.UserRole) if items else None
+
+
+class _TaskMoveDialog(QDialog):
+    """문서의 업무 분류를 확인하고 다른 업무로 변경(매핑)한다."""
+
+    def __init__(self, parent: QWidget, filename: str, current_tasks: list, all_tasks: list) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("업무 분류 변경 / 매핑")
+        self.setMinimumWidth(460)
+        self.setMinimumHeight(420)
+
+        column = QVBoxLayout(self)
+        column.setSpacing(theme.SP_MD)
+
+        title = ElidedLabel(f"문서: {filename}")
+        font = title.font()
+        font.setBold(True)
+        title.setFont(font)
+        column.addWidget(title)
+
+        curr_names = ", ".join(t["name"] for t in current_tasks) if current_tasks else "미분류"
+        curr_label = QLabel(f"현재 분류: {curr_names}")
+        curr_label.setStyleSheet("color: #4B5563; font-weight: 500;")
+        column.addWidget(curr_label)
+
+        column.addWidget(
+            muted_label("변경하여 새로 매핑할 업무를 목록에서 선택하세요.", small=True)
+        )
+
+        self.filter = QLineEdit()
+        self.filter.setPlaceholderText("업무 이름으로 검색")
+        self.filter.setClearButtonEnabled(True)
+        self.filter.textChanged.connect(self._apply_filter)
+        column.addWidget(self.filter)
+
+        self.list = QListWidget()
+        curr_ids = {t["id"] for t in current_tasks}
+        for task in all_tasks:
+            is_curr = task["id"] in curr_ids
+            suffix = " (현재 분류)" if is_curr else ""
+            item = QListWidgetItem(f"📁 {task['name']}   ({task['doc_count']:,}건){suffix}")
+            item.setData(Qt.ItemDataRole.UserRole, task["id"])
+            item.setData(Qt.ItemDataRole.UserRole + 1, task["name"])
+            if is_curr:
+                item.setForeground(QColor(theme.color("TEXT_DISABLED")))
+            self.list.addItem(item)
+        self.list.itemDoubleClicked.connect(lambda _item: self.accept())
+        column.addWidget(self.list)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        column.addWidget(buttons)
+
+        self._ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self._ok.setText("분류 변경")
+        self._ok.setEnabled(False)
+        self.list.itemSelectionChanged.connect(self._revalidate)
+
+    def _revalidate(self) -> None:
+        items = self.list.selectedItems()
+        self._ok.setEnabled(bool(items))
+
+    def _apply_filter(self, term: str) -> None:
+        needle = term.strip().lower()
+        for index in range(self.list.count()):
+            item = self.list.item(index)
+            name = (item.data(Qt.ItemDataRole.UserRole + 1) or "").lower()
+            item.setHidden(bool(needle) and needle not in name)
+
+    @classmethod
+    def run(cls, parent: QWidget, filename: str, current_tasks: list, all_tasks: list) -> int | None:
+        dialog = cls(parent, filename, current_tasks, all_tasks)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return None
         items = dialog.list.selectedItems()

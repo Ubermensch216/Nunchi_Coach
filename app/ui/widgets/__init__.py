@@ -37,6 +37,9 @@ from .evidence_drawer import Evidence, EvidenceDrawer
 from .flow_grid import FlowGrid
 from .task_card import MonthStrip, TaskCard
 from .timeline_grid import TimelineGrid, legend_text
+from .work_folder_card import WorkFolderCard
+from .work_year_dashboard import WorkYearDashboard
+from .work_sidebar import WorkSidebar
 
 __all__ = [
     "MORE",
@@ -58,6 +61,9 @@ __all__ = [
     "TabBar",
     "TaskCard",
     "TimelineGrid",
+    "WorkFolderCard",
+    "WorkYearDashboard",
+    "WorkSidebar",
     "UnknownBlock",
     "WrapLabel",
     "body_label",

@@ -685,6 +685,17 @@ def stylesheet(text_size: str = "medium") -> str:
     QScrollArea#AnswerPane > QWidget#qt_scrollarea_viewport {{
         background: transparent;
     }}
+    /* 문서 화면 왼쪽 업무 분류 패널 및 상단 배너. */
+    QFrame#CategoryFrame {{
+        background: {BG};
+        border: 1px solid {BORDER};
+        border-radius: {RADIUS_LG}px;
+    }}
+    QFrame#CategoryBanner {{
+        background: {SURFACE};
+        border: 1px solid {BORDER};
+        border-radius: {RADIUS}px;
+    }}
     /* 문서 화면 오른쪽 상세. 표와 나란히 서는 흰 판이라 같은 테두리를 쓴다. */
     QFrame#DetailFrame {{
         background: {BG};

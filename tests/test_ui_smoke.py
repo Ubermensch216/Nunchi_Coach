@@ -1632,3 +1632,28 @@ def test_a_failing_scan_does_not_break_the_window(make_window, db, monkeypatch):
     _add_docs(db)
     window = make_window(db)
     assert window.stack.currentWidget() is window.views["tasks"]
+
+
+def test_work_folder_cards_and_sidebar_in_tasks_home(make_window, db):
+    """업무 홈에 큰 폴더형 업무카드가 배치되고 상세 화면 사이드바와 연동된다."""
+    from app.ui.widgets import WorkFolderCard
+    _add_docs(db)
+    _recurring_this_month(db)
+    window = make_window(db)
+    tasks_view = window.views["tasks"]
+
+    # 홈에서는 사이드바가 숨겨져 있고, 폴더형 카드 그리드가 렌더링됨
+    assert tasks_view.sidebar.isHidden()
+    cards = tasks_view.findChildren(WorkFolderCard)
+    assert len(cards) >= 1
+
+    # 카드 클릭 시 상세 진입 및 사이드바 노출
+    first_card = cards[0]
+    tasks_view.open_task(first_card.task_id)
+    assert not tasks_view.sidebar.isHidden()
+    assert tasks_view._task_id == first_card.task_id
+
+    # 사이드바에서 홈 복귀 버튼 클릭 시 다시 홈으로 복귀
+    tasks_view.sidebar.back_to_home.emit()
+    assert tasks_view._task_id is None
+    assert tasks_view.sidebar.isHidden()

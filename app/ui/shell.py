@@ -337,6 +337,7 @@ class MainWindow(QMainWindow):
         # When(일정)과 What(업무)은 서로 되돌아간다 — 일정에서 업무를 열고,
         # 업무 상세에서 일정으로 넘어간다.
         self.views["tasks"].go_calendar.connect(lambda: self.go("calendar"))
+        self.views["tasks"].open_notebook.connect(self._open_notebook_for_task)
         self.views["today"].open_task.connect(self._open_task_from_calendar)
         self.views["today"].changed.connect(self._sync_today)
         self.views["today"].go_tasks.connect(lambda: self.go("tasks"))
@@ -544,6 +545,27 @@ class MainWindow(QMainWindow):
     def _open_task_from_calendar(self, task_id: int) -> None:
         self.go("tasks")
         self.views["tasks"].open_task(task_id)
+
+    def _open_notebook_for_task(self, task_id: int) -> None:
+        """업무 상세에서 '노트북에서 묻기'를 눌렀을 때 해당 업무의 기본 노트북을 열거나 생성 (개편계획서 §7)."""
+        task = self.db.task(task_id)
+        if not task:
+            return
+        from ..core import notebook, notebook_tasks
+        # 업무명과 일치하거나 관련된 기존 노트북 조회
+        notebooks = self.db.notebooks()
+        target_nb = next((nb for nb in notebooks if nb["title"] == task["name"]), None)
+        if not target_nb:
+            target_nb_id = notebook.create(self.db, title=task["name"])
+            try:
+                notebook_tasks.add_brief(self.db, target_nb_id, task_id)
+            except Exception:
+                pass
+        else:
+            target_nb_id = target_nb["id"]
+
+        self.go("notebooks")
+        self.views["notebooks"].open_notebook(target_nb_id)
 
     def _open_settings(self) -> None:
         from .views.settings import SettingsDialog

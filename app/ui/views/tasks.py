@@ -61,6 +61,8 @@ from ..widgets import (
     TabBar,
     TaskCard,
     TimelineGrid,
+    WorkFolderCard,
+    WorkSidebar,
     UnknownBlock,
     center_column,
     clear_layout,
@@ -146,6 +148,7 @@ class TasksView(QWidget):
     go_documents = Signal()
     go_calendar = Signal()
     go_attention = Signal()
+    open_notebook = Signal(int)   # task_id로 노트북 열기 (개편계획서 §7)
     state_changed = Signal()   # 확인·교정이 일어났다 (셸의 진행도가 듣는다)
 
     def __init__(self, db: Database, parent: QWidget | None = None):
@@ -164,6 +167,14 @@ class TasksView(QWidget):
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
+
+        # 좌측 업무 목록 사이드바 (개편계획서 §13.2)
+        self.sidebar = WorkSidebar()
+        self.sidebar.task_selected.connect(self.open_task)
+        self.sidebar.back_to_home.connect(self.back)
+        self.sidebar.hide()
+        outer.addWidget(self.sidebar)
+
         main = QVBoxLayout()
         main.setContentsMargins(0, 0, 0, 0)
         main.setSpacing(0)
@@ -237,11 +248,15 @@ class TasksView(QWidget):
     def refresh(self) -> None:
         """분석 중에는 1.5초마다 불린다. 보고 있던 탭을 절대 빼앗지 않는다."""
         clear_layout(self.head)
+        tasks = self.db.tasks()
         if self._task_id is not None and self.db.task(self._task_id):
             self.attention.hide()
+            self.sidebar.show()
+            self.sidebar.set_tasks(tasks, self._task_id)
             self._render_detail(self._task_id)
         else:
             self._task_id = None
+            self.sidebar.hide()
             self.attention.show()
             self.tabs.setVisible(False)
             self._head_pad.setVisible(True)
@@ -669,16 +684,24 @@ class TasksView(QWidget):
 
     def _task_card(self, row, now: bool = False) -> QWidget:
         cycle = self.db.task_cycle(row["id"])
-        card = TaskCard(
+        work = workcard.build(self.db, row["id"])
+        deliverable = ""
+        next_act = ""
+        if work.todo:
+            deliverable = work.todo[0].get("content", "")
+        if work.actions:
+            next_act = work.actions[0].get("text", "")
+        card = WorkFolderCard(
             task_id=row["id"],
             name=row["name"],
             description=row["description"],
+            deliverable=deliverable,
             span_text=_span(row),
             months=_active_months(cycle),
             cycle_text=cycle_headline(cycle) if cycle else None,
+            next_action=next_act,
             confidence=row["confidence"],
             review_state=status.of_task(row),
-            now=now,
         )
         card.opened.connect(self.open_task)
         return card
@@ -780,6 +803,13 @@ class TasksView(QWidget):
         title_row.setSpacing(theme.SP_SM)
         title_row.addWidget(view_title(row["name"]))
         title_row.addStretch(1)
+
+        ask_btn = QPushButton("노트북에서 묻기")
+        ask_btn.setObjectName("Quiet")
+        ask_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        ask_btn.setToolTip("이 업무의 설명과 근거 문서를 바탕으로 노트북에서 질문하고 정리합니다")
+        ask_btn.clicked.connect(lambda _=False, tid=task_id: self.open_notebook.emit(tid))
+        title_row.addWidget(ask_btn)
 
         edit = QPushButton("수정 ▾")
         edit.setObjectName("MenuButton")

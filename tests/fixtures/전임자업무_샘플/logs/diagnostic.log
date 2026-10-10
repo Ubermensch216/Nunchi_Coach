@@ -48,3 +48,14 @@
 2026-10-10 19:59:19,697 {"event": "pipeline.stop"}
 2026-10-10 20:15:00,463 {"event": "app.stop"}
 2026-10-10 20:15:15,325 {"event": "app.start", "version": "0.1.0"}
+2026-10-10 21:55:03,812 {"event": "app.start", "version": "0.1.0"}
+2026-10-10 21:55:04,846 {"event": "pipeline.start"}
+2026-10-10 21:55:49,367 {"event": "pipeline.stop"}
+2026-10-10 21:55:49,611 {"event": "app.stop"}
+2026-10-10 21:57:42,029 {"event": "app.start", "version": "0.1.0"}
+2026-10-10 22:02:38,867 {"event": "app.stop"}
+2026-10-10 22:03:30,893 {"event": "app.start", "version": "0.1.0"}
+2026-10-10 22:06:37,237 {"event": "app.stop"}
+2026-10-10 22:16:33,727 {"event": "app.start", "version": "0.1.0"}
+2026-10-10 22:18:28,473 {"event": "app.unhandled", "error_type": "AttributeError", "frames": [{"file": "shell.py", "line": 556, "function": "_open_notebook_for_task"}]}
+2026-10-10 22:19:29,925 {"event": "app.stop"}

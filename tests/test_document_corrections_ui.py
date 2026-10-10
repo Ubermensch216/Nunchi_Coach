@@ -28,6 +28,7 @@ from app.ui.views.documents import (  # noqa: E402
     _DateDialog,
     _parse_date_text,
     _TaskPicker,
+    _TaskMoveDialog,
 )
 
 
@@ -289,3 +290,110 @@ def test_corrected_kind_survives_reanalysis_and_is_shown(view):
              if hasattr(view.detail.itemAt(i).widget(), "text")]
     assert any("담당자가 정함" in t for t in texts)
     assert any("평가 2026년" in t for t in texts)
+
+
+# ── 업무 분류별 기본 보기 및 매핑 변경 ─────────────────────────────
+
+def test_default_view_is_work_classification(tmp_path: Path, qapp):
+    """업무가 존재할 때 기본 보기는 첫 번째 업무 분류에 속하는 파일이어야 한다."""
+    db = Database(tmp_path / "proj.db")
+    db.init()
+    source_id = db.add_source(tmp_path / "files")
+    db.upsert_document(source_id, {
+        "path": str(tmp_path / "doc1.hwp"), "filename": "doc1.hwp", "ext": ".hwp", "parse_status": "ok",
+    })
+    db.upsert_document(source_id, {
+        "path": str(tmp_path / "doc2.hwp"), "filename": "doc2.hwp", "ext": ".hwp", "parse_status": "ok",
+    })
+    db.upsert_document(source_id, {
+        "path": str(tmp_path / "doc3.hwp"), "filename": "doc3.hwp", "ext": ".hwp", "parse_status": "ok",
+    })
+    db.con.execute("INSERT INTO tasks(id, name, confidence) VALUES (1, '행정사무감사', 'high')")
+    db.con.execute("INSERT INTO tasks(id, name, confidence) VALUES (2, '예산관리', 'medium')")
+    db.con.execute("INSERT INTO task_docs(task_id, doc_id) VALUES (1, 1)")
+    db.con.execute("INSERT INTO task_docs(task_id, doc_id) VALUES (2, 2)")
+    # doc3은 미분류
+
+    view = DocumentsView(db)
+    try:
+        # 기본 선택된 업무는 첫 번째 업무(행정사무감사)여야 함
+        assert view._selected_task_id == 1
+        assert "행정사무감사" in view.banner_title.text()
+
+        # 목록에는 행정사무감사에 속하는 doc1.hwp만 표시됨 (기본 보기 = 업무 분류별 파일)
+        shown = [view.table.item(r, 0).text() for r in range(view.table.rowCount())]
+        assert shown == ["doc1.hwp"]
+
+        # 사이드바에서 예산관리(task_id=2) 선택 시
+        view._selected_task_id = 2
+        view.refresh()
+        shown_budget = [view.table.item(r, 0).text() for r in range(view.table.rowCount())]
+        assert shown_budget == ["doc2.hwp"]
+        assert "예산관리" in view.banner_title.text()
+
+        # 전체 문서 선택 시 (3건 모두 표시)
+        view._selected_task_id = None
+        view.unclassified_only.setChecked(False)
+        view.refresh()
+        assert view.table.rowCount() == 3
+        assert "전체 문서" in view.banner_title.text()
+    finally:
+        view.setParent(None)
+        db.close()
+
+
+def test_move_document_remaps_task_classification(tmp_path: Path, qapp):
+    """AI가 분류한 업무가 틀렸을 때 사용자가 직접 다른 업무로 변경(매핑)할 수 있어야 한다."""
+    db = Database(tmp_path / "proj2.db")
+    db.init()
+    source_id = db.add_source(tmp_path / "files")
+    db.upsert_document(source_id, {
+        "path": str(tmp_path / "오분류.hwp"), "filename": "오분류.hwp", "ext": ".hwp", "parse_status": "ok",
+    })
+    db.con.execute("INSERT INTO tasks(id, name, confidence) VALUES (1, '행정사무감사', 'high')")
+    db.con.execute("INSERT INTO tasks(id, name, confidence) VALUES (2, '예산관리', 'medium')")
+    # AI가 1번 업무(행정사무감사)로 자동 분류했다고 가정
+    db.con.execute("INSERT INTO task_docs(task_id, doc_id, origin, confidence) VALUES (1, 1, 'ai', 'low')")
+
+    view = DocumentsView(db)
+    try:
+        # 상세 패널 확인: AI분류 표시 및 '업무 변경' 버튼 존재
+        view._show_detail(1)
+        buttons = _buttons(view)
+        assert "업무 변경" in buttons
+        assert "배정 해제" in buttons
+
+        # 업무 변경: 1번(행정사무감사)에서 2번(예산관리)으로 재매핑
+        view.db.move_document(from_task=1, to_task=2, doc_id=1)
+        view.refresh()
+
+        # 2번 업무(예산관리)에 배정되었는지 확인
+        tasks_of_doc = [t["name"] for t in view.db.document_tasks(1)]
+        assert tasks_of_doc == ["예산관리"]
+
+        # 상세 패널 갱신 확인
+        view._show_detail(1)
+        assert any("예산관리" in t for t in _labels(view))
+    finally:
+        view.setParent(None)
+        db.close()
+
+
+def test_task_move_dialog_execution(tmp_path: Path, qapp):
+    """_TaskMoveDialog 대화상자가 업무 목록을 올바르게 표시하고 선택값을 돌려주는지 시험한다."""
+    all_tasks = [
+        {"id": 1, "name": "행정사무감사", "doc_count": 5},
+        {"id": 2, "name": "예산관리", "doc_count": 3},
+    ]
+    curr_tasks = [{"id": 1, "name": "행정사무감사"}]
+
+    dialog = _TaskMoveDialog(None, "테스트.hwp", curr_tasks, all_tasks)
+    assert dialog.list.count() == 2
+    # 현재 분류는 비활성 표시
+    assert "(현재 분류)" in dialog.list.item(0).text()
+
+    # 다른 업무 선택
+    dialog.list.setCurrentRow(1)
+    assert dialog._ok.isEnabled()
+    items = dialog.list.selectedItems()
+    assert items[0].data(Qt.ItemDataRole.UserRole) == 2
