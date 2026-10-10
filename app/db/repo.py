@@ -18,6 +18,7 @@ from typing import Any
 from ..core import health, provenance
 from ..core.chunking import CHUNKING_VERSION
 from .migrations import SCHEMA_VERSION, add_column, add_notebook_columns, upgrade
+from .actionstore import ActionStore
 from .workstore import WorkStore
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
@@ -90,7 +91,7 @@ def open_project_at(directory: Path | str) -> "Database":
     return db
 
 
-class Database(WorkStore):
+class Database(WorkStore, ActionStore):
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         self._con: sqlite3.Connection | None = None
@@ -135,6 +136,8 @@ class Database(WorkStore):
                 self.con.execute(f"DELETE FROM {table} WHERE doc_id=?", (doc_id,))
             self.con.execute("DELETE FROM ai_document WHERE doc_id=? AND status='proposed'", (doc_id,))
             self.con.execute("DELETE FROM jobs WHERE doc_id=?", (doc_id,))
+            self.con.execute("DELETE FROM doc_roles WHERE doc_id=? AND decided_by='ai'", (doc_id,))
+            self.con.execute("DELETE FROM doc_years WHERE doc_id=? AND decided_by='ai'", (doc_id,))
             self.con.execute(
                 "UPDATE documents SET eff_date=NULL,eff_date_kind=NULL,eff_precision=NULL,"
                 "eff_year=NULL,eff_month=NULL WHERE id=? AND date_decided_by!='user'", (doc_id,))
@@ -220,6 +223,7 @@ class Database(WorkStore):
         add_notebook_columns(self.con)
         self.con.executescript(Path(__file__).with_name("child_schema.sql").read_text(encoding="utf-8"))
         self.con.executescript(Path(__file__).with_name("coverage_schema.sql").read_text(encoding="utf-8"))
+        self.con.executescript(Path(__file__).with_name("action_schema.sql").read_text(encoding="utf-8"))
         if self.con.execute("SELECT 1 FROM chunks c WHERE NOT EXISTS "
                             "(SELECT 1 FROM chunk_children s WHERE s.parent_id=c.id) LIMIT 1").fetchone():
             self.con.execute("DELETE FROM meta WHERE key='chunks_checked'")

@@ -24,6 +24,7 @@ from ..ai.discover import discover
 from ..core import dating, handover_release, reconstruction, timeline, transfer
 from ..core import diagnostics, coverage
 from ..core import reindex
+from ..core import docrole, docyears, versions
 from ..core.chunking import build_chunks_with_context
 from ..core.labeling import label_document
 from ..core.workcard import OUTPUT_DIR
@@ -47,6 +48,7 @@ STAGE_PARSE = "내용 읽기"
 STAGE_DATE = "시점 확인"
 STAGE_EMBED = "의미 색인"
 STAGE_DISCOVER = "업무 파악"
+STAGE_ROLES = "문서 갈래 확인"
 STAGE_CYCLES = "일정 파악"
 STAGE_STEPS = "처리 순서 파악"
 STAGE_RESTORE = "업무 복원"
@@ -119,6 +121,8 @@ class Pipeline(QObject):
                 self._chunks(db)
             if not self._stop:
                 self._discover(db)
+            if not self._stop:
+                self._roles(db)
             if not self._stop:
                 self._cycles(db)
             if not self._stop:
@@ -471,6 +475,32 @@ class Pipeline(QObject):
         self._report(db, report)
 
 
+    # ── 문서 갈래 확인 (역할·해·판 묶음) ────────────────────────────
+    def _roles(self, db: Database) -> None:
+        """문서가 그 업무에서 무엇이었는지, 어느 해의 것인지, 어떤 판인지 정한다.
+
+        규칙으로만 한다 — Ollama가 꺼져 있어도 돈다. 아직 역할을 정하지 않은
+        문서만 본다(내용이 바뀐 문서는 역할이 지워져 다시 들어온다). 판 묶음은
+        업무에 묶인 문서가 달라지면 달라지므로 매번 다시 만든다.
+        """
+        pending = docrole.pending(db)
+        report = StageReport(STAGE_ROLES, total=len(pending))
+        for start in range(0, len(pending), COMMIT_EVERY):
+            if self._stop:
+                break
+            batch = pending[start:start + COMMIT_EVERY]
+            docrole.classify_documents(db, batch)
+            docyears.mark_documents(db, batch)
+            report.done = start + len(batch)
+            self.progress.emit(STAGE_ROLES, report.done, len(pending), "")
+        groups = 0 if self._stop else versions.rebuild(db)
+        report.note = (f"문서 {report.done:,}건의 갈래 확인" if pending
+                       else "새로 확인할 문서가 없습니다")
+        if groups:
+            report.note += f" · 판 묶음 {groups:,}개"
+        self._report(db, report)
+
+
     # ── 7단계: 일정 파악 (When) ─────────────────────────────────────
     def _cycles(self, db: Database) -> None:
         """업무마다 연도×월 격자를 만들어 반복 주기를 찾는다.
@@ -729,12 +759,15 @@ class Pipeline(QObject):
                 self.progress.emit(STAGE_CHUNKS, index, len(rows), row["filename"])
 
         from ..core.child_index import embed_children
-        for row in hierarchy_docs:
+        for index, row in enumerate(hierarchy_docs, start=1):
             if self._stop:
                 break
             error = embed_children(db, row["doc_id"], client, lambda: self._stop, CHUNK_EMBED_BATCH)
             if error and error != "cancelled":
                 report.errors.append(f"자식 검색 준비: {row['doc_id']}: {error}")
+            # 이 구간이 전체의 절반 가까이 걸린다. 알리지 않으면 화면이 멈춘 것처럼 보인다.
+            if index % 5 == 0 or index == len(hierarchy_docs):
+                self.progress.emit(STAGE_CHUNKS, index, len(hierarchy_docs), "세부 조각 준비")
         child_left = db.unembedded_child_count(client.embed_model)
         left = db.unembedded_chunk_count(client.embed_model) + child_left
         if made or embedded:

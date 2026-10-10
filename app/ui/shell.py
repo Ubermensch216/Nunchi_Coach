@@ -355,6 +355,7 @@ class MainWindow(QMainWindow):
         if not self.db.work_sources():
             return
         from ..ai.settings import model_names
+        from ..core import docrole
         from ..ingest.parsers.base import outdated_clause
         embed_model = model_names(self.db)[1]
         pending = self.db.con.execute(
@@ -384,8 +385,10 @@ class MainWindow(QMainWindow):
                  or self.db.unembedded_chunk_count(embed_model) > 0
                  or self.db.unembedded_child_count(embed_model) > 0)
         )
+        # 역할을 아직 정하지 않은 문서(스키마를 올린 옛 프로젝트 포함).
+        needs_roles = bool(docrole.pending(self.db, limit=1))
         if (pending or needs_discovery or needs_cycles or needs_steps or needs_items
-                or needs_chunks):
+                or needs_chunks or needs_roles):
             self._start_pipeline()
 
     def _start_pipeline(self) -> None:

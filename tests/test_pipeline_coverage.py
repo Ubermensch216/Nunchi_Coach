@@ -159,7 +159,7 @@ def test_v8_upgrade_backs_up_and_preserves_reviewed_data(db):
     db.set_meta("schema_version", "8")
     db.close()
     db.init()
-    assert db.get_meta("schema_version") == "9"
+    assert db.get_meta("schema_version") == "10"
     assert db.task(task)["name"] == "사람 업무"
     backup = Path(str(db.path) + ".bak-v8")
     assert backup.exists()

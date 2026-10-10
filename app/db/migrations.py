@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "9"
+SCHEMA_VERSION = "10"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -445,6 +445,16 @@ def _to_v9(con: sqlite3.Connection) -> None:
             statement = ""
 
 
+def _to_v10(con: sqlite3.Connection) -> None:
+    # 수행 건·제안·실행·산출물. 새 표만 더하고 기존 행은 바꾸지 않는다.
+    statement = ""
+    for line in Path(__file__).with_name("action_schema.sql").read_text(encoding="utf-8").splitlines(True):
+        statement += line
+        if sqlite3.complete_statement(statement):
+            con.execute(statement)
+            statement = ""
+
+
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
@@ -454,6 +464,7 @@ STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "7": _to_v7,
     "8": _to_v8,
     "9": _to_v9,
+    "10": _to_v10,
 }
 
 

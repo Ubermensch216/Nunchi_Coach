@@ -267,3 +267,29 @@ def test_the_copied_folder_scenario():
     )
     assert resolution.year == 2024, "복사 시각에 속았습니다"
     assert resolution.kind == BODY
+
+
+# ── 표 숫자·두 자리 연도 (과부하 합성 자료에서 드러난 결함) ───────────────
+
+def test_bare_number_in_a_table_cell_is_not_a_year():
+    assert dating.from_text("12345\t1992\t3000\n8\t77\t2010") == []
+
+
+def test_bare_year_outside_a_table_cell_is_still_read():
+    assert dating.from_text("2024 주요업무계획")[0].value == "2024-01-01"
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("작성일: '24. 11. 5.", "2024-11-05"),
+        ("’24년 3월 7일 시행", "2024-03-07"),
+        ("'98.12.31. 기준", "1998-12-31"),
+    ],
+)
+def test_two_digit_year_with_apostrophe(text, expected):
+    assert dating.from_text(text)[0].value == expected
+
+
+def test_two_digit_numbers_without_apostrophe_are_not_dates():
+    assert dating.from_text("24. 11. 5. 회의") == []
