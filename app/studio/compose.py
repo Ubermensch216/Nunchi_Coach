@@ -26,6 +26,10 @@ from .templates import Template
 
 MAX_EVIDENCE = 24               # 한 문서의 재료로 쓰는 대목 수
 EVIDENCE_CHARS = 700
+# 한 항목의 프롬프트에 싣는 근거 전체의 글자 수. 대목 24개를 700자씩 실으면 16,800자로,
+# 모델의 문맥 창(ai/client.py NUM_CTX)을 넘어 지시문이 잘려 나간다. 대목이 많으면
+# 하나하나를 줄여 이 안에 담는다.
+CONTEXT_CHARS = 7000
 SENTENCES_PER_SECTION = 5
 SECTION_TOKENS = 700
 
@@ -123,7 +127,8 @@ def compose(db, notebook_id: int, template: Template, client, title: str = "", r
     evidence, snapshot, note = gather(db, notebook_id)
     book = notebook.require(db, notebook_id)
     title = title.strip() or f"{book['title']} {template.title}"
-    source_text = {i: intent.strip_instructions(" ".join(e["exact_quote"].split())[:EVIDENCE_CHARS])[0]
+    share = min(EVIDENCE_CHARS, CONTEXT_CHARS // max(len(evidence), 1))
+    source_text = {i: intent.strip_instructions(" ".join(e["exact_quote"].split())[:share])[0]
                    for i, e in enumerate(evidence, start=1)}
     names = {i: e["filename"] for i, e in enumerate(evidence, start=1)}
     context = "\n\n".join(f"[{i}] ({e['filename']} · {e['locator']})\n{source_text[i]}"

@@ -23,7 +23,8 @@ from ..ai.settings import project_client
 from ..ai.discover import discover
 from ..core import dating, handover_release, reconstruction, timeline, transfer
 from ..core import diagnostics
-from ..core.chunking import build_chunks
+from ..core import reindex
+from ..core.chunking import build_chunks_with_context
 from ..core.labeling import label_document
 from ..core.workcard import OUTPUT_DIR
 from ..db import Database
@@ -256,7 +257,7 @@ class Pipeline(QObject):
                 if result.ok:
                     db.replace_sections(
                         row["id"],
-                        [(s.kind, s.ordinal, s.locator, s.text) for s in result.sections],
+                        [(s.kind, s.ordinal, s.locator, s.text, s.meta) for s in result.sections],
                     )
                     db.index_document(
                         row["id"], row["filename"], row["path"],
@@ -614,6 +615,12 @@ class Pipeline(QObject):
         made = 0
         embedded = 0
 
+        # 조각 규칙이 바뀌었으면 새 조각을 따로 준비해 검증한 뒤 바꾼다. 그동안 옛 조각으로
+        # 계속 답하고, 인용된 옛 조각은 보관된다(core/reindex.py).
+        _switched, reindex_note = reindex.run(
+            db, client, lambda: self._stop,
+            lambda done, total, name: self.progress.emit(STAGE_CHUNKS, done, total, name))
+
         # 조각이 이미 있는 문서는 다시 만들지 않는다. 다시 만들면 chunk_id가
         # 바뀌어 멀쩡히 있던 임베딩까지 CASCADE로 함께 지워진다.
         bare = db.documents_without_chunks()
@@ -621,12 +628,12 @@ class Pipeline(QObject):
             if self._stop:
                 break
             sections = db.con.execute(
-                "SELECT kind, locator, text FROM document_sections "
+                "SELECT kind, locator, text, meta FROM document_sections "
                 "WHERE doc_id = ? ORDER BY ordinal",
                 (row["id"],),
             ).fetchall()
-            pieces = build_chunks(
-                [(s["kind"], s["locator"], s["text"]) for s in sections]
+            pieces = build_chunks_with_context(
+                [(s["kind"], s["locator"], s["text"], s["meta"]) for s in sections]
             )
             if pieces:
                 # 조각을 지우고 다시 넣는 사이에 죽으면 조각이 반만 남는다. 그 문서는
@@ -652,6 +659,8 @@ class Pipeline(QObject):
             report.note = f"임베딩 보류 — {health.message}"
             if made:
                 report.note = f"{made:,}조각 나눔 · " + report.note
+            if reindex_note:
+                report.note = f"{reindex_note} · {report.note}"
             self.stage_done.emit(report)
             return
 
@@ -702,7 +711,9 @@ class Pipeline(QObject):
             report.note += f" · {left:,}조각 남음"
         if report.errors:
             report.note += " · 일부 실패"
-        if not self._stop and not child_left:
+        if reindex_note:
+            report.note = f"{reindex_note} · {report.note}"
+        if not self._stop and not child_left and not reindex.needed(db):
             db.set_meta("chunks_checked", "1")
         elif child_left:
             db.con.execute("DELETE FROM meta WHERE key='chunks_checked'")

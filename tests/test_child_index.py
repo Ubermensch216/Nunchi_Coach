@@ -160,10 +160,10 @@ def test_child_creation_rolls_back_on_failure(db, monkeypatch):
     doc, _, _ = document(db)
     db.replace_document_chunks(doc, [(1, '1문단', '첫 원문'), (2, '2문단', '둘째 원문')])
     original = child_chunking.build_children
-    def fail(text):
+    def fail(text, context=''):
         if text == '둘째 원문':
             raise RuntimeError('injected')
-        return original(text)
+        return original(text, context)
     monkeypatch.setattr(child_chunking, 'build_children', fail)
     with pytest.raises(RuntimeError, match='injected'):
         db.ensure_child_chunks(doc)
@@ -199,3 +199,21 @@ def test_parent_deletion_cascades_child_fts_and_embeddings(db):
     assert db.con.execute('SELECT COUNT(*) FROM chunk_children').fetchone()[0] == 0
     assert db.con.execute('SELECT COUNT(*) FROM child_embeddings').fetchone()[0] == 0
     assert db.con.execute("SELECT COUNT(*) FROM child_fts WHERE child_fts MATCH '계약'").fetchone()[0] == 0
+
+
+def test_heading_context_reaches_the_search_text_but_not_the_quoted_range(db):
+    """'집행 현황'이라는 절 제목이 본문에 다시 나오지 않아도 그 절의 대목을 찾는다."""
+    from app.core import child_chunking
+    doc, _, _ = document(db)
+    body = '새봄 센터의 교부액은 31,500천원이다.'
+    parent = db.replace_document_chunks(doc, [(1, '3문단', body, '제2장 예산 > 1. 집행 현황')])[0][0]
+    db.ensure_child_chunks(doc)
+    child = db.con.execute('SELECT * FROM chunk_children WHERE parent_id=?', (parent,)).fetchone()
+    assert child['text'] == '제2장 예산 > 1. 집행 현황\n' + body
+    assert child['version'] == child_chunking.child_version('문맥')
+    assert body[child['start_offset']:child['end_offset']] == body
+    assert parent in fts.search_chunk_ids(db, '집행 현황')
+    assert db.con.execute('SELECT text FROM chunks WHERE id=?', (parent,)).fetchone()[0] == body
+    # 문맥이 없는 부모의 자식은 예전 판 그대로다 — 다시 만들지 않는다.
+    assert [c.text for c in build_children(body)] == [body]
+    assert child_chunking.child_version() == child_chunking.CHILD_VERSION

@@ -144,6 +144,36 @@ def test_split_pieces_do_not_exceed_the_limit():
     assert all(len(c[2]) <= MAX_CHUNK_CHARS for c in chunks)
 
 
+def test_long_table_is_split_between_rows_not_inside_one():
+    """글자 수로 자르면 행이 두 조각에 걸쳐 값과 항목 이름이 떨어진다."""
+    rows = [f"항목{i}\t{i * 1000:,}원\t담당 {i}명" for i in range(1, 200)]
+    text = "\n".join(rows)
+    chunks = build_chunks([(TABLE, "표1", text)])
+    assert len(chunks) > 1
+    assert "".join(c[2] for c in chunks) == text
+    for _ordinal, locator, piece in chunks:
+        assert locator == "표1"
+        assert len(piece) <= MAX_CHUNK_CHARS
+        assert all(line in rows for line in piece.splitlines())
+
+
+def test_long_prose_is_split_at_a_sentence_end():
+    sentence = "보조금 정산서는 사업 종료 후 2개월 안에 제출한다. "
+    text = (sentence * 80).strip()
+    chunks = build_chunks([(PAGE, "1쪽", text)])
+    assert len(chunks) > 1
+    assert "".join(c[2] for c in chunks) == text
+    assert all(c[2].rstrip().endswith("제출한다.") for c in chunks)
+
+
+def test_long_line_without_sentence_ends_is_split_between_words():
+    text = " ".join(f"1,234,{i:03d}원" for i in range(400))
+    chunks = build_chunks([(SLIDE, "슬라이드 1", text)])
+    assert "".join(c[2] for c in chunks) == text
+    assert all(len(c[2]) <= MAX_CHUNK_CHARS for c in chunks)
+    assert all(c[2].strip().endswith("원") and c[2].strip().startswith("1,234,") for c in chunks)
+
+
 def test_no_sections_yields_no_chunks():
     assert build_chunks([]) == []
 
@@ -157,3 +187,35 @@ def test_merged_whitespace_only_pieces_do_not_survive():
     chunks = build_chunks([(PARA, "1문단", "실제"), (PARA, "2문단", "   ")])
     assert len(chunks) == 1
     assert chunks[0][2] == "실제"
+
+
+# ── 제목 문맥 (v3) ──────────────────────────────────────────────────
+
+def test_chunk_carries_the_heading_path_of_its_first_section():
+    from app.core.chunking import build_chunks_with_context
+    sections = [
+        (PARA, "1문단", "제2장 예산", {"heading": ["제2장 예산"]}),
+        (PARA, "2문단", "가" * 300, '{"heading": ["제2장 예산", "1. 집행"]}'),   # 저장된 JSON 꼴
+        (TABLE, "표1", "항목\t금액", {"heading": ["제2장 예산", "1. 집행"], "table": 1}),
+    ]
+    chunks = build_chunks_with_context(sections)
+    assert [(c[1], c[3]) for c in chunks] == [("1~2문단", "제2장 예산"), ("표1", "제2장 예산 > 1. 집행")]
+    assert all("제2장 예산 > " not in c[2] for c in chunks)       # 문맥은 본문에 섞이지 않는다
+
+
+def test_a_new_heading_starts_a_new_chunk_unless_what_came_before_is_too_short():
+    from app.core.chunking import build_chunks_with_context
+    first, second = {"heading": ["1. 집행"]}, {"heading": ["2. 반납"]}
+    long = build_chunks_with_context([(PARA, "1문단", "가" * 250, first), (PARA, "2문단", "나" * 250, second)])
+    assert [(c[1], c[3]) for c in long] == [("1문단", "1. 집행"), ("2문단", "2. 반납")]
+    short = build_chunks_with_context([(PARA, "1문단", "가" * 50, first), (PARA, "2문단", "나" * 250, second)])
+    assert [(c[1], c[3]) for c in short] == [("1~2문단", "1. 집행")]
+
+
+def test_sections_without_structure_are_chunked_exactly_as_before():
+    """구조 정보가 없는 기존 문서의 조각이 달라지면 색인 전환이 모든 문서를 갈아엎는다."""
+    from app.core.chunking import build_chunks_with_context
+    sections = [(PARA, f"{i}문단", "가" * 150) for i in range(1, 8)] + [(TABLE, "표1", "a\tb")]
+    plain = build_chunks(sections)
+    assert [c[:3] for c in build_chunks_with_context([(*s, {}) for s in sections])] == plain
+    assert all(c[3] == "" for c in build_chunks_with_context(sections))

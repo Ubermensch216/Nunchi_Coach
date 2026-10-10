@@ -17,7 +17,8 @@ PARSER_VERSION = "4"
 # 한 형식의 파서만 바뀌었을 때는 여기에 적는다. PARSER_VERSION을 올리면 모든 문서를
 # 다시 읽고 AI 분석까지 다시 돌지만, 여기 적으면 그 형식의 문서만 다시 읽는다.
 # xlsx 5: 시트를 행 경계에서 나누고(행 중간에서 자르지 않는다) 이어지는 조각에 머리 행을 붙인다.
-PARSER_REVISIONS = {"xlsx": "5"}
+# docx 5: 긴 표를 행 경계에서 나누고 이어지는 조각에 첫 행을 붙인다. 제목 계층을 구조 정보로 남긴다.
+PARSER_REVISIONS = {"xlsx": "5", "docx": "5"}
 
 
 def version_of(parser: str | None) -> str:
@@ -66,6 +67,13 @@ class Section:
     ordinal: int
     locator: str   # "3쪽" | "'검사결과' B4:F28" | "슬라이드 7" | "12문단"
     text: str
+    # 본문과 따로 두는 구조 정보. 본문(text)은 근거로 인용하는 글이라 여기에 섞지 않는다.
+    #   heading  이 조각이 속한 제목들, 바깥 것부터 (["제2장 예산", "1. 집행"])
+    #   table    문서 안의 표 번호      rows  표·시트의 [첫 행, 끝 행]
+    #   header   표의 머리(첫) 행       unit  표의 단위      sheet  시트 이름
+    #   spans    병합 셀 설명           ocr   그림을 판독해 얻은 글이면 True
+    # 파서가 알아낸 것만 적는다. 없는 열쇠는 '모른다'이다.
+    meta: dict = field(default_factory=dict)
 
 
 @dataclass(slots=True)

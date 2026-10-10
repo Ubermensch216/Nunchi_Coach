@@ -73,7 +73,7 @@ def parse(path: Path) -> ParseResult:
                     return
                 ordinal += 1
                 lines = [header, *buffer] if continued and header else buffer
-                out.append(_section(ws.title, ordinal, first_row, last_row, max_col, lines, budget))
+                out.append(_section(ws.title, ordinal, first_row, last_row, max_col, lines, budget, header))
                 buffer, first_row, max_col, continued = [], None, 0, True
 
             for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
@@ -115,12 +115,15 @@ def parse(path: Path) -> ParseResult:
     )
 
 
-def _section(sheet, ordinal, first_row, last_row, max_col, buffer, budget) -> Section:
+def _section(sheet, ordinal, first_row, last_row, max_col, buffer, budget, header=None) -> Section:
     start = first_row or 1
     end_col = get_column_letter(max(max_col, 1))
     locator = f"'{sheet}' A{start}:{end_col}{last_row}"
     body = clip(f"[{sheet}]\n" + "\n".join(buffer), budget)
-    return Section("sheet", ordinal, locator, body)
+    meta = {"sheet": sheet, "rows": [start, last_row]}
+    if header:
+        meta["header"] = header
+    return Section("sheet", ordinal, locator, body, meta)
 
 
 def _is_header(row, line: str) -> bool:

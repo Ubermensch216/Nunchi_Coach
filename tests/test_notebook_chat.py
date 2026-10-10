@@ -12,7 +12,8 @@ from app.core import notebook
 from app.db import Database
 from app.search import expand, overview
 from app.search.query import QueryScope
-from app.search.rag import Answer, Citation, MIN_SIMILARITY, _with_variants, ask
+from app.search.rag import (GENERIC_WITHHELD, Answer, Citation, MIN_SIMILARITY, _with_variants, ask,
+                            withheld_reason)
 from app.search.vector import pack
 
 import numpy as np
@@ -246,6 +247,14 @@ def test_oversized_selection_is_sampled_evenly_and_disclosed(db, tmp_path):
     assert answer.generation["chunks_total"] == overview.MAX_CHUNKS + 8
 
 
+def test_long_pieces_are_batched_by_size_so_the_prompt_fits_the_model_window():
+    """실측: 긴 조각 넷을 한 묶음에 넣으면 문맥 창을 넘어 지시문이 잘려 나간다."""
+    short = [{"doc_id": 1, "text": "가" * 100} for _ in range(5)]
+    assert overview._batches(short) == [[1, 2, 3, 4], [5]]
+    long = [{"doc_id": 1, "text": "가" * 1200} for _ in range(5)]
+    assert overview._batches(long) == [[1, 2], [3, 4], [5]]
+
+
 def test_notebook_overview_mode_is_stored_with_the_message(db, book):
     client = Scripted(map={"facts": [{"text": "제출처는 총무과이다", "sources": [2]}]})
     message, answer = notebook.query(db, book, "전체를 정리해 줘", client, mode="overview")
@@ -278,13 +287,40 @@ def test_bare_summary_of_a_small_selection_is_answered_as_an_overview(db, book, 
     assert len(seen) == 1                                   # 주제가 있으면 보통 질문이다
 
 
-def test_bare_summary_of_a_large_selection_points_to_the_overview_switch(db, book, monkeypatch):
-    monkeypatch.setattr(overview, "AUTO_CHUNKS", 1)
-    client = Scripted(ask={"answered": False, "sentences": []})
-    message, answer = notebook.query(db, book, "요약해줘.", client)
-    assert answer.withheld and "전체 정리" in answer.guidance
+def test_bare_summary_is_an_overview_whatever_the_size_of_the_selection(db, tmp_path):
+    """실측: 자료가 24조각을 넘자 "요약해줘"가 보통 질문으로 가서 보류됐고, 화면은
+    '전체 정리를 켜고 다시 요청하세요'라고 했다. 무엇을 원하는지 알았으면 그렇게 한다."""
+    pieces = [f"{n}번 항목의 수량은 {n}개이다" for n in range(1, 40)]
+    doc, _ = add_doc(db, tmp_path, "목록.txt", pieces)
+    key = notebook.create(db, "큰 자료")
+    notebook.add_sources(db, key, [doc])
+    client = Scripted(map={"facts": [{"text": pieces[0], "sources": [1]}]})
+    steps = []
+    message, answer = notebook.query(db, key, "요약해줘.", client, progress=lambda *step: steps.append(step))
     row = db.con.execute("SELECT * FROM notebook_messages WHERE id=?", (message,)).fetchone()
-    assert row["mode"] == "rag" and "전체 정리" in json.loads(row["generation"])["guidance"]
+    assert not answer.withheld and row["mode"] == "overview"
+    batches = answer.generation["batches"]
+    assert batches > 6 and steps == [(done, batches) for done in range(batches)]
+
+
+def test_bare_summary_without_a_model_says_the_model_is_missing_not_the_material(db, book):
+    message, answer = notebook.query(db, book, "요약해줘.", Scripted(ready=False))
+    row = db.con.execute("SELECT * FROM notebook_messages WHERE id=?", (message,)).fetchone()
+    assert row["mode"] == "rag" and "로컬 AI" in answer.guidance
+    assert "로컬 AI" in json.loads(row["generation"])["guidance"]
+
+
+@pytest.mark.parametrize("code, word", [("subject_unknown", "대상"), ("model_declined", "확정"),
+                                        ("unverified", "대조"), ("no_facts", "찾지 못")])
+def test_withheld_reason_names_the_cause_instead_of_blaming_the_material(code, word):
+    answer = Answer("질문", GENERIC_WITHHELD, True, generation={"withheld": code})
+    assert word in withheld_reason(answer) and "부족" not in withheld_reason(answer)
+
+
+def test_withheld_reason_keeps_specific_text_and_the_generic_line_for_no_evidence():
+    assert withheld_reason(Answer("질문", GENERIC_WITHHELD, True)) == GENERIC_WITHHELD
+    assert withheld_reason(Answer("질문", "수량을 확인할 수 없습니다.", True,
+                                  generation={"withheld": "unverified"})) == "수량을 확인할 수 없습니다."
 
 
 def test_overview_keeps_the_complete_facts_of_a_cut_off_response(db, tmp_path):

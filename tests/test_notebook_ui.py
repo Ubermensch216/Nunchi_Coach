@@ -257,3 +257,48 @@ def test_answer_renders_tables_lists_and_escapes_source_text():
     assert answer_html("하나입니다.[1] 둘입니다.[2]").count("<p")==2
     plain=answer_html("근거 없는 문장입니다. 이어지는 문장입니다.[1]")
     assert plain.count("<p")==1 and "<li" not in plain
+
+
+def test_withheld_answer_names_the_cause_and_offers_a_whole_material_pass(workspace):
+    from PySide6.QtWidgets import QCheckBox,QPushButton
+    view,db,book=workspace.view,workspace.db,workspace.book
+    view.open_notebook(book)
+    chat=view.workspace.chat
+    assert not any(box.text()=="전체 정리" for box in chat.findChildren(QCheckBox))
+    snapshot=notebook.dumps(notebook.selected_snapshot(db,book))
+    for mode,code in (("rag","model_declined"),("overview","no_facts")):
+        db.con.execute("INSERT INTO notebook_messages(notebook_id,question,answer,source_snapshot,citations,generation,"
+                       "model,withheld,standalone_question,mode,law_citations) VALUES (?,?,?,?,'[]',?,'fake',1,'',?,'{}')",
+                       (book,"예산 내용을 정리해 줘","확인 가능한 자료가 부족합니다.",snapshot,
+                        notebook.dumps({"withheld":code,"mode":mode}),mode))
+    chat.refresh()
+    texts=[label.text() for label in chat.findChildren(QLabel)]
+    assert any("확정하지 못했습니다" in text for text in texts) and not any("자료가 부족" in text for text in texts)
+    again=[b for b in chat.findChildren(QPushButton) if b.text()=="자료 전체를 훑어 다시 정리"]
+    assert len(again)==1                       # 이미 전체를 훑은 답에는 붙지 않는다
+    started=[]
+    chat._runner.start=lambda question,scope:started.append((question,scope.mode)) or True
+    again[0].click()
+    assert started==[("예산 내용을 정리해 줘","overview")] and chat._whole
+    chat._on_progress(2,5)
+    assert "5묶음 중 3번째" in chat.waiting.text()
+
+
+def test_empty_chat_shows_the_guides_of_the_selected_sources_only(workspace):
+    view,db,book=workspace.view,workspace.db,workspace.book
+    notebook.add_sources(db,book,workspace.docs[1:])
+    for doc,summary in zip(workspace.docs,("요청 문서의 안내이다.","참고 문서의 안내이다.")):
+        db.con.execute("UPDATE notebook_sources SET summary=?,topics=? WHERE notebook_id=? AND doc_id=?",
+                       (summary,notebook.dumps(["제출기한"]),book,doc))
+    notebook.select(db,book,workspace.docs[1],False)
+    view.open_notebook(book)
+    chat=view.workspace.chat
+    texts=[label.text() for label in chat.findChildren(QLabel)]
+    assert "요청 문서의 안내이다." in texts and "참고 문서의 안내이다." not in texts
+    assert any("원문이 아닙니다" in text for text in texts) and any("주제어 — 제출기한" in text for text in texts)
+    notebook.select(db,book,workspace.docs[1],True)
+    chat.refresh()
+    assert "참고 문서의 안내이다." in [label.text() for label in chat.findChildren(QLabel)]
+    notebook.query(db,book,"제출기한",Offline())
+    chat.refresh()
+    assert "요청 문서의 안내이다." not in [label.text() for label in chat.findChildren(QLabel)]

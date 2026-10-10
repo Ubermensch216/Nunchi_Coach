@@ -19,6 +19,15 @@ from .prompts_loader import render
 
 # 프롬프트에 넣을 본문 길이. 길수록 느려지고, 문서 앞부분에 정체가 다 드러난다.
 DOCUMENT_BUDGET = 2400
+# 노트북 자료 안내에 넣을 본문 길이. Ollama의 기본 문맥 창은 4,096토큰이고, 넘으면 오류
+# 없이 프롬프트의 앞쪽(지시문과 문서 머리)이 잘려 나간다. 실측(gemma4:e2b): 숫자가 많은 표는
+# 3,600자가 2,991토큰, 산문은 2,141토큰이었고, 4,857자짜리 표를 4,800자 예산으로 넣자
+# 2,051토큰만 읽혀 요약이 문서의 정체를 놓쳤다. 지시문(약 350토큰)과 생성 한도(420)를 더해도
+# 창 안에 드는 값이다.
+BRIEF_BUDGET = 3600
+BRIEF_HEAD_RATIO = 0.6
+BRIEF_SUMMARY_CHARS = 600
+BRIEF_GAP = "[... 중간 생략 ...]"
 
 
 @dataclass(slots=True)
@@ -56,6 +65,35 @@ def summarize(client: OllamaClient, doc_id: int, text: str) -> Analysis:
     result.summary = schemas.clean_summary(data.get("summary"))
     if not result.summary:
         result.error = "요약이 비어 있습니다"
+    return result
+
+
+def brief(client: OllamaClient, doc_id: int, text: str, filename: str = "") -> Analysis:
+    """노트북에 올린 자료 한 건의 안내 — 요약 2~4문장과 주제어를 한 번에 받는다.
+
+    summarize()는 앞 2,400자만 보고 두 문장을 쓴다. 수많은 문서의 정체를 빨리
+    가리려는 것이라 그렇다. 노트북 자료는 사용자가 골라 올린 몇 건이고 그 내용을
+    알려는 것이므로, 앞·뒤를 함께 보이고 무엇이 담겼는지를 적게 한다(참고: myAI
+    documentAnalysis.js). 결론·합계·붙임은 문서 뒤쪽에 있다.
+    """
+    result = Analysis(doc_id=doc_id, model=client.gen_model)
+    body = _head_and_tail(text, BRIEF_BUDGET)
+    if not body:
+        result.error = "요약할 본문이 없습니다"
+        return result
+
+    prompt, version = render("source_brief", document=body, filename=(filename or "이름 없음")[:200],
+                             limit=str(schemas.BRIEF_TOPICS))
+    result.prompt_version = version
+    data, error, _raw = client.generate_json(prompt, schemas.BRIEF_SCHEMA, num_predict=420)
+    if error:
+        result.error = error
+        return result
+
+    result.summary = schemas.clean_summary(data.get("summary"), BRIEF_SUMMARY_CHARS)
+    result.keywords = schemas.clean_keywords(data.get("topics"), schemas.BRIEF_TOPICS)
+    if not result.summary and not result.keywords:
+        result.error = "자료 안내가 비어 있습니다"
     return result
 
 
@@ -145,6 +183,17 @@ def name_task(client: OllamaClient, titles: list[str]) -> TaskNaming:
     if not naming.name:
         naming.error = f"쓸 수 없는 업무 이름: {data.get('name')!r}"
     return naming
+
+
+def _head_and_tail(text: str, budget: int) -> str:
+    """예산을 넘는 글은 앞 60%와 뒤 40%를 남기고 가운데를 뺀다. 줄 경계는 남긴다 —
+    표를 한 줄로 펴면 모델이 행을 알아보지 못한다."""
+    lines = (" ".join(line.split()) for line in (text or "").splitlines())
+    body = "\n".join(line for line in lines if line)
+    if len(body) <= budget:
+        return body
+    head = int(budget * BRIEF_HEAD_RATIO)
+    return f"{body[:head]}\n\n{BRIEF_GAP}\n\n{body[-(budget - head):]}"
 
 
 def _budget(text: str) -> str:

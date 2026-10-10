@@ -25,7 +25,7 @@ from ..ai.prompts_loader import render
 from ..ai.schemas import ASK_SCHEMA
 from ..db import Database, representative_predicate
 from . import evidence, fts, intent, tablemath
-from ..core import korean, provenance
+from ..core import diagnostics, korean, provenance
 from ..core.chunking import MAX_CHUNK_CHARS
 from .query import QueryScope, infer_scope
 from .rerank import Candidate, collapse_near_duplicates, rerank
@@ -135,6 +135,26 @@ class Answer:
             # 저장한 대화를 되살릴 때는 그때 남긴 안내를 쓴다(generation에 실려 온다).
             self.guidance = (self.guidance or self.generation.get("guidance")
                              or needed_material(self.question))
+
+
+# 보류한 까닭(generation["withheld"])을 화면에 적을 말. '자료가 부족하다'는 자료가
+# 정말 없을 때만 쓴다 — 자료는 있는데 다른 까닭으로 보류한 것을 그렇게 적으면 틀린 말이다.
+WITHHELD_REASONS = {
+    "subject_unknown": "질문한 대상이 선택한 자료에 나오지 않습니다.",
+    "model_declined": "찾은 대목만으로는 답을 확정하지 못했습니다.",
+    "unverified": "만든 답을 원문과 대조해 확인하지 못해 내놓지 않았습니다.",
+    "reason_missing": "찾은 값이 질문에 대한 답인지 확인하지 못했습니다.",
+    "no_facts": "선택한 자료에서 요청과 관련된 내용을 찾지 못했습니다.",
+}
+GENERIC_WITHHELD = "확인 가능한 자료가 부족합니다."
+
+
+def withheld_reason(answer: "Answer") -> str:
+    """보류한 답의 첫 줄. 저장된 답의 글은 바꾸지 않고 보여 줄 때 고른다."""
+    text = answer.text or GENERIC_WITHHELD
+    if text != GENERIC_WITHHELD:
+        return text
+    return WITHHELD_REASONS.get(str(answer.generation.get("withheld")), text)
 
 
 def needed_material(question: str) -> str:
@@ -805,7 +825,12 @@ def _ask_again(client, prompt: str, schema: dict):
 def _generation_record(client) -> dict:
     """클라이언트가 남긴 생성 계측값. 계측을 모르는 대역 클라이언트면 빈 값."""
     record = getattr(client, "last_generation", None)
-    return record.as_dict() if record is not None and record.outcome else {}
+    if record is None or not record.outcome:
+        return {}
+    if getattr(record, "prompt_truncated", False):
+        # 모델이 지시문 없이 답했을 수 있다. 문장 검증은 그대로 하지만 원인을 남긴다.
+        diagnostics.record("generation.prompt_truncated", count=record.prompt_eval_count)
+    return record.as_dict()
 
 
 _ANSWERED = re.compile(r'"answered"\s*:\s*(true|false)')
@@ -1290,7 +1315,7 @@ def _load_chunk_context(db: Database, chunk_ids: list[int]) -> list:
         return []
     marks = ", ".join("?" * len(chunk_ids))
     rows = db.con.execute(
-        f"SELECT c.id AS chunk_id, c.doc_id, c.locator, c.text, d.filename, d.path "
+        f"SELECT c.id AS chunk_id, c.doc_id, c.locator, c.text, c.context, d.filename, d.path "
         f"FROM chunks c JOIN documents d ON d.id = c.doc_id "
         f"WHERE c.id IN ({marks}) AND d.missing_since IS NULL",
         chunk_ids,
@@ -1315,6 +1340,17 @@ def _evidence_text(rows, question: str) -> dict[int, str]:
     return {i: evidence.window(row["text"], question, budget) for i, row in enumerate(rows, start=1)}
 
 
+def context_head(row) -> str:
+    """근거 머리줄 — 파일·위치와, 알고 있으면 그 대목이 속한 제목. 제목은 모델이 대목의
+    자리를 알게 하는 단서일 뿐 근거 본문이 아니다(검증은 본문으로만 한다)."""
+    head = f"{row['filename']} · {row['locator']}"
+    try:
+        context = row["context"]
+    except (IndexError, KeyError):
+        context = ""
+    return f"{head} · 제목: {context}" if context else head
+
+
 def _format_context(rows, official: dict[int, dict] | None = None,
                     evidence_text: dict[int, str] | None = None) -> str:
     """공식 출처가 있으면 머리줄에 함께 적는다.
@@ -1326,7 +1362,7 @@ def _format_context(rows, official: dict[int, dict] | None = None,
     parts = []
     for i, row in enumerate(rows, start=1):
         text = (evidence_text or {}).get(i) or " ".join(row["text"].split())[:MAX_CONTEXT_CHARS]
-        head = f"{row['filename']} · {row['locator']}"
+        head = context_head(row)
         label = provenance.describe(official.get(row["doc_id"]))
         if label:
             head += f" · {label}"

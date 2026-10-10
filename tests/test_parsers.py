@@ -239,3 +239,76 @@ def test_only_documents_of_a_revised_parser_are_read_again():
     assert stale == ["옛 엑셀", "옛 PDF", "판본 없음"]
     assert ParseResult(OK, "xlsx").parser_version == version_of("xlsx") != PARSER_VERSION
     assert ParseResult(OK, "pdf").parser_version == PARSER_VERSION
+
+
+# ── DOCX 구조 보존 (노트북 RAG 2단계) ──────────────────────────────
+
+def _structured_docx(path, rows):
+    import docx
+    document = docx.Document()
+    document.add_heading("제2장 예산", level=1)
+    document.add_heading("1. 집행 현황", level=2)
+    document.add_paragraph("센터별 교부액과 집행액은 다음과 같다.")
+    table = document.add_table(rows=len(rows), cols=3)
+    for line, cells in zip(table.rows, rows):
+        for cell, value in zip(line.cells, cells):
+            cell.text = value
+    document.add_heading("2. 반납", level=2)
+    document.add_paragraph("집행잔액은 기한 안에 반납한다.")
+    document.save(str(path))
+
+
+def test_docx_keeps_the_heading_path_apart_from_the_body(tmp_path):
+    from app.ingest.parsers import docx as docx_parser
+    path = tmp_path / "정산.docx"
+    _structured_docx(path, [("센터", "교부액", "집행액"), ("새봄", "31,500", "30,400")])
+    sections = docx_parser.parse(path).sections
+    by_text = {s.text: s for s in sections}
+    assert by_text["제2장 예산"].meta["heading"] == ["제2장 예산"]
+    assert by_text["센터별 교부액과 집행액은 다음과 같다."].meta["heading"] == ["제2장 예산", "1. 집행 현황"]
+    # 같은 수준의 다음 제목이 앞 제목을 밀어낸다.
+    assert by_text["집행잔액은 기한 안에 반납한다."].meta["heading"] == ["제2장 예산", "2. 반납"]
+    table = next(s for s in sections if s.kind == "table")
+    assert table.locator == "표1" and table.text == "센터\t교부액\t집행액\n새봄\t31,500\t30,400"
+    assert table.meta == {"heading": ["제2장 예산", "1. 집행 현황"], "table": 1, "rows": [1, 2],
+                          "header": "센터\t교부액\t집행액"}
+    assert all("제2장" not in s.text for s in sections if s.kind == "table")   # 제목을 본문에 섞지 않는다
+
+
+def test_long_docx_table_is_split_between_rows_and_every_piece_carries_the_header(tmp_path):
+    """실측한 문제: 표 하나가 통째로 한 조각이라 1,200자에서 잘렸고, 둘째 조각부터 열 이름이 없었다."""
+    from app.core.chunking import MAX_CHUNK_CHARS, build_chunks
+    from app.ingest.parsers import docx as docx_parser
+    rows = [("센터", "교부액(천원)", "집행액(천원)")] + [
+        (f"{n}번 지역아동센터", f"{30000 + n * 1500:,}", f"{29000 + n * 1400:,}") for n in range(1, 121)]
+    path = tmp_path / "정산.docx"
+    _structured_docx(path, rows)
+    pieces = [s for s in docx_parser.parse(path).sections if s.kind == "table"]
+    assert len(pieces) > 2
+    header = "\t".join(rows[0])
+    lines = ["\t".join(row) for row in rows]
+    covered = []
+    for piece in pieces:
+        first, last = piece.meta["rows"]
+        assert piece.locator == f"표1 · {first}~{last}행" and piece.meta["header"] == header
+        body = piece.text.splitlines()
+        assert body[0] == header and len(piece.text) <= MAX_CHUNK_CHARS
+        assert (body if first == 1 else body[1:]) == lines[first - 1:last]
+        covered += range(first, last + 1)
+    assert covered == list(range(1, len(rows) + 1))
+    # 조각 단계에서 다시 잘리지 않는다.
+    assert len(build_chunks([(s.kind, s.locator, s.text) for s in pieces])) == len(pieces)
+
+
+def test_spreadsheet_and_ocr_sections_say_what_they_are(tmp_path):
+    import openpyxl
+    from app.ingest.parsers import xlsx as xlsx_parser
+    path = tmp_path / "집계.xlsx"
+    book = openpyxl.Workbook()
+    sheet = book.active
+    sheet.title = "집계"
+    sheet.append(["항목", "금액"])
+    sheet.append(["인건비", 1200])
+    book.save(path)
+    section, = xlsx_parser.parse(path).sections
+    assert section.meta == {"sheet": "집계", "rows": [1, 2], "header": "항목\t금액"}

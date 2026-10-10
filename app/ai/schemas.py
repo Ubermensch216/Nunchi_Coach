@@ -35,6 +35,17 @@ SUMMARIZE_SCHEMA: dict[str, Any] = {
     "required": ["summary"],
 }
 
+# 노트북 자료 안내(ai/analyze.py brief). 요약과 주제어를 한 번에 받는다.
+BRIEF_TOPICS = 8
+BRIEF_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "topics": {"type": "array", "items": {"type": "string"}, "maxItems": BRIEF_TOPICS},
+    },
+    "required": ["summary", "topics"],
+}
+
 KEYWORDS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {

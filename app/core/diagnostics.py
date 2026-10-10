@@ -11,7 +11,8 @@ _logger.propagate = False
 _logger.setLevel(logging.INFO)
 _FIELDS = {"stage", "doc_id", "count", "elapsed_ms", "version"}
 _EVENTS = {"app.start", "app.stop", "app.unhandled", "pipeline.start", "pipeline.stop",
-           "pipeline.error", "question.error", "summary.error"}
+           "pipeline.error", "question.error", "summary.error", "generation.prompt_truncated",
+           "notebook.ingest.error", "notebook.summary.error", "studio.compose.error"}
 
 
 def configure(directory: Path) -> bool:

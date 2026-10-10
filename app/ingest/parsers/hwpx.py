@@ -103,7 +103,7 @@ class _Writer:
         self.table_number = 0
         self.preceding = ""   # 표 바로 앞 문단 — 단위 안내를 찾는 데만 쓴다
 
-    def emit(self, kind: str, locator, text: str) -> None:
+    def emit(self, kind: str, locator, text: str, meta: dict | None = None) -> None:
         if not text.strip():
             return
         body = clip(text, self.budget)
@@ -111,7 +111,7 @@ class _Writer:
             self.limited = True
         if body:
             ordinal = len(self.out) + 1
-            self.out.append(Section(kind, ordinal, locator(ordinal), body))
+            self.out.append(Section(kind, ordinal, locator(ordinal), body, meta or {}))
 
 
 def _local(el) -> str:
@@ -291,7 +291,14 @@ def _rows(grid, spans, header_rows, unit, number, nested, writer: _Writer) -> No
                         text += f"\n단위: {unit}"
                 if row in spans:
                     text += "\n" + ", ".join(spans[row])
-            writer.emit("table", lambda _n, r=row: f"{writer.name} · 표 {number} · {r + 1}행", text)
+            meta = {"table": number, "rows": [row + 1, row + 1]}
+            if columns > 1 and any(heads):
+                meta["header"] = " | ".join(heads)
+            if unit:
+                meta["unit"] = unit
+            if row in spans:
+                meta["spans"] = spans[row]
+            writer.emit("table", lambda _n, r=row: f"{writer.name} · 표 {number} · {r + 1}행", text, meta)
         # 셀 안의 표는 그 행 바로 뒤에 별도의 표로 낸다.
         for inner in nested.get(row, []):
             _table(inner, writer)

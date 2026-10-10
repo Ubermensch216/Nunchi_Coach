@@ -241,3 +241,27 @@ def test_format_settings_reach_the_files(db, book, output, tmp_path):
 def test_pdf_embeds_only_the_glyphs_it_uses(db):
     data = render.to_pdf(SAMPLE, templates.DEFAULT_FORMAT, "제목")
     assert len(data) < 400_000
+
+
+def test_section_prompt_fits_the_model_window_however_many_passages_there_are(db, tmp_path):
+    """실측: 창을 넘는 프롬프트는 오류 없이 앞쪽 지시문이 버려진다. 대목이 많으면 하나하나를 줄인다."""
+    from app.ai.client import fits_window
+    folder = tmp_path / "많은자료"
+    folder.mkdir()
+    source = db.add_source(folder)
+    docs = []
+    for n in range(compose.MAX_EVIDENCE + 6):
+        text = f"{n}번 수행기관의 교부액은 {30000 + n:,}천원이다. " * 40
+        path = folder / f"{n}.txt"
+        path.write_text(text, encoding="utf-8")
+        doc = db.upsert_document(source, {"path": str(path), "filename": path.name, "ext": ".txt",
+                                          "hash": hashlib.sha256(path.read_bytes()).hexdigest(),
+                                          "parse_status": "ok"})
+        db.replace_document_chunks(doc, [(1, "1문단", text)])
+        docs.append(doc)
+    key = notebook.create(db, "정산")
+    notebook.add_sources(db, key, docs)
+    writer = Writer({})
+    compose.compose(db, key, report(db), writer)
+    assert writer.prompts and all(fits_window(len(prompt), compose.SECTION_TOKENS) for prompt in writer.prompts)
+    assert "[24]" in writer.prompts[0]                        # 대목을 빼지 않고 줄여 싣는다

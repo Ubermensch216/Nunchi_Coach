@@ -21,6 +21,7 @@ from ..search.rag import Answer, ask
 
 class AskWorker(QObject):
     done = Signal(object)   # Answer
+    progress = Signal(int, int)
 
     def __init__(self, db_path: Path | str, question: str, scope=None):
         super().__init__()
@@ -51,7 +52,8 @@ class AskWorker(QObject):
                 from ..core import notebook
                 message_id, answer = notebook.query(
                     db, notebook_id, self._question, client=self._client,
-                    mode=getattr(self._scope, "mode", ""), law=getattr(self._scope, "law", False))
+                    mode=getattr(self._scope, "mode", ""), law=getattr(self._scope, "law", False),
+                    progress=self.progress.emit)
                 answer.generation["notebook_message_id"] = message_id
             else:
                 answer = ask(db, self._question, client=self._client, scope=self._scope)
@@ -81,6 +83,7 @@ class AskWorker(QObject):
 class AskRunner(QObject):
     done = Signal(object)
     cancelled = Signal()
+    progress = Signal(int, int)   # 전체 정리의 (끝난 묶음, 전체 묶음)
 
     def __init__(self, db_path: Path | str, parent: QObject | None = None):
         super().__init__(parent)
@@ -103,6 +106,7 @@ class AskRunner(QObject):
         self._worker = AskWorker(self._db_path, question, scope)
         self._worker.moveToThread(self._thread)
         self._worker.done.connect(self._finish)
+        self._worker.progress.connect(self.progress)
         self._worker.done.connect(self._thread.quit, Qt.ConnectionType.DirectConnection)
         self._worker.done.connect(self._worker.deleteLater)
         self._thread.started.connect(self._worker.run)

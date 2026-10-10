@@ -31,7 +31,7 @@ from ..ingest.parsers import parse, supported_extensions
 from ..ingest.parsers.base import EMPTY, MAX_BYTES, PARTIAL, ParseResult, outdated_clause
 from ..search import pack
 from . import dating, notebook
-from .chunking import build_chunks
+from .chunking import build_chunks_with_context
 
 UPLOAD_DIR = "uploads"
 EMBED_BATCH = 32
@@ -146,7 +146,7 @@ def write_parse(db, doc_id: int, filename: str, path: str, result: ParseResult) 
             author=result.meta.author, doc_title=result.meta.title,
             meta_created=result.meta.created, meta_modified=result.meta.modified)
         if result.ok:
-            db.replace_sections(doc_id, [(s.kind, s.ordinal, s.locator, s.text) for s in result.sections])
+            db.replace_sections(doc_id, [(s.kind, s.ordinal, s.locator, s.text, s.meta) for s in result.sections])
             db.index_document(doc_id, filename, path, result.meta.author or "", result.text)
 
 
@@ -173,9 +173,9 @@ def write_chunks(db, doc_id: int, client, should_stop: Callable[[], bool] = lamb
     """조각을 만들고 임베딩한다. 모델이 없으면 조각까지만 — 글자 검색은 그대로 된다."""
     if not db.con.execute("SELECT 1 FROM chunks WHERE doc_id=? LIMIT 1", (doc_id,)).fetchone():
         sections = db.con.execute(
-            "SELECT kind, locator, text FROM document_sections WHERE doc_id=? ORDER BY ordinal",
+            "SELECT kind, locator, text, meta FROM document_sections WHERE doc_id=? ORDER BY ordinal",
             (doc_id,)).fetchall()
-        pieces = build_chunks([(s["kind"], s["locator"], s["text"]) for s in sections])
+        pieces = build_chunks_with_context([(s["kind"], s["locator"], s["text"], s["meta"]) for s in sections])
         if pieces:
             with db.transaction():
                 db.replace_document_chunks(doc_id, pieces)
@@ -205,12 +205,12 @@ def summarize_source(db, notebook_id: int, doc_id: int, client) -> bool:
     row = db.con.execute("SELECT body FROM document_index WHERE doc_id=?", (doc_id,)).fetchone()
     if row is None or not (row["body"] or "").strip():
         return False
-    summary = analyze.summarize(client, doc_id, row["body"])
-    topics = analyze.keywords(client, doc_id, row["body"])
-    if not summary.ok and not topics.ok:
+    document = db.document(doc_id)
+    guide = analyze.brief(client, doc_id, row["body"], document["filename"] if document else "")
+    if not guide.ok:
         return False
     db.con.execute("UPDATE notebook_sources SET summary=?, topics=? WHERE notebook_id=? AND doc_id=?",
-                   (summary.summary or "", notebook.dumps(topics.keywords), notebook_id, doc_id))
+                   (guide.summary or "", notebook.dumps(guide.keywords), notebook_id, doc_id))
     return True
 
 

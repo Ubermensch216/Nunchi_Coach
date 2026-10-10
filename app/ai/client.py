@@ -30,6 +30,24 @@ DEFAULT_EMBED_MODEL = "bge-m3"
 LOOPBACK = {"127.0.0.1", "localhost", "::1", "[::1]"}
 
 CONNECT_TIMEOUT = 3.0
+# 생성 호출의 문맥 창(토큰). Ollama의 기본은 4,096이고, 프롬프트가 이를 넘으면 오류 없이
+# 앞쪽 — 지시문 — 을 버리고 뒤쪽 절반쯤만 읽는다. 실측(gemma4:e2b, 2026-10-10): 질문
+# 프롬프트는 지시문 720토큰에 근거 4,800자가 붙는데, 근거가 숫자 많은 표이면 5,029토큰이
+# 되어 2,051토큰만 읽혔다. 산문 근거(3,766토큰)도 생성 한도 900을 더하면 창을 넘는다.
+# 8,192로 올리면 전부 읽고, 모델이 차지하는 메모리는 6.27GB에서 6.40GB가 된다.
+# 모든 생성 호출에 같은 값을 준다 — 호출마다 다르면 Ollama가 그때마다 모델을 다시 올린다
+# (실측 약 10초).
+NUM_CTX = 8192
+# 잘림을 알아채는 데 쓰는 값. 한국어 프롬프트는 글자당 0.59(산문)~0.83(숫자 많은 표)토큰
+# 이었다. 잘린 프롬프트는 창의 절반쯤만 읽힌다.
+MIN_TOKENS_PER_CHAR = 0.55
+MAX_TOKENS_PER_CHAR = 0.85
+
+
+def fits_window(prompt_chars: int, num_predict: int) -> bool:
+    """가장 촘촘한 글(숫자 많은 표)이라고 쳐도 프롬프트와 생성 한도가 문맥 창에 드는가.
+    프롬프트를 짜는 쪽이 근거 분량을 정할 때 쓴다."""
+    return prompt_chars * MAX_TOKENS_PER_CHAR + num_predict <= NUM_CTX
 GENERATE_TIMEOUT = 300.0
 EMBED_TIMEOUT = 300.0
 EMBED_BATCH = 32
@@ -73,6 +91,18 @@ EMPTY_RETRY_CAP = 2048
 EMPTY_RETRY_MIN_BUDGET = 32
 
 
+def prompt_was_truncated(prompt_chars: int, prompt_tokens: int, num_ctx: int = NUM_CTX) -> bool:
+    """모델이 읽은 토큰 수가 프롬프트 길이에 비해 터무니없이 적은가.
+
+    Ollama는 잘랐다고 알려 주지 않는다. 창을 넘는 프롬프트는 창의 절반쯤만 읽히므로,
+    읽은 수가 그 언저리이고 글자 수로 어림한 최소 토큰 수에 한참 못 미치면 잘린 것이다.
+    읽은 수를 알려 주지 않은 응답(0)은 판단하지 않는다.
+    """
+    if prompt_tokens <= 0 or prompt_tokens > num_ctx // 2 + 64:
+        return False
+    return prompt_chars * MIN_TOKENS_PER_CHAR > prompt_tokens * 1.3
+
+
 @dataclass(slots=True)
 class Generation:
     """마지막 생성 호출이 어떻게 끝났는가. 본문·질문은 담지 않는다.
@@ -87,6 +117,8 @@ class Generation:
     num_predict: int = 0               # 마지막 시도에 준 생성 한도
     eval_count: int = 0                # 실제로 생성한 토큰 수
     prompt_eval_count: int = 0
+    num_ctx: int = 0                   # 이 호출에 준 문맥 창
+    prompt_truncated: bool = False     # 프롬프트가 창을 넘어 앞쪽이 버려진 것으로 보인다
     elapsed_ms: int = 0
     attempts: int = 0
     think_disabled: bool = False       # 사고 기능을 끄고 불렀는가
@@ -252,7 +284,7 @@ class OllamaClient:
         started = time.monotonic()
         think_off = self._supports("thinking")
         record = self.last_generation = Generation(
-            model=self.gen_model, num_predict=num_predict, think_disabled=think_off,
+            model=self.gen_model, num_predict=num_predict, think_disabled=think_off, num_ctx=NUM_CTX,
         )
 
         def finish(outcome: str):
@@ -271,7 +303,7 @@ class OllamaClient:
                 "keep_alive": KEEP_ALIVE,
                 # 온도 0만으로는 같은 질문·같은 근거의 답이 실행마다 갈렸다. 씨앗도 고정한다.
                 "options": {"temperature": temperature, "num_predict": budget,
-                            "seed": self.seed},
+                            "seed": self.seed, "num_ctx": NUM_CTX},
             }
             if think_off:
                 payload["think"] = False
@@ -298,6 +330,7 @@ class OllamaClient:
             record.done_reason = str(body.get("done_reason") or "")
             record.eval_count = int(body.get("eval_count") or 0)
             record.prompt_eval_count = int(body.get("prompt_eval_count") or 0)
+            record.prompt_truncated = prompt_was_truncated(len(prompt), record.prompt_eval_count)
             hit_limit = record.done_reason == "length"
 
             if not raw.strip():
@@ -342,7 +375,8 @@ class OllamaClient:
             "prompt": prompt,
             "stream": False,
             "keep_alive": KEEP_ALIVE,
-            "options": {"temperature": temperature, "num_predict": num_predict, "seed": self.seed},
+            "options": {"temperature": temperature, "num_predict": num_predict, "seed": self.seed,
+                        "num_ctx": NUM_CTX},
         }
         if system:
             payload["system"] = system

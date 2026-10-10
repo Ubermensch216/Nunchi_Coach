@@ -220,3 +220,49 @@ def test_folder_that_is_not_a_collection_is_refused(db, book, tmp_path):
     with pytest.raises(ValueError):
         onnara_import.import_collection(db, book, tmp_path / "아무폴더", Offline())
     assert notebook.sources(db, book) == [] and db.sources() == []
+
+
+# ── 자료 안내(요약·주제어) ──────────────────────────────────────────
+
+class Briefing(Offline):
+    """자료 안내를 만드는 생성 모델의 대역. 받은 프롬프트를 남긴다."""
+    gen_model = "fake"
+
+    def __init__(self, response):
+        self.response, self.prompts = response, []
+
+    def health(self):
+        return SimpleNamespace(embedding_ready=False, generation_ready=True, message="")
+
+    def generate_json(self, prompt, schema, num_predict=400, temperature=0.0):
+        self.prompts.append((prompt, schema))
+        return (self.response, None, "") if self.response else (None, "응답 없음", "")
+
+
+def test_source_brief_shows_the_model_the_head_and_the_tail_of_a_long_file(db, book, tmp_path):
+    """앞부분만 보이면 결론·합계가 있는 문서 뒤쪽이 안내에서 빠진다."""
+    from app.ai import analyze, schemas
+    lines = ["머리말: 2026년 보조금 정산 안내"] + [f"{n}번째 본문 줄입니다. " * 4 for n in range(400)]
+    lines.append("맺음말: 정산서는 총무과로 제출한다.")
+    done = notebook_ingest.ingest_file(db, book, write(tmp_path, "정산안내.txt", "\n".join(lines)), Offline())
+    client = Briefing({"summary": "  보조금 정산 절차를 안내하는 문서이다.\n제출처는 총무과이다. ",
+                       "topics": ["보조금", "정산", "보조금", "#총무과", "가" * 40]})
+    assert notebook_ingest.summarize_source(db, book, done.doc_id, client)
+    (prompt, schema), = client.prompts
+    assert schema is schemas.BRIEF_SCHEMA and "파일명: 정산안내.txt" in prompt
+    assert "머리말: 2026년 보조금 정산 안내" in prompt and "맺음말: 정산서는 총무과로 제출한다." in prompt
+    assert analyze.BRIEF_GAP in prompt and "200번째 본문 줄" not in prompt
+    assert len(prompt) < analyze.BRIEF_BUDGET + 1200
+    row = notebook.sources(db, book)[0]
+    assert row["summary"] == "보조금 정산 절차를 안내하는 문서이다. 제출처는 총무과이다."
+    assert row["topics"] == notebook.dumps(["보조금", "정산", "총무과"])
+
+
+def test_short_file_is_briefed_whole_and_a_failed_brief_leaves_the_source_usable(db, book, tmp_path):
+    from app.ai import analyze
+    done = notebook_ingest.ingest_file(db, book, write(tmp_path, "요청.txt"), Offline())
+    client = Briefing(None)
+    assert not notebook_ingest.summarize_source(db, book, done.doc_id, client)
+    assert analyze.BRIEF_GAP not in client.prompts[0][0].split("[본문]")[1]
+    row = notebook.sources(db, book)[0]
+    assert row["summary"] == "" and notebook.selected_snapshot(db, book)

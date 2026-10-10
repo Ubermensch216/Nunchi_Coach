@@ -59,7 +59,7 @@ from ...db import Database
 from ...ai.settings import model_names
 from ...jobs import AskRunner, WarmupRunner
 from ...search.query import QueryScope
-from ...search.rag import Answer
+from ...search.rag import Answer, withheld_reason
 from .. import theme
 from ..widgets import (
     Badge,
@@ -725,7 +725,7 @@ class AskView(QWidget):
     def _withheld_card(self, answer: Answer) -> QWidget:
         card = Card()
         card.body.addWidget(
-            muted_label(answer.text or "확인 가능한 자료가 부족합니다.")
+            muted_label(withheld_reason(answer))
         )
         if answer.guidance:
             card.body.addWidget(muted_label(answer.guidance))

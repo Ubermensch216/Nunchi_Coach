@@ -40,7 +40,7 @@ from ....core import notebook
 from ....law import service as law_service
 from ....jobs import AskRunner, WarmupRunner
 from ....search.query import QueryScope
-from ....search.rag import Answer, Citation
+from ....search.rag import Answer, Citation, withheld_reason
 from ... import icons, theme
 from ...widgets import (
     Card,
@@ -56,6 +56,8 @@ from ..ask import ASK_INPUT_H
 from .answer_html import answer_html
 from .panel import ICON_PX, icon_button, set_icon
 
+# 대화를 시작하기 전에 보여 주는 자료 안내 수. 자료가 많으면 앞의 몇 건만 보인다.
+GUIDE_CARDS = 5
 # 한 번에 그리는 대화 수. 긴 노트북을 열 때마다 수백 장의 카드를 짓지 않는다.
 THREAD_PAGE = 20
 # 보내기·멈춤 단추 한 변. 입력칸(ASK_INPUT_H)보다 조금 작아 테두리 안에 여백이 남는다.
@@ -94,10 +96,12 @@ class ChatPanel(QWidget):
         self._signature = None
         self._started_at = 0.0
         self._whole = False                      # 지금 기다리는 것이 전체 정리인가
+        self._batches = (0, 0)                   # 전체 정리의 (끝난 묶음, 전체 묶음)
 
         self._runner = AskRunner(db.path, self)
         self._runner.done.connect(self._on_answer)
         self._runner.cancelled.connect(self._on_cancelled)
+        self._runner.progress.connect(self._on_progress)
         self._warmup = WarmupRunner(self)
         self._elapsed = QTimer(self)
         self._elapsed.setInterval(1000)
@@ -136,12 +140,6 @@ class ChatPanel(QWidget):
         self.input.setMinimumHeight(ASK_INPUT_H)
         self.input.returnPressed.connect(self._ask)
         row.addWidget(self.input, 1)
-        self.overview = QCheckBox("전체 정리")
-        self.overview.setToolTip(
-            "선택한 자료 전체를 훑어 요약·정리합니다. 보통 질문보다 훨씬 오래 걸립니다(자료가 많으면 몇 분).\n"
-            "꺼 두면 질문과 가장 관련 있는 대목만 찾아 답합니다.\n"
-            "'요약해 줘'처럼 주제 없이 전체를 묻는 요청은, 자료가 적으면 켜지 않아도 이렇게 답합니다.")
-        row.addWidget(self.overview)
         self.law = QCheckBox("법령")
         self.law.setToolTip(
             "이 질문에 대해 현행 법령 조문을 국가법령정보센터(law.go.kr)에서 함께 조회합니다.\n"
@@ -194,7 +192,6 @@ class ChatPanel(QWidget):
         busy = self._runner.running
         self.input.setEnabled(ready and not busy)
         self._sync_send(ready)
-        self.overview.setEnabled(ready and not busy)
         # 설정에서 켜고 인증키를 넣은 인수인계에서만 보인다. 꺼져 있으면 자리도 차지하지 않는다.
         self.law.setVisible(law_service.available(self.db))
         self.law.setEnabled(ready and not busy)
@@ -209,16 +206,28 @@ class ChatPanel(QWidget):
             self.notice.setText("선택한 원문만 근거로 답합니다. 답은 틀릴 수 있으니 근거 원문을 확인하세요.")
 
         rows = notebook.messages(self.db, self.notebook_id) if self.notebook_id is not None else []
-        signature = (self.notebook_id, self.editable, self._limit, self._pending,
+        guides = self._guides(snapshot) if not rows else []
+        signature = (self.notebook_id, self.editable, self._limit, self._pending, tuple(guides),
                      tuple((row["id"], row["rating"]) for row in rows),
                      notebook.dumps(snapshot), id(self._answer),
                      theme.BG)   # 답은 색을 직접 칠한다 — 테마가 바뀌면 다시 그린다
         if signature != self._signature:
             self._signature = signature
-            self._render(rows, snapshot)
+            self._render(rows, snapshot, guides)
+
+    def _guides(self, snapshot: dict) -> list[tuple[str, str, tuple[str, ...]]]:
+        """선택한 자료의 (파일명, 요약, 주제어). 자료를 올릴 때 만들어 둔 것이다(core/notebook_ingest.py)."""
+        guides = []
+        for row in notebook.sources(self.db, self.notebook_id) if snapshot else []:
+            if str(row["doc_id"]) not in snapshot:
+                continue
+            topics = tuple(t for t in json.loads(row["topics"] or "[]") if isinstance(t, str))
+            if row["summary"] or topics:
+                guides.append((row["filename"], row["summary"], topics))
+        return guides
 
     # ── 대화 그리기 ─────────────────────────────────────────────────
-    def _render(self, rows, snapshot: dict) -> None:
+    def _render(self, rows, snapshot: dict, guides=()) -> None:
         clear_layout(self.thread)
         if self.notebook_id is None:
             return
@@ -227,6 +236,21 @@ class ChatPanel(QWidget):
                 "자료에 대해 물어보세요",
                 "왼쪽에서 선택한 자료만 근거로 답합니다. 답의 번호를 누르면 "
                 "그 문서의 원문이 왼쪽에 펼쳐집니다."))
+            # 무엇을 물을지 정하기 전에 자료가 무엇인지부터 보인다.
+            if guides:
+                self.thread.addWidget(muted_label("AI가 만든 자료 안내 · 원문이 아닙니다", small=True))
+            for filename, summary, topics in guides[:GUIDE_CARDS]:
+                card = Card(tone="static")
+                card.body.addWidget(section_title(filename))
+                if summary:
+                    card.body.addWidget(muted_label(summary))
+                if topics:
+                    card.body.addWidget(muted_label("주제어 — " + " · ".join(topics), small=True))
+                self.thread.addWidget(card)
+            if len(guides) > GUIDE_CARDS:
+                self.thread.addWidget(muted_label(
+                    f"그 밖의 자료 {len(guides) - GUIDE_CARDS}건의 안내는 왼쪽 출처에서 원문 보기로 볼 수 있습니다.",
+                    small=True))
             return
         hidden = max(0, len(rows) - self._limit)
         if hidden:
@@ -335,11 +359,14 @@ class ChatPanel(QWidget):
         if answer.generation.get("mode") == "search_only":
             body.addWidget(section_title("자료 검색 결과"))
             body.addWidget(muted_label(answer.text))
+            guidance = answer.guidance or answer.generation.get("guidance")
+            if guidance:
+                body.addWidget(muted_label(guidance, small=True))
             self._add_citations(body, answer)
             return card
         if answer.withheld:
             # 첫 줄이 '왜 확정하지 못했는가'이고, 그 아래는 견줄 값들이다(수량 대조).
-            reason, _, detail = (answer.text or "확인 가능한 자료가 부족합니다.").partition("\n")
+            reason, _, detail = withheld_reason(answer).partition("\n")
             body.addWidget(UnknownBlock(reason))
             if detail.strip():
                 body.addWidget(self._rich(detail, answer))
@@ -348,6 +375,8 @@ class ChatPanel(QWidget):
             if answer.citations:
                 body.addWidget(muted_label("확정하지 않은 원문 근거", small=True))
                 self._add_citations(body, answer)
+            if row is not None and self.editable and answer.generation.get("mode") != "overview":
+                body.addWidget(self._whole_button(answer.question), 0, Qt.AlignmentFlag.AlignLeft)
             return card
 
         if answer.generation.get("mode") == "overview":
@@ -440,6 +469,8 @@ class ChatPanel(QWidget):
                                "메모로 저장")
             save.clicked.connect(lambda _=False, r=row: self._save_note(r))
             line.addWidget(save)
+            if answer.generation.get("mode") != "overview":
+                line.addWidget(self._whole_button(answer.question))
         for name, value, label, done in (("thumb-up", "right", "맞습니다", "맞다고 남김"),
                                          ("thumb-down", "wrong", "사실과 다릅니다", "사실과 다르다고 남김")):
             chosen = row["rating"] == value
@@ -456,6 +487,17 @@ class ChatPanel(QWidget):
                 line.addWidget(mark)
         line.addStretch(1)
         return line
+
+    def _whole_button(self, question: str) -> QPushButton:
+        """보통 질문으로 받은 답이 모자랄 때 — 같은 질문을 자료 전체를 훑어 다시 받는다."""
+        button = QPushButton("자료 전체를 훑어 다시 정리")
+        button.setObjectName("Fold")
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolTip("가장 관련 있는 대목만 보고 한 답입니다. 선택한 자료 전체를 차례로 훑어 다시 정리합니다.\n"
+                          "보통 질문보다 훨씬 오래 걸립니다(자료가 많으면 몇 분).")
+        button.setEnabled(not self._runner.running)
+        button.clicked.connect(lambda _=False, q=question: self._start(q, whole=True))
+        return button
 
     def _copy(self, button: QPushButton, text: str) -> None:
         QApplication.clipboard().setText(text)
@@ -512,30 +554,40 @@ class ChatPanel(QWidget):
             self._ask()
 
     def _ask(self) -> None:
-        question = self.input.text().strip()
-        if not question or self._runner.running or self.notebook_id is None:
-            return
-        whole = self.overview.isChecked()
+        if self._start(self.input.text().strip()):
+            self.input.clear()
+
+    def _start(self, question: str, whole: bool = False) -> bool:
+        if not question or self._runner.running or self.notebook_id is None or not self.snapshot():
+            return False
         statutes = self.law.isChecked() and law_service.available(self.db)
         if not self._runner.start(question, QueryScope(
                 notebook_id=self.notebook_id, mode="overview" if whole else "", law=statutes)):
-            return
-        # 주제 없는 요약 요청은 켜지 않아도 전체 정리로 받는다(core/notebook.py). 기다리는 말을 맞춘다.
+            return False
+        # 주제 없는 요약 요청은 고르지 않아도 전체 정리로 받는다(core/notebook.py). 기다리는 말을 맞춘다.
         self._whole = whole or notebook.effective_mode(self.db, self.notebook_id, question) == "overview"
-        self.overview.setChecked(False)   # 한 번 쓰고 끈다 — 켜 둔 채 잊으면 질문마다 몇 분이 걸린다
+        self._batches = (0, 0)
         self.law.setChecked(False)        # 밖으로 나가는 조회는 질문마다 다시 고르게 한다
         self._pending = question
         self._answer = None
         self._started_at = time.monotonic()
-        self.input.clear()
         self.waiting.show()
         self._update_waiting()
         self._elapsed.start()
         self.refresh()
+        return True
+
+    def _on_progress(self, done: int, total: int) -> None:
+        self._batches = (done, total)
+        self._update_waiting()
 
     def _update_waiting(self) -> None:
         seconds = int(time.monotonic() - self._started_at)
-        if self._whole:
+        done, total = self._batches
+        if self._whole and total:
+            # 남은 시간은 말하지 않는다 — 묶음마다 걸리는 시간이 고르지 않다.
+            hint = f"선택한 자료 전체를 훑고 있습니다 · {total}묶음 중 {min(done + 1, total)}번째"
+        elif self._whole:
             hint = "선택한 자료 전체를 차례로 훑고 있습니다. 자료가 많으면 몇 분 걸립니다."
         else:
             hint = ("처음 질문할 때는 모델을 준비하는 시간이 더 걸릴 수 있습니다." if seconds >= 10

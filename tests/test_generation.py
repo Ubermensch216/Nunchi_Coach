@@ -595,3 +595,31 @@ def test_a_subject_the_material_never_names_is_withheld_without_asking_the_model
         _answering(client, "토너의 단가는 58,000원이다.")
         assert not ask(database, question, client=client).withheld, question
     database.close()
+
+
+# ── 문맥 창 ─────────────────────────────────────────────────────────
+
+def test_every_generation_call_asks_for_the_same_explicit_context_window():
+    """실측: 기본 창(4,096)에서 숫자 많은 표 근거의 질문 프롬프트(5,029토큰)는 2,051토큰만
+    읽혔다 — 지시문이 버려졌다. 창을 호출마다 바꾸면 모델이 그때마다 다시 올라온다."""
+    from app.ai.client import NUM_CTX
+    client = OllamaClient()
+    calls = wire(client, [{"response": NAME, "done_reason": "stop", "prompt_eval_count": 3}],
+                 capabilities=["completion", "vision"])
+    client.generate_json("제목", schemas.NAME_TASK_SCHEMA)
+    client.generate_text("그림을 읽어 줘", num_predict=10)
+    assert NUM_CTX >= 8192 and [call["options"]["num_ctx"] for call in calls] == [NUM_CTX, NUM_CTX]
+    assert client.last_generation.num_ctx == NUM_CTX
+
+
+def test_a_prompt_the_model_read_only_half_of_is_flagged():
+    from app.ai.client import NUM_CTX, prompt_was_truncated
+    assert prompt_was_truncated(6363, 2051, 4096)             # 실측한 잘림
+    assert not prompt_was_truncated(6363, 3766, 4096)         # 같은 길이의 산문 — 전부 읽혔다
+    assert not prompt_was_truncated(6363, 5029)               # 창을 올린 뒤
+    assert prompt_was_truncated(14000, NUM_CTX // 2 + 10)     # 올린 창도 넘는 프롬프트
+    assert not prompt_was_truncated(6363, 0)                  # 읽은 수를 모르면 판단하지 않는다
+    client = OllamaClient()
+    wire(client, [{"response": NAME, "done_reason": "stop", "prompt_eval_count": NUM_CTX // 2 + 3}])
+    client.generate_json("가" * 14000, schemas.NAME_TASK_SCHEMA)
+    assert client.last_generation.prompt_truncated and client.last_generation.as_dict()["prompt_truncated"]

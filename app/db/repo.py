@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from contextlib import contextmanager
@@ -28,6 +29,9 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # v5 안에서 나중에 붙은 열. 그 전에 v5로 올라간 프로젝트가 있다.
     ("evidence", "doc_name", "doc_name TEXT"),
     ("evidence", "doc_relpath", "doc_relpath TEXT"),
+    # 구조 보존 조각(노트북 RAG 2단계). 본문과 따로 두는 구조 정보와 조각의 제목 문맥.
+    ("document_sections", "meta", "meta TEXT NOT NULL DEFAULT '{}'"),
+    ("chunks", "context", "context TEXT NOT NULL DEFAULT ''"),
 )
 
 APP_DIR_NAME = "NunchiCoach"
@@ -220,7 +224,12 @@ class Database(WorkStore):
             self.con.execute("DELETE FROM meta WHERE key='chunks_checked'")
 
     def sync_chunking_version(self) -> bool:
-        """조각 규칙이 바뀌면 옛 조각을 지우고 다시 만들게 한다.
+        """조각 규칙이 바뀐 것을 알아챈다. 버전을 남기지 않은 v1 조각만 여기서 지운다.
+
+        버전이 적힌 조각(v2 이후)은 지우지 않는다 — 노트북의 답변·메모·검토 지식이 그
+        조각의 위치와 원문을 인용하고 있다. 옛 조각으로 계속 답하면서 새 조각을 따로
+        준비해 검증한 뒤 바꾼다(core/reindex.py, 분석의 '질문 준비' 단계가 돌린다).
+        여기서는 그 단계가 다시 돌도록 chunks_checked만 지운다.
 
         메타에 버전이 없다고 '새 프로젝트'로 넘겨짚으면 안 된다 — v1은
         애초에 버전을 남기지 않았으므로, 메타가 비어 있어도 chunks 표에
@@ -235,10 +244,13 @@ class Database(WorkStore):
         if current == CHUNKING_VERSION:
             return False
         had_chunks = self.con.execute("SELECT 1 FROM chunks LIMIT 1").fetchone() is not None
+        if had_chunks and current is not None:
+            self.con.execute("DELETE FROM meta WHERE key = 'chunks_checked'")
+            return False
         if had_chunks:
             self.con.execute("DELETE FROM chunks")   # CASCADE로 embeddings도 함께 지워진다
             self.con.execute("DELETE FROM meta WHERE key = 'chunks_checked'")
-            self.audit("chunking.reindex", detail=f"{current or '?'} → {CHUNKING_VERSION}")
+            self.audit("chunking.reindex", detail=f"? → {CHUNKING_VERSION}")
         self.set_meta("chunking_version", CHUNKING_VERSION)
         return had_chunks
 
@@ -401,13 +413,15 @@ class Database(WorkStore):
         return {row["path"]: row for row in rows}
 
     # ── 본문·검색 색인 ──────────────────────────────────────────────
-    def replace_sections(self, doc_id: int, sections: Sequence[tuple[str, int, str, str]]) -> None:
+    def replace_sections(self, doc_id: int, sections: Sequence[tuple]) -> None:
+        """(kind, ordinal, locator, text[, meta]) 목록. meta는 구조 정보 사전이다(없어도 된다)."""
         self.con.execute("DELETE FROM document_sections WHERE doc_id = ?", (doc_id,))
         if sections:
             self.con.executemany(
-                "INSERT INTO document_sections(doc_id, kind, ordinal, locator, text) "
-                "VALUES (?, ?, ?, ?, ?)",
-                [(doc_id, *s) for s in sections],
+                "INSERT INTO document_sections(doc_id, kind, ordinal, locator, text, meta) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                [(doc_id, *s[:4], json.dumps(s[4] if len(s) > 4 and s[4] else {}, ensure_ascii=False))
+                 for s in sections],
             )
 
     def index_document(self, doc_id: int, filename: str, path: str, author: str, body: str) -> None:
@@ -432,7 +446,7 @@ class Database(WorkStore):
     def sections(self, doc_id: int) -> list[sqlite3.Row]:
         """문서 본문을 원래 순서대로. 근거 원문을 앱 안에서 보여줄 때 쓴다."""
         return self.con.execute(
-            "SELECT kind, ordinal, locator, text FROM document_sections "
+            "SELECT kind, ordinal, locator, text, meta FROM document_sections "
             "WHERE doc_id = ? ORDER BY ordinal",
             (doc_id,),
         ).fetchall()
@@ -820,18 +834,20 @@ class Database(WorkStore):
     # ── 질문 (RAG 재료) ─────────────────────────────────────────────
     def ensure_child_chunks(self, doc_id: int) -> int:
         """문서별 원자적 자식 색인. 부모·기존 임베딩·저장된 인용은 유지한다."""
-        from ..core.child_chunking import CHILD_VERSION, build_children
+        from ..core.child_chunking import build_children, child_version
         made = 0
         with self.transaction():
-            for parent in self.con.execute("SELECT id,text FROM chunks WHERE doc_id=? ORDER BY ordinal", (doc_id,)).fetchall():
+            for parent in self.con.execute("SELECT id,text,context FROM chunks WHERE doc_id=? ORDER BY ordinal", (doc_id,)).fetchall():
+                # 제목 문맥이 붙은 부모의 자식은 판이 다르다. 문맥 없는 기존 자식은 그대로 둔다.
+                version = child_version(parent["context"])
                 versions = self.con.execute("SELECT DISTINCT version FROM chunk_children WHERE parent_id=?", (parent["id"],)).fetchall()
-                if versions and all(r[0] == CHILD_VERSION for r in versions):
+                if versions and all(r[0] == version for r in versions):
                     continue
-                children = build_children(parent["text"])
+                children = build_children(parent["text"], parent["context"])
                 self.con.execute("DELETE FROM chunk_children WHERE parent_id=?", (parent["id"],))
                 self.con.executemany(
                     "INSERT INTO chunk_children(parent_id,ordinal,start_offset,end_offset,text,version) VALUES(?,?,?,?,?,?)",
-                    [(parent["id"], c.ordinal, c.start, c.end, c.text, CHILD_VERSION) for c in children])
+                    [(parent["id"], c.ordinal, c.start, c.end, c.text, version) for c in children])
                 made += len(children)
         return made
 
@@ -852,22 +868,36 @@ class Database(WorkStore):
             "JOIN documents d ON d.id=c.doc_id LEFT JOIN child_embeddings e ON e.child_id=s.id AND e.model=? "
             "WHERE d.missing_since IS NULL AND e.child_id IS NULL", (model,)).fetchone()[0]
 
-    def replace_document_chunks(
-        self, doc_id: int, pieces: list[tuple[int, str, str]]
-    ) -> list[tuple[int, str]]:
+    def replace_document_chunks(self, doc_id: int, pieces: list[tuple]) -> list[tuple[int, str]]:
         """이 문서의 조각을 통째로 갈아 끼운다. (chunk_id, text) 목록을 돌려준다.
 
-        임베딩은 chunks에 FK CASCADE로 걸려 있어 조각을 지우면 함께 지워진다.
+        pieces는 (ordinal, locator, text[, context])이다. 임베딩은 chunks에 FK CASCADE로
+        걸려 있어 조각을 지우면 함께 지워진다.
         """
         self.con.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
         out: list[tuple[int, str]] = []
-        for ordinal, locator, text in pieces:
-            cur = self.con.execute(
-                "INSERT INTO chunks(doc_id, ordinal, locator, text) VALUES (?, ?, ?, ?)",
-                (doc_id, ordinal, locator, text),
-            )
-            out.append((cur.lastrowid, text))
+        for piece in pieces:
+            out.append((self.insert_chunk(doc_id, *piece), piece[2]))
         return out
+
+    def insert_chunk(self, doc_id: int, ordinal: int, locator: str, text: str, context: str = "") -> int:
+        """조각 하나를 넣고 번호를 돌려준다. 보관한 옛 조각(chunk_archive)의 번호는 다시 쓰지 않는다.
+
+        SQLite는 가장 큰 번호 다음을 준다. 조각 표가 비면 1부터 다시 시작하는데, 그 번호를
+        저장된 인용이 옛 조각의 것으로 기억하고 있을 수 있다.
+        """
+        floor = self.con.execute(
+            "SELECT MAX(a.id) FROM chunk_archive a WHERE a.id >= (SELECT COALESCE(MAX(id), 0) FROM chunks)"
+        ).fetchone()[0]
+        if floor is None:
+            cur = self.con.execute(
+                "INSERT INTO chunks(doc_id, ordinal, locator, text, context) VALUES (?, ?, ?, ?, ?)",
+                (doc_id, ordinal, locator, text, context))
+        else:
+            cur = self.con.execute(
+                "INSERT INTO chunks(id, doc_id, ordinal, locator, text, context) VALUES (?, ?, ?, ?, ?, ?)",
+                (floor + 1, doc_id, ordinal, locator, text, context))
+        return cur.lastrowid
 
     def documents_without_chunks(self) -> list[sqlite3.Row]:
         """읽기는 끝났는데 조각이 아직 없는 문서. 모델과 상관없는 판정이다."""

@@ -9,11 +9,12 @@
     것만 남긴다. 엮은 문장도 같은 검증을 한 번 더 지난다.
   · 과거 AI 답변은 재료가 아니다. 언제나 지금 선택한 원문 조각에서 시작한다.
 
-느리다. 조각 48개면 생성 호출이 적어도 13번이다(묶음은 문서마다 따로 짠다). 그래서 사용자가
-'전체 정리'를 켰을 때 돈다. 다만 주제 없이 "요약해 줘"라고만 한 요청은 자료가 적으면
-켜지 않아도 이쪽으로 온다(automatic) — 그런 요청을 조각 몇 개만 보는 보통 질문으로
-받으면 모델이 "답할 수 없다"고 하고, 화면에는 '자료 부족'으로 보인다(실측: 24행짜리
-키워드 목록 시트에 "요약해줘").
+느리다. 조각 48개면 생성 호출이 적어도 13번이다(묶음은 문서마다 따로 짠다). 그래서 보통
+질문은 이쪽으로 오지 않는다. 주제 없이 "요약해 줘"라고만 한 요청은 자료 크기와 상관없이
+이쪽으로 온다(automatic) — 그런 요청을 조각 몇 개만 보는 보통 질문으로 받으면 모델이
+"답할 수 없다"고 하고, 화면에는 '자료 부족'으로 보인다(실측: 24행짜리 키워드 목록 시트에
+"요약해줘"). 걸리는 시간은 MAX_CHUNKS가 묶고, 화면은 묶음 진행을 보여 준다. 주제가 있는
+요청은 사용자가 답 아래의 '자료 전체를 훑어 다시 정리'를 눌렀을 때 온다.
 """
 
 from __future__ import annotations
@@ -26,11 +27,14 @@ from ..core import provenance
 from . import intent
 from .query import QueryScope
 from .rag import (SNIPPET_CHARS, Answer, Citation, _CITATION_MARK, _complete_sentences,
-                  _load_chunk_context)
+                  _load_chunk_context, context_head)
 from .verify import VerifiedSentence, verify_sentences
 
 MAX_CHUNKS = 48          # 넘으면 고르게 솎아 훑는다. 그 사실을 답에 적는다.
 BATCH = 4
+# 한 묶음의 글자 수 상한. 조각 넷이 모두 길면(1,200자씩) 숫자 많은 표는 4,000토큰에 닿아
+# 모델의 기본 문맥 창(4,096)을 넘고, 그러면 프롬프트 앞쪽의 지시문이 오류 없이 잘린다.
+BATCH_CHARS = 3000
 FACTS_PER_BATCH = 4
 MAX_FACTS = 60
 MAX_SENTENCES = 10
@@ -42,8 +46,6 @@ _MAP_SCHEMA = {**MAP_SCHEMA, "properties": {
     "facts": {**MAP_SCHEMA["properties"]["facts"], "maxItems": FACTS_PER_BATCH}}}
 _REDUCE_SCHEMA = {**REDUCE_SCHEMA, "properties": {
     "sentences": {**REDUCE_SCHEMA["properties"]["sentences"], "maxItems": MAX_SENTENCES}}}
-# 켜지 않아도 전체 정리로 받는 자료 크기(조각 수). 묶음 여섯 번 + 엮기 한 번까지다.
-AUTO_CHUNKS = 24
 
 _SUMMARY = re.compile(r"요약|정리|개요|간추|줄거리|(?:무슨|어떤|무엇에|뭐에)\s*(?:관한\s*|대한\s*)?(?:내용|자료|문서|파일)")
 # 요청에서 주제가 될 수 없는 말(앞머리로 견준다). 이것들을 빼고 남는 낱말이 없으면
@@ -73,8 +75,8 @@ def asks_whole(question: str) -> bool:
 
 
 def automatic(db, question: str, doc_ids: list[int]) -> bool:
-    """켜지 않았어도 전체 정리로 받을 요청인가."""
-    return asks_whole(question) and 0 < len(_chunk_ids(db, doc_ids)) <= AUTO_CHUNKS
+    """사용자가 고르지 않았어도 전체 정리로 받을 요청인가."""
+    return asks_whole(question) and bool(_chunk_ids(db, doc_ids))
 
 
 def _chunk_ids(db, doc_ids: list[int]) -> list[int]:
@@ -102,11 +104,15 @@ def _batches(rows) -> list[list[int]]:
     바꿔 붙인다(실측: 2023년 문서의 사실에 2022년을 붙였다).
     """
     batches: list[list[int]] = []
+    size = 0
     for number, row in enumerate(rows, start=1):
-        if batches and len(batches[-1]) < BATCH and rows[batches[-1][0] - 1]["doc_id"] == row["doc_id"]:
+        if (batches and len(batches[-1]) < BATCH and size + len(row["text"]) <= BATCH_CHARS
+                and rows[batches[-1][0] - 1]["doc_id"] == row["doc_id"]):
             batches[-1].append(number)
+            size += len(row["text"])
         else:
             batches.append([number])
+            size = len(row["text"])
     return batches
 
 
@@ -174,11 +180,12 @@ def _is_name_column(values: list[str]) -> bool:
 
 def _block(rows, numbers: list[int], source_text: dict[int, str]) -> str:
     return "\n\n".join(
-        f"[{n}] ({row['filename']} · {row['locator']})\n{source_text[n]}"
+        f"[{n}] ({context_head(row)})\n{source_text[n]}"
         for n, row in zip(numbers, rows))
 
 
-def overview(db, question: str, client, scope: QueryScope) -> Answer:
+def overview(db, question: str, client, scope: QueryScope, progress=None) -> Answer:
+    """progress(끝난 묶음 수, 전체 묶음 수)는 묶음 하나를 시작하기 전마다 불린다."""
     question = question.strip()
     if not question:
         return Answer(question, "", True, error="빈 질문입니다")
@@ -199,9 +206,12 @@ def overview(db, question: str, client, scope: QueryScope) -> Answer:
     record = {"mode": "overview", "chunks": len(rows), "chunks_total": len(every), "batches": 0}
 
     facts: list[VerifiedSentence] = []
-    for numbers in _batches(rows):
+    batches = _batches(rows)
+    for numbers in batches:
         if getattr(client, "cancelled", False):
             return Answer(question, "", True, error="질문을 취소했습니다.")
+        if progress:
+            progress(record["batches"], len(batches))
         batch = [rows[n - 1] for n in numbers]
         prompt, _version = render("map_extract", question=question, limit=str(FACTS_PER_BATCH),
                                   document=batch[0]["filename"],

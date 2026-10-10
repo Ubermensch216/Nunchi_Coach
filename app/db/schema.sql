@@ -88,7 +88,8 @@ CREATE TABLE IF NOT EXISTS document_sections (
     kind    TEXT NOT NULL,       -- paragraph | table | page | sheet | slide | note | preview
     ordinal INTEGER NOT NULL,
     locator TEXT NOT NULL,
-    text    TEXT NOT NULL
+    text    TEXT NOT NULL,
+    meta    TEXT NOT NULL DEFAULT '{}'   -- 구조 정보(JSON): 제목 계층·표 번호·행·머리 행·단위 (parsers/base.py Section.meta)
 );
 CREATE INDEX IF NOT EXISTS idx_sections_doc ON document_sections(doc_id, ordinal);
 
@@ -248,7 +249,8 @@ CREATE TABLE IF NOT EXISTS chunks (
     doc_id  INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     ordinal INTEGER NOT NULL,
     locator TEXT NOT NULL,
-    text    TEXT NOT NULL
+    text    TEXT NOT NULL,
+    context TEXT NOT NULL DEFAULT ''     -- 이 조각이 속한 제목들. 찾는 데만 쓰고 근거로 인용하지 않는다
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(doc_id);
 

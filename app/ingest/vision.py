@@ -85,7 +85,7 @@ def read(client, path: str | Path, should_stop: Callable[[], bool] = lambda: Fal
         body = clip(text, budget)
         if not body:
             break
-        sections.append(Section("page", ordinal, locator, body))
+        sections.append(Section("page", ordinal, locator, body, {"ocr": True}))
 
     if not sections:
         if errors:

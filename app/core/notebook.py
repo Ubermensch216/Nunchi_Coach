@@ -205,18 +205,19 @@ def _law_lookup(db, question, client, answer):
 
 
 def effective_mode(db, notebook_id, question, mode="", generating=True):
-    """이 질문을 실제로 받을 방식. 주제 없는 요약 요청은 자료가 적으면 전체 정리로 받는다."""
+    """이 질문을 실제로 받을 방식. 주제 없는 요약 요청은 전체 정리로 받는다."""
     if mode or not generating:
         return mode
     doc_ids = [int(k) for k in selected_snapshot(db, notebook_id)]
     return "overview" if automatic(db, question, doc_ids) else ""
 
 
-def query(db, notebook_id, question, client=None, mode="", law=False):
+def query(db, notebook_id, question, client=None, mode="", law=False, progress=None):
     """노트북의 한 차례 대화.
 
     mode="overview"면 선택한 자료 전체를 훑어 정리한다. law=True면 현행 법령을
-    함께 조회해 따로 답한다(app/law) — 자료 답변과 섞지 않는다.
+    함께 조회해 따로 답한다(app/law) — 자료 답변과 섞지 않는다. progress는 전체
+    정리의 묶음 진행을 받는다(search/overview.py).
     """
     started = perf_counter()
     snapshot = selected_snapshot(db, notebook_id)
@@ -240,7 +241,7 @@ def query(db, notebook_id, question, client=None, mode="", law=False):
     mode = effective_mode(db, notebook_id, question, mode, generating)
     if mode == "overview":
         from ..search.overview import overview
-        answer = overview(db, effective, client, scope)
+        answer = overview(db, effective, client, scope, progress)
     elif generating and db.get_meta("notebook_query_expansion") != "0":
         answer = ask(db, effective, client=client, scope=scope,
                      expander=lambda text: expand.variants(client, text))
@@ -249,10 +250,10 @@ def query(db, notebook_id, question, client=None, mode="", law=False):
     if getattr(client, "cancelled", False):
         raise ValueError("질문을 취소했습니다.")
     answer.question = question.strip()
-    if answer.withheld and not answer.error and mode != "overview" and asks_whole(question):
-        # 자료가 많아 보통 질문으로 받은 요약 요청이 보류됐다. 자료가 없는 것이 아니다.
-        answer.guidance = ("자료 전체를 요약·정리하려면 입력창 옆 '전체 정리'를 켜고 다시 요청하세요. "
-                           "특정 내용이 궁금하면 그 주제를 질문에 적어 주세요.")
+    if not generating and not answer.error and asks_whole(question):
+        # 주제 없는 요약 요청인데 생성 모델이 없어 검색 결과만 나갔다. 자료가 없는 것이 아니다.
+        answer.guidance = ("자료 전체를 요약·정리하려면 로컬 AI가 준비되어야 합니다. "
+                           "설정 → 시스템에서 모델 상태를 확인하세요.")
         answer.generation["guidance"] = answer.guidance
     if selected_snapshot(db, notebook_id) != snapshot:
         raise ValueError("질문 중 자료 선택이나 판본이 바뀌었습니다. 다시 질문하세요.")
@@ -377,9 +378,13 @@ def evidence_current(db, notebook_id, evidence, check_file=False):
         if check_file:
             if not file_matches(row["path"], entry["version_hash"]):
                 return False
-        # 위치와 인용문을 같은 판본의 분석 결과에서 대조한다.
-        if not db.con.execute("SELECT 1 FROM chunks WHERE doc_id=? AND locator=? AND text=?",
-                              (entry["doc_id"], entry["locator"], entry["exact_quote"])).fetchone():
+        # 위치와 인용문을 같은 판본의 분석 결과에서 대조한다. 조각 규칙이 바뀌어 색인을
+        # 바꾼 뒤에는 그때 보관한 조각과 대조한다 — 원문 파일은 그대로다(core/reindex.py).
+        if not db.con.execute(
+                "SELECT 1 FROM chunks WHERE doc_id=? AND locator=? AND text=? UNION ALL "
+                "SELECT 1 FROM chunk_archive WHERE doc_id=? AND locator=? AND text=? AND doc_hash=?",
+                (entry["doc_id"], entry["locator"], entry["exact_quote"],
+                 entry["doc_id"], entry["locator"], entry["exact_quote"], entry["version_hash"])).fetchone():
             return False
     return True
 
