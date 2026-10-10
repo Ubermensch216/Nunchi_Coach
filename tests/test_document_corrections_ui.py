@@ -247,3 +247,45 @@ def _labels(view) -> list[str]:
 
     holder = view.detail.parentWidget()
     return [w.text() for w in holder.findChildren(QLabel) if w.text()]
+
+
+# ── 문서 역할·연도 교정 (계획서 M8) ─────────────────────────────────
+
+def test_kind_dialog_changes_only_what_the_person_touched(view):
+    from app.core import docrole, docyears
+    from app.ui.views.documents import _KindDialog
+
+    docyears.mark_documents(view.db, [1])
+    view.db.con.execute("INSERT INTO doc_years(doc_id, kind, year, raw, locator) "
+                        "VALUES (1, 'performance', 2023, '2023년 실적', '')")
+    dialog = _KindDialog(view, docrole.OTHER, {"performance": [2023]})
+
+    # 아무것도 건드리지 않으면 연도 변경은 없다.
+    assert dialog.result_value() == (docrole.OTHER, {})
+
+    dialog.role.setCurrentIndex(dialog.role.findData(docrole.PERFORMANCE))
+    combo = dialog.years["evaluation"]
+    combo.setCurrentIndex(combo.findData(2026))
+    dialog.years["performance"].setCurrentIndex(1)   # 이 문서에는 없음
+    assert dialog.result_value() == (
+        docrole.PERFORMANCE, {"performance": None, "evaluation": 2026})
+
+
+def test_corrected_kind_survives_reanalysis_and_is_shown(view):
+    from app.core import docrole, docyears
+
+    docrole.set_role(view.db, 1, docrole.CRITERIA)
+    docyears.set_year(view.db, 1, "evaluation", 2026)
+
+    docrole.classify_documents(view.db, [1])
+    docyears.mark_documents(view.db, [1])
+
+    assert docrole.roles(view.db, [1])[1]["role"] == docrole.CRITERIA
+    assert docyears.years(view.db, [1])[1]["evaluation"] == [2026]
+
+    view._show_detail(1)
+    texts = [view.detail.itemAt(i).widget().text()
+             for i in range(view.detail.count())
+             if hasattr(view.detail.itemAt(i).widget(), "text")]
+    assert any("담당자가 정함" in t for t in texts)
+    assert any("평가 2026년" in t for t in texts)

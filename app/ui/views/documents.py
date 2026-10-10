@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...core import status
+from ...core import docrole, docyears, status
 from ...db import Database, representative_predicate
 from ...jobs import SummaryRunner
 from ...search.documents import find_documents
@@ -461,6 +461,7 @@ class DocumentsView(QWidget):
 
         self._add_summary(row)
         self._add_when(row)
+        self._add_kind(row)
         self._add_tasks(row)
         self._add_facts(row)
         self._add_trouble(row)
@@ -620,6 +621,53 @@ class DocumentsView(QWidget):
             return
         value, precision, kind = picked
         self.db.set_document_date(doc_id, value, precision=precision, kind=kind)
+        self.refresh()
+
+    # ── 상세 (문서 역할·연도) ───────────────────────────────────────
+    def _add_kind(self, row) -> None:
+        """이 문서의 역할과 연도 갈래를 보이고 고칠 수 있게 한다 (계획서 M8).
+
+        못 정한 역할은 '정하지 못함'으로 그대로 보인다. 사람이 고친 값은
+        decided_by='user'로 남아 재분석이 덮지 않는다.
+        """
+        doc_id = row["id"]
+        info = docrole.roles(self.db, [doc_id]).get(doc_id)
+        marks = docyears.years(self.db, [doc_id]).get(doc_id, {})
+
+        self.detail.addWidget(section_title("문서 갈래"))
+        role = info["role"] if info else docrole.OTHER
+        by_user = bool(info) and info["decided_by"] == "user"
+        line = docrole.ROLE_LABEL.get(role, role)
+        if by_user:
+            line += "  · 담당자가 정함"
+        elif info and role != docrole.OTHER:
+            line += f"  · 근거: {info['basis']}"
+        self.detail.addWidget(muted_label(f"역할: {line}", small=True))
+
+        shown = [f"{docyears.KIND_LABEL[kind]} {', '.join(f'{y}년' for y in marks[kind])}"
+                 for kind in docyears.KINDS if marks.get(kind)]
+        self.detail.addWidget(muted_label(
+            "연도: " + (" / ".join(shown) if shown else "읽어 내지 못함"), small=True))
+
+        button = QPushButton("역할·연도 고치기")
+        button.setObjectName("Quiet")
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(lambda _=False, i=doc_id: self._edit_kind(i))
+        self.detail.addWidget(button, alignment=Qt.AlignmentFlag.AlignLeft)
+
+    def _edit_kind(self, doc_id: int) -> None:
+        info = docrole.roles(self.db, [doc_id]).get(doc_id)
+        marks = docyears.years(self.db, [doc_id]).get(doc_id, {})
+        picked = _KindDialog.run(
+            self, info["role"] if info else docrole.OTHER, marks)
+        if picked is None:
+            return
+        role, year_changes = picked
+        if role != (info["role"] if info else docrole.OTHER):
+            with self.db.transaction():
+                docrole.set_role(self.db, doc_id, role)
+        for kind, year in year_changes.items():
+            docyears.set_year(self.db, doc_id, kind, year)
         self.refresh()
 
     # ── 상세 (업무 배정) ────────────────────────────────────────────
@@ -922,6 +970,64 @@ class _TaskPicker(QDialog):
             return None
         items = dialog.list.selectedItems()
         return items[0].data(Qt.ItemDataRole.UserRole) if items else None
+
+
+class _KindDialog(QDialog):
+    """역할과 갈래별 연도를 고른다. 건드리지 않은 연도는 바꾸지 않는다."""
+
+    _KEEP, _NONE = "keep", "none"
+
+    def __init__(self, parent: QWidget, role: str, marks: dict[str, list[int]]) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("문서 역할·연도 고치기")
+        self.setMinimumWidth(380)
+        column = QVBoxLayout(self)
+        column.setSpacing(theme.SP_MD)
+        column.addWidget(muted_label(
+            "고친 값은 다시 분석해도 그대로 남습니다. 연도는 건드리지 않으면 바뀌지 않습니다."))
+
+        column.addWidget(QLabel("역할"))
+        self.role = QComboBox()
+        for key in docrole.ROLES:
+            self.role.addItem(docrole.ROLE_LABEL[key], key)
+        self.role.setCurrentIndex(max(0, self.role.findData(role)))
+        column.addWidget(self.role)
+
+        this_year = date.today().year
+        self.years: dict[str, QComboBox] = {}
+        for kind in docyears.KINDS:
+            column.addWidget(QLabel(f"{docyears.KIND_LABEL[kind]} 연도"))
+            combo = QComboBox()
+            current = ", ".join(str(y) for y in marks.get(kind, [])) or "없음"
+            combo.addItem(f"그대로 ({current})", self._KEEP)
+            combo.addItem("이 문서에는 없음", self._NONE)
+            span = set(range(this_year - 12, this_year + 2)) | set(marks.get(kind, []))
+            for year in sorted(span, reverse=True):
+                combo.addItem(f"{year}년", year)
+            self.years[kind] = combo
+            column.addWidget(combo)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        column.addWidget(buttons)
+
+    def result_value(self) -> tuple[str, dict[str, int | None]]:
+        changes: dict[str, int | None] = {}
+        for kind, combo in self.years.items():
+            data = combo.currentData()
+            if data == self._KEEP:
+                continue
+            changes[kind] = None if data == self._NONE else int(data)
+        return self.role.currentData(), changes
+
+    @classmethod
+    def run(cls, parent: QWidget, role: str, marks: dict[str, list[int]]):
+        dialog = cls(parent, role, marks)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.result_value()
 
 
 def _parse_date_text(text: str) -> tuple[str, str] | None:
