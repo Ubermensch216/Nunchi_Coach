@@ -323,7 +323,15 @@ def test_source_item_row_icons_and_actions(workspace):
     # 원문 보기 아이콘 클릭 -> 원문 판으로 전환
     row.read_btn.click()
     assert sources.stack.currentIndex() == 1 and sources.reader_doc_id == workspace.docs[0]
-    sources.show_list()
+    # '자료 목록'은 아이콘만 표시(텍스트 없음), '원본'은 아이콘 + 원본 텍스트
+    assert sources.back_button.text() == ""
+    assert sources.back_button.toolTip() == "자료 목록"
+    assert not sources.back_button.icon().isNull()
+    assert sources.open_button.text() == "원본"
+    assert not sources.open_button.icon().isNull()
+    sources.repaint_icons()
+    # '자료 목록' 아이콘 클릭 -> 목록으로 복귀
+    sources.back_button.click()
     assert sources.stack.currentIndex() == 0
 
     # 연결 해제 아이콘 클릭 -> 문서가 노트북에서 제거됨

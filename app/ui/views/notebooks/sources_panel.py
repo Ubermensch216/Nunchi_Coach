@@ -40,7 +40,7 @@ from ....core import notebook, notebook_ingest, notebook_tasks, onnara_import
 from ....db import representative_predicate
 from ....jobs import NotebookIngestRunner
 from ....search.rag import Citation
-from ... import theme
+from ... import icons, theme
 from ...widgets import (
     Card,
     ElidedLabel,
@@ -376,6 +376,10 @@ class SourcesPanel(Panel):
 
     def repaint_icons(self) -> None:
         super().repaint_icons()
+        if hasattr(self, "back_button"):
+            set_icon(self.back_button, "arrow-left")
+        if hasattr(self, "open_button"):
+            self.open_button.setIcon(icons.icon("external-link", theme.TEXT_MUTED, 16))
         for i in range(self.source_list.count()):
             widget = self.source_list.itemWidget(self.source_list.item(i))
             if isinstance(widget, SourceRow):
@@ -653,15 +657,16 @@ class SourcesPanel(Panel):
 
         head = QHBoxLayout()
         head.setSpacing(theme.SP_SM)
-        back = QPushButton("← 자료 목록")
-        back.setObjectName("Quiet")
-        back.setCursor(Qt.CursorShape.PointingHandCursor)
-        back.clicked.connect(self.show_list)
-        head.addWidget(back)
+        self.back_button = icon_button("arrow-left", "자료 목록")
+        self.back_button.clicked.connect(self.show_list)
+        head.addWidget(self.back_button)
         head.addStretch(1)
-        self.open_button = QPushButton("원본 열기")
+        self.open_button = QPushButton("원본")
         self.open_button.setObjectName("Quiet")
         self.open_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.open_button.setToolTip("원본 파일을 엽니다")
+        self.open_button.setIcon(icons.icon("external-link", theme.TEXT_MUTED, 16))
+        self.open_button.setIconSize(QSize(16, 16))
         self.open_button.clicked.connect(self._open_original)
         head.addWidget(self.open_button)
         column.addLayout(head)
