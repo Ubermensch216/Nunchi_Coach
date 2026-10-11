@@ -195,3 +195,79 @@ class KnowledgeStore:
     def claim_links(self, claim_id: str) -> list:
         return self.db.con.execute("SELECT * FROM kg_claim_links WHERE from_claim=? OR to_claim=?",
                                    (claim_id, claim_id)).fetchall()
+
+    def schedule(self, partition_key: str, reason: str) -> None:
+        self.db.con.execute("INSERT INTO kg_jobs(partition_key,reason) VALUES (?,?) "
+                            "ON CONFLICT(partition_key,job_kind) DO UPDATE SET "
+                            "wanted_revision=kg_jobs.wanted_revision+1,reason=excluded.reason,"
+                            "state=CASE WHEN kg_jobs.state='running' THEN 'running' ELSE 'dirty' END",
+                            (partition_key, reason))
+
+    def published(self, partition_key: str, input_fingerprint: str):
+        return self.db.con.execute("SELECT * FROM kg_generations WHERE partition_key=? "
+                                   "AND input_fingerprint=? AND active=1", (partition_key, input_fingerprint)).fetchone()
+
+    def begin_generation(self, partition_key: str, input_fingerprint: str) -> int:
+        self.db.con.execute("INSERT INTO kg_jobs(partition_key,reason) VALUES (?,'projection') "
+                            "ON CONFLICT(partition_key,job_kind) DO NOTHING", (partition_key,))
+        revision = self.db.con.execute("SELECT wanted_revision FROM kg_jobs WHERE partition_key=? "
+                                       "AND job_kind='projection'", (partition_key,)).fetchone()[0]
+        return self.db.con.execute("INSERT INTO kg_generations(partition_key,wanted_revision,input_fingerprint,versions) "
+                                   "VALUES (?,?,?,?)", (partition_key, revision, input_fingerprint,
+                                                        canonical_json({"projection": "1", "ontology": load()["version"]}))).lastrowid
+
+    def support(self, claim_id: str, evidence_id: str, generation_id: int,
+                validation: str = "structural", active: bool = True) -> None:
+        self.db.con.execute("INSERT INTO kg_claim_evidence(claim_id,evidence_id,generation_id,validation_result,"
+                            "validation_version,active) VALUES (?,?,?,?,'1',?) ON CONFLICT DO NOTHING",
+                            (claim_id, evidence_id, generation_id, validation, int(active)))
+
+    def inherit_states(self, claim_id: str, *, basis_state: str = "stated",
+                       applicability: str = "unknown", human_state: str = "none",
+                       execution_state: str | None = None, generation_id: int | None = None) -> None:
+        self.db.con.execute("UPDATE kg_claims SET basis_state=?,applicability=?,human_state=?,execution_state=?,"
+                            "generation_id=coalesce(?,generation_id) WHERE uuid=?",
+                            (basis_state, applicability, human_state, execution_state, generation_id, claim_id))
+
+    def decisions_for(self, target_key: str) -> list:
+        return self.db.con.execute("SELECT * FROM kg_decisions WHERE target_kind='claim' AND target_key=? ORDER BY rowid",
+                                   (target_key,)).fetchall()
+
+    def finish_generation(self, generation_id: int, diagnostics: list[str]) -> None:
+        from ..core.knowledge.resolution import latest_decision
+
+        generation = self.db.con.execute("SELECT * FROM kg_generations WHERE id=?", (generation_id,)).fetchone()
+        partition = generation["partition_key"]
+        wanted = self.db.con.execute("SELECT wanted_revision FROM kg_jobs WHERE partition_key=? AND job_kind='projection'",
+                                     (partition,)).fetchone()[0]
+        if wanted != generation["wanted_revision"]:
+            raise RuntimeError("변경된 입력의 그래프 세대를 게시할 수 없습니다.")
+        self.db.con.execute("UPDATE kg_claim_evidence SET active=0 WHERE generation_id IN "
+                            "(SELECT id FROM kg_generations WHERE partition_key=? AND active=1)", (partition,))
+        self.db.con.execute("UPDATE kg_generations SET active=0 WHERE partition_key=? AND active=1", (partition,))
+        processed = self.db.con.execute("SELECT COUNT(DISTINCT claim_id) FROM kg_claim_evidence WHERE generation_id=?",
+                                        (generation_id,)).fetchone()[0]
+        self.db.con.execute("UPDATE kg_generations SET status='published',active=1,processed=?,failed=?,versions=? WHERE id=?",
+                            (processed, len(diagnostics), canonical_json({"projection": "1", "ontology": load()["version"],
+                                                                        "diagnostics": diagnostics}), generation_id))
+        affected = self.db.con.execute("SELECT DISTINCT c.uuid,c.claim_key FROM kg_claims c JOIN kg_claim_evidence e "
+                                       "ON e.claim_id=c.uuid JOIN kg_generations g ON g.id=e.generation_id WHERE g.partition_key=?",
+                                       (partition,)).fetchall()
+        for claim in affected:
+            supported = self.db.con.execute("SELECT 1 FROM kg_claim_evidence WHERE claim_id=? AND active=1 "
+                                            "AND support_role='supports' AND validation_result IN "
+                                            "('structural','quote_matched','semantic_supported') LIMIT 1", (claim["uuid"],)).fetchone()
+            decision = latest_decision(self.decisions_for(claim["claim_key"]))
+            lifecycle = "retracted" if decision and decision["decision"] == "reject" else "active" if supported else "stale"
+            self.db.con.execute("UPDATE kg_claims SET lifecycle=?,generation_id=? WHERE uuid=?", (lifecycle, generation_id, claim["uuid"]))
+        self.db.con.execute("UPDATE kg_jobs SET state='done',lease=NULL WHERE partition_key=? AND job_kind='projection'", (partition,))
+        self.db.set_meta("kg_revision", str(int(self.db.get_meta("kg_revision") or 0) + 1))
+
+    def decision_revision(self) -> int:
+        return self.db.con.execute("SELECT coalesce(max(rowid),0) FROM kg_decisions").fetchone()[0]
+
+    def independent_quote_sources(self, claim_id: str) -> int:
+        return self.db.con.execute("SELECT COUNT(DISTINCT e.doc_hash) FROM kg_claim_evidence s JOIN kg_evidence e "
+                                   "ON e.uuid=s.evidence_id WHERE s.claim_id=? AND s.active=1 AND s.support_role='supports' "
+                                   "AND s.validation_result IN ('quote_matched','semantic_supported') AND e.kind='document_quote'",
+                                   (claim_id,)).fetchone()[0]

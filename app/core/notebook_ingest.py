@@ -151,6 +151,9 @@ def write_parse(db, doc_id: int, filename: str, path: str, result: ParseResult) 
         if result.ok:
             db.replace_sections(doc_id, [(s.kind, s.ordinal, s.locator, s.text, s.meta) for s in result.sections])
             db.index_document(doc_id, filename, path, result.meta.author or "", result.text)
+        from .knowledge.lifecycle import schedule_document
+
+        schedule_document(db, doc_id, "notebook_parse")
 
 
 def write_date(db, doc_id: int) -> None:
@@ -251,6 +254,9 @@ def ingest_file(db, notebook_id: int, path: str | Path, client=None,
             outcome.doc_id, outcome.status = known["id"], "reused"
             outcome.note = "같은 내용의 문서를 이미 읽어 두어 그 문서를 연결했습니다."
             write_chunks(db, known["id"], client, should_stop)
+            from .knowledge.lifecycle import schedule_document
+
+            schedule_document(db, known["id"], "notebook_reused")
             return outcome
 
         stored = store(db, path, digest)

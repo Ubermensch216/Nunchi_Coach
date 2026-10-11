@@ -661,6 +661,9 @@ class Pipeline(QObject):
             saved = handover_release.autosave(db)
             if saved and saved[1]:
                 report.note += " · 복원본 저장"
+            from ..core.knowledge.lifecycle import schedule_tasks
+
+            schedule_tasks(db)
         self._report(db, report)
 
 
