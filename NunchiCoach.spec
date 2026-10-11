@@ -59,6 +59,8 @@ a = Analysis(
         ('app/db/child_schema.sql', 'app/db'),
         ('app/db/coverage_schema.sql', 'app/db'),
         ('app/db/action_schema.sql', 'app/db'),
+        ('app/db/knowledge_schema.sql', 'app/db'),
+        ('app/core/knowledge/ontology.json', 'app/core/knowledge'),
         ('app/ui/assets', 'app/ui/assets'),
         (str(NOTICES), 'app/licenses'),
     ],
@@ -68,7 +70,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['rdflib', 'pyshacl', 'owlrl', 'html5rdf'],  # 그래프 표준 검증은 개발 전용
     noarchive=False,
     optimize=0,
 )

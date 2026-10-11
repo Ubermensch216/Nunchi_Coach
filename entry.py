@@ -27,6 +27,7 @@ def main() -> int:
         import app
         root = Path(app.__file__).parent
         required = [root / "ui/assets/logo.png", root / "db/schema.sql",
+                    root / "db/knowledge_schema.sql", root / "core/knowledge/ontology.json",
                     root / "ai/prompts/ask.md", root / "ai/prompts/summarize.md"]
         if getattr(sys, "frozen", False):
             # 고지문 없이 나간 실행물은 배포할 수 없다. 개발 환경에서는 그때그때 만든다.

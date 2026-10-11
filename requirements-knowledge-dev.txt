@@ -1,0 +1,5 @@
+# 개발·CI 전용. 사용자 실행 환경 requirements.lock과 분리한다.
+# Python 3.14.6 / Windows에서 별도 .venv-knowledge로 호환성 확인.
+rdflib==7.6.0
+pyshacl==0.40.1
+pytest==9.1.1

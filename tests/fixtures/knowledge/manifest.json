@@ -1,0 +1,23 @@
+{
+  "sha256": "dd0250e23b79122ea99eeec2b86a7efdb0b45828755e8be8acaeca343f7d3606",
+  "questions": 120,
+  "tuning": 40,
+  "holdout": 80,
+  "top_k": 10,
+  "graph_enabled": false,
+  "gates": {
+    "scope_leaks": 0,
+    "unsupported_citations": 0,
+    "lost_decisions": 0,
+    "linked_recall_improvement_pp": 5,
+    "simple_accuracy_max_drop_pp": 2,
+    "graph_p95_ms": 150,
+    "graph_peak_rss_mb": 150
+  },
+  "limitations": [
+    "합성 자료",
+    "생성·임베딩 모델 OFF FTS 기준선",
+    "독립 정답 검토 및 실제 비식별 자료 미확보",
+    "P4 전에는 B/C 비교와 답변 정확도·의미 지지 평가 불가"
+  ]
+}

@@ -1,0 +1,1695 @@
+{
+  "comparison": "A",
+  "retrieval": "existing FTS, model OFF",
+  "fixture_sha256": "dd0250e23b79122ea99eeec2b86a7efdb0b45828755e8be8acaeca343f7d3606",
+  "source": "synthetic",
+  "review": "independent_review_pending",
+  "split": "all",
+  "hardware": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu": "Intel64 Family 6 Model 191 Stepping 2, GenuineIntel",
+    "logical_cpus": 20,
+    "python": "3.14.6",
+    "sqlite": "3.50.4"
+  },
+  "questions": 120,
+  "categories": {
+    "simple": {
+      "questions": 30,
+      "scored_questions": 30,
+      "all_evidence_found": 30,
+      "recall_at_10": 1.0
+    },
+    "alias": {
+      "questions": 20,
+      "scored_questions": 20,
+      "all_evidence_found": 8,
+      "recall_at_10": 0.6
+    },
+    "linked": {
+      "questions": 25,
+      "scored_questions": 25,
+      "all_evidence_found": 5,
+      "recall_at_10": 0.5
+    },
+    "temporal": {
+      "questions": 25,
+      "scored_questions": 25,
+      "all_evidence_found": 25,
+      "recall_at_10": 1.0
+    },
+    "missing": {
+      "questions": 20,
+      "scored_questions": 0,
+      "all_evidence_found": 0,
+      "recall_at_10": null
+    }
+  },
+  "scope_leaks": 0,
+  "retrieval_p95_ms": 0.27290000070934184,
+  "unmeasured": [
+    "LLM 답변 정확도",
+    "의미 지지",
+    "B/C 개선",
+    "그래프 RSS/지연",
+    "실제 자료 정확도"
+  ],
+  "results": [
+    {
+      "id": "kg01-q1",
+      "category": "simple",
+      "split": "tuning",
+      "expected": [
+        "kg01-지침"
+      ],
+      "retrieved": [
+        "kg01-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg01-q2",
+      "category": "simple",
+      "split": "tuning",
+      "expected": [
+        "kg01-지침"
+      ],
+      "retrieved": [
+        "kg01-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg01-q3",
+      "category": "simple",
+      "split": "tuning",
+      "expected": [
+        "kg01-지침"
+      ],
+      "retrieved": [
+        "kg01-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg01-q4",
+      "category": "simple",
+      "split": "tuning",
+      "expected": [
+        "kg01-지침"
+      ],
+      "retrieved": [
+        "kg01-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg01-q5",
+      "category": "simple",
+      "split": "tuning",
+      "expected": [
+        "kg01-지침"
+      ],
+      "retrieved": [
+        "kg01-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg02-q1",
+      "category": "simple",
+      "split": "tuning",
+      "expected": [
+        "kg02-지침"
+      ],
+      "retrieved": [
+        "kg02-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg02-q2",
+      "category": "simple",
+      "split": "tuning",
+      "expected": [
+        "kg02-지침"
+      ],
+      "retrieved": [
+        "kg02-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg02-q3",
+      "category": "simple",
+      "split": "tuning",
+      "expected": [
+        "kg02-지침"
+      ],
+      "retrieved": [
+        "kg02-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg02-q4",
+      "category": "simple",
+      "split": "tuning",
+      "expected": [
+        "kg02-지침"
+      ],
+      "retrieved": [
+        "kg02-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg02-q5",
+      "category": "simple",
+      "split": "tuning",
+      "expected": [
+        "kg02-지침"
+      ],
+      "retrieved": [
+        "kg02-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg03-q1",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg03-지침"
+      ],
+      "retrieved": [
+        "kg03-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg03-q2",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg03-지침"
+      ],
+      "retrieved": [
+        "kg03-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg03-q3",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg03-지침"
+      ],
+      "retrieved": [
+        "kg03-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg03-q4",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg03-지침"
+      ],
+      "retrieved": [
+        "kg03-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg03-q5",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg03-지침"
+      ],
+      "retrieved": [
+        "kg03-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg04-q1",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg04-지침"
+      ],
+      "retrieved": [
+        "kg04-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg04-q2",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg04-지침"
+      ],
+      "retrieved": [
+        "kg04-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg04-q3",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg04-지침"
+      ],
+      "retrieved": [
+        "kg04-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg04-q4",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg04-지침"
+      ],
+      "retrieved": [
+        "kg04-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg04-q5",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg04-지침"
+      ],
+      "retrieved": [
+        "kg04-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg05-q1",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg05-지침"
+      ],
+      "retrieved": [
+        "kg05-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg05-q2",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg05-지침"
+      ],
+      "retrieved": [
+        "kg05-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg05-q3",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg05-지침"
+      ],
+      "retrieved": [
+        "kg05-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg05-q4",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg05-지침"
+      ],
+      "retrieved": [
+        "kg05-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg05-q5",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg05-지침"
+      ],
+      "retrieved": [
+        "kg05-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg06-q1",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg06-지침"
+      ],
+      "retrieved": [
+        "kg06-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg06-q2",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg06-지침"
+      ],
+      "retrieved": [
+        "kg06-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg06-q3",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg06-지침"
+      ],
+      "retrieved": [
+        "kg06-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg06-q4",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg06-지침"
+      ],
+      "retrieved": [
+        "kg06-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg06-q5",
+      "category": "simple",
+      "split": "holdout",
+      "expected": [
+        "kg06-지침"
+      ],
+      "retrieved": [
+        "kg06-지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg07-q1",
+      "category": "alias",
+      "split": "tuning",
+      "expected": [
+        "kg07-별칭",
+        "kg07-지침"
+      ],
+      "retrieved": [
+        "kg07-별칭"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg07-q2",
+      "category": "alias",
+      "split": "tuning",
+      "expected": [
+        "kg07-별칭",
+        "kg07-지침"
+      ],
+      "retrieved": [
+        "kg07-별칭",
+        "kg07-지침",
+        "kg07-동명부서"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg07-q3",
+      "category": "alias",
+      "split": "tuning",
+      "expected": [
+        "kg07-별칭",
+        "kg07-지침"
+      ],
+      "retrieved": [
+        "kg07-별칭"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg07-q4",
+      "category": "alias",
+      "split": "tuning",
+      "expected": [
+        "kg07-별칭",
+        "kg07-지침"
+      ],
+      "retrieved": [],
+      "recall_at_10": 0.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg07-q5",
+      "category": "alias",
+      "split": "tuning",
+      "expected": [
+        "kg07-동명부서"
+      ],
+      "retrieved": [
+        "kg07-동명부서"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg08-q1",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg08-별칭",
+        "kg08-지침"
+      ],
+      "retrieved": [
+        "kg08-별칭"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg08-q2",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg08-별칭",
+        "kg08-지침"
+      ],
+      "retrieved": [
+        "kg08-별칭",
+        "kg08-지침",
+        "kg08-동명부서"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg08-q3",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg08-별칭",
+        "kg08-지침"
+      ],
+      "retrieved": [
+        "kg08-별칭"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg08-q4",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg08-별칭",
+        "kg08-지침"
+      ],
+      "retrieved": [],
+      "recall_at_10": 0.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg08-q5",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg08-동명부서"
+      ],
+      "retrieved": [
+        "kg08-동명부서"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg09-q1",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg09-별칭",
+        "kg09-지침"
+      ],
+      "retrieved": [
+        "kg09-별칭"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg09-q2",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg09-별칭",
+        "kg09-지침"
+      ],
+      "retrieved": [
+        "kg09-별칭",
+        "kg09-지침",
+        "kg09-동명부서"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg09-q3",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg09-별칭",
+        "kg09-지침"
+      ],
+      "retrieved": [
+        "kg09-별칭"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg09-q4",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg09-별칭",
+        "kg09-지침"
+      ],
+      "retrieved": [],
+      "recall_at_10": 0.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg09-q5",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg09-동명부서"
+      ],
+      "retrieved": [
+        "kg09-동명부서"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg10-q1",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg10-별칭",
+        "kg10-지침"
+      ],
+      "retrieved": [
+        "kg10-별칭"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg10-q2",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg10-별칭",
+        "kg10-지침"
+      ],
+      "retrieved": [
+        "kg10-별칭",
+        "kg10-지침",
+        "kg10-동명부서"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg10-q3",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg10-별칭",
+        "kg10-지침"
+      ],
+      "retrieved": [
+        "kg10-별칭"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg10-q4",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg10-별칭",
+        "kg10-지침"
+      ],
+      "retrieved": [],
+      "recall_at_10": 0.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg10-q5",
+      "category": "alias",
+      "split": "holdout",
+      "expected": [
+        "kg10-동명부서"
+      ],
+      "retrieved": [
+        "kg10-동명부서"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg11-q1",
+      "category": "linked",
+      "split": "tuning",
+      "expected": [
+        "kg11-서식",
+        "kg11-지침"
+      ],
+      "retrieved": [
+        "kg11-지침",
+        "kg11-서식"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg11-q2",
+      "category": "linked",
+      "split": "tuning",
+      "expected": [
+        "kg11-서식",
+        "kg11-지침"
+      ],
+      "retrieved": [
+        "kg11-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg11-q3",
+      "category": "linked",
+      "split": "tuning",
+      "expected": [
+        "kg11-서식",
+        "kg11-지침"
+      ],
+      "retrieved": [
+        "kg11-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg11-q4",
+      "category": "linked",
+      "split": "tuning",
+      "expected": [
+        "kg11-서식",
+        "kg11-지침"
+      ],
+      "retrieved": [
+        "kg11-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg11-q5",
+      "category": "linked",
+      "split": "tuning",
+      "expected": [
+        "kg11-서식",
+        "kg11-지침"
+      ],
+      "retrieved": [],
+      "recall_at_10": 0.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg12-q1",
+      "category": "linked",
+      "split": "tuning",
+      "expected": [
+        "kg12-서식",
+        "kg12-지침"
+      ],
+      "retrieved": [
+        "kg12-지침",
+        "kg12-서식"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg12-q2",
+      "category": "linked",
+      "split": "tuning",
+      "expected": [
+        "kg12-서식",
+        "kg12-지침"
+      ],
+      "retrieved": [
+        "kg12-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg12-q3",
+      "category": "linked",
+      "split": "tuning",
+      "expected": [
+        "kg12-서식",
+        "kg12-지침"
+      ],
+      "retrieved": [
+        "kg12-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg12-q4",
+      "category": "linked",
+      "split": "tuning",
+      "expected": [
+        "kg12-서식",
+        "kg12-지침"
+      ],
+      "retrieved": [
+        "kg12-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg12-q5",
+      "category": "linked",
+      "split": "tuning",
+      "expected": [
+        "kg12-서식",
+        "kg12-지침"
+      ],
+      "retrieved": [],
+      "recall_at_10": 0.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg13-q1",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg13-서식",
+        "kg13-지침"
+      ],
+      "retrieved": [
+        "kg13-지침",
+        "kg13-서식"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg13-q2",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg13-서식",
+        "kg13-지침"
+      ],
+      "retrieved": [
+        "kg13-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg13-q3",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg13-서식",
+        "kg13-지침"
+      ],
+      "retrieved": [
+        "kg13-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg13-q4",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg13-서식",
+        "kg13-지침"
+      ],
+      "retrieved": [
+        "kg13-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg13-q5",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg13-서식",
+        "kg13-지침"
+      ],
+      "retrieved": [],
+      "recall_at_10": 0.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg14-q1",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg14-서식",
+        "kg14-지침"
+      ],
+      "retrieved": [
+        "kg14-지침",
+        "kg14-서식"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg14-q2",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg14-서식",
+        "kg14-지침"
+      ],
+      "retrieved": [
+        "kg14-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg14-q3",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg14-서식",
+        "kg14-지침"
+      ],
+      "retrieved": [
+        "kg14-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg14-q4",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg14-서식",
+        "kg14-지침"
+      ],
+      "retrieved": [
+        "kg14-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg14-q5",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg14-서식",
+        "kg14-지침"
+      ],
+      "retrieved": [],
+      "recall_at_10": 0.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg15-q1",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg15-서식",
+        "kg15-지침"
+      ],
+      "retrieved": [
+        "kg15-지침",
+        "kg15-서식"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg15-q2",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg15-서식",
+        "kg15-지침"
+      ],
+      "retrieved": [
+        "kg15-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg15-q3",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg15-서식",
+        "kg15-지침"
+      ],
+      "retrieved": [
+        "kg15-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg15-q4",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg15-서식",
+        "kg15-지침"
+      ],
+      "retrieved": [
+        "kg15-지침"
+      ],
+      "recall_at_10": 0.5,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg15-q5",
+      "category": "linked",
+      "split": "holdout",
+      "expected": [
+        "kg15-서식",
+        "kg15-지침"
+      ],
+      "retrieved": [],
+      "recall_at_10": 0.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg16-q1",
+      "category": "temporal",
+      "split": "tuning",
+      "expected": [
+        "kg16-지침"
+      ],
+      "retrieved": [
+        "kg16-지침",
+        "kg16-변경안내",
+        "kg16-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg16-q2",
+      "category": "temporal",
+      "split": "tuning",
+      "expected": [
+        "kg16-지난지침",
+        "kg16-지침"
+      ],
+      "retrieved": [
+        "kg16-지난지침",
+        "kg16-지침",
+        "kg16-변경안내"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg16-q3",
+      "category": "temporal",
+      "split": "tuning",
+      "expected": [
+        "kg16-변경안내"
+      ],
+      "retrieved": [
+        "kg16-지침",
+        "kg16-변경안내",
+        "kg16-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg16-q4",
+      "category": "temporal",
+      "split": "tuning",
+      "expected": [
+        "kg16-변경안내"
+      ],
+      "retrieved": [
+        "kg16-지침",
+        "kg16-변경안내",
+        "kg16-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg16-q5",
+      "category": "temporal",
+      "split": "tuning",
+      "expected": [
+        "kg16-지난지침",
+        "kg16-지침"
+      ],
+      "retrieved": [
+        "kg16-지난지침",
+        "kg16-지침",
+        "kg16-변경안내"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg17-q1",
+      "category": "temporal",
+      "split": "tuning",
+      "expected": [
+        "kg17-지침"
+      ],
+      "retrieved": [
+        "kg17-지침",
+        "kg17-변경안내",
+        "kg17-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg17-q2",
+      "category": "temporal",
+      "split": "tuning",
+      "expected": [
+        "kg17-지난지침",
+        "kg17-지침"
+      ],
+      "retrieved": [
+        "kg17-지난지침",
+        "kg17-지침",
+        "kg17-변경안내"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg17-q3",
+      "category": "temporal",
+      "split": "tuning",
+      "expected": [
+        "kg17-변경안내"
+      ],
+      "retrieved": [
+        "kg17-지침",
+        "kg17-변경안내",
+        "kg17-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg17-q4",
+      "category": "temporal",
+      "split": "tuning",
+      "expected": [
+        "kg17-변경안내"
+      ],
+      "retrieved": [
+        "kg17-지침",
+        "kg17-변경안내",
+        "kg17-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg17-q5",
+      "category": "temporal",
+      "split": "tuning",
+      "expected": [
+        "kg17-지난지침",
+        "kg17-지침"
+      ],
+      "retrieved": [
+        "kg17-지난지침",
+        "kg17-지침",
+        "kg17-변경안내"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg18-q1",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg18-지침"
+      ],
+      "retrieved": [
+        "kg18-지침",
+        "kg18-변경안내",
+        "kg18-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg18-q2",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg18-지난지침",
+        "kg18-지침"
+      ],
+      "retrieved": [
+        "kg18-지난지침",
+        "kg18-지침",
+        "kg18-변경안내"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg18-q3",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg18-변경안내"
+      ],
+      "retrieved": [
+        "kg18-지침",
+        "kg18-변경안내",
+        "kg18-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg18-q4",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg18-변경안내"
+      ],
+      "retrieved": [
+        "kg18-지침",
+        "kg18-변경안내",
+        "kg18-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg18-q5",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg18-지난지침",
+        "kg18-지침"
+      ],
+      "retrieved": [
+        "kg18-지난지침",
+        "kg18-지침",
+        "kg18-변경안내"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg19-q1",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg19-지침"
+      ],
+      "retrieved": [
+        "kg19-지침",
+        "kg19-변경안내",
+        "kg19-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg19-q2",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg19-지난지침",
+        "kg19-지침"
+      ],
+      "retrieved": [
+        "kg19-지난지침",
+        "kg19-지침",
+        "kg19-변경안내"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg19-q3",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg19-변경안내"
+      ],
+      "retrieved": [
+        "kg19-지침",
+        "kg19-변경안내",
+        "kg19-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg19-q4",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg19-변경안내"
+      ],
+      "retrieved": [
+        "kg19-지침",
+        "kg19-변경안내",
+        "kg19-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg19-q5",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg19-지난지침",
+        "kg19-지침"
+      ],
+      "retrieved": [
+        "kg19-지난지침",
+        "kg19-지침",
+        "kg19-변경안내"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg20-q1",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg20-지침"
+      ],
+      "retrieved": [
+        "kg20-지침",
+        "kg20-변경안내",
+        "kg20-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg20-q2",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg20-지난지침",
+        "kg20-지침"
+      ],
+      "retrieved": [
+        "kg20-지난지침",
+        "kg20-지침",
+        "kg20-변경안내"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg20-q3",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg20-변경안내"
+      ],
+      "retrieved": [
+        "kg20-지침",
+        "kg20-변경안내",
+        "kg20-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg20-q4",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg20-변경안내"
+      ],
+      "retrieved": [
+        "kg20-지침",
+        "kg20-변경안내",
+        "kg20-지난지침"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg20-q5",
+      "category": "temporal",
+      "split": "holdout",
+      "expected": [
+        "kg20-지난지침",
+        "kg20-지침"
+      ],
+      "retrieved": [
+        "kg20-지난지침",
+        "kg20-지침",
+        "kg20-변경안내"
+      ],
+      "recall_at_10": 1.0,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg21-q1",
+      "category": "missing",
+      "split": "tuning",
+      "expected": [],
+      "retrieved": [
+        "kg21-지침",
+        "kg21-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg21-q2",
+      "category": "missing",
+      "split": "tuning",
+      "expected": [],
+      "retrieved": [
+        "kg21-지침",
+        "kg21-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg21-q3",
+      "category": "missing",
+      "split": "tuning",
+      "expected": [],
+      "retrieved": [
+        "kg21-지침",
+        "kg21-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg21-q4",
+      "category": "missing",
+      "split": "tuning",
+      "expected": [],
+      "retrieved": [
+        "kg21-지침",
+        "kg21-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg21-q5",
+      "category": "missing",
+      "split": "tuning",
+      "expected": [],
+      "retrieved": [
+        "kg21-지침",
+        "kg21-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg22-q1",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg22-지침",
+        "kg22-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg22-q2",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg22-지침",
+        "kg22-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg22-q3",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg22-지침",
+        "kg22-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg22-q4",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg22-지침",
+        "kg22-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg22-q5",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg22-지침",
+        "kg22-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg23-q1",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg23-지침",
+        "kg23-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg23-q2",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg23-지침",
+        "kg23-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg23-q3",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg23-지침",
+        "kg23-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg23-q4",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg23-지침",
+        "kg23-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg23-q5",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg23-지침",
+        "kg23-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg24-q1",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg24-지침",
+        "kg24-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg24-q2",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg24-지침",
+        "kg24-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg24-q3",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg24-지침",
+        "kg24-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg24-q4",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg24-지침",
+        "kg24-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    },
+    {
+      "id": "kg24-q5",
+      "category": "missing",
+      "split": "holdout",
+      "expected": [],
+      "retrieved": [
+        "kg24-지침",
+        "kg24-참고"
+      ],
+      "recall_at_10": null,
+      "scope_leaks": 0
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 # 실행 환경
 .venv/
 .venv-ci/
+.venv-knowledge/
 __pycache__/
 *.pyc
 

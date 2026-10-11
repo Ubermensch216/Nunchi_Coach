@@ -40,6 +40,7 @@ ALLOWED_SKIPS = (
     "NUNCHICOACH_LIVE_AI",          # 실제 모델 시험 — 별도 수동 실행
     "실문서 표본이 없습니다",          # 실제 기관 문서 표본 — 저장소에 두지 않는다
     "프로젝트 .venv가 아닌 환경",      # CI는 lockfile --check 단계로 따로 검사한다
+    "개발 전용 knowledge 환경에서 실행",  # 별도 knowledge-standard CI에서 전부 실행한다
 )
 _unexpected_skips: list[str] = []
 

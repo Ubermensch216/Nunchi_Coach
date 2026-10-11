@@ -171,7 +171,8 @@ def test_v10_upgrade_keeps_human_records_and_creates_backup(tmp_path):
     db.close()
     db.init()
     try:
-        assert db.get_meta('schema_version') == '11'
+        from app.db.migrations import SCHEMA_VERSION
+        assert db.get_meta('schema_version') == SCHEMA_VERSION
         assert db.con.execute('SELECT name,origin FROM tasks').fetchone()[:] == ('사용자 업무', 'user')
         assert path.with_name('project.db.bak-v10').exists()
         assert coverage.snapshot(db)['extraction_scope_measured_documents'] == 0

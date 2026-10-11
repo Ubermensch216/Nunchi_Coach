@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # 폴더째 올라가면 안 되는 곳. .gitignore와 같은 목록이어야 한다.
 FORBIDDEN_DIRS = (
-    ".analysis_audit", ".test_runs", ".venv", ".venv-ci", "build", "dist",
+    ".analysis_audit", ".test_runs", ".venv", ".venv-ci", ".venv-knowledge", "build", "dist",
     "data", "outputs", "wheelhouse", "htmlcov", ".pytest_cache", "__pycache__",
 )
 # 어디에 있든 올라가면 안 되는 파일. SQLite는 WAL·SHM·이행 전 백업까지 본다.

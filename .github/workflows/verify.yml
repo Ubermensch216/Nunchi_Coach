@@ -4,7 +4,7 @@ on:
   pull_request:
   workflow_dispatch:
 
-# 릴리스는 guard · test · package 가 모두 통과해야 한다.
+# 릴리스는 guard · test · knowledge-standard · package 가 모두 통과해야 한다.
 # 실제 모델 시험(NUNCHICOACH_LIVE_AI=1)과 실제 기관 문서 표본 시험은 이 러너에서
 # 돌릴 수 없다. 여기서 통과했다고 그 둘이 확인된 것은 아니다 — 보고서에 '미실행'으로 적는다.
 jobs:
@@ -39,6 +39,24 @@ jobs:
         with:
           name: verification-results
           path: .test_runs/results.xml
+
+  knowledge-standard:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install -r requirements.lock
+      - run: python -m venv .venv-knowledge
+      - run: .venv-knowledge/Scripts/python -m pip install -r requirements-knowledge-dev.lock
+      - run: .venv-knowledge/Scripts/python -m app.tools.lockfile --check --out requirements-knowledge-dev.lock
+      - run: python -m app.tools.knowledge_standard --check
+      # 기본 환경에는 개발 검증 라이브러리를 설치하지 않는다.
+      - run: .venv-knowledge/Scripts/python -c "import sys; sys.path.append(sys.base_prefix + '/Lib/site-packages'); import pytest; raise SystemExit(pytest.main(['-q','-rs','tests/test_knowledge_standards.py']))"
+        env:
+          QT_QPA_PLATFORM: offscreen
+          NUNCHICOACH_STRICT_SKIPS: '1'
 
   # 시험이 실패해도 실행물 점검은 따로 돈다 — '선행 실패로 미실행'을 남기지 않는다.
   package:

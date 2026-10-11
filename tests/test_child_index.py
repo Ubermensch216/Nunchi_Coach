@@ -183,7 +183,8 @@ def test_upgrade_v7_preserves_chunk_id_and_embedding(tmp_path):
         db.set_meta('chunks_checked', '1')
     with Database(path) as db:
         db.init()
-        assert db.get_meta('schema_version') == '11'
+        from app.db.migrations import SCHEMA_VERSION
+        assert db.get_meta('schema_version') == SCHEMA_VERSION
         assert db.get_meta('chunks_checked') is None
         assert db.con.execute('SELECT text FROM chunks WHERE id=?', (parent,)).fetchone()[0] == text
         assert db.con.execute('SELECT COUNT(*) FROM embeddings').fetchone()[0] == 1

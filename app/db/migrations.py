@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "11"
+SCHEMA_VERSION = "12"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -459,6 +459,12 @@ def _to_v11(con: sqlite3.Connection) -> None:
     add_column(con, "documents", "extraction_coverage", "extraction_coverage TEXT NOT NULL DEFAULT '{}'")
 
 
+def _to_v12(con: sqlite3.Connection) -> None:
+    from .knowledge import install
+
+    install(con)
+
+
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
@@ -470,6 +476,7 @@ STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "9": _to_v9,
     "10": _to_v10,
     "11": _to_v11,
+    "12": _to_v12,
 }
 
 

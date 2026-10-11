@@ -1,0 +1,32 @@
+@prefix kg: <urn:nunchi:knowledge:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Generated from ontology.json. Do not edit.
+kg:Task a rdfs:Class .
+kg:Case a rdfs:Class .
+kg:HistoricalCase a rdfs:Class .
+kg:Step a rdfs:Class .
+kg:Organization a rdfs:Class .
+kg:Role a rdfs:Class .
+kg:Form a rdfs:Class .
+kg:Artifact a rdfs:Class .
+kg:DocumentVersion a rdfs:Class .
+kg:Regulation a rdfs:Class .
+kg:Article a rdfs:Class .
+kg:Claim a rdfs:Class .
+kg:HAS_DOCUMENT a rdf:Property ; kg:definition "{\"domain\":[\"Task\"],\"range\":[\"DocumentVersion\"]}" .
+kg:HAS_CASE a rdf:Property ; kg:definition "{\"domain\":[\"Task\"],\"range\":[\"Case\"]}" .
+kg:HAS_STEP a rdf:Property ; kg:definition "{\"domain\":[\"Task\",\"Case\"],\"range\":[\"Step\"]}" .
+kg:PRECEDES a rdf:Property ; kg:definition "{\"acyclic\":true,\"domain\":[\"Step\"],\"range\":[\"Step\"]}" .
+kg:DOCUMENTS_CASE a rdf:Property ; kg:definition "{\"domain\":[\"DocumentVersion\"],\"range\":[\"Case\",\"HistoricalCase\"]}" .
+kg:OWNED_BY a rdf:Property ; kg:definition "{\"domain\":[\"Task\",\"Case\",\"Step\"],\"range\":[\"Organization\",\"Role\"]}" .
+kg:SUBMITTED_TO a rdf:Property ; kg:definition "{\"domain\":[\"Task\",\"Case\",\"Step\"],\"range\":[\"Organization\",\"Role\"]}" .
+kg:REQUIRES_FORM a rdf:Property ; kg:definition "{\"domain\":[\"Task\",\"Case\",\"Step\"],\"range\":[\"Form\"]}" .
+kg:PRODUCES a rdf:Property ; kg:definition "{\"domain\":[\"Case\",\"Step\"],\"range\":[\"Artifact\"]}" .
+kg:BASED_ON a rdf:Property ; kg:definition "{\"domain\":[\"Case\",\"Step\"],\"range\":[\"DocumentVersion\",\"Regulation\",\"Article\"]}" .
+kg:SUPERSEDES a rdf:Property ; kg:definition "{\"acyclic\":true,\"domain\":[\"DocumentVersion\",\"Artifact\"],\"range\":[\"DocumentVersion\",\"Artifact\"],\"same_type\":true}" .
+kg:due_date a rdf:Property ; kg:definition "{\"domain\":[\"Task\",\"Case\",\"Step\"],\"value_type\":\"date\"}" .
+kg:amount a rdf:Property ; kg:definition "{\"domain\":[\"Task\",\"Case\",\"Step\"],\"value_type\":\"decimal_amount\"}" .

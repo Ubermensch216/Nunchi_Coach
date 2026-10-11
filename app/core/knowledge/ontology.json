@@ -1,0 +1,30 @@
+{
+  "version": "1",
+  "claim_key_version": "1",
+  "namespace": "urn:nunchi:knowledge:",
+  "entities": ["Task", "Case", "HistoricalCase", "Step", "Organization", "Role", "Form", "Artifact", "DocumentVersion", "Regulation", "Article"],
+  "predicates": {
+    "HAS_DOCUMENT": {"domain": ["Task"], "range": ["DocumentVersion"]},
+    "HAS_CASE": {"domain": ["Task"], "range": ["Case"]},
+    "HAS_STEP": {"domain": ["Task", "Case"], "range": ["Step"]},
+    "PRECEDES": {"domain": ["Step"], "range": ["Step"], "acyclic": true},
+    "DOCUMENTS_CASE": {"domain": ["DocumentVersion"], "range": ["Case", "HistoricalCase"]},
+    "OWNED_BY": {"domain": ["Task", "Case", "Step"], "range": ["Organization", "Role"]},
+    "SUBMITTED_TO": {"domain": ["Task", "Case", "Step"], "range": ["Organization", "Role"]},
+    "REQUIRES_FORM": {"domain": ["Task", "Case", "Step"], "range": ["Form"]},
+    "PRODUCES": {"domain": ["Case", "Step"], "range": ["Artifact"]},
+    "BASED_ON": {"domain": ["Case", "Step"], "range": ["DocumentVersion", "Regulation", "Article"]},
+    "SUPERSEDES": {"domain": ["DocumentVersion", "Artifact"], "range": ["DocumentVersion", "Artifact"], "same_type": true, "acyclic": true},
+    "due_date": {"domain": ["Task", "Case", "Step"], "value_type": "date"},
+    "amount": {"domain": ["Task", "Case", "Step"], "value_type": "decimal_amount"}
+  },
+  "states": {
+    "origin": ["projection", "rule", "model", "human"],
+    "basis_state": ["stated", "inferred", "conflict", "missing"],
+    "applicability": ["current", "past", "unknown"],
+    "human_state": ["none", "predecessor", "successor", "recheck"],
+    "lifecycle": ["active", "stale", "retracted"]
+  },
+  "time": {"interval": "[from,to)", "unknown": null},
+  "search_defaults": {"depth": 1, "seeds": 8, "relations": 100, "supplements": 5, "budget_ms": 150, "weight": 0.2}
+}

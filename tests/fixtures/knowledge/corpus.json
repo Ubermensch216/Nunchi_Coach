@@ -1,0 +1,4433 @@
+{
+  "version": 1,
+  "source": "synthetic",
+  "review": "independent_review_pending",
+  "basis_date": "2026-10-11",
+  "groups": [
+    {
+      "id": "kg01",
+      "category": "simple",
+      "split": "tuning",
+      "task": "행정사무감사",
+      "documents": [
+        {
+          "key": "kg01-지침",
+          "path": "kg01/지침.txt",
+          "text": "1구청 행정사무감사 지침. 담당은 복지과입니다. 제출처는 1구청 기획과입니다. 제출기한은 2026-11-10입니다. 행정사무감사 신청서식을 사용합니다.",
+          "sha256": "397b212bdef804171ce7a4be1fea49b5815d1919093451f6b24b6afc1b644671",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg02",
+      "category": "simple",
+      "split": "tuning",
+      "task": "물품구매",
+      "documents": [
+        {
+          "key": "kg02-지침",
+          "path": "kg02/지침.txt",
+          "text": "2구청 물품구매 지침. 담당은 총무과입니다. 제출처는 2구청 기획과입니다. 제출기한은 2026-11-11입니다. 물품구매 신청서식을 사용합니다.",
+          "sha256": "61941f8b762ab35bd7845695d29acb19759b8e8b1a9fea645ae496d0858b60c8",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg03",
+      "category": "simple",
+      "split": "holdout",
+      "task": "청년지원",
+      "documents": [
+        {
+          "key": "kg03-지침",
+          "path": "kg03/지침.txt",
+          "text": "3구청 청년지원 지침. 담당은 회계과입니다. 제출처는 3구청 기획과입니다. 제출기한은 2026-11-12입니다. 청년지원 신청서식을 사용합니다.",
+          "sha256": "1e5353f9357fbc89398abe918c2a8cacce7105b5891eebad28f6bab6fc69f772",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg04",
+      "category": "simple",
+      "split": "holdout",
+      "task": "통계보고",
+      "documents": [
+        {
+          "key": "kg04-지침",
+          "path": "kg04/지침.txt",
+          "text": "4구청 통계보고 지침. 담당은 기획과입니다. 제출처는 4구청 기획과입니다. 제출기한은 2026-11-13입니다. 통계보고 신청서식을 사용합니다.",
+          "sha256": "88d25e947ca7fc05fe218e1d3817e2de7f350bcbf945a4bdb67e547da158dddc",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg05",
+      "category": "simple",
+      "split": "holdout",
+      "task": "안전점검",
+      "documents": [
+        {
+          "key": "kg05-지침",
+          "path": "kg05/지침.txt",
+          "text": "5구청 안전점검 지침. 담당은 복지과입니다. 제출처는 5구청 기획과입니다. 제출기한은 2026-11-14입니다. 안전점검 신청서식을 사용합니다.",
+          "sha256": "1474cc9992c98b1b1da3ca56ad66f121f22a942c0613551120716710c2f8e377",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg06",
+      "category": "simple",
+      "split": "holdout",
+      "task": "교육신청",
+      "documents": [
+        {
+          "key": "kg06-지침",
+          "path": "kg06/지침.txt",
+          "text": "6구청 교육신청 지침. 담당은 총무과입니다. 제출처는 6구청 기획과입니다. 제출기한은 2026-11-15입니다. 교육신청 신청서식을 사용합니다.",
+          "sha256": "24d0fdc4897c49e3a5ccbaa71ab8918c72691b26e26b37a27eb0e006f1489be1",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg07",
+      "category": "alias",
+      "split": "tuning",
+      "task": "복지지원",
+      "documents": [
+        {
+          "key": "kg07-지침",
+          "path": "kg07/지침.txt",
+          "text": "7구청 복지지원 지침. 담당은 회계과입니다. 제출처는 7구청 기획과입니다. 제출기한은 2026-11-16입니다. 복지지원 신청서식을 사용합니다.",
+          "sha256": "5d59769a7ce701be861fdf7bd09d44a5569b8bf6607514d0501ef6797e8c9dae",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg07-별칭",
+          "path": "kg07/별칭.txt",
+          "text": "7구청에서 복지지원은 '복지업무'로도 부릅니다. 복지업무의 담당은 7구청 회계과입니다.",
+          "sha256": "5bd1e8c35745c58a82f21704d5401de46d4d8a1173aba8213f0df6d6a730d953",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg07-동명부서",
+          "path": "kg07/동명부서.txt",
+          "text": "다른시청 회계과의 담당 업무는 환경관리입니다.",
+          "sha256": "e7b04471328813c0636d4390d8aab8168b6b3e89f85d032d74df4670b759e3b1",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg08",
+      "category": "alias",
+      "split": "holdout",
+      "task": "주민상담",
+      "documents": [
+        {
+          "key": "kg08-지침",
+          "path": "kg08/지침.txt",
+          "text": "8구청 주민상담 지침. 담당은 기획과입니다. 제출처는 8구청 기획과입니다. 제출기한은 2026-11-17입니다. 주민상담 신청서식을 사용합니다.",
+          "sha256": "d899eb5cd2e0e11078713904f935652eb096e9e281d01a6c454c63afd630eb3d",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg08-별칭",
+          "path": "kg08/별칭.txt",
+          "text": "8구청에서 주민상담은 '주민업무'로도 부릅니다. 주민업무의 담당은 8구청 기획과입니다.",
+          "sha256": "93507a4be225844d9ee9d121539a0069eb6b8c31190cf827e5e9f0dfd6dc4d36",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg08-동명부서",
+          "path": "kg08/동명부서.txt",
+          "text": "다른시청 기획과의 담당 업무는 환경관리입니다.",
+          "sha256": "e753cefb1b446219a11551dde071248e155ab011f5454851b5f9298ea4ec7cea",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg09",
+      "category": "alias",
+      "split": "holdout",
+      "task": "주차관리",
+      "documents": [
+        {
+          "key": "kg09-지침",
+          "path": "kg09/지침.txt",
+          "text": "9구청 주차관리 지침. 담당은 복지과입니다. 제출처는 9구청 기획과입니다. 제출기한은 2026-11-18입니다. 주차관리 신청서식을 사용합니다.",
+          "sha256": "9f1f1865f3c403ca224ad5e0ff32cf79796a3bb9b05c3d02353d14b8fe992031",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg09-별칭",
+          "path": "kg09/별칭.txt",
+          "text": "9구청에서 주차관리은 '주차업무'로도 부릅니다. 주차업무의 담당은 9구청 복지과입니다.",
+          "sha256": "5cdf9d1a0626b1a2003ecd25123fb2ad5ba74559b2c8ed221cb94ccdc46d5502",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg09-동명부서",
+          "path": "kg09/동명부서.txt",
+          "text": "다른시청 복지과의 담당 업무는 환경관리입니다.",
+          "sha256": "4bcb102560ab5116028a7e00362d95f66f9ae74bfefc6c87f5266f9557d6c4f3",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg10",
+      "category": "alias",
+      "split": "holdout",
+      "task": "건강검진",
+      "documents": [
+        {
+          "key": "kg10-지침",
+          "path": "kg10/지침.txt",
+          "text": "10구청 건강검진 지침. 담당은 총무과입니다. 제출처는 10구청 기획과입니다. 제출기한은 2026-11-19입니다. 건강검진 신청서식을 사용합니다.",
+          "sha256": "480f1fa84a365c8349a0f00579e1b3b54d81b4d04f4dc0ce6f3ed73a292bd996",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg10-별칭",
+          "path": "kg10/별칭.txt",
+          "text": "10구청에서 건강검진은 '건강업무'로도 부릅니다. 건강업무의 담당은 10구청 총무과입니다.",
+          "sha256": "9b3ec6ff2d0853d776a6c3e5ec6f956f1da1c64f7d13a7170375bd5ece8cc3c4",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg10-동명부서",
+          "path": "kg10/동명부서.txt",
+          "text": "다른시청 총무과의 담당 업무는 환경관리입니다.",
+          "sha256": "ffd0a87526a42a284a2f935bc33f5bffc5063a3adb2cd323ec822b4b1300951f",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg11",
+      "category": "linked",
+      "split": "tuning",
+      "task": "시설보수",
+      "documents": [
+        {
+          "key": "kg11-지침",
+          "path": "kg11/지침.txt",
+          "text": "11구청 시설보수 지침. 담당은 회계과입니다. 제출처는 11구청 기획과입니다. 제출기한은 2026-11-20입니다. 시설보수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-11 안내를 참고합니다.",
+          "sha256": "b2a97bffde885fd9edf7cd2f2a0d9d17780b9a895b2a0946cd1a2bd5247523d7",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg11-서식",
+          "path": "kg11/서식.txt",
+          "text": "공통서식-11 제출 안내. 공통서식-11은 11구청 기획과에 제출합니다.",
+          "sha256": "8f37cc231a4eb4bbe400cbf58d6b2e5c064ef4a0e3cf76268ec363c8240eaa66",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg12",
+      "category": "linked",
+      "split": "tuning",
+      "task": "보조금정산",
+      "documents": [
+        {
+          "key": "kg12-지침",
+          "path": "kg12/지침.txt",
+          "text": "12구청 보조금정산 지침. 담당은 기획과입니다. 제출처는 12구청 기획과입니다. 제출기한은 2026-11-21입니다. 보조금정산 신청서식을 사용합니다. 상세 제출 안내는 공통서식-12 안내를 참고합니다.",
+          "sha256": "ee7b6bfecc0c5cef64e423722634306eead879fce684e2f6bd33160b70acc1b0",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg12-서식",
+          "path": "kg12/서식.txt",
+          "text": "공통서식-12 제출 안내. 공통서식-12은 12구청 기획과에 제출합니다.",
+          "sha256": "e48bcc3018c0bbe79e1ce8a6e9c3e1433d7fd49b67bc0532606984d4f16e734b",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg13",
+      "category": "linked",
+      "split": "holdout",
+      "task": "민원접수",
+      "documents": [
+        {
+          "key": "kg13-지침",
+          "path": "kg13/지침.txt",
+          "text": "13구청 민원접수 지침. 담당은 복지과입니다. 제출처는 13구청 기획과입니다. 제출기한은 2026-11-22입니다. 민원접수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-13 안내를 참고합니다.",
+          "sha256": "57c2099a0d16c8cf5404fcbf600f1313a00062c5a4b0e99251a8e3cb87187614",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg13-서식",
+          "path": "kg13/서식.txt",
+          "text": "공통서식-13 제출 안내. 공통서식-13은 13구청 기획과에 제출합니다.",
+          "sha256": "ad12502c645b96f8c01946079b21b933cc52f1a255d30c48d10e4fd6298c251b",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg14",
+      "category": "linked",
+      "split": "holdout",
+      "task": "재난대응",
+      "documents": [
+        {
+          "key": "kg14-지침",
+          "path": "kg14/지침.txt",
+          "text": "14구청 재난대응 지침. 담당은 총무과입니다. 제출처는 14구청 기획과입니다. 제출기한은 2026-11-23입니다. 재난대응 신청서식을 사용합니다. 상세 제출 안내는 공통서식-14 안내를 참고합니다.",
+          "sha256": "3c09990d4a4b4bea6f934c291944b10188ff4d47f53d0a87976408a4e5d51911",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg14-서식",
+          "path": "kg14/서식.txt",
+          "text": "공통서식-14 제출 안내. 공통서식-14은 14구청 기획과에 제출합니다.",
+          "sha256": "dc0e92f5f64572b2a85b0694d4fd721efa7b49775090d0c97eb209d64240e8d0",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg15",
+      "category": "linked",
+      "split": "holdout",
+      "task": "장비교체",
+      "documents": [
+        {
+          "key": "kg15-지침",
+          "path": "kg15/지침.txt",
+          "text": "15구청 장비교체 지침. 담당은 회계과입니다. 제출처는 15구청 기획과입니다. 제출기한은 2026-11-24입니다. 장비교체 신청서식을 사용합니다. 상세 제출 안내는 공통서식-15 안내를 참고합니다.",
+          "sha256": "493cd6d0840230356a829ceb0bf62b9b20d2aea86dd188e79749d3d191507ded",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg15-서식",
+          "path": "kg15/서식.txt",
+          "text": "공통서식-15 제출 안내. 공통서식-15은 15구청 기획과에 제출합니다.",
+          "sha256": "505d11eff99da41863496fc225c6f5bc4450d10b87b82f2c0801b69b2741f157",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg16",
+      "category": "temporal",
+      "split": "tuning",
+      "task": "사업평가",
+      "documents": [
+        {
+          "key": "kg16-지침",
+          "path": "kg16/지침.txt",
+          "text": "16구청 사업평가 지침. 담당은 기획과입니다. 제출처는 16구청 기획과입니다. 제출기한은 2026-11-25입니다. 사업평가 신청서식을 사용합니다.",
+          "sha256": "c4eabef09968955c0c008681994339c95b1da5b7d1f0e41d4b43249769db2523",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg16-지난지침",
+          "path": "kg16/지난지침.txt",
+          "text": "16구청 사업평가의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "sha256": "afe13e58336e40fb5ccd7d7e32df933ec450c1d1e01a7b8b0dfdb9bcd742605f",
+          "document_year": 2025,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg16-변경안내",
+          "path": "kg16/변경안내.txt",
+          "text": "사업평가 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "sha256": "937a480a1b7d3e5fb0c5d4fda0d9db6e8005156a04ca40b7d5b02a812dbaa765",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg17",
+      "category": "temporal",
+      "split": "tuning",
+      "task": "성과보고",
+      "documents": [
+        {
+          "key": "kg17-지침",
+          "path": "kg17/지침.txt",
+          "text": "17구청 성과보고 지침. 담당은 복지과입니다. 제출처는 17구청 기획과입니다. 제출기한은 2026-11-26입니다. 성과보고 신청서식을 사용합니다.",
+          "sha256": "f067f2bb8985daeda04a894d949b5b0d3ff4d4d71a31c02a9cc7b7822cf730c6",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg17-지난지침",
+          "path": "kg17/지난지침.txt",
+          "text": "17구청 성과보고의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "sha256": "c77a317ba597870a97ac767e4b0fd5152fc74235296d9c437b5a025720c4c40f",
+          "document_year": 2025,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg17-변경안내",
+          "path": "kg17/변경안내.txt",
+          "text": "성과보고 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "sha256": "f6dddc689346faebf5ee0d8292f6752e05f304c5a2eb2ab7710a348a83193198",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg18",
+      "category": "temporal",
+      "split": "holdout",
+      "task": "예산요구",
+      "documents": [
+        {
+          "key": "kg18-지침",
+          "path": "kg18/지침.txt",
+          "text": "18구청 예산요구 지침. 담당은 총무과입니다. 제출처는 18구청 기획과입니다. 제출기한은 2026-11-27입니다. 예산요구 신청서식을 사용합니다.",
+          "sha256": "4e4c91a421cfcb0660062cb96201d92465faa0c37e3ed4b7326a646f34367285",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg18-지난지침",
+          "path": "kg18/지난지침.txt",
+          "text": "18구청 예산요구의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "sha256": "6f9cf4b17a8ba2d5caab0ccc229f0b97a06744be6c177e94702d6c7769b9daa8",
+          "document_year": 2025,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg18-변경안내",
+          "path": "kg18/변경안내.txt",
+          "text": "예산요구 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "sha256": "f21871e388c000ebcf30ee20aba20178f539ee1c9b207494d220ecb9a41b6797",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg19",
+      "category": "temporal",
+      "split": "holdout",
+      "task": "자산조사",
+      "documents": [
+        {
+          "key": "kg19-지침",
+          "path": "kg19/지침.txt",
+          "text": "19구청 자산조사 지침. 담당은 회계과입니다. 제출처는 19구청 기획과입니다. 제출기한은 2026-11-28입니다. 자산조사 신청서식을 사용합니다.",
+          "sha256": "898ddeacfd5b8206153404182b302cdd21a5fa6173eba657e76c84567542bc2c",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg19-지난지침",
+          "path": "kg19/지난지침.txt",
+          "text": "19구청 자산조사의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "sha256": "399f2975469274e985d5d7733ce9d4b3d4de5f987d7ec072b9c7bb13e491b900",
+          "document_year": 2025,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg19-변경안내",
+          "path": "kg19/변경안내.txt",
+          "text": "자산조사 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "sha256": "58f5009edbfee04c6ee169df64caaf5bc5d7ca0e429d218d5b7bd1235481f746",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg20",
+      "category": "temporal",
+      "split": "holdout",
+      "task": "인력배치",
+      "documents": [
+        {
+          "key": "kg20-지침",
+          "path": "kg20/지침.txt",
+          "text": "20구청 인력배치 지침. 담당은 기획과입니다. 제출처는 20구청 기획과입니다. 제출기한은 2026-11-29입니다. 인력배치 신청서식을 사용합니다.",
+          "sha256": "53222450be81cfbfc6627afbf63ca501e4d69ec8a59dc20fa605c445d05a3478",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg20-지난지침",
+          "path": "kg20/지난지침.txt",
+          "text": "20구청 인력배치의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "sha256": "e50c1d0f7c64b175c244801c8f1038336c5ccceb4632331fc1d3dceb95320497",
+          "document_year": 2025,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg20-변경안내",
+          "path": "kg20/변경안내.txt",
+          "text": "인력배치 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "sha256": "66d08402380ed4a8eab37a427e0ef5e761e67be497aa4c89155037fb1ca6dbf2",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg21",
+      "category": "missing",
+      "split": "tuning",
+      "task": "행사계획",
+      "documents": [
+        {
+          "key": "kg21-지침",
+          "path": "kg21/지침.txt",
+          "text": "21구청 행사계획 지침. 담당은 복지과입니다. 제출처는 21구청 기획과입니다. 제출기한은 2026-11-10입니다. 행사계획 신청서식을 사용합니다.",
+          "sha256": "2eef524aca46ff3a4e7acef7e53e09c26f8e9496106b11d96e782a38b68fd906",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg21-참고",
+          "path": "kg21/참고.txt",
+          "text": "행사계획의 담당·제출처 자료만 있습니다. 예산·수량·법적 효력·승인·완료 기록은 없습니다.",
+          "sha256": "c9c75e23ee9019e1638160966c47eb4046680f4b8609a704cdd41ed8899fc807",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg22",
+      "category": "missing",
+      "split": "holdout",
+      "task": "계약변경",
+      "documents": [
+        {
+          "key": "kg22-지침",
+          "path": "kg22/지침.txt",
+          "text": "22구청 계약변경 지침. 담당은 총무과입니다. 제출처는 22구청 기획과입니다. 제출기한은 2026-11-11입니다. 계약변경 신청서식을 사용합니다.",
+          "sha256": "e60040bf6fa0496868582a8a2ede456389d94cfac79d13c8250b07ab9d096a90",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg22-참고",
+          "path": "kg22/참고.txt",
+          "text": "계약변경의 담당·제출처 자료만 있습니다. 예산·수량·법적 효력·승인·완료 기록은 없습니다.",
+          "sha256": "e0f092a48ba15d093b598e847283d38f18c95c31fe3f54b090ad65ac237252f4",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg23",
+      "category": "missing",
+      "split": "holdout",
+      "task": "수요조사",
+      "documents": [
+        {
+          "key": "kg23-지침",
+          "path": "kg23/지침.txt",
+          "text": "23구청 수요조사 지침. 담당은 회계과입니다. 제출처는 23구청 기획과입니다. 제출기한은 2026-11-12입니다. 수요조사 신청서식을 사용합니다.",
+          "sha256": "d22d39d12d3911996bb3adedca242056a7ce3a7541bc3d61c6ba15450bf83c3a",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg23-참고",
+          "path": "kg23/참고.txt",
+          "text": "수요조사의 담당·제출처 자료만 있습니다. 예산·수량·법적 효력·승인·완료 기록은 없습니다.",
+          "sha256": "0a2f900207be75083407d18b63b6119c515a05ac830c965914fc5c4a3bcb7ddf",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "kg24",
+      "category": "missing",
+      "split": "holdout",
+      "task": "실적취합",
+      "documents": [
+        {
+          "key": "kg24-지침",
+          "path": "kg24/지침.txt",
+          "text": "24구청 실적취합 지침. 담당은 기획과입니다. 제출처는 24구청 기획과입니다. 제출기한은 2026-11-13입니다. 실적취합 신청서식을 사용합니다.",
+          "sha256": "95b98c48f522949fc486fc504c1c5a22e617ad18fa02a331bba1ab48b1f4b5ca",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "kg24-참고",
+          "path": "kg24/참고.txt",
+          "text": "실적취합의 담당·제출처 자료만 있습니다. 예산·수량·법적 효력·승인·완료 기록은 없습니다.",
+          "sha256": "45b720ccab772c41b63b401e8337b1d336dee42a89576dd8908410e264135fe9",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "kg01-q1",
+      "group": "kg01",
+      "category": "simple",
+      "split": "tuning",
+      "question": "행정사무감사 담당은?",
+      "allowed_documents": [
+        "kg01-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg01-지침",
+          "sha256": "397b212bdef804171ce7a4be1fea49b5815d1919093451f6b24b6afc1b644671",
+          "locator": "본문 1",
+          "exact_quote": "1구청 행정사무감사 지침. 담당은 복지과입니다. 제출처는 1구청 기획과입니다. 제출기한은 2026-11-10입니다. 행정사무감사 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 84
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg01-q2",
+      "group": "kg01",
+      "category": "simple",
+      "split": "tuning",
+      "question": "행정사무감사 제출처는?",
+      "allowed_documents": [
+        "kg01-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg01-지침",
+          "sha256": "397b212bdef804171ce7a4be1fea49b5815d1919093451f6b24b6afc1b644671",
+          "locator": "본문 1",
+          "exact_quote": "1구청 행정사무감사 지침. 담당은 복지과입니다. 제출처는 1구청 기획과입니다. 제출기한은 2026-11-10입니다. 행정사무감사 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 84
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg01-q3",
+      "group": "kg01",
+      "category": "simple",
+      "split": "tuning",
+      "question": "행정사무감사 제출기한은?",
+      "allowed_documents": [
+        "kg01-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg01-지침",
+          "sha256": "397b212bdef804171ce7a4be1fea49b5815d1919093451f6b24b6afc1b644671",
+          "locator": "본문 1",
+          "exact_quote": "1구청 행정사무감사 지침. 담당은 복지과입니다. 제출처는 1구청 기획과입니다. 제출기한은 2026-11-10입니다. 행정사무감사 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 84
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg01-q4",
+      "group": "kg01",
+      "category": "simple",
+      "split": "tuning",
+      "question": "행정사무감사 신청서식은?",
+      "allowed_documents": [
+        "kg01-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg01-지침",
+          "sha256": "397b212bdef804171ce7a4be1fea49b5815d1919093451f6b24b6afc1b644671",
+          "locator": "본문 1",
+          "exact_quote": "1구청 행정사무감사 지침. 담당은 복지과입니다. 제출처는 1구청 기획과입니다. 제출기한은 2026-11-10입니다. 행정사무감사 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 84
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg01-q5",
+      "group": "kg01",
+      "category": "simple",
+      "split": "tuning",
+      "question": "1구청 행정사무감사 지침을 찾아줘",
+      "allowed_documents": [
+        "kg01-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg01-지침",
+          "sha256": "397b212bdef804171ce7a4be1fea49b5815d1919093451f6b24b6afc1b644671",
+          "locator": "본문 1",
+          "exact_quote": "1구청 행정사무감사 지침. 담당은 복지과입니다. 제출처는 1구청 기획과입니다. 제출기한은 2026-11-10입니다. 행정사무감사 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 84
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg02-q1",
+      "group": "kg02",
+      "category": "simple",
+      "split": "tuning",
+      "question": "물품구매 담당은?",
+      "allowed_documents": [
+        "kg02-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg02-지침",
+          "sha256": "61941f8b762ab35bd7845695d29acb19759b8e8b1a9fea645ae496d0858b60c8",
+          "locator": "본문 1",
+          "exact_quote": "2구청 물품구매 지침. 담당은 총무과입니다. 제출처는 2구청 기획과입니다. 제출기한은 2026-11-11입니다. 물품구매 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg02-q2",
+      "group": "kg02",
+      "category": "simple",
+      "split": "tuning",
+      "question": "물품구매 제출처는?",
+      "allowed_documents": [
+        "kg02-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg02-지침",
+          "sha256": "61941f8b762ab35bd7845695d29acb19759b8e8b1a9fea645ae496d0858b60c8",
+          "locator": "본문 1",
+          "exact_quote": "2구청 물품구매 지침. 담당은 총무과입니다. 제출처는 2구청 기획과입니다. 제출기한은 2026-11-11입니다. 물품구매 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg02-q3",
+      "group": "kg02",
+      "category": "simple",
+      "split": "tuning",
+      "question": "물품구매 제출기한은?",
+      "allowed_documents": [
+        "kg02-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg02-지침",
+          "sha256": "61941f8b762ab35bd7845695d29acb19759b8e8b1a9fea645ae496d0858b60c8",
+          "locator": "본문 1",
+          "exact_quote": "2구청 물품구매 지침. 담당은 총무과입니다. 제출처는 2구청 기획과입니다. 제출기한은 2026-11-11입니다. 물품구매 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg02-q4",
+      "group": "kg02",
+      "category": "simple",
+      "split": "tuning",
+      "question": "물품구매 신청서식은?",
+      "allowed_documents": [
+        "kg02-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg02-지침",
+          "sha256": "61941f8b762ab35bd7845695d29acb19759b8e8b1a9fea645ae496d0858b60c8",
+          "locator": "본문 1",
+          "exact_quote": "2구청 물품구매 지침. 담당은 총무과입니다. 제출처는 2구청 기획과입니다. 제출기한은 2026-11-11입니다. 물품구매 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg02-q5",
+      "group": "kg02",
+      "category": "simple",
+      "split": "tuning",
+      "question": "2구청 물품구매 지침을 찾아줘",
+      "allowed_documents": [
+        "kg02-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg02-지침",
+          "sha256": "61941f8b762ab35bd7845695d29acb19759b8e8b1a9fea645ae496d0858b60c8",
+          "locator": "본문 1",
+          "exact_quote": "2구청 물품구매 지침. 담당은 총무과입니다. 제출처는 2구청 기획과입니다. 제출기한은 2026-11-11입니다. 물품구매 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg03-q1",
+      "group": "kg03",
+      "category": "simple",
+      "split": "holdout",
+      "question": "청년지원 담당은?",
+      "allowed_documents": [
+        "kg03-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg03-지침",
+          "sha256": "1e5353f9357fbc89398abe918c2a8cacce7105b5891eebad28f6bab6fc69f772",
+          "locator": "본문 1",
+          "exact_quote": "3구청 청년지원 지침. 담당은 회계과입니다. 제출처는 3구청 기획과입니다. 제출기한은 2026-11-12입니다. 청년지원 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg03-q2",
+      "group": "kg03",
+      "category": "simple",
+      "split": "holdout",
+      "question": "청년지원 제출처는?",
+      "allowed_documents": [
+        "kg03-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg03-지침",
+          "sha256": "1e5353f9357fbc89398abe918c2a8cacce7105b5891eebad28f6bab6fc69f772",
+          "locator": "본문 1",
+          "exact_quote": "3구청 청년지원 지침. 담당은 회계과입니다. 제출처는 3구청 기획과입니다. 제출기한은 2026-11-12입니다. 청년지원 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg03-q3",
+      "group": "kg03",
+      "category": "simple",
+      "split": "holdout",
+      "question": "청년지원 제출기한은?",
+      "allowed_documents": [
+        "kg03-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg03-지침",
+          "sha256": "1e5353f9357fbc89398abe918c2a8cacce7105b5891eebad28f6bab6fc69f772",
+          "locator": "본문 1",
+          "exact_quote": "3구청 청년지원 지침. 담당은 회계과입니다. 제출처는 3구청 기획과입니다. 제출기한은 2026-11-12입니다. 청년지원 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg03-q4",
+      "group": "kg03",
+      "category": "simple",
+      "split": "holdout",
+      "question": "청년지원 신청서식은?",
+      "allowed_documents": [
+        "kg03-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg03-지침",
+          "sha256": "1e5353f9357fbc89398abe918c2a8cacce7105b5891eebad28f6bab6fc69f772",
+          "locator": "본문 1",
+          "exact_quote": "3구청 청년지원 지침. 담당은 회계과입니다. 제출처는 3구청 기획과입니다. 제출기한은 2026-11-12입니다. 청년지원 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg03-q5",
+      "group": "kg03",
+      "category": "simple",
+      "split": "holdout",
+      "question": "3구청 청년지원 지침을 찾아줘",
+      "allowed_documents": [
+        "kg03-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg03-지침",
+          "sha256": "1e5353f9357fbc89398abe918c2a8cacce7105b5891eebad28f6bab6fc69f772",
+          "locator": "본문 1",
+          "exact_quote": "3구청 청년지원 지침. 담당은 회계과입니다. 제출처는 3구청 기획과입니다. 제출기한은 2026-11-12입니다. 청년지원 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg04-q1",
+      "group": "kg04",
+      "category": "simple",
+      "split": "holdout",
+      "question": "통계보고 담당은?",
+      "allowed_documents": [
+        "kg04-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg04-지침",
+          "sha256": "88d25e947ca7fc05fe218e1d3817e2de7f350bcbf945a4bdb67e547da158dddc",
+          "locator": "본문 1",
+          "exact_quote": "4구청 통계보고 지침. 담당은 기획과입니다. 제출처는 4구청 기획과입니다. 제출기한은 2026-11-13입니다. 통계보고 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg04-q2",
+      "group": "kg04",
+      "category": "simple",
+      "split": "holdout",
+      "question": "통계보고 제출처는?",
+      "allowed_documents": [
+        "kg04-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg04-지침",
+          "sha256": "88d25e947ca7fc05fe218e1d3817e2de7f350bcbf945a4bdb67e547da158dddc",
+          "locator": "본문 1",
+          "exact_quote": "4구청 통계보고 지침. 담당은 기획과입니다. 제출처는 4구청 기획과입니다. 제출기한은 2026-11-13입니다. 통계보고 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg04-q3",
+      "group": "kg04",
+      "category": "simple",
+      "split": "holdout",
+      "question": "통계보고 제출기한은?",
+      "allowed_documents": [
+        "kg04-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg04-지침",
+          "sha256": "88d25e947ca7fc05fe218e1d3817e2de7f350bcbf945a4bdb67e547da158dddc",
+          "locator": "본문 1",
+          "exact_quote": "4구청 통계보고 지침. 담당은 기획과입니다. 제출처는 4구청 기획과입니다. 제출기한은 2026-11-13입니다. 통계보고 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg04-q4",
+      "group": "kg04",
+      "category": "simple",
+      "split": "holdout",
+      "question": "통계보고 신청서식은?",
+      "allowed_documents": [
+        "kg04-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg04-지침",
+          "sha256": "88d25e947ca7fc05fe218e1d3817e2de7f350bcbf945a4bdb67e547da158dddc",
+          "locator": "본문 1",
+          "exact_quote": "4구청 통계보고 지침. 담당은 기획과입니다. 제출처는 4구청 기획과입니다. 제출기한은 2026-11-13입니다. 통계보고 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg04-q5",
+      "group": "kg04",
+      "category": "simple",
+      "split": "holdout",
+      "question": "4구청 통계보고 지침을 찾아줘",
+      "allowed_documents": [
+        "kg04-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg04-지침",
+          "sha256": "88d25e947ca7fc05fe218e1d3817e2de7f350bcbf945a4bdb67e547da158dddc",
+          "locator": "본문 1",
+          "exact_quote": "4구청 통계보고 지침. 담당은 기획과입니다. 제출처는 4구청 기획과입니다. 제출기한은 2026-11-13입니다. 통계보고 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg05-q1",
+      "group": "kg05",
+      "category": "simple",
+      "split": "holdout",
+      "question": "안전점검 담당은?",
+      "allowed_documents": [
+        "kg05-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg05-지침",
+          "sha256": "1474cc9992c98b1b1da3ca56ad66f121f22a942c0613551120716710c2f8e377",
+          "locator": "본문 1",
+          "exact_quote": "5구청 안전점검 지침. 담당은 복지과입니다. 제출처는 5구청 기획과입니다. 제출기한은 2026-11-14입니다. 안전점검 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg05-q2",
+      "group": "kg05",
+      "category": "simple",
+      "split": "holdout",
+      "question": "안전점검 제출처는?",
+      "allowed_documents": [
+        "kg05-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg05-지침",
+          "sha256": "1474cc9992c98b1b1da3ca56ad66f121f22a942c0613551120716710c2f8e377",
+          "locator": "본문 1",
+          "exact_quote": "5구청 안전점검 지침. 담당은 복지과입니다. 제출처는 5구청 기획과입니다. 제출기한은 2026-11-14입니다. 안전점검 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg05-q3",
+      "group": "kg05",
+      "category": "simple",
+      "split": "holdout",
+      "question": "안전점검 제출기한은?",
+      "allowed_documents": [
+        "kg05-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg05-지침",
+          "sha256": "1474cc9992c98b1b1da3ca56ad66f121f22a942c0613551120716710c2f8e377",
+          "locator": "본문 1",
+          "exact_quote": "5구청 안전점검 지침. 담당은 복지과입니다. 제출처는 5구청 기획과입니다. 제출기한은 2026-11-14입니다. 안전점검 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg05-q4",
+      "group": "kg05",
+      "category": "simple",
+      "split": "holdout",
+      "question": "안전점검 신청서식은?",
+      "allowed_documents": [
+        "kg05-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg05-지침",
+          "sha256": "1474cc9992c98b1b1da3ca56ad66f121f22a942c0613551120716710c2f8e377",
+          "locator": "본문 1",
+          "exact_quote": "5구청 안전점검 지침. 담당은 복지과입니다. 제출처는 5구청 기획과입니다. 제출기한은 2026-11-14입니다. 안전점검 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg05-q5",
+      "group": "kg05",
+      "category": "simple",
+      "split": "holdout",
+      "question": "5구청 안전점검 지침을 찾아줘",
+      "allowed_documents": [
+        "kg05-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg05-지침",
+          "sha256": "1474cc9992c98b1b1da3ca56ad66f121f22a942c0613551120716710c2f8e377",
+          "locator": "본문 1",
+          "exact_quote": "5구청 안전점검 지침. 담당은 복지과입니다. 제출처는 5구청 기획과입니다. 제출기한은 2026-11-14입니다. 안전점검 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg06-q1",
+      "group": "kg06",
+      "category": "simple",
+      "split": "holdout",
+      "question": "교육신청 담당은?",
+      "allowed_documents": [
+        "kg06-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg06-지침",
+          "sha256": "24d0fdc4897c49e3a5ccbaa71ab8918c72691b26e26b37a27eb0e006f1489be1",
+          "locator": "본문 1",
+          "exact_quote": "6구청 교육신청 지침. 담당은 총무과입니다. 제출처는 6구청 기획과입니다. 제출기한은 2026-11-15입니다. 교육신청 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg06-q2",
+      "group": "kg06",
+      "category": "simple",
+      "split": "holdout",
+      "question": "교육신청 제출처는?",
+      "allowed_documents": [
+        "kg06-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg06-지침",
+          "sha256": "24d0fdc4897c49e3a5ccbaa71ab8918c72691b26e26b37a27eb0e006f1489be1",
+          "locator": "본문 1",
+          "exact_quote": "6구청 교육신청 지침. 담당은 총무과입니다. 제출처는 6구청 기획과입니다. 제출기한은 2026-11-15입니다. 교육신청 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg06-q3",
+      "group": "kg06",
+      "category": "simple",
+      "split": "holdout",
+      "question": "교육신청 제출기한은?",
+      "allowed_documents": [
+        "kg06-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg06-지침",
+          "sha256": "24d0fdc4897c49e3a5ccbaa71ab8918c72691b26e26b37a27eb0e006f1489be1",
+          "locator": "본문 1",
+          "exact_quote": "6구청 교육신청 지침. 담당은 총무과입니다. 제출처는 6구청 기획과입니다. 제출기한은 2026-11-15입니다. 교육신청 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg06-q4",
+      "group": "kg06",
+      "category": "simple",
+      "split": "holdout",
+      "question": "교육신청 신청서식은?",
+      "allowed_documents": [
+        "kg06-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg06-지침",
+          "sha256": "24d0fdc4897c49e3a5ccbaa71ab8918c72691b26e26b37a27eb0e006f1489be1",
+          "locator": "본문 1",
+          "exact_quote": "6구청 교육신청 지침. 담당은 총무과입니다. 제출처는 6구청 기획과입니다. 제출기한은 2026-11-15입니다. 교육신청 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg06-q5",
+      "group": "kg06",
+      "category": "simple",
+      "split": "holdout",
+      "question": "6구청 교육신청 지침을 찾아줘",
+      "allowed_documents": [
+        "kg06-지침"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg06-지침",
+          "sha256": "24d0fdc4897c49e3a5ccbaa71ab8918c72691b26e26b37a27eb0e006f1489be1",
+          "locator": "본문 1",
+          "exact_quote": "6구청 교육신청 지침. 담당은 총무과입니다. 제출처는 6구청 기획과입니다. 제출기한은 2026-11-15입니다. 교육신청 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg07-q1",
+      "group": "kg07",
+      "category": "alias",
+      "split": "tuning",
+      "question": "복지업무 담당은?",
+      "allowed_documents": [
+        "kg07-지침",
+        "kg07-별칭",
+        "kg07-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg07-지침",
+          "sha256": "5d59769a7ce701be861fdf7bd09d44a5569b8bf6607514d0501ef6797e8c9dae",
+          "locator": "본문 1",
+          "exact_quote": "7구청 복지지원 지침. 담당은 회계과입니다. 제출처는 7구청 기획과입니다. 제출기한은 2026-11-16입니다. 복지지원 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg07-별칭",
+          "sha256": "5bd1e8c35745c58a82f21704d5401de46d4d8a1173aba8213f0df6d6a730d953",
+          "locator": "본문 1",
+          "exact_quote": "7구청에서 복지지원은 '복지업무'로도 부릅니다. 복지업무의 담당은 7구청 회계과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg07-q2",
+      "group": "kg07",
+      "category": "alias",
+      "split": "tuning",
+      "question": "7구청 회계과 담당 업무는?",
+      "allowed_documents": [
+        "kg07-지침",
+        "kg07-별칭",
+        "kg07-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg07-지침",
+          "sha256": "5d59769a7ce701be861fdf7bd09d44a5569b8bf6607514d0501ef6797e8c9dae",
+          "locator": "본문 1",
+          "exact_quote": "7구청 복지지원 지침. 담당은 회계과입니다. 제출처는 7구청 기획과입니다. 제출기한은 2026-11-16입니다. 복지지원 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg07-별칭",
+          "sha256": "5bd1e8c35745c58a82f21704d5401de46d4d8a1173aba8213f0df6d6a730d953",
+          "locator": "본문 1",
+          "exact_quote": "7구청에서 복지지원은 '복지업무'로도 부릅니다. 복지업무의 담당은 7구청 회계과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg07-q3",
+      "group": "kg07",
+      "category": "alias",
+      "split": "tuning",
+      "question": "복지업무와 복지지원은 같은 업무인가?",
+      "allowed_documents": [
+        "kg07-지침",
+        "kg07-별칭",
+        "kg07-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg07-지침",
+          "sha256": "5d59769a7ce701be861fdf7bd09d44a5569b8bf6607514d0501ef6797e8c9dae",
+          "locator": "본문 1",
+          "exact_quote": "7구청 복지지원 지침. 담당은 회계과입니다. 제출처는 7구청 기획과입니다. 제출기한은 2026-11-16입니다. 복지지원 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg07-별칭",
+          "sha256": "5bd1e8c35745c58a82f21704d5401de46d4d8a1173aba8213f0df6d6a730d953",
+          "locator": "본문 1",
+          "exact_quote": "7구청에서 복지지원은 '복지업무'로도 부릅니다. 복지업무의 담당은 7구청 회계과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg07-q4",
+      "group": "kg07",
+      "category": "alias",
+      "split": "tuning",
+      "question": "복지지원의 기관은?",
+      "allowed_documents": [
+        "kg07-지침",
+        "kg07-별칭",
+        "kg07-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg07-지침",
+          "sha256": "5d59769a7ce701be861fdf7bd09d44a5569b8bf6607514d0501ef6797e8c9dae",
+          "locator": "본문 1",
+          "exact_quote": "7구청 복지지원 지침. 담당은 회계과입니다. 제출처는 7구청 기획과입니다. 제출기한은 2026-11-16입니다. 복지지원 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg07-별칭",
+          "sha256": "5bd1e8c35745c58a82f21704d5401de46d4d8a1173aba8213f0df6d6a730d953",
+          "locator": "본문 1",
+          "exact_quote": "7구청에서 복지지원은 '복지업무'로도 부릅니다. 복지업무의 담당은 7구청 회계과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg07-q5",
+      "group": "kg07",
+      "category": "alias",
+      "split": "tuning",
+      "question": "다른시청 회계과가 복지지원을 담당하나?",
+      "allowed_documents": [
+        "kg07-지침",
+        "kg07-별칭",
+        "kg07-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg07-동명부서",
+          "sha256": "e7b04471328813c0636d4390d8aab8168b6b3e89f85d032d74df4670b759e3b1",
+          "locator": "본문 1",
+          "exact_quote": "다른시청 회계과의 담당 업무는 환경관리입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 25
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg08-q1",
+      "group": "kg08",
+      "category": "alias",
+      "split": "holdout",
+      "question": "주민업무 담당은?",
+      "allowed_documents": [
+        "kg08-지침",
+        "kg08-별칭",
+        "kg08-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg08-지침",
+          "sha256": "d899eb5cd2e0e11078713904f935652eb096e9e281d01a6c454c63afd630eb3d",
+          "locator": "본문 1",
+          "exact_quote": "8구청 주민상담 지침. 담당은 기획과입니다. 제출처는 8구청 기획과입니다. 제출기한은 2026-11-17입니다. 주민상담 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg08-별칭",
+          "sha256": "93507a4be225844d9ee9d121539a0069eb6b8c31190cf827e5e9f0dfd6dc4d36",
+          "locator": "본문 1",
+          "exact_quote": "8구청에서 주민상담은 '주민업무'로도 부릅니다. 주민업무의 담당은 8구청 기획과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg08-q2",
+      "group": "kg08",
+      "category": "alias",
+      "split": "holdout",
+      "question": "8구청 기획과 담당 업무는?",
+      "allowed_documents": [
+        "kg08-지침",
+        "kg08-별칭",
+        "kg08-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg08-지침",
+          "sha256": "d899eb5cd2e0e11078713904f935652eb096e9e281d01a6c454c63afd630eb3d",
+          "locator": "본문 1",
+          "exact_quote": "8구청 주민상담 지침. 담당은 기획과입니다. 제출처는 8구청 기획과입니다. 제출기한은 2026-11-17입니다. 주민상담 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg08-별칭",
+          "sha256": "93507a4be225844d9ee9d121539a0069eb6b8c31190cf827e5e9f0dfd6dc4d36",
+          "locator": "본문 1",
+          "exact_quote": "8구청에서 주민상담은 '주민업무'로도 부릅니다. 주민업무의 담당은 8구청 기획과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg08-q3",
+      "group": "kg08",
+      "category": "alias",
+      "split": "holdout",
+      "question": "주민업무와 주민상담은 같은 업무인가?",
+      "allowed_documents": [
+        "kg08-지침",
+        "kg08-별칭",
+        "kg08-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg08-지침",
+          "sha256": "d899eb5cd2e0e11078713904f935652eb096e9e281d01a6c454c63afd630eb3d",
+          "locator": "본문 1",
+          "exact_quote": "8구청 주민상담 지침. 담당은 기획과입니다. 제출처는 8구청 기획과입니다. 제출기한은 2026-11-17입니다. 주민상담 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg08-별칭",
+          "sha256": "93507a4be225844d9ee9d121539a0069eb6b8c31190cf827e5e9f0dfd6dc4d36",
+          "locator": "본문 1",
+          "exact_quote": "8구청에서 주민상담은 '주민업무'로도 부릅니다. 주민업무의 담당은 8구청 기획과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg08-q4",
+      "group": "kg08",
+      "category": "alias",
+      "split": "holdout",
+      "question": "주민상담의 기관은?",
+      "allowed_documents": [
+        "kg08-지침",
+        "kg08-별칭",
+        "kg08-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg08-지침",
+          "sha256": "d899eb5cd2e0e11078713904f935652eb096e9e281d01a6c454c63afd630eb3d",
+          "locator": "본문 1",
+          "exact_quote": "8구청 주민상담 지침. 담당은 기획과입니다. 제출처는 8구청 기획과입니다. 제출기한은 2026-11-17입니다. 주민상담 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg08-별칭",
+          "sha256": "93507a4be225844d9ee9d121539a0069eb6b8c31190cf827e5e9f0dfd6dc4d36",
+          "locator": "본문 1",
+          "exact_quote": "8구청에서 주민상담은 '주민업무'로도 부릅니다. 주민업무의 담당은 8구청 기획과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg08-q5",
+      "group": "kg08",
+      "category": "alias",
+      "split": "holdout",
+      "question": "다른시청 기획과가 주민상담을 담당하나?",
+      "allowed_documents": [
+        "kg08-지침",
+        "kg08-별칭",
+        "kg08-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg08-동명부서",
+          "sha256": "e753cefb1b446219a11551dde071248e155ab011f5454851b5f9298ea4ec7cea",
+          "locator": "본문 1",
+          "exact_quote": "다른시청 기획과의 담당 업무는 환경관리입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 25
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg09-q1",
+      "group": "kg09",
+      "category": "alias",
+      "split": "holdout",
+      "question": "주차업무 담당은?",
+      "allowed_documents": [
+        "kg09-지침",
+        "kg09-별칭",
+        "kg09-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg09-지침",
+          "sha256": "9f1f1865f3c403ca224ad5e0ff32cf79796a3bb9b05c3d02353d14b8fe992031",
+          "locator": "본문 1",
+          "exact_quote": "9구청 주차관리 지침. 담당은 복지과입니다. 제출처는 9구청 기획과입니다. 제출기한은 2026-11-18입니다. 주차관리 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg09-별칭",
+          "sha256": "5cdf9d1a0626b1a2003ecd25123fb2ad5ba74559b2c8ed221cb94ccdc46d5502",
+          "locator": "본문 1",
+          "exact_quote": "9구청에서 주차관리은 '주차업무'로도 부릅니다. 주차업무의 담당은 9구청 복지과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg09-q2",
+      "group": "kg09",
+      "category": "alias",
+      "split": "holdout",
+      "question": "9구청 복지과 담당 업무는?",
+      "allowed_documents": [
+        "kg09-지침",
+        "kg09-별칭",
+        "kg09-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg09-지침",
+          "sha256": "9f1f1865f3c403ca224ad5e0ff32cf79796a3bb9b05c3d02353d14b8fe992031",
+          "locator": "본문 1",
+          "exact_quote": "9구청 주차관리 지침. 담당은 복지과입니다. 제출처는 9구청 기획과입니다. 제출기한은 2026-11-18입니다. 주차관리 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg09-별칭",
+          "sha256": "5cdf9d1a0626b1a2003ecd25123fb2ad5ba74559b2c8ed221cb94ccdc46d5502",
+          "locator": "본문 1",
+          "exact_quote": "9구청에서 주차관리은 '주차업무'로도 부릅니다. 주차업무의 담당은 9구청 복지과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg09-q3",
+      "group": "kg09",
+      "category": "alias",
+      "split": "holdout",
+      "question": "주차업무와 주차관리은 같은 업무인가?",
+      "allowed_documents": [
+        "kg09-지침",
+        "kg09-별칭",
+        "kg09-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg09-지침",
+          "sha256": "9f1f1865f3c403ca224ad5e0ff32cf79796a3bb9b05c3d02353d14b8fe992031",
+          "locator": "본문 1",
+          "exact_quote": "9구청 주차관리 지침. 담당은 복지과입니다. 제출처는 9구청 기획과입니다. 제출기한은 2026-11-18입니다. 주차관리 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg09-별칭",
+          "sha256": "5cdf9d1a0626b1a2003ecd25123fb2ad5ba74559b2c8ed221cb94ccdc46d5502",
+          "locator": "본문 1",
+          "exact_quote": "9구청에서 주차관리은 '주차업무'로도 부릅니다. 주차업무의 담당은 9구청 복지과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg09-q4",
+      "group": "kg09",
+      "category": "alias",
+      "split": "holdout",
+      "question": "주차관리의 기관은?",
+      "allowed_documents": [
+        "kg09-지침",
+        "kg09-별칭",
+        "kg09-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg09-지침",
+          "sha256": "9f1f1865f3c403ca224ad5e0ff32cf79796a3bb9b05c3d02353d14b8fe992031",
+          "locator": "본문 1",
+          "exact_quote": "9구청 주차관리 지침. 담당은 복지과입니다. 제출처는 9구청 기획과입니다. 제출기한은 2026-11-18입니다. 주차관리 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 80
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg09-별칭",
+          "sha256": "5cdf9d1a0626b1a2003ecd25123fb2ad5ba74559b2c8ed221cb94ccdc46d5502",
+          "locator": "본문 1",
+          "exact_quote": "9구청에서 주차관리은 '주차업무'로도 부릅니다. 주차업무의 담당은 9구청 복지과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg09-q5",
+      "group": "kg09",
+      "category": "alias",
+      "split": "holdout",
+      "question": "다른시청 복지과가 주차관리을 담당하나?",
+      "allowed_documents": [
+        "kg09-지침",
+        "kg09-별칭",
+        "kg09-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg09-동명부서",
+          "sha256": "4bcb102560ab5116028a7e00362d95f66f9ae74bfefc6c87f5266f9557d6c4f3",
+          "locator": "본문 1",
+          "exact_quote": "다른시청 복지과의 담당 업무는 환경관리입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 25
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg10-q1",
+      "group": "kg10",
+      "category": "alias",
+      "split": "holdout",
+      "question": "건강업무 담당은?",
+      "allowed_documents": [
+        "kg10-지침",
+        "kg10-별칭",
+        "kg10-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg10-지침",
+          "sha256": "480f1fa84a365c8349a0f00579e1b3b54d81b4d04f4dc0ce6f3ed73a292bd996",
+          "locator": "본문 1",
+          "exact_quote": "10구청 건강검진 지침. 담당은 총무과입니다. 제출처는 10구청 기획과입니다. 제출기한은 2026-11-19입니다. 건강검진 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg10-별칭",
+          "sha256": "9b3ec6ff2d0853d776a6c3e5ec6f956f1da1c64f7d13a7170375bd5ece8cc3c4",
+          "locator": "본문 1",
+          "exact_quote": "10구청에서 건강검진은 '건강업무'로도 부릅니다. 건강업무의 담당은 10구청 총무과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 50
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg10-q2",
+      "group": "kg10",
+      "category": "alias",
+      "split": "holdout",
+      "question": "10구청 총무과 담당 업무는?",
+      "allowed_documents": [
+        "kg10-지침",
+        "kg10-별칭",
+        "kg10-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg10-지침",
+          "sha256": "480f1fa84a365c8349a0f00579e1b3b54d81b4d04f4dc0ce6f3ed73a292bd996",
+          "locator": "본문 1",
+          "exact_quote": "10구청 건강검진 지침. 담당은 총무과입니다. 제출처는 10구청 기획과입니다. 제출기한은 2026-11-19입니다. 건강검진 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg10-별칭",
+          "sha256": "9b3ec6ff2d0853d776a6c3e5ec6f956f1da1c64f7d13a7170375bd5ece8cc3c4",
+          "locator": "본문 1",
+          "exact_quote": "10구청에서 건강검진은 '건강업무'로도 부릅니다. 건강업무의 담당은 10구청 총무과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 50
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg10-q3",
+      "group": "kg10",
+      "category": "alias",
+      "split": "holdout",
+      "question": "건강업무와 건강검진은 같은 업무인가?",
+      "allowed_documents": [
+        "kg10-지침",
+        "kg10-별칭",
+        "kg10-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg10-지침",
+          "sha256": "480f1fa84a365c8349a0f00579e1b3b54d81b4d04f4dc0ce6f3ed73a292bd996",
+          "locator": "본문 1",
+          "exact_quote": "10구청 건강검진 지침. 담당은 총무과입니다. 제출처는 10구청 기획과입니다. 제출기한은 2026-11-19입니다. 건강검진 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg10-별칭",
+          "sha256": "9b3ec6ff2d0853d776a6c3e5ec6f956f1da1c64f7d13a7170375bd5ece8cc3c4",
+          "locator": "본문 1",
+          "exact_quote": "10구청에서 건강검진은 '건강업무'로도 부릅니다. 건강업무의 담당은 10구청 총무과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 50
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg10-q4",
+      "group": "kg10",
+      "category": "alias",
+      "split": "holdout",
+      "question": "건강검진의 기관은?",
+      "allowed_documents": [
+        "kg10-지침",
+        "kg10-별칭",
+        "kg10-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg10-지침",
+          "sha256": "480f1fa84a365c8349a0f00579e1b3b54d81b4d04f4dc0ce6f3ed73a292bd996",
+          "locator": "본문 1",
+          "exact_quote": "10구청 건강검진 지침. 담당은 총무과입니다. 제출처는 10구청 기획과입니다. 제출기한은 2026-11-19입니다. 건강검진 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg10-별칭",
+          "sha256": "9b3ec6ff2d0853d776a6c3e5ec6f956f1da1c64f7d13a7170375bd5ece8cc3c4",
+          "locator": "본문 1",
+          "exact_quote": "10구청에서 건강검진은 '건강업무'로도 부릅니다. 건강업무의 담당은 10구청 총무과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 50
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg10-q5",
+      "group": "kg10",
+      "category": "alias",
+      "split": "holdout",
+      "question": "다른시청 총무과가 건강검진을 담당하나?",
+      "allowed_documents": [
+        "kg10-지침",
+        "kg10-별칭",
+        "kg10-동명부서"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg10-동명부서",
+          "sha256": "ffd0a87526a42a284a2f935bc33f5bffc5063a3adb2cd323ec822b4b1300951f",
+          "locator": "본문 1",
+          "exact_quote": "다른시청 총무과의 담당 업무는 환경관리입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 25
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "OWNED_BY"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg11-q1",
+      "group": "kg11",
+      "category": "linked",
+      "split": "tuning",
+      "question": "시설보수 공통서식 제출처는?",
+      "allowed_documents": [
+        "kg11-지침",
+        "kg11-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg11-지침",
+          "sha256": "b2a97bffde885fd9edf7cd2f2a0d9d17780b9a895b2a0946cd1a2bd5247523d7",
+          "locator": "본문 1",
+          "exact_quote": "11구청 시설보수 지침. 담당은 회계과입니다. 제출처는 11구청 기획과입니다. 제출기한은 2026-11-20입니다. 시설보수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-11 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg11-서식",
+          "sha256": "8f37cc231a4eb4bbe400cbf58d6b2e5c064ef4a0e3cf76268ec363c8240eaa66",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-11 제출 안내. 공통서식-11은 11구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg11-q2",
+      "group": "kg11",
+      "category": "linked",
+      "split": "tuning",
+      "question": "시설보수 신청서식의 번호는?",
+      "allowed_documents": [
+        "kg11-지침",
+        "kg11-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg11-지침",
+          "sha256": "b2a97bffde885fd9edf7cd2f2a0d9d17780b9a895b2a0946cd1a2bd5247523d7",
+          "locator": "본문 1",
+          "exact_quote": "11구청 시설보수 지침. 담당은 회계과입니다. 제출처는 11구청 기획과입니다. 제출기한은 2026-11-20입니다. 시설보수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-11 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg11-서식",
+          "sha256": "8f37cc231a4eb4bbe400cbf58d6b2e5c064ef4a0e3cf76268ec363c8240eaa66",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-11 제출 안내. 공통서식-11은 11구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg11-q3",
+      "group": "kg11",
+      "category": "linked",
+      "split": "tuning",
+      "question": "시설보수 담당과 서식 제출처를 연결해줘",
+      "allowed_documents": [
+        "kg11-지침",
+        "kg11-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg11-지침",
+          "sha256": "b2a97bffde885fd9edf7cd2f2a0d9d17780b9a895b2a0946cd1a2bd5247523d7",
+          "locator": "본문 1",
+          "exact_quote": "11구청 시설보수 지침. 담당은 회계과입니다. 제출처는 11구청 기획과입니다. 제출기한은 2026-11-20입니다. 시설보수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-11 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg11-서식",
+          "sha256": "8f37cc231a4eb4bbe400cbf58d6b2e5c064ef4a0e3cf76268ec363c8240eaa66",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-11 제출 안내. 공통서식-11은 11구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg11-q4",
+      "group": "kg11",
+      "category": "linked",
+      "split": "tuning",
+      "question": "시설보수 지침과 서식 원문을 보여줘",
+      "allowed_documents": [
+        "kg11-지침",
+        "kg11-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg11-지침",
+          "sha256": "b2a97bffde885fd9edf7cd2f2a0d9d17780b9a895b2a0946cd1a2bd5247523d7",
+          "locator": "본문 1",
+          "exact_quote": "11구청 시설보수 지침. 담당은 회계과입니다. 제출처는 11구청 기획과입니다. 제출기한은 2026-11-20입니다. 시설보수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-11 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg11-서식",
+          "sha256": "8f37cc231a4eb4bbe400cbf58d6b2e5c064ef4a0e3cf76268ec363c8240eaa66",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-11 제출 안내. 공통서식-11은 11구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg11-q5",
+      "group": "kg11",
+      "category": "linked",
+      "split": "tuning",
+      "question": "시설보수을 제출할 서식과 부서는?",
+      "allowed_documents": [
+        "kg11-지침",
+        "kg11-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg11-지침",
+          "sha256": "b2a97bffde885fd9edf7cd2f2a0d9d17780b9a895b2a0946cd1a2bd5247523d7",
+          "locator": "본문 1",
+          "exact_quote": "11구청 시설보수 지침. 담당은 회계과입니다. 제출처는 11구청 기획과입니다. 제출기한은 2026-11-20입니다. 시설보수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-11 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg11-서식",
+          "sha256": "8f37cc231a4eb4bbe400cbf58d6b2e5c064ef4a0e3cf76268ec363c8240eaa66",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-11 제출 안내. 공통서식-11은 11구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg12-q1",
+      "group": "kg12",
+      "category": "linked",
+      "split": "tuning",
+      "question": "보조금정산 공통서식 제출처는?",
+      "allowed_documents": [
+        "kg12-지침",
+        "kg12-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg12-지침",
+          "sha256": "ee7b6bfecc0c5cef64e423722634306eead879fce684e2f6bd33160b70acc1b0",
+          "locator": "본문 1",
+          "exact_quote": "12구청 보조금정산 지침. 담당은 기획과입니다. 제출처는 12구청 기획과입니다. 제출기한은 2026-11-21입니다. 보조금정산 신청서식을 사용합니다. 상세 제출 안내는 공통서식-12 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 113
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg12-서식",
+          "sha256": "e48bcc3018c0bbe79e1ce8a6e9c3e1433d7fd49b67bc0532606984d4f16e734b",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-12 제출 안내. 공통서식-12은 12구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg12-q2",
+      "group": "kg12",
+      "category": "linked",
+      "split": "tuning",
+      "question": "보조금정산 신청서식의 번호는?",
+      "allowed_documents": [
+        "kg12-지침",
+        "kg12-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg12-지침",
+          "sha256": "ee7b6bfecc0c5cef64e423722634306eead879fce684e2f6bd33160b70acc1b0",
+          "locator": "본문 1",
+          "exact_quote": "12구청 보조금정산 지침. 담당은 기획과입니다. 제출처는 12구청 기획과입니다. 제출기한은 2026-11-21입니다. 보조금정산 신청서식을 사용합니다. 상세 제출 안내는 공통서식-12 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 113
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg12-서식",
+          "sha256": "e48bcc3018c0bbe79e1ce8a6e9c3e1433d7fd49b67bc0532606984d4f16e734b",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-12 제출 안내. 공통서식-12은 12구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg12-q3",
+      "group": "kg12",
+      "category": "linked",
+      "split": "tuning",
+      "question": "보조금정산 담당과 서식 제출처를 연결해줘",
+      "allowed_documents": [
+        "kg12-지침",
+        "kg12-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg12-지침",
+          "sha256": "ee7b6bfecc0c5cef64e423722634306eead879fce684e2f6bd33160b70acc1b0",
+          "locator": "본문 1",
+          "exact_quote": "12구청 보조금정산 지침. 담당은 기획과입니다. 제출처는 12구청 기획과입니다. 제출기한은 2026-11-21입니다. 보조금정산 신청서식을 사용합니다. 상세 제출 안내는 공통서식-12 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 113
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg12-서식",
+          "sha256": "e48bcc3018c0bbe79e1ce8a6e9c3e1433d7fd49b67bc0532606984d4f16e734b",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-12 제출 안내. 공통서식-12은 12구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg12-q4",
+      "group": "kg12",
+      "category": "linked",
+      "split": "tuning",
+      "question": "보조금정산 지침과 서식 원문을 보여줘",
+      "allowed_documents": [
+        "kg12-지침",
+        "kg12-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg12-지침",
+          "sha256": "ee7b6bfecc0c5cef64e423722634306eead879fce684e2f6bd33160b70acc1b0",
+          "locator": "본문 1",
+          "exact_quote": "12구청 보조금정산 지침. 담당은 기획과입니다. 제출처는 12구청 기획과입니다. 제출기한은 2026-11-21입니다. 보조금정산 신청서식을 사용합니다. 상세 제출 안내는 공통서식-12 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 113
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg12-서식",
+          "sha256": "e48bcc3018c0bbe79e1ce8a6e9c3e1433d7fd49b67bc0532606984d4f16e734b",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-12 제출 안내. 공통서식-12은 12구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg12-q5",
+      "group": "kg12",
+      "category": "linked",
+      "split": "tuning",
+      "question": "보조금정산을 제출할 서식과 부서는?",
+      "allowed_documents": [
+        "kg12-지침",
+        "kg12-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg12-지침",
+          "sha256": "ee7b6bfecc0c5cef64e423722634306eead879fce684e2f6bd33160b70acc1b0",
+          "locator": "본문 1",
+          "exact_quote": "12구청 보조금정산 지침. 담당은 기획과입니다. 제출처는 12구청 기획과입니다. 제출기한은 2026-11-21입니다. 보조금정산 신청서식을 사용합니다. 상세 제출 안내는 공통서식-12 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 113
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg12-서식",
+          "sha256": "e48bcc3018c0bbe79e1ce8a6e9c3e1433d7fd49b67bc0532606984d4f16e734b",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-12 제출 안내. 공통서식-12은 12구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg13-q1",
+      "group": "kg13",
+      "category": "linked",
+      "split": "holdout",
+      "question": "민원접수 공통서식 제출처는?",
+      "allowed_documents": [
+        "kg13-지침",
+        "kg13-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg13-지침",
+          "sha256": "57c2099a0d16c8cf5404fcbf600f1313a00062c5a4b0e99251a8e3cb87187614",
+          "locator": "본문 1",
+          "exact_quote": "13구청 민원접수 지침. 담당은 복지과입니다. 제출처는 13구청 기획과입니다. 제출기한은 2026-11-22입니다. 민원접수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-13 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg13-서식",
+          "sha256": "ad12502c645b96f8c01946079b21b933cc52f1a255d30c48d10e4fd6298c251b",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-13 제출 안내. 공통서식-13은 13구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg13-q2",
+      "group": "kg13",
+      "category": "linked",
+      "split": "holdout",
+      "question": "민원접수 신청서식의 번호는?",
+      "allowed_documents": [
+        "kg13-지침",
+        "kg13-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg13-지침",
+          "sha256": "57c2099a0d16c8cf5404fcbf600f1313a00062c5a4b0e99251a8e3cb87187614",
+          "locator": "본문 1",
+          "exact_quote": "13구청 민원접수 지침. 담당은 복지과입니다. 제출처는 13구청 기획과입니다. 제출기한은 2026-11-22입니다. 민원접수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-13 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg13-서식",
+          "sha256": "ad12502c645b96f8c01946079b21b933cc52f1a255d30c48d10e4fd6298c251b",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-13 제출 안내. 공통서식-13은 13구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg13-q3",
+      "group": "kg13",
+      "category": "linked",
+      "split": "holdout",
+      "question": "민원접수 담당과 서식 제출처를 연결해줘",
+      "allowed_documents": [
+        "kg13-지침",
+        "kg13-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg13-지침",
+          "sha256": "57c2099a0d16c8cf5404fcbf600f1313a00062c5a4b0e99251a8e3cb87187614",
+          "locator": "본문 1",
+          "exact_quote": "13구청 민원접수 지침. 담당은 복지과입니다. 제출처는 13구청 기획과입니다. 제출기한은 2026-11-22입니다. 민원접수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-13 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg13-서식",
+          "sha256": "ad12502c645b96f8c01946079b21b933cc52f1a255d30c48d10e4fd6298c251b",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-13 제출 안내. 공통서식-13은 13구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg13-q4",
+      "group": "kg13",
+      "category": "linked",
+      "split": "holdout",
+      "question": "민원접수 지침과 서식 원문을 보여줘",
+      "allowed_documents": [
+        "kg13-지침",
+        "kg13-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg13-지침",
+          "sha256": "57c2099a0d16c8cf5404fcbf600f1313a00062c5a4b0e99251a8e3cb87187614",
+          "locator": "본문 1",
+          "exact_quote": "13구청 민원접수 지침. 담당은 복지과입니다. 제출처는 13구청 기획과입니다. 제출기한은 2026-11-22입니다. 민원접수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-13 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg13-서식",
+          "sha256": "ad12502c645b96f8c01946079b21b933cc52f1a255d30c48d10e4fd6298c251b",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-13 제출 안내. 공통서식-13은 13구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg13-q5",
+      "group": "kg13",
+      "category": "linked",
+      "split": "holdout",
+      "question": "민원접수을 제출할 서식과 부서는?",
+      "allowed_documents": [
+        "kg13-지침",
+        "kg13-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg13-지침",
+          "sha256": "57c2099a0d16c8cf5404fcbf600f1313a00062c5a4b0e99251a8e3cb87187614",
+          "locator": "본문 1",
+          "exact_quote": "13구청 민원접수 지침. 담당은 복지과입니다. 제출처는 13구청 기획과입니다. 제출기한은 2026-11-22입니다. 민원접수 신청서식을 사용합니다. 상세 제출 안내는 공통서식-13 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg13-서식",
+          "sha256": "ad12502c645b96f8c01946079b21b933cc52f1a255d30c48d10e4fd6298c251b",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-13 제출 안내. 공통서식-13은 13구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg14-q1",
+      "group": "kg14",
+      "category": "linked",
+      "split": "holdout",
+      "question": "재난대응 공통서식 제출처는?",
+      "allowed_documents": [
+        "kg14-지침",
+        "kg14-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg14-지침",
+          "sha256": "3c09990d4a4b4bea6f934c291944b10188ff4d47f53d0a87976408a4e5d51911",
+          "locator": "본문 1",
+          "exact_quote": "14구청 재난대응 지침. 담당은 총무과입니다. 제출처는 14구청 기획과입니다. 제출기한은 2026-11-23입니다. 재난대응 신청서식을 사용합니다. 상세 제출 안내는 공통서식-14 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg14-서식",
+          "sha256": "dc0e92f5f64572b2a85b0694d4fd721efa7b49775090d0c97eb209d64240e8d0",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-14 제출 안내. 공통서식-14은 14구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg14-q2",
+      "group": "kg14",
+      "category": "linked",
+      "split": "holdout",
+      "question": "재난대응 신청서식의 번호는?",
+      "allowed_documents": [
+        "kg14-지침",
+        "kg14-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg14-지침",
+          "sha256": "3c09990d4a4b4bea6f934c291944b10188ff4d47f53d0a87976408a4e5d51911",
+          "locator": "본문 1",
+          "exact_quote": "14구청 재난대응 지침. 담당은 총무과입니다. 제출처는 14구청 기획과입니다. 제출기한은 2026-11-23입니다. 재난대응 신청서식을 사용합니다. 상세 제출 안내는 공통서식-14 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg14-서식",
+          "sha256": "dc0e92f5f64572b2a85b0694d4fd721efa7b49775090d0c97eb209d64240e8d0",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-14 제출 안내. 공통서식-14은 14구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg14-q3",
+      "group": "kg14",
+      "category": "linked",
+      "split": "holdout",
+      "question": "재난대응 담당과 서식 제출처를 연결해줘",
+      "allowed_documents": [
+        "kg14-지침",
+        "kg14-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg14-지침",
+          "sha256": "3c09990d4a4b4bea6f934c291944b10188ff4d47f53d0a87976408a4e5d51911",
+          "locator": "본문 1",
+          "exact_quote": "14구청 재난대응 지침. 담당은 총무과입니다. 제출처는 14구청 기획과입니다. 제출기한은 2026-11-23입니다. 재난대응 신청서식을 사용합니다. 상세 제출 안내는 공통서식-14 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg14-서식",
+          "sha256": "dc0e92f5f64572b2a85b0694d4fd721efa7b49775090d0c97eb209d64240e8d0",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-14 제출 안내. 공통서식-14은 14구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg14-q4",
+      "group": "kg14",
+      "category": "linked",
+      "split": "holdout",
+      "question": "재난대응 지침과 서식 원문을 보여줘",
+      "allowed_documents": [
+        "kg14-지침",
+        "kg14-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg14-지침",
+          "sha256": "3c09990d4a4b4bea6f934c291944b10188ff4d47f53d0a87976408a4e5d51911",
+          "locator": "본문 1",
+          "exact_quote": "14구청 재난대응 지침. 담당은 총무과입니다. 제출처는 14구청 기획과입니다. 제출기한은 2026-11-23입니다. 재난대응 신청서식을 사용합니다. 상세 제출 안내는 공통서식-14 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg14-서식",
+          "sha256": "dc0e92f5f64572b2a85b0694d4fd721efa7b49775090d0c97eb209d64240e8d0",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-14 제출 안내. 공통서식-14은 14구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg14-q5",
+      "group": "kg14",
+      "category": "linked",
+      "split": "holdout",
+      "question": "재난대응을 제출할 서식과 부서는?",
+      "allowed_documents": [
+        "kg14-지침",
+        "kg14-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg14-지침",
+          "sha256": "3c09990d4a4b4bea6f934c291944b10188ff4d47f53d0a87976408a4e5d51911",
+          "locator": "본문 1",
+          "exact_quote": "14구청 재난대응 지침. 담당은 총무과입니다. 제출처는 14구청 기획과입니다. 제출기한은 2026-11-23입니다. 재난대응 신청서식을 사용합니다. 상세 제출 안내는 공통서식-14 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg14-서식",
+          "sha256": "dc0e92f5f64572b2a85b0694d4fd721efa7b49775090d0c97eb209d64240e8d0",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-14 제출 안내. 공통서식-14은 14구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg15-q1",
+      "group": "kg15",
+      "category": "linked",
+      "split": "holdout",
+      "question": "장비교체 공통서식 제출처는?",
+      "allowed_documents": [
+        "kg15-지침",
+        "kg15-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg15-지침",
+          "sha256": "493cd6d0840230356a829ceb0bf62b9b20d2aea86dd188e79749d3d191507ded",
+          "locator": "본문 1",
+          "exact_quote": "15구청 장비교체 지침. 담당은 회계과입니다. 제출처는 15구청 기획과입니다. 제출기한은 2026-11-24입니다. 장비교체 신청서식을 사용합니다. 상세 제출 안내는 공통서식-15 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg15-서식",
+          "sha256": "505d11eff99da41863496fc225c6f5bc4450d10b87b82f2c0801b69b2741f157",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-15 제출 안내. 공통서식-15은 15구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg15-q2",
+      "group": "kg15",
+      "category": "linked",
+      "split": "holdout",
+      "question": "장비교체 신청서식의 번호는?",
+      "allowed_documents": [
+        "kg15-지침",
+        "kg15-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg15-지침",
+          "sha256": "493cd6d0840230356a829ceb0bf62b9b20d2aea86dd188e79749d3d191507ded",
+          "locator": "본문 1",
+          "exact_quote": "15구청 장비교체 지침. 담당은 회계과입니다. 제출처는 15구청 기획과입니다. 제출기한은 2026-11-24입니다. 장비교체 신청서식을 사용합니다. 상세 제출 안내는 공통서식-15 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg15-서식",
+          "sha256": "505d11eff99da41863496fc225c6f5bc4450d10b87b82f2c0801b69b2741f157",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-15 제출 안내. 공통서식-15은 15구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg15-q3",
+      "group": "kg15",
+      "category": "linked",
+      "split": "holdout",
+      "question": "장비교체 담당과 서식 제출처를 연결해줘",
+      "allowed_documents": [
+        "kg15-지침",
+        "kg15-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg15-지침",
+          "sha256": "493cd6d0840230356a829ceb0bf62b9b20d2aea86dd188e79749d3d191507ded",
+          "locator": "본문 1",
+          "exact_quote": "15구청 장비교체 지침. 담당은 회계과입니다. 제출처는 15구청 기획과입니다. 제출기한은 2026-11-24입니다. 장비교체 신청서식을 사용합니다. 상세 제출 안내는 공통서식-15 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg15-서식",
+          "sha256": "505d11eff99da41863496fc225c6f5bc4450d10b87b82f2c0801b69b2741f157",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-15 제출 안내. 공통서식-15은 15구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg15-q4",
+      "group": "kg15",
+      "category": "linked",
+      "split": "holdout",
+      "question": "장비교체 지침과 서식 원문을 보여줘",
+      "allowed_documents": [
+        "kg15-지침",
+        "kg15-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg15-지침",
+          "sha256": "493cd6d0840230356a829ceb0bf62b9b20d2aea86dd188e79749d3d191507ded",
+          "locator": "본문 1",
+          "exact_quote": "15구청 장비교체 지침. 담당은 회계과입니다. 제출처는 15구청 기획과입니다. 제출기한은 2026-11-24입니다. 장비교체 신청서식을 사용합니다. 상세 제출 안내는 공통서식-15 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg15-서식",
+          "sha256": "505d11eff99da41863496fc225c6f5bc4450d10b87b82f2c0801b69b2741f157",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-15 제출 안내. 공통서식-15은 15구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg15-q5",
+      "group": "kg15",
+      "category": "linked",
+      "split": "holdout",
+      "question": "장비교체을 제출할 서식과 부서는?",
+      "allowed_documents": [
+        "kg15-지침",
+        "kg15-서식"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg15-지침",
+          "sha256": "493cd6d0840230356a829ceb0bf62b9b20d2aea86dd188e79749d3d191507ded",
+          "locator": "본문 1",
+          "exact_quote": "15구청 장비교체 지침. 담당은 회계과입니다. 제출처는 15구청 기획과입니다. 제출기한은 2026-11-24입니다. 장비교체 신청서식을 사용합니다. 상세 제출 안내는 공통서식-15 안내를 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 111
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg15-서식",
+          "sha256": "505d11eff99da41863496fc225c6f5bc4450d10b87b82f2c0801b69b2741f157",
+          "locator": "본문 1",
+          "exact_quote": "공통서식-15 제출 안내. 공통서식-15은 15구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 40
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "REQUIRES_FORM",
+        "SUBMITTED_TO"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg16-q1",
+      "group": "kg16",
+      "category": "temporal",
+      "split": "tuning",
+      "question": "사업평가 올해 제출기한은?",
+      "allowed_documents": [
+        "kg16-지침",
+        "kg16-지난지침",
+        "kg16-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg16-지침",
+          "sha256": "c4eabef09968955c0c008681994339c95b1da5b7d1f0e41d4b43249769db2523",
+          "locator": "본문 1",
+          "exact_quote": "16구청 사업평가 지침. 담당은 기획과입니다. 제출처는 16구청 기획과입니다. 제출기한은 2026-11-25입니다. 사업평가 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg16-q2",
+      "group": "kg16",
+      "category": "temporal",
+      "split": "tuning",
+      "question": "사업평가 전년도 기한과 올해 기한을 비교해줘",
+      "allowed_documents": [
+        "kg16-지침",
+        "kg16-지난지침",
+        "kg16-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg16-지침",
+          "sha256": "c4eabef09968955c0c008681994339c95b1da5b7d1f0e41d4b43249769db2523",
+          "locator": "본문 1",
+          "exact_quote": "16구청 사업평가 지침. 담당은 기획과입니다. 제출처는 16구청 기획과입니다. 제출기한은 2026-11-25입니다. 사업평가 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg16-지난지침",
+          "sha256": "afe13e58336e40fb5ccd7d7e32df933ec450c1d1e01a7b8b0dfdb9bcd742605f",
+          "locator": "본문 1",
+          "exact_quote": "16구청 사업평가의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 73
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg16-q3",
+      "group": "kg16",
+      "category": "temporal",
+      "split": "tuning",
+      "question": "사업평가 2026-12-01로 확정되었나?",
+      "allowed_documents": [
+        "kg16-지침",
+        "kg16-지난지침",
+        "kg16-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg16-변경안내",
+          "sha256": "937a480a1b7d3e5fb0c5d4fda0d9db6e8005156a04ca40b7d5b02a812dbaa765",
+          "locator": "본문 1",
+          "exact_quote": "사업평가 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg16-q4",
+      "group": "kg16",
+      "category": "temporal",
+      "split": "tuning",
+      "question": "사업평가 기한 변경의 시행 여부는?",
+      "allowed_documents": [
+        "kg16-지침",
+        "kg16-지난지침",
+        "kg16-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg16-변경안내",
+          "sha256": "937a480a1b7d3e5fb0c5d4fda0d9db6e8005156a04ca40b7d5b02a812dbaa765",
+          "locator": "본문 1",
+          "exact_quote": "사업평가 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg16-q5",
+      "group": "kg16",
+      "category": "temporal",
+      "split": "tuning",
+      "question": "사업평가 2025년 사례를 올해 사용해도 되나?",
+      "allowed_documents": [
+        "kg16-지침",
+        "kg16-지난지침",
+        "kg16-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg16-지침",
+          "sha256": "c4eabef09968955c0c008681994339c95b1da5b7d1f0e41d4b43249769db2523",
+          "locator": "본문 1",
+          "exact_quote": "16구청 사업평가 지침. 담당은 기획과입니다. 제출처는 16구청 기획과입니다. 제출기한은 2026-11-25입니다. 사업평가 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg16-지난지침",
+          "sha256": "afe13e58336e40fb5ccd7d7e32df933ec450c1d1e01a7b8b0dfdb9bcd742605f",
+          "locator": "본문 1",
+          "exact_quote": "16구청 사업평가의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 73
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg17-q1",
+      "group": "kg17",
+      "category": "temporal",
+      "split": "tuning",
+      "question": "성과보고 올해 제출기한은?",
+      "allowed_documents": [
+        "kg17-지침",
+        "kg17-지난지침",
+        "kg17-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg17-지침",
+          "sha256": "f067f2bb8985daeda04a894d949b5b0d3ff4d4d71a31c02a9cc7b7822cf730c6",
+          "locator": "본문 1",
+          "exact_quote": "17구청 성과보고 지침. 담당은 복지과입니다. 제출처는 17구청 기획과입니다. 제출기한은 2026-11-26입니다. 성과보고 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg17-q2",
+      "group": "kg17",
+      "category": "temporal",
+      "split": "tuning",
+      "question": "성과보고 전년도 기한과 올해 기한을 비교해줘",
+      "allowed_documents": [
+        "kg17-지침",
+        "kg17-지난지침",
+        "kg17-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg17-지침",
+          "sha256": "f067f2bb8985daeda04a894d949b5b0d3ff4d4d71a31c02a9cc7b7822cf730c6",
+          "locator": "본문 1",
+          "exact_quote": "17구청 성과보고 지침. 담당은 복지과입니다. 제출처는 17구청 기획과입니다. 제출기한은 2026-11-26입니다. 성과보고 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg17-지난지침",
+          "sha256": "c77a317ba597870a97ac767e4b0fd5152fc74235296d9c437b5a025720c4c40f",
+          "locator": "본문 1",
+          "exact_quote": "17구청 성과보고의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 73
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg17-q3",
+      "group": "kg17",
+      "category": "temporal",
+      "split": "tuning",
+      "question": "성과보고 2026-12-01로 확정되었나?",
+      "allowed_documents": [
+        "kg17-지침",
+        "kg17-지난지침",
+        "kg17-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg17-변경안내",
+          "sha256": "f6dddc689346faebf5ee0d8292f6752e05f304c5a2eb2ab7710a348a83193198",
+          "locator": "본문 1",
+          "exact_quote": "성과보고 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg17-q4",
+      "group": "kg17",
+      "category": "temporal",
+      "split": "tuning",
+      "question": "성과보고 기한 변경의 시행 여부는?",
+      "allowed_documents": [
+        "kg17-지침",
+        "kg17-지난지침",
+        "kg17-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg17-변경안내",
+          "sha256": "f6dddc689346faebf5ee0d8292f6752e05f304c5a2eb2ab7710a348a83193198",
+          "locator": "본문 1",
+          "exact_quote": "성과보고 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg17-q5",
+      "group": "kg17",
+      "category": "temporal",
+      "split": "tuning",
+      "question": "성과보고 2025년 사례를 올해 사용해도 되나?",
+      "allowed_documents": [
+        "kg17-지침",
+        "kg17-지난지침",
+        "kg17-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg17-지침",
+          "sha256": "f067f2bb8985daeda04a894d949b5b0d3ff4d4d71a31c02a9cc7b7822cf730c6",
+          "locator": "본문 1",
+          "exact_quote": "17구청 성과보고 지침. 담당은 복지과입니다. 제출처는 17구청 기획과입니다. 제출기한은 2026-11-26입니다. 성과보고 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg17-지난지침",
+          "sha256": "c77a317ba597870a97ac767e4b0fd5152fc74235296d9c437b5a025720c4c40f",
+          "locator": "본문 1",
+          "exact_quote": "17구청 성과보고의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 73
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg18-q1",
+      "group": "kg18",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "예산요구 올해 제출기한은?",
+      "allowed_documents": [
+        "kg18-지침",
+        "kg18-지난지침",
+        "kg18-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg18-지침",
+          "sha256": "4e4c91a421cfcb0660062cb96201d92465faa0c37e3ed4b7326a646f34367285",
+          "locator": "본문 1",
+          "exact_quote": "18구청 예산요구 지침. 담당은 총무과입니다. 제출처는 18구청 기획과입니다. 제출기한은 2026-11-27입니다. 예산요구 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg18-q2",
+      "group": "kg18",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "예산요구 전년도 기한과 올해 기한을 비교해줘",
+      "allowed_documents": [
+        "kg18-지침",
+        "kg18-지난지침",
+        "kg18-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg18-지침",
+          "sha256": "4e4c91a421cfcb0660062cb96201d92465faa0c37e3ed4b7326a646f34367285",
+          "locator": "본문 1",
+          "exact_quote": "18구청 예산요구 지침. 담당은 총무과입니다. 제출처는 18구청 기획과입니다. 제출기한은 2026-11-27입니다. 예산요구 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg18-지난지침",
+          "sha256": "6f9cf4b17a8ba2d5caab0ccc229f0b97a06744be6c177e94702d6c7769b9daa8",
+          "locator": "본문 1",
+          "exact_quote": "18구청 예산요구의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 73
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg18-q3",
+      "group": "kg18",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "예산요구 2026-12-01로 확정되었나?",
+      "allowed_documents": [
+        "kg18-지침",
+        "kg18-지난지침",
+        "kg18-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg18-변경안내",
+          "sha256": "f21871e388c000ebcf30ee20aba20178f539ee1c9b207494d220ecb9a41b6797",
+          "locator": "본문 1",
+          "exact_quote": "예산요구 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg18-q4",
+      "group": "kg18",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "예산요구 기한 변경의 시행 여부는?",
+      "allowed_documents": [
+        "kg18-지침",
+        "kg18-지난지침",
+        "kg18-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg18-변경안내",
+          "sha256": "f21871e388c000ebcf30ee20aba20178f539ee1c9b207494d220ecb9a41b6797",
+          "locator": "본문 1",
+          "exact_quote": "예산요구 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg18-q5",
+      "group": "kg18",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "예산요구 2025년 사례를 올해 사용해도 되나?",
+      "allowed_documents": [
+        "kg18-지침",
+        "kg18-지난지침",
+        "kg18-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg18-지침",
+          "sha256": "4e4c91a421cfcb0660062cb96201d92465faa0c37e3ed4b7326a646f34367285",
+          "locator": "본문 1",
+          "exact_quote": "18구청 예산요구 지침. 담당은 총무과입니다. 제출처는 18구청 기획과입니다. 제출기한은 2026-11-27입니다. 예산요구 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg18-지난지침",
+          "sha256": "6f9cf4b17a8ba2d5caab0ccc229f0b97a06744be6c177e94702d6c7769b9daa8",
+          "locator": "본문 1",
+          "exact_quote": "18구청 예산요구의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 73
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg19-q1",
+      "group": "kg19",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "자산조사 올해 제출기한은?",
+      "allowed_documents": [
+        "kg19-지침",
+        "kg19-지난지침",
+        "kg19-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg19-지침",
+          "sha256": "898ddeacfd5b8206153404182b302cdd21a5fa6173eba657e76c84567542bc2c",
+          "locator": "본문 1",
+          "exact_quote": "19구청 자산조사 지침. 담당은 회계과입니다. 제출처는 19구청 기획과입니다. 제출기한은 2026-11-28입니다. 자산조사 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg19-q2",
+      "group": "kg19",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "자산조사 전년도 기한과 올해 기한을 비교해줘",
+      "allowed_documents": [
+        "kg19-지침",
+        "kg19-지난지침",
+        "kg19-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg19-지침",
+          "sha256": "898ddeacfd5b8206153404182b302cdd21a5fa6173eba657e76c84567542bc2c",
+          "locator": "본문 1",
+          "exact_quote": "19구청 자산조사 지침. 담당은 회계과입니다. 제출처는 19구청 기획과입니다. 제출기한은 2026-11-28입니다. 자산조사 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg19-지난지침",
+          "sha256": "399f2975469274e985d5d7733ce9d4b3d4de5f987d7ec072b9c7bb13e491b900",
+          "locator": "본문 1",
+          "exact_quote": "19구청 자산조사의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 73
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg19-q3",
+      "group": "kg19",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "자산조사 2026-12-01로 확정되었나?",
+      "allowed_documents": [
+        "kg19-지침",
+        "kg19-지난지침",
+        "kg19-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg19-변경안내",
+          "sha256": "58f5009edbfee04c6ee169df64caaf5bc5d7ca0e429d218d5b7bd1235481f746",
+          "locator": "본문 1",
+          "exact_quote": "자산조사 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg19-q4",
+      "group": "kg19",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "자산조사 기한 변경의 시행 여부는?",
+      "allowed_documents": [
+        "kg19-지침",
+        "kg19-지난지침",
+        "kg19-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg19-변경안내",
+          "sha256": "58f5009edbfee04c6ee169df64caaf5bc5d7ca0e429d218d5b7bd1235481f746",
+          "locator": "본문 1",
+          "exact_quote": "자산조사 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg19-q5",
+      "group": "kg19",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "자산조사 2025년 사례를 올해 사용해도 되나?",
+      "allowed_documents": [
+        "kg19-지침",
+        "kg19-지난지침",
+        "kg19-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg19-지침",
+          "sha256": "898ddeacfd5b8206153404182b302cdd21a5fa6173eba657e76c84567542bc2c",
+          "locator": "본문 1",
+          "exact_quote": "19구청 자산조사 지침. 담당은 회계과입니다. 제출처는 19구청 기획과입니다. 제출기한은 2026-11-28입니다. 자산조사 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg19-지난지침",
+          "sha256": "399f2975469274e985d5d7733ce9d4b3d4de5f987d7ec072b9c7bb13e491b900",
+          "locator": "본문 1",
+          "exact_quote": "19구청 자산조사의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 73
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg20-q1",
+      "group": "kg20",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "인력배치 올해 제출기한은?",
+      "allowed_documents": [
+        "kg20-지침",
+        "kg20-지난지침",
+        "kg20-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg20-지침",
+          "sha256": "53222450be81cfbfc6627afbf63ca501e4d69ec8a59dc20fa605c445d05a3478",
+          "locator": "본문 1",
+          "exact_quote": "20구청 인력배치 지침. 담당은 기획과입니다. 제출처는 20구청 기획과입니다. 제출기한은 2026-11-29입니다. 인력배치 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg20-q2",
+      "group": "kg20",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "인력배치 전년도 기한과 올해 기한을 비교해줘",
+      "allowed_documents": [
+        "kg20-지침",
+        "kg20-지난지침",
+        "kg20-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg20-지침",
+          "sha256": "53222450be81cfbfc6627afbf63ca501e4d69ec8a59dc20fa605c445d05a3478",
+          "locator": "본문 1",
+          "exact_quote": "20구청 인력배치 지침. 담당은 기획과입니다. 제출처는 20구청 기획과입니다. 제출기한은 2026-11-29입니다. 인력배치 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg20-지난지침",
+          "sha256": "e50c1d0f7c64b175c244801c8f1038336c5ccceb4632331fc1d3dceb95320497",
+          "locator": "본문 1",
+          "exact_quote": "20구청 인력배치의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 73
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "kg20-q3",
+      "group": "kg20",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "인력배치 2026-12-01로 확정되었나?",
+      "allowed_documents": [
+        "kg20-지침",
+        "kg20-지난지침",
+        "kg20-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg20-변경안내",
+          "sha256": "66d08402380ed4a8eab37a427e0ef5e761e67be497aa4c89155037fb1ca6dbf2",
+          "locator": "본문 1",
+          "exact_quote": "인력배치 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg20-q4",
+      "group": "kg20",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "인력배치 기한 변경의 시행 여부는?",
+      "allowed_documents": [
+        "kg20-지침",
+        "kg20-지난지침",
+        "kg20-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg20-변경안내",
+          "sha256": "66d08402380ed4a8eab37a427e0ef5e761e67be497aa4c89155037fb1ca6dbf2",
+          "locator": "본문 1",
+          "exact_quote": "인력배치 제출기한 변경 검토: 2026-12-01. 공식 시행 여부는 미확정입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg20-q5",
+      "group": "kg20",
+      "category": "temporal",
+      "split": "holdout",
+      "question": "인력배치 2025년 사례를 올해 사용해도 되나?",
+      "allowed_documents": [
+        "kg20-지침",
+        "kg20-지난지침",
+        "kg20-변경안내"
+      ],
+      "expected_evidence": [
+        {
+          "document": "kg20-지침",
+          "sha256": "53222450be81cfbfc6627afbf63ca501e4d69ec8a59dc20fa605c445d05a3478",
+          "locator": "본문 1",
+          "exact_quote": "20구청 인력배치 지침. 담당은 기획과입니다. 제출처는 20구청 기획과입니다. 제출기한은 2026-11-29입니다. 인력배치 신청서식을 사용합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 82
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "kg20-지난지침",
+          "sha256": "e50c1d0f7c64b175c244801c8f1038336c5ccceb4632331fc1d3dceb95320497",
+          "locator": "본문 1",
+          "exact_quote": "20구청 인력배치의 2025년도 제출기한은 2025-10-15입니다. 이것은 전년도 사례이며 올해 적용 여부는 확인되지 않았습니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 73
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [
+        "due_date"
+      ],
+      "answer_policy": "do_not_confirm_effective_change"
+    },
+    {
+      "id": "kg21-q1",
+      "group": "kg21",
+      "category": "missing",
+      "split": "tuning",
+      "question": "행사계획 예산 금액은?",
+      "allowed_documents": [
+        "kg21-지침",
+        "kg21-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg21-q2",
+      "group": "kg21",
+      "category": "missing",
+      "split": "tuning",
+      "question": "행사계획 몇 건 완료했나?",
+      "allowed_documents": [
+        "kg21-지침",
+        "kg21-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg21-q3",
+      "group": "kg21",
+      "category": "missing",
+      "split": "tuning",
+      "question": "행사계획 법적 효력이 확정되었나?",
+      "allowed_documents": [
+        "kg21-지침",
+        "kg21-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg21-q4",
+      "group": "kg21",
+      "category": "missing",
+      "split": "tuning",
+      "question": "행사계획 승인자는?",
+      "allowed_documents": [
+        "kg21-지침",
+        "kg21-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg21-q5",
+      "group": "kg21",
+      "category": "missing",
+      "split": "tuning",
+      "question": "행사계획 제출이 완료되었나?",
+      "allowed_documents": [
+        "kg21-지침",
+        "kg21-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg22-q1",
+      "group": "kg22",
+      "category": "missing",
+      "split": "holdout",
+      "question": "계약변경 예산 금액은?",
+      "allowed_documents": [
+        "kg22-지침",
+        "kg22-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg22-q2",
+      "group": "kg22",
+      "category": "missing",
+      "split": "holdout",
+      "question": "계약변경 몇 건 완료했나?",
+      "allowed_documents": [
+        "kg22-지침",
+        "kg22-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg22-q3",
+      "group": "kg22",
+      "category": "missing",
+      "split": "holdout",
+      "question": "계약변경 법적 효력이 확정되었나?",
+      "allowed_documents": [
+        "kg22-지침",
+        "kg22-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg22-q4",
+      "group": "kg22",
+      "category": "missing",
+      "split": "holdout",
+      "question": "계약변경 승인자는?",
+      "allowed_documents": [
+        "kg22-지침",
+        "kg22-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg22-q5",
+      "group": "kg22",
+      "category": "missing",
+      "split": "holdout",
+      "question": "계약변경 제출이 완료되었나?",
+      "allowed_documents": [
+        "kg22-지침",
+        "kg22-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg23-q1",
+      "group": "kg23",
+      "category": "missing",
+      "split": "holdout",
+      "question": "수요조사 예산 금액은?",
+      "allowed_documents": [
+        "kg23-지침",
+        "kg23-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg23-q2",
+      "group": "kg23",
+      "category": "missing",
+      "split": "holdout",
+      "question": "수요조사 몇 건 완료했나?",
+      "allowed_documents": [
+        "kg23-지침",
+        "kg23-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg23-q3",
+      "group": "kg23",
+      "category": "missing",
+      "split": "holdout",
+      "question": "수요조사 법적 효력이 확정되었나?",
+      "allowed_documents": [
+        "kg23-지침",
+        "kg23-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg23-q4",
+      "group": "kg23",
+      "category": "missing",
+      "split": "holdout",
+      "question": "수요조사 승인자는?",
+      "allowed_documents": [
+        "kg23-지침",
+        "kg23-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg23-q5",
+      "group": "kg23",
+      "category": "missing",
+      "split": "holdout",
+      "question": "수요조사 제출이 완료되었나?",
+      "allowed_documents": [
+        "kg23-지침",
+        "kg23-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg24-q1",
+      "group": "kg24",
+      "category": "missing",
+      "split": "holdout",
+      "question": "실적취합 예산 금액은?",
+      "allowed_documents": [
+        "kg24-지침",
+        "kg24-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg24-q2",
+      "group": "kg24",
+      "category": "missing",
+      "split": "holdout",
+      "question": "실적취합 몇 건 완료했나?",
+      "allowed_documents": [
+        "kg24-지침",
+        "kg24-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg24-q3",
+      "group": "kg24",
+      "category": "missing",
+      "split": "holdout",
+      "question": "실적취합 법적 효력이 확정되었나?",
+      "allowed_documents": [
+        "kg24-지침",
+        "kg24-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg24-q4",
+      "group": "kg24",
+      "category": "missing",
+      "split": "holdout",
+      "question": "실적취합 승인자는?",
+      "allowed_documents": [
+        "kg24-지침",
+        "kg24-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "kg24-q5",
+      "group": "kg24",
+      "category": "missing",
+      "split": "holdout",
+      "question": "실적취합 제출이 완료되었나?",
+      "allowed_documents": [
+        "kg24-지침",
+        "kg24-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    }
+  ]
+}

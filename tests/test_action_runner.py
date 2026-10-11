@@ -413,7 +413,8 @@ def test_v9_project_upgrades_without_touching_existing_rows(db):
     db.set_meta("schema_version", "9")
     db.close()
     db.init()
-    assert db.get_meta("schema_version") == "11"
+    from app.db.migrations import SCHEMA_VERSION
+    assert db.get_meta("schema_version") == SCHEMA_VERSION
     assert db.task(db.task_id)["name"] == "평가 대응"
     backup = Path(str(db.path) + ".bak-v9")
     with sqlite3.connect(backup) as old:

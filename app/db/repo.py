@@ -213,8 +213,6 @@ class Database(WorkStore, ActionStore):
         else:
             self.con.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
             self._add_missing_columns()
-            if current is None:
-                self.set_meta("schema_version", SCHEMA_VERSION)
 
         # 두 경로 모두를 지나야 한다 — 스키마 승격 경로에서 빠뜨리면
         # 옛 조각을 지울 기회를 영영 놓친다(이 코드가 나오기 전까지는
@@ -225,6 +223,12 @@ class Database(WorkStore, ActionStore):
         self.con.executescript(Path(__file__).with_name("child_schema.sql").read_text(encoding="utf-8"))
         self.con.executescript(Path(__file__).with_name("coverage_schema.sql").read_text(encoding="utf-8"))
         self.con.executescript(Path(__file__).with_name("action_schema.sql").read_text(encoding="utf-8"))
+        from .knowledge import install as install_knowledge
+
+        with self.transaction():
+            install_knowledge(self.con)
+            if current is None:
+                self.set_meta("schema_version", SCHEMA_VERSION)
         if self.con.execute("SELECT 1 FROM chunks c WHERE NOT EXISTS "
                             "(SELECT 1 FROM chunk_children s WHERE s.parent_id=c.id) LIMIT 1").fetchone():
             self.con.execute("DELETE FROM meta WHERE key='chunks_checked'")
