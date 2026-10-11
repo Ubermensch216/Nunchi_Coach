@@ -10,14 +10,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QFileDialog,
-    QProgressBar,
+    QApplication,
     QCheckBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -25,10 +25,13 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMenu,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
+    QStyle,
+    QStyledItemDelegate,
     QVBoxLayout,
     QWidget,
 )
@@ -47,7 +50,7 @@ from ...widgets import (
     open_original,
 )
 from ..ask import _cited_ordinals, _fill_passages, _meta_strip
-from .panel import Panel
+from .panel import Panel, icon_button, set_icon
 from .task_picker import TaskSourceDialog
 
 ORIGIN_LABELS = {"project": "전임자 자료", "upload": "올린 파일", "onnara": "온나라 수집본",
@@ -87,6 +90,105 @@ def _fit_narrow(card: QWidget) -> None:
             label.setText(label.text().replace("_", "_\u200b").replace("/", "/\u200b"))
             label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             label.setMinimumWidth(0)
+
+
+SOURCE_ROW_H = 36
+
+
+class SourceItemDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        style = option.widget.style() if option.widget else QApplication.style()
+        style.drawPrimitive(QStyle.PrimitiveElement.PE_PanelItemViewItem, option, painter, option.widget)
+
+
+class SourceItem(QListWidgetItem):
+    """자료 목록 아이템.
+
+    QListView는 아이템에 CheckStateRole 또는 ItemIsUserCheckable 플래그가 있으면
+    왼쪽에 체크 표시 영역(약 24~28px)을 강제로 예약하여 setItemWidget의 위젯을 오른쪽으로 밀어낸다.
+    이로 인해 위젯 안의 QCheckBox 왼쪽에 빈 공간(유령 여백)이 생기므로,
+    체크 상태는 아이템 내부 변수로 관리하고 QListWidgetItem의 CheckStateRole에는 기록하지 않는다.
+    """
+
+    def __init__(self, text: str = ""):
+        super().__init__(text)
+        self._check_state = Qt.CheckState.Unchecked
+
+    def checkState(self) -> Qt.CheckState:
+        return self._check_state
+
+    def setCheckState(self, state: Qt.CheckState) -> None:
+        state = Qt.CheckState(state)
+        if self._check_state != state:
+            self._check_state = state
+            lw = self.listWidget()
+            if lw is not None:
+                lw.itemChanged.emit(self)
+
+
+class SourceRow(QWidget):
+    """자료 목록의 각 줄 — 체크 상자, 파일 이름, 원문 보기·연결 해제 아이콘 단추."""
+
+    def __init__(self, item: QListWidgetItem, doc_id: int, filename: str, state: str,
+                 editable: bool, on_read, on_detach, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.item = item
+        self.doc_id = doc_id
+        self._on_read = on_read
+        self.setObjectName("SourceRow")
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 2, 4, 2)
+        layout.setSpacing(theme.SP_XS)
+
+        self.cb = QCheckBox()
+        self.cb.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.cb.setEnabled(editable)
+        self.cb.setChecked(item.checkState() == Qt.CheckState.Checked)
+        self.cb.clicked.connect(lambda c: item.setCheckState(Qt.CheckState.Checked if c else Qt.CheckState.Unchecked))
+        layout.addWidget(self.cb)
+
+        self.name_label = ElidedLabel(filename)
+        self.name_label.setObjectName("SourceRowText")
+        self.name_label.setToolTip(item.toolTip())
+        layout.addWidget(self.name_label, 1)
+
+        if state:
+            state_label = QLabel(f"· {state}")
+            state_label.setObjectName("SourceRowState")
+            state_label.setToolTip(item.toolTip())
+            layout.addWidget(state_label)
+
+        # 원문 보기 아이콘 단추 — 아이콘으로만 표시하고 설명 텍스트는 넣지 않는다
+        self.read_btn = icon_button("eye", "원문 보기")
+        self.read_btn.setFixedSize(26, 26)
+        self.read_btn.setIconSize(QSize(16, 16))
+        self.read_btn.clicked.connect(lambda: on_read(doc_id))
+        layout.addWidget(self.read_btn)
+
+        # 연결 해제 아이콘 단추 — 아이콘으로만 표시하고 설명 텍스트는 넣지 않는다
+        self.detach_btn = None
+        if editable:
+            self.detach_btn = icon_button("unlink", "연결 해제")
+            self.detach_btn.setFixedSize(26, 26)
+            self.detach_btn.setIconSize(QSize(16, 16))
+            self.detach_btn.clicked.connect(lambda: on_detach(doc_id))
+            layout.addWidget(self.detach_btn)
+
+    def repaint_icons(self) -> None:
+        set_icon(self.read_btn, "eye")
+        if self.detach_btn is not None:
+            set_icon(self.detach_btn, "unlink")
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 — Qt 규약
+        lw = self.item.listWidget()
+        if lw is not None:
+            lw.setCurrentItem(self.item)
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802 — Qt 규약
+        self._on_read(self.doc_id)
+        super().mouseDoubleClickEvent(event)
 
 
 class SourcesPanel(Panel):
@@ -175,6 +277,7 @@ class SourcesPanel(Panel):
 
         self.source_list = QListWidget()
         self.source_list.setObjectName("SourceList")
+        self.source_list.setItemDelegate(SourceItemDelegate(self.source_list))
         # 긴 파일 이름은 가운데를 접는다. 가로 스크롤이 생기면 상태 표시가 밀려 안 보인다.
         self.source_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.source_list.setTextElideMode(Qt.TextElideMode.ElideMiddle)
@@ -192,17 +295,18 @@ class SourcesPanel(Panel):
         self.read_button = QPushButton("원문 보기")
         self.read_button.setObjectName("Quiet")
         self.read_button.clicked.connect(self._read_current)
-        actions.addWidget(self.read_button)
+        self.read_button.hide()
         self.accept_button = QPushButton("새 판본 사용")
         self.accept_button.setObjectName("Quiet")
         self.accept_button.setToolTip("원문이 바뀐 자료를 다시 분석한 판본으로 근거를 바꿉니다")
         self.accept_button.clicked.connect(lambda: self._safe(self._accept))
+        self.accept_button.hide()
         actions.addWidget(self.accept_button)
         self.detach_button = QPushButton("연결 해제")
         self.detach_button.setObjectName("Quiet")
         self.detach_button.setToolTip("이 노트북에서만 뺍니다. 원문 파일과 분석 결과는 그대로입니다")
         self.detach_button.clicked.connect(lambda: self._safe(self._detach))
-        actions.addWidget(self.detach_button)
+        self.detach_button.hide()
         actions.addStretch(1)
         column.addLayout(actions)
         return page
@@ -246,24 +350,36 @@ class SourcesPanel(Panel):
             state = source_state(row)
             if not state and row["doc_id"] in self._stale_briefs:
                 state = STALE_BRIEF
-            item = QListWidgetItem(row["filename"] + (f"  ·  {state}" if state else ""))
+            item = SourceItem(row["filename"] + (f"  ·  {state}" if state else ""))
             item.setData(Qt.ItemDataRole.UserRole, row["doc_id"])
             item.setData(Qt.ItemDataRole.UserRole + 1, state)
             reason = row["parse_error"] or row["parse_note"] or ""
             item.setToolTip("\n".join(part for part in (
                 row["filename"], ORIGIN_LABELS.get(row["origin"], row["origin"]), state, reason) if part))
             # 보관한 노트북에서도 원문은 읽을 수 있어야 한다. 선택만 잠근다.
-            flags = item.flags()
-            item.setFlags(flags | Qt.ItemFlag.ItemIsUserCheckable if self.editable
-                          else flags & ~Qt.ItemFlag.ItemIsUserCheckable)
+            # QListView가 체크 표시 영역을 예약해 위젯을 밀어내지 않도록 ItemIsUserCheckable 플래그는 주지 않는다.
             item.setCheckState(Qt.CheckState.Checked if row["selected"] else Qt.CheckState.Unchecked)
+            item.setSizeHint(QSize(0, SOURCE_ROW_H))
             self.source_list.addItem(item)
+            row_widget = SourceRow(
+                item, row["doc_id"], row["filename"], state, self.editable,
+                on_read=self.show_document,
+                on_detach=lambda did: self._safe(lambda: self._detach_doc(did)),
+            )
+            self.source_list.setItemWidget(item, row_widget)
             if row["doc_id"] == current:
                 self.source_list.setCurrentItem(item)
         self.source_list.blockSignals(False)
         self.add_button.setEnabled(self.editable and not self._ingest.running)
         self._sync_counts(rows)
         self._sync_actions()
+
+    def repaint_icons(self) -> None:
+        super().repaint_icons()
+        for i in range(self.source_list.count()):
+            widget = self.source_list.itemWidget(self.source_list.item(i))
+            if isinstance(widget, SourceRow):
+                widget.repaint_icons()
 
     def _sync_counts(self, rows) -> None:
         chosen = sum(1 for r in rows if r["selected"])
@@ -306,6 +422,13 @@ class SourcesPanel(Panel):
             QMessageBox.information(self, "출처", str(exc))
 
     def _select_source(self, item: QListWidgetItem) -> None:
+        row_widget = self.source_list.itemWidget(item)
+        if isinstance(row_widget, SourceRow):
+            is_checked = item.checkState() == Qt.CheckState.Checked
+            if row_widget.cb.isChecked() != is_checked:
+                row_widget.cb.blockSignals(True)
+                row_widget.cb.setChecked(is_checked)
+                row_widget.cb.blockSignals(False)
         notebook.select(self.db, self.notebook_id, item.data(Qt.ItemDataRole.UserRole),
                         item.checkState() == Qt.CheckState.Checked)
         self._signature = None
@@ -326,11 +449,18 @@ class SourcesPanel(Panel):
         self.refresh(force=True)
         self.selection_changed.emit()
 
-    def _detach(self) -> None:
-        notebook.detach(self.db, self.notebook_id, self._current_doc())
+    def _detach_doc(self, doc_id: int) -> None:
+        notebook.detach(self.db, self.notebook_id, doc_id)
+        if self.reader_doc_id == doc_id and self.stack.currentIndex() == 1:
+            self.show_list()
         self._check_briefs()
         self.refresh(force=True)
         self.selection_changed.emit()
+
+    def _detach(self) -> None:
+        doc_id = self._current_doc()
+        if doc_id is not None:
+            self._detach_doc(doc_id)
 
     def _read_current(self) -> None:
         doc_id = self._current_doc()

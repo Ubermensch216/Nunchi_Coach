@@ -56,7 +56,15 @@ DESCRIPTION_CHARS = 44
 
 def color_for(name: str) -> str:
     """업무 이름에서 고정 색을 뽑는다. 같은 이름은 항상 같은 색."""
-    return TASK_COLORS[sum(ord(c) for c in name) % len(TASK_COLORS)]
+    base = TASK_COLORS[sum(ord(c) for c in name) % len(TASK_COLORS)]
+    if theme.current_mode() == "dark":
+        from PySide6.QtGui import QColor
+
+        c = QColor(base)
+        h, s, v, _ = c.getHsv()
+        c.setHsv(h, max(0, s - 20), min(255, int(v * 1.15)))
+        return c.name()
+    return base
 
 
 class MonthStrip(QWidget):
@@ -82,42 +90,59 @@ class MonthStrip(QWidget):
         super().__init__(parent)
         self.setObjectName("MonthStrip")
         self.months = sorted(set(months or []))
-        active = set(self.months)
-        accent = accent or theme.PRIMARY
+        self._accent = accent
 
         self.setFixedHeight(STRIP_H)
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
 
-        row = QHBoxLayout(self)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(0)
-        radius = STRIP_H // 2
-        for month in range(1, 13):
-            # 칸은 카드 폭을 열둘로 나눠 갖는다. 폭을 못 박으면 넓은 카드에서
-            # 띠가 왼쪽 절반에만 서서 어느 칸이 몇 월인지 가늠하기 어렵다.
-            cell = QLabel(str(month) if month in active else "")
+        self._row = QHBoxLayout(self)
+        self._row.setContentsMargins(0, 0, 0, 0)
+        self._row.setSpacing(0)
+        self._cells: list[QLabel] = []
+
+        for _ in range(1, 13):
+            cell = QLabel()
             cell.setAlignment(Qt.AlignmentFlag.AlignCenter)
             cell.setFixedHeight(STRIP_H)
             cell.setMinimumWidth(STRIP_CELL_W // 2)
             cell.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            if month not in active:
-                # 빈 칸도 틀의 일부다. 양 끝만 둥글려 12칸이 하나의 띠로 보인다.
-                left = radius if month == 1 else 0
-                right = radius if month == 12 else 0
-                fill = theme.SURFACE_ALT
-            else:
+            self._cells.append(cell)
+            self._row.addWidget(cell, 1)
+
+        self._apply_styles()
+
+    def _apply_styles(self) -> None:
+        active = set(self.months)
+        accent = self._accent or theme.PRIMARY
+        radius = STRIP_H // 2
+        for idx, cell in enumerate(self._cells):
+            month = idx + 1
+            if month in active:
+                cell.setText(str(month))
                 left = radius if month - 1 not in active else 0
                 right = radius if month + 1 not in active else 0
                 fill = accent
+                text_color = "#FFFFFF"
+            else:
+                cell.setText("")
+                left = radius if month == 1 else 0
+                right = radius if month == 12 else 0
+                fill = theme.SURFACE_ALT
+                text_color = "transparent"
+
             cell.setStyleSheet(
-                f"background: {fill}; color: {theme.TEXT_ON_PRIMARY};"
+                f"background: {fill}; color: {text_color};"
                 f"font-size: {STRIP_FONT_PX}px; font-weight: 700;"
                 f"border-top-left-radius: {left}px;"
                 f"border-bottom-left-radius: {left}px;"
                 f"border-top-right-radius: {right}px;"
                 f"border-bottom-right-radius: {right}px;"
             )
-            row.addWidget(cell, 1)
+
+    def changeEvent(self, event) -> None:  # noqa: N802
+        if event.type() in (event.Type.PaletteChange, event.Type.StyleChange):
+            self._apply_styles()
+        super().changeEvent(event)
 
 
 class TaskCard(QFrame):

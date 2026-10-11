@@ -139,6 +139,7 @@ class TopBar(QWidget):
     project_requested = Signal()
     navigated = Signal(str)
     handover_clicked = Signal()
+    home_requested = Signal()
 
     def __init__(self, project_name: str = "", parent: QWidget | None = None):
         super().__init__(parent)
@@ -153,13 +154,21 @@ class TopBar(QWidget):
         # 창 아이콘과 같은 연결 고리 표지를 쓴다.
         art = icons.brand(theme.NAVBAR_TEXT, theme.TOPBAR_H - 24)
         if art is not None:
-            mark = QLabel()
-            mark.setPixmap(art)
-            row.addWidget(mark)
+            self.brand_mark = QLabel()
+            self.brand_mark.setPixmap(art)
+            self.brand_mark.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.brand_mark.setToolTip("업무 홈으로 이동")
+            self.brand_mark.mousePressEvent = lambda _event: self.home_requested.emit()
+            row.addWidget(self.brand_mark)
+        else:
+            self.brand_mark = None
 
-        name = QLabel("눈치코치")
-        name.setObjectName("AppName")
-        row.addWidget(name)
+        self.brand_title = QPushButton("눈치코치")
+        self.brand_title.setObjectName("AppName")
+        self.brand_title.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.brand_title.setToolTip("업무 홈으로 이동")
+        self.brand_title.clicked.connect(self.home_requested.emit)
+        row.addWidget(self.brand_title)
         row.addSpacing(theme.SP_MD)
 
         self.group = QButtonGroup(self)
@@ -302,6 +311,7 @@ class MainWindow(QMainWindow):
         outer.setSpacing(0)
 
         self.topbar = TopBar(self.project_name)
+        self.topbar.home_requested.connect(self._go_home)
         self.topbar.settings_requested.connect(self._open_settings)
         self.topbar.status_clicked.connect(self._open_status)
         self.topbar.project_requested.connect(self.switch_requested.emit)
@@ -371,6 +381,12 @@ class MainWindow(QMainWindow):
         self._daily.start()
 
     # ── 내비게이션 ──────────────────────────────────────────────────
+    def _go_home(self) -> None:
+        tasks_view = self.views.get("tasks")
+        if hasattr(tasks_view, "back"):
+            tasks_view.back()
+        self.go("tasks")
+
     def go(self, key: str) -> None:
         view = self.views.get(key)
         if view is None:

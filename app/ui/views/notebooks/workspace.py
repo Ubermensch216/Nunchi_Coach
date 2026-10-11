@@ -35,8 +35,8 @@ from .panel import Rail, icon_button, set_icon
 from .sources_panel import SourcesPanel
 from .studio_panel import StudioPanel
 
-DEFAULT_SIZES = [300, 760, 340]
-SIDE_MIN_W = 240
+DEFAULT_SIZES = [340, 720, 340]
+SIDE_MIN_W = 260
 # 판의 이름과 붙은 쪽. 그림(icons.py panel-left-*, panel-right-*)이 이 쪽을 따른다.
 PANELS = {"sources": ("출처", "left"), "studio": ("스튜디오", "right")}
 CHAT_MIN_W = 420

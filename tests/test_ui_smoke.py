@@ -176,6 +176,26 @@ def test_analysis_message_and_gauge_share_state_and_click_target(qapp):
         bar.deleteLater()
 
 
+def test_clicking_system_title_navigates_to_tasks_home(make_window, db):
+    _add_docs(db)
+    window = make_window(db)
+    # 다른 탭으로 이동 후 타이틀 클릭 시 업무 홈으로 이동
+    window.go("calendar")
+    assert window.stack.currentWidget() is window.views["calendar"]
+    window.topbar.brand_title.click()
+    assert window.stack.currentWidget() is window.views["tasks"]
+
+    # 업무 상세 화면에 들어간 상태에서도 타이틀 클릭 시 업무 홈(목록)으로 복귀
+    window.views["tasks"]._task_id = 1
+    window.topbar.brand_title.click()
+    assert window.views["tasks"]._task_id is None
+    assert window.stack.currentWidget() is window.views["tasks"]
+    if window.topbar.brand_mark is not None:
+        window.go("documents")
+        window.topbar.brand_mark.mousePressEvent(None)
+        assert window.stack.currentWidget() is window.views["tasks"]
+
+
 def test_window_switches_to_tasks_once_source_exists(make_window, db):
     _add_docs(db)
     window = make_window(db)

@@ -302,3 +302,40 @@ def test_empty_chat_shows_the_guides_of_the_selected_sources_only(workspace):
     notebook.query(db,book,"제출기한",Offline())
     chat.refresh()
     assert "요청 문서의 안내이다." not in [label.text() for label in chat.findChildren(QLabel)]
+
+
+def test_source_item_row_icons_and_actions(workspace):
+    view, db, book = workspace.view, workspace.db, workspace.book
+    view.open_notebook(book)
+    sources = view.workspace.sources
+    assert sources.source_list.count() == 1
+    item = sources.source_list.item(0)
+    row = sources.source_list.itemWidget(item)
+    assert row is not None
+
+    # 원문 보기, 연결 해제 버튼은 아이콘만 있고 설명 텍스트가 없어야 함
+    assert row.read_btn.text() == ""
+    assert row.read_btn.toolTip() == "원문 보기"
+    assert row.detach_btn is not None
+    assert row.detach_btn.text() == ""
+    assert row.detach_btn.toolTip() == "연결 해제"
+
+    # 원문 보기 아이콘 클릭 -> 원문 판으로 전환
+    row.read_btn.click()
+    assert sources.stack.currentIndex() == 1 and sources.reader_doc_id == workspace.docs[0]
+    sources.show_list()
+    assert sources.stack.currentIndex() == 0
+
+    # 연결 해제 아이콘 클릭 -> 문서가 노트북에서 제거됨
+    row.detach_btn.click()
+    assert sources.source_list.count() == 0
+    assert notebook.sources(db, book) == []
+
+    # 보관된 노트북(editable=False)에서는 연결 해제 버튼이 생성되지 않음
+    notebook.add_sources(db, book, workspace.docs[:1])
+    notebook.archive(db, book, True)
+    view.refresh()
+    item2 = sources.source_list.item(0)
+    row2 = sources.source_list.itemWidget(item2)
+    assert row2.detach_btn is None
+

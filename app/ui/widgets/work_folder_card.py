@@ -12,8 +12,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QKeyEvent, QMouseEvent, QPainter, QPaintEvent
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont, QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -50,9 +50,7 @@ class WorkFolderCard(QFrame):
         super().__init__(parent)
         self.task_id = task_id
         self.name = name
-        self.cover_color = color_for(name)
-        self._hovered = False
-        self._pressed = False
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         self.setObjectName("WorkFolderCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -73,6 +71,10 @@ class WorkFolderCard(QFrame):
             review_state=review_state,
             confidence=confidence,
         )
+
+    @property
+    def cover_color(self) -> str:
+        return color_for(self.name)
 
     def _build_ui(
         self,
@@ -95,12 +97,12 @@ class WorkFolderCard(QFrame):
         top_row.setSpacing(8)
 
         # 폴더 컬러 인디케이터 (작은 탭 형태의 색 판)
-        tab_indicator = QFrame()
-        tab_indicator.setFixedSize(28, 8)
-        tab_indicator.setStyleSheet(
+        self.tab_indicator = QFrame()
+        self.tab_indicator.setFixedSize(28, 8)
+        self.tab_indicator.setStyleSheet(
             f"background-color: {self.cover_color}; border-radius: 4px;"
         )
-        top_row.addWidget(tab_indicator)
+        top_row.addWidget(self.tab_indicator)
 
         top_row.addStretch(1)
 
@@ -119,14 +121,12 @@ class WorkFolderCard(QFrame):
         title_font.setPointSize(13)
         title_font.setBold(True)
         title_label.setFont(title_font)
-        title_label.setStyleSheet("color: #1E293B; line-height: 1.3;")
         outer.addWidget(title_label)
 
         # 3. 한 줄 설명 (무슨 일인가)
         desc_text = description.strip() if description else "자료에서 분석 중인 업무입니다."
         desc_label = ElidedLabel(desc_text)
         desc_label.setObjectName("FolderCardDesc")
-        desc_label.setStyleSheet("color: #475569; font-size: 12px;")
         outer.addWidget(desc_label)
 
         # 4. 주요 결과물 / 다음 행동 (있을 경우)
@@ -134,12 +134,12 @@ class WorkFolderCard(QFrame):
             action_text = deliverable or next_action
             action_label = ElidedLabel(f"핵심: {action_text}")
             action_label.setObjectName("FolderCardAction")
-            action_label.setStyleSheet("color: #0F766E; font-size: 11px; font-weight: 500;")
             outer.addWidget(action_label)
 
         # 5. 월간 스트립 (언제 하는 일인가)
         outer.addSpacing(2)
-        outer.addWidget(MonthStrip(months, accent=self.cover_color))
+        self.month_strip = MonthStrip(months, accent=self.cover_color)
+        outer.addWidget(self.month_strip)
 
         outer.addStretch(1)
 
@@ -158,38 +158,20 @@ class WorkFolderCard(QFrame):
         bottom_row.addWidget(meta_label)
         bottom_row.addStretch(1)
 
-        hint_label = QLabel("열기 →")
-        hint_label.setStyleSheet(
+        self.hint_label = QLabel("열기 →")
+        self.hint_label.setObjectName("FolderCardHint")
+        self.hint_label.setStyleSheet(
             f"color: {self.cover_color}; font-size: 11px; font-weight: 600;"
         )
-        bottom_row.addWidget(hint_label)
+        bottom_row.addWidget(self.hint_label)
 
         outer.addLayout(bottom_row)
 
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._pressed = True
-            self.update()
-        super().mousePressEvent(event)
-
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton and self._pressed:
-            self._pressed = False
-            self.update()
+        if event.button() == Qt.MouseButton.LeftButton:
             if self.rect().contains(event.pos()):
                 self.opened.emit(self.task_id)
         super().mouseReleaseEvent(event)
-
-    def enterEvent(self, event) -> None:
-        self._hovered = True
-        self.update()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event) -> None:
-        self._hovered = False
-        self._pressed = False
-        self.update()
-        super().leaveEvent(event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
@@ -198,37 +180,12 @@ class WorkFolderCard(QFrame):
             return
         super().keyPressEvent(event)
 
-    def paintEvent(self, event: QPaintEvent) -> None:
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        rect = self.rect()
-
-        # 배경 및 테두리 스타일
-        if self._pressed:
-            bg_color = QColor("#F1F5F9")
-            border_color = QColor(self.cover_color)
-            border_width = 2
-        elif self._hovered or self.hasFocus():
-            bg_color = QColor("#FFFFFF")
-            border_color = QColor(self.cover_color)
-            border_width = 1.5
-        else:
-            bg_color = QColor("#FAFAFA")
-            border_color = QColor("#E2E8F0")
-            border_width = 1
-
-        painter.setBrush(bg_color)
-        painter.setPen(Qt.PenStyle.NoPen)
-        # 둥근 모서리 배경
-        painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 10, 10)
-
-        # 테두리
-        from PySide6.QtGui import QPen
-        pen = QPen(border_color, border_width)
-        painter.setPen(pen)
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 10, 10)
-
-        painter.end()
-        super().paintEvent(event)
+    def changeEvent(self, event) -> None:  # noqa: N802
+        if event.type() in (event.Type.PaletteChange, event.Type.StyleChange):
+            self.tab_indicator.setStyleSheet(
+                f"background-color: {self.cover_color}; border-radius: 4px;"
+            )
+            self.hint_label.setStyleSheet(
+                f"color: {self.cover_color}; font-size: 11px; font-weight: 600;"
+            )
+        super().changeEvent(event)

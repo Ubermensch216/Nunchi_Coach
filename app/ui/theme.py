@@ -486,6 +486,7 @@ def stylesheet(text_size: str = "medium") -> str:
     section = _scaled(FS_SECTION, scale)
     lead = _scaled(FS_LEAD, scale)
     title = _scaled(FS_TITLE, scale)
+    folder_action = "#2DD4BF" if _mode == "dark" else "#0F766E"
     return f"""
     * {{
         font-family: {_qss_family()};
@@ -501,10 +502,17 @@ def stylesheet(text_size: str = "medium") -> str:
         background: {NAVBAR_BG};
         border-bottom: 1px solid {NAVBAR_LINE};
     }}
-    QLabel#AppName {{
+    QLabel#AppName, QPushButton#AppName {{
         font-size: {lead}px;
         font-weight: 700;
         color: {NAVBAR_TEXT};
+        background: transparent;
+        border: none;
+        padding: 0;
+        text-align: left;
+    }}
+    QPushButton#AppName:hover {{
+        color: {PRIMARY};
     }}
     QFrame#TopDivider {{ background: {NAVBAR_LINE}; border: none; }}
     QPushButton#NavTab {{
@@ -749,6 +757,36 @@ def stylesheet(text_size: str = "medium") -> str:
     }}
     QFrame#TaskCard:hover {{ border-color: {PRIMARY}; }}
     QFrame#TaskCard:focus {{ border: 2px solid {TEXT}; }}
+    /* 큰 폴더형 업무 카드 (WorkFolderCard) */
+    QFrame#WorkFolderCard {{
+        background: {BG};
+        border: 1px solid {BORDER};
+        border-radius: 10px;
+    }}
+    QFrame#WorkFolderCard:hover {{
+        background: {SURFACE};
+        border-color: {PRIMARY};
+    }}
+    QFrame#WorkFolderCard:focus {{
+        border: 2px solid {TEXT};
+    }}
+    QFrame#WorkFolderCard QLabel {{
+        background: transparent;
+    }}
+    QLabel#FolderCardTitle {{
+        font-size: {lead}px;
+        font-weight: 700;
+        color: {TEXT};
+    }}
+    QLabel#FolderCardDesc {{
+        font-size: {body}px;
+        color: {TEXT_MUTED};
+    }}
+    QLabel#FolderCardAction {{
+        font-size: {small}px;
+        font-weight: 500;
+        color: {folder_action};
+    }}
     QLabel#NotebookCardTitle {{ font-size: {lead}px; font-weight: 700; color: {TEXT}; }}
     /* 작업 화면의 세 판. 회색 바탕 위의 흰 판으로 서로 갈린다. */
     QFrame#NotebookPanel {{
@@ -765,11 +803,14 @@ def stylesheet(text_size: str = "medium") -> str:
     QTreeWidget#TaskTree {{ padding: {SP_XS}px; }}
     QTreeWidget#TaskTree::item {{ min-height: 26px; padding: 1px 0; }}
     QListWidget#SourceList::item {{
-        padding: {SP_SM}px {SP_XS}px;
+        padding: 0;
         border-radius: {RADIUS_SM}px;
         color: {TEXT};
     }}
     QListWidget#SourceList::item:hover {{ background: {BAND}; }}
+    QWidget#SourceRow {{ background: transparent; }}
+    QLabel#SourceRowText {{ color: {TEXT}; background: transparent; }}
+    QLabel#SourceRowState {{ color: {TEXT_MUTED}; background: transparent; }}
     /* 산출물 줄 — 이름과 휴지통. 줄 위젯은 비워 두어 고른 줄의 바탕이 비쳐 보이게 한다. */
     QListWidget#OutputList {{ background: transparent; border: none; outline: none; }}
     QListWidget#OutputList::item {{ padding: 0; border-radius: {RADIUS_SM}px; }}

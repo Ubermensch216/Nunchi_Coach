@@ -790,13 +790,6 @@ class TasksView(QWidget):
         self.tabs.setVisible(True)
         self._head_pad.setVisible(False)
 
-        back = QPushButton("←  업무 목록")
-        back.setObjectName("BackLink")
-        back.setCursor(Qt.CursorShape.PointingHandCursor)
-        back.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-        back.clicked.connect(self.back)
-        self.head.addWidget(back, alignment=Qt.AlignmentFlag.AlignLeft)
-
         # 제목과 조작을 한 줄에 둔다. 제목은 왼쪽, 손댈 것은 오른쪽 —
         # 스크롤을 내려도 이 줄은 머리 띠에 남는다.
         title_row = QHBoxLayout()
