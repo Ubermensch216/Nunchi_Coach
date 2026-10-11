@@ -45,37 +45,9 @@ def install(con: sqlite3.Connection) -> None:
 
 
 def _install_dirty_triggers(con: sqlite3.Connection) -> None:
-    """여러 DB 연결과 직접 SQL 쓰기도 같은 변경 원장에 남긴다. 작업 실행은 P3."""
-    sources = {"documents": "'document:'||{row}.id", "tasks": "'task:'||{row}.id"}
-    for table in ("task_docs", "task_items", "work_steps", "task_steps", "work_cases", "action_runs"):
-        sources[table] = "coalesce('task:'||{row}.task_id,'project')"
-    for table in ("document_sections", "document_index", "chunks", "doc_roles", "doc_years", "evidence"):
-        sources[table] = "coalesce('document:'||{row}.doc_id,'project')"
-    for table in ("artifacts", "checklist_items"):
-        sources[table] = "coalesce('task:'||(SELECT task_id FROM work_cases WHERE id={row}.case_id),'project')"
-    sources["action_steps"] = "coalesce('task:'||(SELECT task_id FROM action_runs WHERE id={row}.run_id),'project')"
-    sources["step_runs"] = "coalesce('task:'||(SELECT task_id FROM work_steps WHERE id={row}.step_id),'project')"
-    existing = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    for table, expression in sources.items():
-        # 일부 초기 DB에는 보충 스키마 표가 없다. repo.init이 표를 만든 뒤 다시 설치한다.
-        if table not in existing:
-            continue
-        for operation, refs in (("INSERT", ("new",)), ("UPDATE", ("old", "new")), ("DELETE", ("old",))):
-            # 하나의 UPDATE는 이전 소속과 새 소속 모두 dirty로 만든다. 중복 키는 한 번만.
-            partitions = " UNION ".join(f"SELECT {expression.format(row=ref)} AS partition_key" for ref in refs)
-            sql = (f"CREATE TRIGGER IF NOT EXISTS kg_dirty_{table}_{operation.lower()} AFTER {operation} ON {table} BEGIN "
-                   f"INSERT INTO kg_jobs(partition_key,reason) SELECT partition_key,'{table}:{operation.lower()}' "
-                   f"FROM ({partitions}) WHERE true ON CONFLICT(partition_key,job_kind) DO UPDATE SET "
-                   "wanted_revision=kg_jobs.wanted_revision+1,"
-                   "state=CASE WHEN kg_jobs.state='running' THEN 'running' ELSE 'dirty' END,"
-                   "reason=excluded.reason; END")
-            con.execute(sql)
-    con.execute("""CREATE TRIGGER IF NOT EXISTS kg_dirty_meta AFTER UPDATE OF value ON meta
-        WHEN new.key IN ('content_revision','index_revision') AND new.value!=old.value BEGIN
-        INSERT INTO kg_jobs(partition_key,reason) VALUES ('project','revision')
-        ON CONFLICT(partition_key,job_kind) DO UPDATE SET wanted_revision=kg_jobs.wanted_revision+1,
-        state=CASE WHEN kg_jobs.state='running' THEN 'running' ELSE 'dirty' END,reason=excluded.reason;
-        END""")
+    from .knowledge_dirty import install_dirty_triggers
+
+    install_dirty_triggers(con)
 
 
 class KnowledgeStore:
@@ -99,7 +71,7 @@ class KnowledgeStore:
             if row:
                 if row["type"] != entity_type:
                     raise ValueError("기존 binding의 유형은 바꿀 수 없습니다.")
-                self.db.con.execute("UPDATE kg_entities SET label=? WHERE uuid=?", (label, row["uuid"]))
+                self.db.con.execute("UPDATE kg_entities SET label=?,scope_key=? WHERE uuid=?", (label, scope_key, row["uuid"]))
                 return row["uuid"]
             uid = self.new_id()
             self.db.con.execute("INSERT INTO kg_entities(uuid,type,label,scope_key) VALUES (?,?,?,?)",
@@ -179,12 +151,24 @@ class KnowledgeStore:
 
     def record_decision(self, target_kind: str, target_key: str, decision: str, actor: str,
                         *, before=None, after=None, supersedes_decision: str | None = None) -> str:
+        if target_kind == 'identity' and decision == 'merge':
+            from ..core.knowledge.resolution import canonical_entity
+            target = (after or {}).get('entity_id')
+            kinds = self.db.con.execute('SELECT uuid,type FROM kg_entities WHERE uuid IN (?,?)', (target_key, target)).fetchall()
+            if len(kinds) != 2 or len({r['type'] for r in kinds}) != 1:
+                raise ValueError('동일성 병합은 서로 다른 동일 유형 UUID가 필요합니다.')
+            if canonical_entity(self.db, target) == target_key:
+                raise ValueError('동일성 병합이 순환합니다.')
         uid = self.new_id()
         self.db.con.execute(
             "INSERT INTO kg_decisions(uuid,target_kind,target_key,decision,actor,before_json,after_json,supersedes_decision) "
             "VALUES (?,?,?,?,?,?,?,?)", (uid, target_kind, target_key, decision, actor,
                                         canonical_json(before or {}), canonical_json(after or {}), supersedes_decision))
         return uid
+
+    def canonical_entity(self, entity_id: str) -> str:
+        from ..core.knowledge.resolution import canonical_entity
+        return canonical_entity(self.db, entity_id)
 
     def link_claims(self, from_claim: str, kind: str, to_claim: str, support_ref: str) -> None:
         if kind == "conflicts":
@@ -200,6 +184,7 @@ class KnowledgeStore:
         self.db.con.execute("INSERT INTO kg_jobs(partition_key,reason) VALUES (?,?) "
                             "ON CONFLICT(partition_key,job_kind) DO UPDATE SET "
                             "wanted_revision=kg_jobs.wanted_revision+1,reason=excluded.reason,"
+                            "attempts=0,error='',"
                             "state=CASE WHEN kg_jobs.state='running' THEN 'running' ELSE 'dirty' END",
                             (partition_key, reason))
 
@@ -208,17 +193,39 @@ class KnowledgeStore:
                                    "AND input_fingerprint=? AND active=1", (partition_key, input_fingerprint)).fetchone()
 
     def complete_unchanged(self, partition_key: str) -> None:
+        self.check_lease(partition_key)
         self.db.con.execute("UPDATE kg_jobs SET state='done' WHERE partition_key=? AND job_kind='projection' "
                             "AND state='dirty' AND lease IS NULL", (partition_key,))
+        token = getattr(self.db, "_kg_lease", None)
+        if token:
+            self.db.con.execute("UPDATE kg_jobs SET state='done',lease=NULL,lease_until=NULL,error='' "
+                                "WHERE partition_key=? AND lease=?", (partition_key, token[0]))
+
+    def check_lease(self, partition_key: str) -> None:
+        import time
+        from ..core.knowledge.lifecycle import ObsoleteJob, CancelledJob
+
+        if getattr(self.db, "_kg_should_stop", lambda: False)():
+            raise CancelledJob()
+        job = self.db.con.execute("SELECT * FROM kg_jobs WHERE partition_key=? AND job_kind='projection'",
+                                  (partition_key,)).fetchone()
+        token = getattr(self.db, "_kg_lease", None)
+        if token and (not job or job['state'] != 'running' or job['lease'] != token[0]
+                      or job['wanted_revision'] != token[1] or job['lease_until'] <= time.time()):
+            raise ObsoleteJob("lease 또는 입력 revision이 바뀌었습니다.")
+        if not token and job and job['state'] == 'running':
+            raise ObsoleteJob("다른 작업자가 처리하는 파티션입니다.")
 
     def begin_generation(self, partition_key: str, input_fingerprint: str) -> int:
+        from ..core.knowledge.projection import PROJECTION_VERSION
+        self.check_lease(partition_key)
         self.db.con.execute("INSERT INTO kg_jobs(partition_key,reason) VALUES (?,'projection') "
                             "ON CONFLICT(partition_key,job_kind) DO NOTHING", (partition_key,))
         revision = self.db.con.execute("SELECT wanted_revision FROM kg_jobs WHERE partition_key=? "
                                        "AND job_kind='projection'", (partition_key,)).fetchone()[0]
         return self.db.con.execute("INSERT INTO kg_generations(partition_key,wanted_revision,input_fingerprint,versions) "
                                    "VALUES (?,?,?,?)", (partition_key, revision, input_fingerprint,
-                                                        canonical_json({"projection": "1", "ontology": load()["version"]}))).lastrowid
+                                                        canonical_json({"projection": PROJECTION_VERSION, "ontology": load()["version"]}))).lastrowid
 
     def support(self, claim_id: str, evidence_id: str, generation_id: int,
                 validation: str = "structural", active: bool = True) -> None:
@@ -239,20 +246,23 @@ class KnowledgeStore:
 
     def finish_generation(self, generation_id: int, diagnostics: list[str]) -> None:
         from ..core.knowledge.resolution import latest_decision
+        from ..core.knowledge.projection import PROJECTION_VERSION
 
         generation = self.db.con.execute("SELECT * FROM kg_generations WHERE id=?", (generation_id,)).fetchone()
         partition = generation["partition_key"]
+        self.check_lease(partition)
         wanted = self.db.con.execute("SELECT wanted_revision FROM kg_jobs WHERE partition_key=? AND job_kind='projection'",
                                      (partition,)).fetchone()[0]
         if wanted != generation["wanted_revision"]:
             raise RuntimeError("변경된 입력의 그래프 세대를 게시할 수 없습니다.")
+        self._validate_cycles(generation_id, partition)
         self.db.con.execute("UPDATE kg_claim_evidence SET active=0 WHERE generation_id IN "
                             "(SELECT id FROM kg_generations WHERE partition_key=? AND active=1)", (partition,))
         self.db.con.execute("UPDATE kg_generations SET active=0 WHERE partition_key=? AND active=1", (partition,))
         processed = self.db.con.execute("SELECT COUNT(DISTINCT claim_id) FROM kg_claim_evidence WHERE generation_id=?",
                                         (generation_id,)).fetchone()[0]
         self.db.con.execute("UPDATE kg_generations SET status='published',active=1,processed=?,failed=?,versions=? WHERE id=?",
-                            (processed, len(diagnostics), canonical_json({"projection": "1", "ontology": load()["version"],
+                            (processed, len(diagnostics), canonical_json({"projection": PROJECTION_VERSION, "ontology": load()["version"],
                                                                         "diagnostics": diagnostics}), generation_id))
         affected = self.db.con.execute("SELECT DISTINCT c.uuid,c.claim_key FROM kg_claims c JOIN kg_claim_evidence e "
                                        "ON e.claim_id=c.uuid JOIN kg_generations g ON g.id=e.generation_id WHERE g.partition_key=?",
@@ -264,14 +274,50 @@ class KnowledgeStore:
             decision = latest_decision(self.decisions_for(claim["claim_key"]))
             lifecycle = "retracted" if decision and decision["decision"] == "reject" else "active" if supported else "stale"
             self.db.con.execute("UPDATE kg_claims SET lifecycle=?,generation_id=? WHERE uuid=?", (lifecycle, generation_id, claim["uuid"]))
-        self.db.con.execute("UPDATE kg_jobs SET state='done',lease=NULL WHERE partition_key=? AND job_kind='projection'", (partition,))
+        self.db.con.execute("UPDATE kg_jobs SET state='done',lease=NULL,lease_until=NULL,error='' "
+                            "WHERE partition_key=? AND job_kind='projection'", (partition,))
         self.db.set_meta("kg_revision", str(int(self.db.get_meta("kg_revision") or 0) + 1))
+
+    def _validate_cycles(self, generation_id: int, partition: str) -> None:
+        # 재사용된 논리 주장도 새 세대의 근거 기준으로 검사한다. 이전 세대는 제외한다.
+        rows = self.db.con.execute("SELECT DISTINCT c.* FROM kg_claims c JOIN kg_claim_evidence s ON s.claim_id=c.uuid "
+            "JOIN kg_generations g ON g.id=s.generation_id JOIN kg_predicates p ON p.name=c.predicate "
+            "WHERE json_extract(p.definition,'$.acyclic')=1 AND s.active=1 AND s.support_role='supports' "
+            "AND s.validation_result IN ('structural','quote_matched','semantic_supported') "
+            "AND (g.id=? OR (g.active=1 AND g.partition_key!=?))", (generation_id, partition)).fetchall()
+        edges = {}
+        from ..core.knowledge.resolution import latest_decision
+        for row in rows:
+            decision = latest_decision(self.decisions_for(row['claim_key']))
+            if decision and decision['decision'] == 'reject':
+                continue
+            key = (row['predicate'], row['scope_key'])
+            edges.setdefault(key, {}).setdefault(row['subject_id'], set()).add(row['object_id'])
+        for graph in edges.values():
+            # 반복형 Kahn 검사로 긴 절차에서도 Python 재귀 한도를 피한다.
+            incoming = {node: 0 for node in graph}
+            for targets in graph.values():
+                for node in targets:
+                    incoming[node] = incoming.get(node, 0) + 1
+            ready = [node for node, degree in incoming.items() if degree == 0]
+            count = 0
+            while ready:
+                node = ready.pop()
+                count += 1
+                for target in graph.get(node, ()):
+                    incoming[target] -= 1
+                    if incoming[target] == 0:
+                        ready.append(target)
+            if count != len(incoming):
+                raise ValueError("kg relation cycle: 현재 세대의 관계가 순환합니다.")
 
     def decision_revision(self) -> int:
         return self.db.con.execute("SELECT coalesce(max(rowid),0) FROM kg_decisions").fetchone()[0]
 
     def independent_quote_sources(self, claim_id: str) -> int:
         return self.db.con.execute("SELECT COUNT(DISTINCT e.doc_hash) FROM kg_claim_evidence s JOIN kg_evidence e "
-                                   "ON e.uuid=s.evidence_id WHERE s.claim_id=? AND s.active=1 AND s.support_role='supports' "
+                                   "ON e.uuid=s.evidence_id JOIN kg_generations g ON g.id=s.generation_id "
+                                   "JOIN kg_current_claims c ON c.uuid=s.claim_id "
+                                   "WHERE s.claim_id=? AND s.active=1 AND g.active=1 AND s.support_role='supports' "
                                    "AND s.validation_result IN ('quote_matched','semantic_supported') AND e.kind='document_quote'",
                                    (claim_id,)).fetchone()[0]

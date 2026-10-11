@@ -61,6 +61,8 @@ def schema(con):
 def strip_graph(db):
     for row in list(db.con.execute("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'kg_%'")):
         db.con.execute(f'DROP TRIGGER "{row[0]}"')
+    for row in list(db.con.execute("SELECT name FROM sqlite_master WHERE type='view' AND name LIKE 'kg_%'")):
+        db.con.execute(f'DROP VIEW "{row[0]}"')
     db.con.execute("PRAGMA foreign_keys=OFF")
     for row in list(db.con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'kg_%'")):
         db.con.execute(f'DROP TABLE "{row[0]}"')
@@ -109,7 +111,7 @@ def test_failed_v12_rolls_back_ddl_uuid_and_queue_then_retries(db, monkeypatch):
     assert not db.con.execute("SELECT 1 FROM sqlite_master WHERE name='kg_entities'").fetchone()
     monkeypatch.setitem(migrations.STEPS, "12", original)
     db.init()
-    assert db.get_meta("schema_version") == "12"
+    assert db.get_meta("schema_version") == migrations.SCHEMA_VERSION
 
 
 def test_older_reader_refuses_v12_without_modification(db, monkeypatch):
@@ -139,7 +141,7 @@ def test_new_database_failure_does_not_publish_schema_version(tmp_path, monkeypa
         assert fresh.get_meta("project_uuid") is None
         assert not fresh.con.execute("SELECT 1 FROM sqlite_master WHERE name='kg_entities'").fetchone()
         fresh.init()
-        assert fresh.get_meta("schema_version") == "12"
+        assert fresh.get_meta("schema_version") == migrations.SCHEMA_VERSION
     finally:
         fresh.close()
 
@@ -153,7 +155,7 @@ def test_binding_claim_dedup_and_append_only_decisions(db):
     first = store.put_claim(task, "due_date", value="2026-11-01", value_type="date")
     decision = store.record_decision("claim", db.con.execute("SELECT claim_key FROM kg_claims").fetchone()[0], "reject", "후임자")
     assert store.put_claim(task, "due_date", value="2026-11-01", value_type="date", origin="model") == first
-    undo = store.record_decision("claim", "target", "undo", "후임자", supersedes_decision=decision)
+    undo = store.record_decision("claim", db.con.execute("SELECT claim_key FROM kg_claims").fetchone()[0], "undo", "후임자", supersedes_decision=decision)
     assert undo != decision
     for statement in ("UPDATE kg_decisions SET actor='changed'", "DELETE FROM kg_decisions",
                       "UPDATE kg_claims SET value_json='\"2026-12-01\"'", "DELETE FROM kg_claims"):
@@ -161,7 +163,7 @@ def test_binding_claim_dedup_and_append_only_decisions(db):
             db.con.execute(statement)
     for state in ("active", "retracted", "active"):
         db.con.execute("UPDATE kg_claims SET lifecycle=?", (state,))
-    assert db.con.execute("SELECT COUNT(*) FROM kg_claim_events").fetchone()[0] == 4
+    assert db.con.execute("SELECT COUNT(*) FROM kg_claim_events").fetchone()[0] == 5
 
 
 def test_quote_anchor_survives_chunk_and_document_deletion(db):

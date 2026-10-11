@@ -1,4 +1,4 @@
-"""개발용 구조 투영. UI 자동 실행·큐 lease 작업자는 P3에서 연결한다."""
+"""구조 투영과 영속 큐 진단·취소·재개용 내부 명령."""
 import argparse
 import json
 from dataclasses import asdict
@@ -14,12 +14,26 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", type=Path, required=True, help="project.db가 있는 프로젝트 폴더")
     parser.add_argument("--task", type=int)
+    parser.add_argument('--jobs', action='store_true', help='dirty/만료 lease 큐를 처리')
+    parser.add_argument('--resume', action='store_true', help='실패/취소 작업을 다시 예약')
+    parser.add_argument('--cancel', metavar='PARTITION', help='task:1/document:1 등 작업 취소')
+    parser.add_argument('--seconds', type=float, default=5)
     args = parser.parse_args(argv)
     path = args.project / "project.db"
     if not path.is_file():
         parser.error("기존 project.db를 찾을 수 없습니다.")
     with Database(path) as db:
         db.init()
+        if args.jobs or args.resume or args.cancel:
+            from ..core.knowledge.lifecycle import run_jobs, resume, cancel
+            if args.resume:
+                resume(db)
+            if args.cancel:
+                cancel(db, args.cancel)
+            report = run_jobs(db, seconds=args.seconds) if args.jobs else None
+            jobs = [dict(r) for r in db.con.execute('SELECT * FROM kg_jobs ORDER BY partition_key')]
+            print(json.dumps({'report': asdict(report) if report else None, 'jobs': jobs}, ensure_ascii=False, indent=2))
+            return int(any(r['state']=='failed' for r in jobs))
         results = []
         if args.task is not None:
             results.append(project_task(db, args.task))

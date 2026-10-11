@@ -131,6 +131,12 @@ class Pipeline(QObject):
                 self._steps(db)
             if not self._stop:
                 self._restore(db)
+            if not self._stop:
+                from ..core.knowledge.lifecycle import run_jobs
+                try:
+                    run_jobs(db, should_stop=self._stopped)
+                except Exception as exc:
+                    diagnostics.record('knowledge.jobs.error', exc)
             db.audit("pipeline.stop", result="cancelled" if self._stop else "completed")
             diagnostics.record("pipeline.stop")
         except Exception as exc:  # 워커가 조용히 죽으면 사용자는 영문을 모른다

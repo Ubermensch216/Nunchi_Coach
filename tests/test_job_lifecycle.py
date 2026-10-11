@@ -25,6 +25,30 @@ def spin(qapp, predicate, timeout=3):
     assert predicate()
 
 
+def test_knowledge_runner_uses_own_connection_and_releases_thread(tmp_path, qapp):
+    from app.jobs.knowledge_task import KnowledgeRunner
+    from app.core.knowledge.lifecycle import pending
+
+    db = Database(tmp_path / 'p.db')
+    db.init()
+    db.con.execute("INSERT INTO tasks(id,name) VALUES (1,'백그라운드 업무')")
+    runner = KnowledgeRunner(db.path)
+    try:
+        assert runner.start()
+        assert not runner.start()
+        spin(qapp, lambda: runner._thread is None)
+        assert not pending(db)
+        assert db.con.execute("SELECT state FROM kg_jobs WHERE partition_key='task:1'").fetchone()[0] == 'done'
+        db.con.execute("UPDATE tasks SET name='수정 업무' WHERE id=1")
+        assert pending(db)
+        assert runner.start()
+        spin(qapp, lambda: runner._thread is None)
+        assert not pending(db)
+    finally:
+        runner.stop()
+        db.close()
+
+
 def test_cancelled_question_is_not_saved_or_delivered(tmp_path, qapp, monkeypatch):
     db = Database(tmp_path / "p.db")
     db.init()

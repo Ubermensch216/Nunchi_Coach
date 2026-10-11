@@ -109,6 +109,12 @@ class IngestWorker(QObject):
         except Exception as exc:
             diagnostics.record("notebook.ingest.error", exc)
         finally:
+            if not self.cancelled:
+                try:
+                    from ..core.knowledge.lifecycle import run_jobs
+                    run_jobs(db, should_stop=lambda: self.cancelled)
+                except Exception as exc:
+                    diagnostics.record('knowledge.jobs.error', exc)
             db.close()
         self.done.emit(results)
 

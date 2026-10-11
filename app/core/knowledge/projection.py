@@ -11,7 +11,7 @@ from ...db.knowledge import KnowledgeStore
 from .evidence import match_quote, parse_fingerprint
 from .ontology import canonical_json, fingerprint, normalize_label
 
-PROJECTION_VERSION = "1"
+PROJECTION_VERSION = "2"
 
 
 @dataclass
@@ -32,14 +32,15 @@ def _document(db, doc_id):
     value = {key: row[key] for key in fields}
     value["parse_fingerprint"] = parse_fingerprint(db, doc_id)
     value["chunk_fingerprint"] = fingerprint([tuple(r) for r in db.con.execute(
-        "SELECT id,ordinal,locator FROM chunks WHERE doc_id=? ORDER BY id", (doc_id,))])
+        "SELECT id,ordinal,locator,text,context FROM chunks WHERE doc_id=? ORDER BY id", (doc_id,))])
+    value['derived'] = bool(db.con.execute("SELECT 1 FROM notebook_sources WHERE doc_id=? AND origin='task' LIMIT 1", (doc_id,)).fetchone())
     return value
 
 
-def _task_input(db, task_id):
+def _task_input(db, task_id, *, prepare=True):
     task = db.task(task_id)
     if task is None:
-        raise ValueError("업무를 찾을 수 없습니다.")
+        return {'task': None, 'documents': []}
     data = {"task": dict(task)}
     for table in ("task_docs", "work_cases", "work_steps", "task_steps", "task_items"):
         data[table] = [dict(r) for r in db.con.execute(f"SELECT * FROM {table} WHERE task_id=? ORDER BY rowid", (task_id,))]
@@ -55,6 +56,9 @@ def _task_input(db, task_id):
     doc_ids = {r["doc_id"] for r in data["task_docs"] + data["task_steps"] + data["evidence"] if r["doc_id"] is not None}
     doc_ids.update(r["basis_doc_id"] for r in data["work_cases"] if r["basis_doc_id"] is not None)
     data["documents"] = [_document(db, doc_id) for doc_id in sorted(doc_ids)]
+    if prepare:
+        data['matches'] = {fingerprint(e): match_quote(db, e['doc_id'], e['doc_hash'], e['locator'], e['quote'])
+                           for e in data['evidence'] if e['doc_id'] is not None}
     return data
 
 
@@ -63,7 +67,8 @@ class _Projection:
         self.db, self.store, self.data = db, KnowledgeStore(db), data
         self.result = Result(partition)
         self.signature = fingerprint({"projection": PROJECTION_VERSION, "data": data,
-            "index_revision": db.get_meta("index_revision"), "decisions": self.store.decision_revision()})
+            "index_revision": db.get_meta("index_revision"), "decisions": self.store.decision_revision(),
+            "aliases": db.get_meta('kg_alias_revision')})
         previous = self.store.published(partition, self.signature)
         if previous:
             self.result.generation, self.result.claims, self.result.reused = previous["id"], previous["processed"], True
@@ -100,6 +105,10 @@ class _Projection:
             doc_uuid = f"{self.db.get_meta('project_uuid')}:{uuid4()}"
             self.db.set_meta(key, doc_uuid)
         uid = self.store.bind("document_versions", f"{doc_uuid}:{row['hash']}", "DocumentVersion", row["filename"], f"document:{doc_uuid}")
+        self.db.con.execute("UPDATE kg_entities SET lifecycle='stale' WHERE type='DocumentVersion' AND scope_key=? AND uuid!=?",
+                            (f'document:{doc_uuid}', uid))
+        self.db.con.execute('UPDATE kg_entities SET lifecycle=? WHERE uuid=?',
+                            ('stale' if row['missing_since'] is not None else 'active', uid))
         evidence = self.store.put_evidence("source_record", doc_uuid=doc_uuid, doc_id=doc_id, doc_hash=row["hash"],
             parse_fingerprint=row["parse_fingerprint"], source_record_snapshot={k: v for k, v in row.items() if k != "chunk_fingerprint"})
         self.store.add_alias(uid, row["filename"], scope_key=f"document:{doc_uuid}", source_key=f"document:{doc_uuid}:{row['hash']}", evidence_id=evidence)
@@ -109,6 +118,7 @@ class _Projection:
 
     def claim(self, subject, predicate, row, *, obj=None, value=None, value_type=None,
               scope="", active=True, table="", evidence_rows=()):
+        self.store.check_lease(self.result.partition)
         try:
             uid = self.store.put_claim(subject, predicate, object_id=obj, value=value, value_type=value_type,
                 scope_key=scope, origin="projection", basis_state=row.get("basis_state", "stated"),
@@ -125,6 +135,10 @@ class _Projection:
             applicability=row.get("applicability", "unknown"), human_state=row.get("human_state", "none"),
             execution_state=row.get("execution_state"), generation_id=self.result.generation)
         human = row.get("origin") == "user"
+        doc_id = row.get('doc_id', row.get('basis_doc_id'))
+        if not human and doc_id is not None and predicate in ('due_date', 'amount', 'HAS_STEP', 'PRECEDES'):
+            doc = self.documents.get(doc_id)
+            active = active and bool(doc and doc[2]['missing_since'] is None and not doc[2]['derived'])
         original_support = self.record(table, row, human=human)
         matched = False
         for original in evidence_rows:
@@ -133,7 +147,7 @@ class _Projection:
                 self.result.diagnostics.append(f"{table}:{row.get('id','')}:missing_document")
                 continue
             _, doc_uuid, doc = document
-            quote = match_quote(self.db, doc["id"], original["doc_hash"], original["locator"], original["quote"])
+            quote = self.data.get('matches', {}).get(fingerprint(original)) if not doc['derived'] else None
             matched = matched or quote is not None
             evidence = self.store.put_evidence("document_quote" if original["doc_hash"] and original["locator"] and original["quote"] else "source_record",
                 doc_uuid=doc_uuid, doc_id=doc["id"], doc_hash=original["doc_hash"], parse_fingerprint=doc["parse_fingerprint"],
@@ -152,24 +166,35 @@ class _Projection:
 
 
 def project_document(db, doc_id: int) -> Result:
+    snapshot = _document(db, doc_id)
     with db.transaction():
+        _lock_partition(db, f'document:{doc_id}')
         row = _document(db, doc_id)
-        if row is None:
-            raise ValueError("문서를 찾을 수 없습니다.")
+        _check_snapshot(snapshot, row)
         projection = _Projection(db, f"document:{doc_id}", row)
         if projection.result.reused:
             return projection.result
-        projection.document(row)
+        if row is not None:
+            projection.document(row)
         return projection.finish()
 
 
 def project_task(db, task_id: int) -> Result:
+    snapshot = _task_input(db, task_id)
     with db.transaction():
-        data = _task_input(db, task_id)
+        _lock_partition(db, f'task:{task_id}')
+        data = _task_input(db, task_id, prepare=False)
+        _check_snapshot({k: v for k, v in snapshot.items() if k != 'matches'}, data)
+        data['matches'] = snapshot.get('matches', {})
         p = _Projection(db, f"task:{task_id}", data)
         if p.result.reused:
             return p.result
         scope = f"task:{task_id}"
+        db.con.execute('DELETE FROM kg_partition_documents WHERE partition_key=?', (scope,))
+        db.con.executemany('INSERT INTO kg_partition_documents(partition_key,doc_id) VALUES (?,?)',
+                          [(scope, d['id']) for d in data['documents'] if d is not None])
+        if data['task'] is None:
+            return p.finish()
         task = p.entity("tasks", data["task"], "Task", data["task"]["name"], scope)
         if data["task"]["not_a_task"]:
             return p.finish()
@@ -203,7 +228,8 @@ def project_task(db, task_id: int) -> Result:
                                 "basis_state": row.get("basis_state", "inferred" if row.get("is_inferred") else "stated"),
                                 "applicability": row.get("applicability", "past" if table == "task_steps" else "unknown")}
                 if not row.get("excluded"):
-                    p.claim(task, "HAS_STEP", record, obj=steps[(table, row["id"])], scope=step_scope, table=table)
+                    original = [e for e in data['evidence'] if table == 'work_steps' and e['owner_kind'] == 'step' and e['owner_id'] == row['id']]
+                    p.claim(task, "HAS_STEP", record, obj=steps[(table, row["id"])], scope=step_scope, table=table, evidence_rows=original)
         for row in data["work_steps"]:
             before = steps.get(("work_steps", row["after_step_id"]))
             if before and not row["excluded"] and not next(r for r in data["work_steps"] if r["id"] == row["after_step_id"])["excluded"]:
@@ -249,3 +275,15 @@ def project_task(db, task_id: int) -> Result:
                 p.store.add_alias(entity, row["content"], scope_key=scope, source_key=f"task_item:{row['id']}", evidence_id=provenance)
                 p.claim(task, predicate, row, obj=entity, scope=item_scope, table="task_items", evidence_rows=original)
         return p.finish()
+
+
+def _lock_partition(db, partition):
+    # 읽기 스냅샷을 쓰기 트랜잭션으로 승격하기 전에 writer를 확보한다.
+    db.con.execute("UPDATE kg_jobs SET wanted_revision=wanted_revision WHERE partition_key=?", (partition,))
+    KnowledgeStore(db).check_lease(partition)
+
+
+def _check_snapshot(before, after):
+    if fingerprint(before) != fingerprint(after):
+        from .lifecycle import ObsoleteJob
+        raise ObsoleteJob('스냅샷 이후 원본이 바뀌었습니다.')

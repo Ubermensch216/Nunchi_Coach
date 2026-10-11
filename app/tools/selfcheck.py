@@ -85,6 +85,17 @@ def run() -> list[str]:
             problems.append("다음 행동을 내놓지 못했다")
         if card.stated_steps:
             sender.set_step_run(card.stated_steps[0]["id"], ws.DONE, note="자체 점검")
+        from ..core.knowledge.lifecycle import run_jobs
+        graph = run_jobs(sender, seconds=30)
+        if graph.failed or not sender.con.execute('SELECT 1 FROM kg_current_claims LIMIT 1').fetchone():
+            problems.append('그래프 영속 큐를 게시하지 못했다')
+        sender.con.execute("UPDATE documents SET missing_since=datetime('now') WHERE id=?", (doc,))
+        if sender.con.execute("SELECT 1 FROM kg_current_claims WHERE predicate='due_date'").fetchone():
+            problems.append('누락 원본의 기한이 현재 그래프에 남았다')
+        sender.mark_seen(doc)
+        run_jobs(sender, seconds=30)
+        if not sender.con.execute("SELECT 1 FROM kg_current_claims WHERE predicate='due_date'").fetchone():
+            problems.append('복귀 원본의 그래프 근거를 재검증하지 못했다')
         snapshot_id, created = handover_release.save(sender)
         if not created or "자료 기반 업무 복원본" not in handover_release.to_markdown(
                 handover_release.load(sender, snapshot_id)):
@@ -120,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
         for problem in problems:
             print(f"  ✕ {problem}")
         return 1
-    print("■ 업무 복원 자체 점검 — 통과 (복원 → 수행 기록 → 복원본 → 묶음 → 가져오기 → 재연결)")
+    print("■ 업무 복원 자체 점검 — 통과 (복원 → 수행 기록 → 그래프 갱신·재개 → 복원본 → 묶음 → 가져오기 → 재연결)")
     return 0
 
 

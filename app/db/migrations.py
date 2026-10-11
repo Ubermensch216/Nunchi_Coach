@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "12"
+SCHEMA_VERSION = "13"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -465,6 +465,18 @@ def _to_v12(con: sqlite3.Connection) -> None:
     install(con)
 
 
+def _to_v13(con: sqlite3.Connection) -> None:
+    from .knowledge import install
+
+    add_column(con, "kg_jobs", "lease_until", "lease_until REAL")
+    add_column(con, "kg_jobs", "leased_revision", "leased_revision INTEGER")
+    add_column(con, "kg_jobs", "error", "error TEXT NOT NULL DEFAULT ''")
+    con.execute("DROP TRIGGER IF EXISTS kg_claim_domain")
+    install(con)
+    con.execute("UPDATE kg_jobs SET state='dirty',lease=NULL,lease_until=NULL,attempts=0,reason='schema13' "
+                "WHERE partition_key IN (SELECT partition_key FROM kg_generations)")
+
+
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
@@ -477,6 +489,7 @@ STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "10": _to_v10,
     "11": _to_v11,
     "12": _to_v12,
+    "13": _to_v13,
 }
 
 

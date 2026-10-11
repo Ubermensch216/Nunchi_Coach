@@ -41,9 +41,18 @@ CREATE TABLE IF NOT EXISTS kg_jobs (
     lease TEXT,
     attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts>=0),
     reason TEXT NOT NULL DEFAULT '',
+    lease_until REAL,
+    leased_revision INTEGER,
+    error TEXT NOT NULL DEFAULT '',
     PRIMARY KEY(partition_key,job_kind)
 );
 CREATE INDEX IF NOT EXISTS idx_kg_jobs_state ON kg_jobs(state,lease);
+CREATE TABLE IF NOT EXISTS kg_partition_documents (
+    partition_key TEXT NOT NULL,
+    doc_id INTEGER NOT NULL,
+    PRIMARY KEY(partition_key,doc_id)
+);
+CREATE INDEX IF NOT EXISTS idx_kg_partition_doc ON kg_partition_documents(doc_id);
 CREATE TABLE IF NOT EXISTS kg_claims (
     uuid TEXT PRIMARY KEY,
     claim_key TEXT NOT NULL UNIQUE,
@@ -103,6 +112,11 @@ CREATE TABLE IF NOT EXISTS kg_decisions (
     supersedes_decision TEXT REFERENCES kg_decisions(uuid)
 );
 CREATE INDEX IF NOT EXISTS idx_kg_decisions_target ON kg_decisions(target_kind,target_key,created_at);
+CREATE TRIGGER IF NOT EXISTS kg_decision_undo BEFORE INSERT ON kg_decisions WHEN new.decision='undo' BEGIN
+    SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM kg_decisions d WHERE d.uuid=new.supersedes_decision
+      AND d.target_kind=new.target_kind AND d.target_key=new.target_key)
+    THEN RAISE(ABORT,'kg undo target mismatch') END;
+END;
 CREATE TABLE IF NOT EXISTS kg_aliases (
     entity_id TEXT NOT NULL REFERENCES kg_entities(uuid),
     label TEXT NOT NULL,
@@ -129,6 +143,12 @@ CREATE TABLE IF NOT EXISTS kg_claim_evidence (
 );
 CREATE INDEX IF NOT EXISTS idx_kg_support_evidence ON kg_claim_evidence(evidence_id,active);
 CREATE INDEX IF NOT EXISTS idx_kg_support_generation ON kg_claim_evidence(generation_id,active);
+CREATE VIEW IF NOT EXISTS kg_current_claims AS
+    SELECT c.* FROM kg_claims c WHERE c.lifecycle='active' AND EXISTS (
+        SELECT 1 FROM kg_claim_evidence s JOIN kg_generations g ON g.id=s.generation_id
+        WHERE s.claim_id=c.uuid AND s.active=1 AND g.active=1 AND g.status='published'
+        AND s.support_role='supports' AND s.validation_result IN ('structural','quote_matched','semantic_supported')
+    );
 CREATE TABLE IF NOT EXISTS kg_claim_links (
     from_claim TEXT NOT NULL REFERENCES kg_claims(uuid),
     kind TEXT NOT NULL CHECK(kind IN ('supersedes','conflicts')),
@@ -194,6 +214,8 @@ CREATE TRIGGER IF NOT EXISTS kg_claim_domain BEFORE INSERT ON kg_claims BEGIN
                 SELECT new.object_id UNION
                 SELECT c.object_id FROM kg_claims c JOIN path p ON c.subject_id=p.id
                 WHERE c.predicate=new.predicate AND c.scope_key=new.scope_key AND c.lifecycle!='retracted'
+                  AND ((new.generation_id IS NULL AND (c.generation_id IS NULL OR c.lifecycle='active'))
+                       OR c.generation_id=new.generation_id)
             ) SELECT 1 FROM path WHERE id=new.subject_id
         ) THEN RAISE(ABORT,'kg relation cycle') END;
 END;

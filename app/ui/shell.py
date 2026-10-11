@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 from ..core import handover
 from ..db import Database
 from ..jobs import PipelineRunner
+from ..jobs.knowledge_task import KnowledgeRunner
 from . import icons, stages, theme
 from .views.calendar import CalendarView
 from .views.documents import DocumentsView
@@ -364,6 +365,11 @@ class MainWindow(QMainWindow):
         self.runner.stage_done.connect(self._on_stage_done)
         self.runner.finished.connect(self._on_pipeline_finished)
         self.runner.failed.connect(self._on_pipeline_failed)
+        self._knowledge = KnowledgeRunner(self.db.path, self)
+        self._knowledge_tick = QTimer(self)
+        self._knowledge_tick.setInterval(2000)
+        self._knowledge_tick.timeout.connect(self._resume_knowledge)
+        self._knowledge_tick.start()
 
         self._tick = QTimer(self)
         self._tick.setInterval(1500)
@@ -381,6 +387,11 @@ class MainWindow(QMainWindow):
         self._daily.start()
 
     # ── 내비게이션 ──────────────────────────────────────────────────
+    def _resume_knowledge(self):
+        from ..core.knowledge.lifecycle import pending
+        if not self.runner.running and not self._knowledge.running and pending(self.db):
+            self._knowledge.start()
+
     def _go_home(self) -> None:
         tasks_view = self.views.get("tasks")
         if hasattr(tasks_view, "back"):
@@ -646,7 +657,8 @@ class MainWindow(QMainWindow):
         테스트처럼 closeEvent 없이 정리되는 경로에서도 불러야 한다.
         """
         self._tick.stop()
-        runners = [self.runner]
+        self._knowledge_tick.stop()
+        runners = [self.runner, self._knowledge]
         for view in self.views.values():
             for name in ("_runner", "_summaries", "_warmup", "_ingest", "_studio"):
                 runner = getattr(view, name, None)
