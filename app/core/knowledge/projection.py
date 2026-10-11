@@ -67,6 +67,7 @@ class _Projection:
         previous = self.store.published(partition, self.signature)
         if previous:
             self.result.generation, self.result.claims, self.result.reused = previous["id"], previous["processed"], True
+            self.store.complete_unchanged(partition)
         else:
             self.result.generation = self.store.begin_generation(partition, self.signature)
         self.documents = {}
@@ -230,13 +231,15 @@ def project_task(db, task_id: int) -> Result:
             if row["excluded"] or row["basis_state"] == "missing":
                 continue
             original = [e for e in data["evidence"] if e["owner_kind"] == "item" and e["owner_id"] == row["id"]]
+            # 같은 값이라도 서로 다른 복원 슬롯의 기간·조건·상태를 합치지 않는다.
+            item_scope = f"{scope}:item:{row['slot']}"
             if row["kind"] == "deadline":
-                p.claim(task, "due_date", row, value=row["content"], value_type="date", scope=scope, table="task_items", evidence_rows=original)
+                p.claim(task, "due_date", row, value=row["content"], value_type="date", scope=item_scope, table="task_items", evidence_rows=original)
             elif row["kind"] == "amount":
                 amount = re.fullmatch(r"\s*(-?(?:0|[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:\.[0-9]+)?)\s*(원|천원|만원|억원|KRW)\s*", row["content"])
                 if amount:
                     value = {"amount": amount[1].replace(",", ""), "currency" if amount[2] == "KRW" else "unit": amount[2]}
-                    p.claim(task, "amount", row, value=value, value_type="decimal_amount", scope=scope, table="task_items", evidence_rows=original)
+                    p.claim(task, "amount", row, value=value, value_type="decimal_amount", scope=item_scope, table="task_items", evidence_rows=original)
                 else:
                     p.result.diagnostics.append(f"task_items:{row['id']}:ambiguous_amount")
             elif row["kind"] in ("recipient", "contact", "form"):
@@ -244,5 +247,5 @@ def project_task(db, task_id: int) -> Result:
                 entity = p.store.bind("task_item_values", f"{row['id']}:{fingerprint(normalize_label(row['content']))}", kind, row["content"], scope)
                 provenance = p.record("task_items", row, human=row["origin"] == "user")
                 p.store.add_alias(entity, row["content"], scope_key=scope, source_key=f"task_item:{row['id']}", evidence_id=provenance)
-                p.claim(task, predicate, row, obj=entity, scope=scope, table="task_items", evidence_rows=original)
+                p.claim(task, predicate, row, obj=entity, scope=item_scope, table="task_items", evidence_rows=original)
         return p.finish()

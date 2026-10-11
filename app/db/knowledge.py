@@ -207,6 +207,10 @@ class KnowledgeStore:
         return self.db.con.execute("SELECT * FROM kg_generations WHERE partition_key=? "
                                    "AND input_fingerprint=? AND active=1", (partition_key, input_fingerprint)).fetchone()
 
+    def complete_unchanged(self, partition_key: str) -> None:
+        self.db.con.execute("UPDATE kg_jobs SET state='done' WHERE partition_key=? AND job_kind='projection' "
+                            "AND state='dirty' AND lease IS NULL", (partition_key,))
+
     def begin_generation(self, partition_key: str, input_fingerprint: str) -> int:
         self.db.con.execute("INSERT INTO kg_jobs(partition_key,reason) VALUES (?,'projection') "
                             "ON CONFLICT(partition_key,job_kind) DO NOTHING", (partition_key,))

@@ -47,6 +47,9 @@ def test_projection_is_idempotent_does_not_mutate_sources_or_invent_cases(db):
     assert all(r[1] == "active" for r in claims)
     assert all(r[2] == "past" for r in claims if r[0] != "HAS_DOCUMENT")
     assert db.con.execute("SELECT COUNT(*) FROM kg_claim_evidence WHERE validation_result='semantic_supported'").fetchone()[0] == 0
+    KnowledgeStore(db).schedule("task:1","반복 예약")
+    assert projection.project_task(db,1).reused
+    assert db.con.execute("SELECT state FROM kg_jobs WHERE partition_key='task:1'").fetchone()[0] == "done"
 
 
 def test_reject_and_undo_survive_projection(db):
@@ -125,6 +128,14 @@ def test_state_event_points_to_generation_that_observed_the_change(db):
     event = db.con.execute("SELECT e.generation_id FROM kg_claim_events e JOIN kg_claims c ON c.uuid=e.claim_id "
                            "WHERE c.predicate='REQUIRES_FORM' AND e.event_kind='state' ORDER BY e.rowid DESC LIMIT 1").fetchone()
     assert event[0] == latest.generation
+
+
+def test_same_literal_in_different_source_slots_keeps_applicability_separate(db):
+    db.con.execute("INSERT INTO task_items(task_id,kind,slot,content,origin,basis_state,applicability) "
+                   "VALUES (1,'deadline','new-period','2026-11-01','user','stated','current')")
+    projection.project_task(db,1)
+    rows = db.con.execute("SELECT scope_key,applicability FROM kg_claims WHERE predicate='due_date'").fetchall()
+    assert len(rows) == 2 and {r[1] for r in rows} == {"past","current"}
 
 
 def test_document_version_separates_hash_from_parse_generation(db):
