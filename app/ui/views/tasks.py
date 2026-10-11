@@ -873,7 +873,11 @@ class TasksView(QWidget):
         work = workcard.build(self.db, task_id)
         # 확인할 것이 남은 탭은 열어 보기 전에 알려 준다.
         self.tabs.set_label(WORK, "지금 할 일" + ("  ◐" if work.gaps else ""))
-        self.tabs.set_count(READ, "먼저 읽을 문서", len(picks))
+        # 숫자는 '아직 안 읽은 문서'의 건수다. 읽음 표시를 했는데도 남아 있으면
+        # 할 일이 남은 것처럼 읽힌다. 다 읽으면 0이 되어 숫자가 사라진다.
+        read_marks = self.db.reading_marks()
+        unread = sum(1 for pick in picks if pick["doc_id"] not in read_marks)
+        self.tabs.set_count(READ, "먼저 읽을 문서", unread)
         self.tabs.set_count(DOCS, "이 업무의 문서", len(docs))
         # 손댈 곳이 있는 탭은 열어 보기 전에 알려 준다.
         self.tabs.set_label(
