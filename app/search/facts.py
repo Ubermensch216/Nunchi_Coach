@@ -73,17 +73,8 @@ def resolve(db, asked, scope):
     label = squeeze(asked.field)
     if len(label) < 2 or scope.doc_ids == []:
         return None
-    restrictions = ['d.missing_since IS NULL', "d.parse_status IN ('ok','partial')"]
-    params = []
-    if scope.doc_ids is not None:
-        restrictions.append('d.id IN ('+','.join('?' for _ in scope.doc_ids)+')')
-        params.extend(scope.doc_ids)
-    if scope.task_id is not None:
-        restrictions.append('EXISTS (SELECT 1 FROM task_docs td WHERE td.doc_id=d.id AND td.task_id=?)')
-        params.append(scope.task_id)
-    if scope.years:
-        restrictions.append('d.eff_year IN ('+','.join('?' for _ in scope.years)+')')
-        params.extend(scope.years)
+    clause, params = scope.predicate()
+    restrictions = [clause, "d.parse_status IN ('ok','partial')"]
     # 흔한 속성명이 다른 모든 업무에 있다는 이유로 범위를 과도하게 보류하지 않는다.
     subjects = [korean.stem(w) for w in asked.subject if len(korean.stem(w))>=3]
     if subjects:
@@ -136,7 +127,7 @@ def resolve(db, asked, scope):
         if len(periods)>1:
             continue
         period = next(iter(periods)) if periods else doc['eff_year']
-        if scope.years and period not in scope.years:
+        if scope.years and scope.year_basis == 'document_date' and period not in scope.years:
             continue
         for row,name,value,quote in labelled:
             if squeeze(name) == label:

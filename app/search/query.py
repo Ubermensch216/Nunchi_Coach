@@ -14,6 +14,8 @@ core/dating.py와는 다른 문제를 푼다. dating.py는 문서 본문에서 �
 from __future__ import annotations
 
 import re
+import hashlib
+import json
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -44,6 +46,20 @@ class QueryScope:
     mode: str = ""
     # 노트북 대화에서 현행 법령을 함께 조회할지(설정에서 켠 경우에만 쓰인다).
     law: bool = False
+    year_basis: str = "document_date"
+    case_id: int | None = None
+
+    def __post_init__(self):
+        if self.year_basis not in {"document_date", "performance", "evaluation", "submitted", "case"}:
+            raise ValueError("연도 기준이 올바르지 않습니다.")
+        if self.year_basis == "case" and self.case_id is None:
+            raise ValueError("수행 건 범위에는 case_id가 필요합니다.")
+
+    def fingerprint(self) -> str:
+        payload = {"years": sorted(set(self.years)), "task": self.task_id,
+                   "documents": None if self.doc_ids is None else sorted(set(self.doc_ids)),
+                   "notebook": self.notebook_id, "year_basis": self.year_basis, "case": self.case_id}
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
     @property
     def has_year(self) -> bool:
@@ -63,6 +79,8 @@ class QueryScope:
             notebook_id=chosen.notebook_id,
             mode=chosen.mode,
             law=chosen.law,
+            year_basis=chosen.year_basis,
+            case_id=chosen.case_id,
         )
 
     def predicate(self, alias: str = "d") -> tuple[str, list]:
@@ -76,14 +94,26 @@ class QueryScope:
         if self.task_id is not None:
             clauses.append(f"EXISTS (SELECT 1 FROM task_docs scope_td WHERE scope_td.doc_id={alias}.id AND scope_td.task_id=?)")
             params.append(self.task_id)
-        if self.years:
+        if self.year_basis == "case":
+            # 수행 건의 명시적 기준 문서만 사용한다. 업무의 모든 자료로 넓히지 않는다.
+            clause = f"EXISTS (SELECT 1 FROM work_cases scope_wc WHERE scope_wc.id=? AND scope_wc.basis_doc_id={alias}.id"
+            params.append(self.case_id)
+            if self.years:
+                clause += " AND scope_wc.period_year IN (" + ",".join("?" for _ in self.years) + ")"
+                params.extend(self.years)
+            clauses.append(clause + ")")
+        elif self.years and self.year_basis != "document_date":
+            clauses.append(f"EXISTS (SELECT 1 FROM doc_years scope_dy WHERE scope_dy.doc_id={alias}.id AND scope_dy.kind=? AND scope_dy.year IN ("
+                           + ",".join("?" for _ in self.years) + "))")
+            params.extend([self.year_basis, *self.years])
+        elif self.years:
             clauses.append(f"{alias}.eff_year IN (" + ",".join("?" for _ in self.years) + ")")
             params.extend(self.years)
         return " AND ".join(clauses), params
 
     def search_documents(self, db) -> list[int] | None:
         """업무·연도를 순위 제한 전에 적용한다. 무제한 범위는 None을 유지한다."""
-        if not self.has_task and not self.has_year:
+        if not self.has_task and not self.has_year and self.case_id is None:
             return self.doc_ids
         clause, params = self.predicate()
         return [row[0] for row in db.con.execute(f"SELECT d.id FROM documents d WHERE {clause}", params)]

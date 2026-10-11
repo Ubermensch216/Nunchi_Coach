@@ -53,7 +53,7 @@ class AskWorker(QObject):
                 message_id, answer = notebook.query(
                     db, notebook_id, self._question, client=self._client,
                     mode=getattr(self._scope, "mode", ""), law=getattr(self._scope, "law", False),
-                    progress=self.progress.emit)
+                    progress=self.progress.emit, chosen_scope=self._scope)
                 answer.generation["notebook_message_id"] = message_id
             else:
                 answer = ask(db, self._question, client=self._client, scope=self._scope)
@@ -233,7 +233,8 @@ def _citations_json(answer: Answer) -> str:
     return json.dumps(
         [
             {"doc_id": c.doc_id, "filename": c.filename, "locator": c.locator,
-             **({"official": c.official} if c.official else {})}
+             **({"official": c.official} if c.official else {}),
+             **({"chunk_id": c.chunk_id, "graph_paths": c.graph_paths} if c.graph_paths else {})}
             for c in answer.citations
         ],
         ensure_ascii=False,

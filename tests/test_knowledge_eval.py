@@ -36,3 +36,14 @@ def test_existing_retrieval_baseline_records_failures_without_claiming_answers()
     assert result["categories"]["missing"]["recall_at_10"] is None
     assert result["comparison"] == "A" and "LLM 답변 정확도" in result["unmeasured"]
     assert any(r["recall_at_10"] is not None and r["recall_at_10"] < 1 for r in result["results"])
+
+
+def test_shadow_preserves_frozen_baseline_and_reports_projection_limits():
+    baseline = run('holdout')
+    shadow = run('holdout', 'shadow')
+    assert shadow['scope_leaks'] == 0 and shadow['graph_added_questions'] == 0
+    assert shadow['categories'] == baseline['categories']
+    assert shadow['graph_current_claims'] > 0
+    assert [r['retrieved'] for r in shadow['results']] == [r['retrieved'] for r in baseline['results']]
+    # Existing structural projection cannot invent semantic links from prose.
+    assert shadow['graph_fallbacks'] == shadow['questions']

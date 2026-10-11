@@ -89,6 +89,14 @@ def run() -> list[str]:
         graph = run_jobs(sender, seconds=30)
         if graph.failed or not sender.con.execute('SELECT 1 FROM kg_current_claims LIMIT 1').fetchone():
             problems.append('그래프 영속 큐를 게시하지 못했다')
+        from ..search.graph import search as graph_search
+        from ..search.query import QueryScope
+        found = graph_search(sender, '기획예산과', QueryScope(doc_ids=[doc]),
+                             seed_chunks=[cid for cid, _ in made], budget_ms=2000)
+        if not found.hits or found.fallback:
+            problems.append('선택 원문의 그래프 근거를 검색하지 못했다')
+        if graph_search(sender, '기획예산과', QueryScope(doc_ids=[])).hits:
+            problems.append('빈 자료 선택 밖의 그래프 근거가 노출됐다')
         sender.con.execute("UPDATE documents SET missing_since=datetime('now') WHERE id=?", (doc,))
         if sender.con.execute("SELECT 1 FROM kg_current_claims WHERE predicate='due_date'").fetchone():
             problems.append('누락 원본의 기한이 현재 그래프에 남았다')
@@ -131,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
         for problem in problems:
             print(f"  ✕ {problem}")
         return 1
-    print("■ 업무 복원 자체 점검 — 통과 (복원 → 수행 기록 → 그래프 갱신·재개 → 복원본 → 묶음 → 가져오기 → 재연결)")
+    print("■ 업무 복원 자체 점검 — 통과 (복원 → 수행 기록 → 그래프 갱신·재개·범위 검색 → 복원본 → 묶음 → 가져오기 → 재연결)")
     return 0
 
 

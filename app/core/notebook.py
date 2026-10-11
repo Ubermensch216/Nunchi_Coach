@@ -214,7 +214,7 @@ def effective_mode(db, notebook_id, question, mode="", generating=True):
     return "overview" if automatic(db, question, doc_ids) else ""
 
 
-def query(db, notebook_id, question, client=None, mode="", law=False, progress=None):
+def query(db, notebook_id, question, client=None, mode="", law=False, progress=None, chosen_scope=None):
     """노트북의 한 차례 대화.
 
     mode="overview"면 선택한 자료 전체를 훑어 정리한다. law=True면 현행 법령을
@@ -222,6 +222,8 @@ def query(db, notebook_id, question, client=None, mode="", law=False, progress=N
     정리의 묶음 진행을 받는다(search/overview.py).
     """
     started = perf_counter()
+    from ..search.graph import revisions
+    revision_snapshot = revisions(db)
     snapshot = selected_snapshot(db, notebook_id)
     snapshot_ms = (perf_counter()-started)*1000
     effective = question.strip()
@@ -240,6 +242,11 @@ def query(db, notebook_id, question, client=None, mode="", law=False, progress=N
         effective = rewritten or earlier[-1] + "\n후속 질문: " + effective
     rewrite_ms = (perf_counter()-rewrite_started)*1000
     scope = QueryScope(doc_ids=[int(k) for k in snapshot], notebook_id=notebook_id)
+    if chosen_scope is not None:
+        scope = scope.merged_with(chosen_scope)
+        selected = {int(k) for k in snapshot}
+        scope.doc_ids = sorted(selected if scope.doc_ids is None else selected.intersection(scope.doc_ids))
+        scope.notebook_id = notebook_id
     mode = effective_mode(db, notebook_id, question, mode, generating)
     if mode == "overview":
         from ..search.overview import overview
@@ -280,9 +287,17 @@ def query(db, notebook_id, question, client=None, mode="", law=False, progress=N
             row = db.con.execute("SELECT text FROM chunks WHERE doc_id=? AND locator=? ORDER BY id LIMIT 1",
                                   (citation.doc_id, citation.locator)).fetchone()
         if row:
-            citations.append({**asdict(citation), "version_hash": snapshot[str(citation.doc_id)],
+            citation_record = asdict(citation)
+            if not citation_record['graph_paths']:
+                del citation_record['graph_paths']
+            citations.append({**citation_record, "version_hash": snapshot[str(citation.doc_id)],
                               "exact_quote": row[0]})
     with db.transaction():
+        # Acquire the writer before the final check so another connection cannot
+        # switch a graph generation, index or selection between check and save.
+        db.con.execute("UPDATE notebooks SET id=id WHERE id=?", (notebook_id,))
+        if revisions(db) != revision_snapshot or selected_snapshot(db, notebook_id) != snapshot:
+            raise ValueError("질문 중 자료 선택이나 판본이 바뀌었습니다. 다시 질문하세요.")
         message_id = db.con.execute("INSERT INTO notebook_messages(notebook_id,question,answer,source_snapshot,"
                                    "citations,generation,model,withheld,standalone_question,mode,law_citations) "
                                    "VALUES (?,?,?,?,?,?,?,?,?,?,?)",

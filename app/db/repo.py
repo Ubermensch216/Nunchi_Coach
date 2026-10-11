@@ -93,18 +93,23 @@ def open_project_at(directory: Path | str) -> "Database":
 
 
 class Database(WorkStore, ActionStore):
-    def __init__(self, path: Path | str) -> None:
+    def __init__(self, path: Path | str, *, readonly: bool = False) -> None:
         self.path = Path(path)
+        self.readonly = readonly
         self._con: sqlite3.Connection | None = None
 
     # ── 연결 ────────────────────────────────────────────────────────
     @property
     def con(self) -> sqlite3.Connection:
         if self._con is None:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            con = sqlite3.connect(self.path, isolation_level=None)
+            if self.readonly:
+                con = sqlite3.connect(self.path.resolve().as_uri() + '?mode=ro', uri=True, isolation_level=None)
+            else:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                con = sqlite3.connect(self.path, isolation_level=None)
             con.row_factory = sqlite3.Row
-            con.execute("PRAGMA journal_mode = WAL")
+            if not self.readonly:
+                con.execute("PRAGMA journal_mode = WAL")
             con.execute("PRAGMA foreign_keys = ON")
             con.execute("PRAGMA synchronous = NORMAL")
             self._con = con

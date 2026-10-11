@@ -103,6 +103,7 @@ class Citation:
     official: str = ""
     # 긴 문단을 나눈 조각은 locator가 같을 수 있으므로 실제 조각도 고정한다.
     chunk_id: int | None = None
+    graph_paths: list[dict] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -176,6 +177,17 @@ def needed_material(question: str) -> str:
 
 def search_only(db: Database, question: str, scope: QueryScope | None = None,
                 message: str = "자료 검색 결과") -> Answer:
+    from .graph import revisions
+    snapshot = revisions(db)
+    scope_snapshot = scope.fingerprint() if scope is not None else None
+    answer = _search_only(db, question, scope, message)
+    if revisions(db) != snapshot or (scope is not None and scope.fingerprint() != scope_snapshot):
+        return Answer(question, "", True, error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
+    return answer
+
+
+def _search_only(db: Database, question: str, scope: QueryScope | None,
+                 message: str) -> Answer:
     scope = infer_scope(question).merged_with(scope)
     scope.doc_ids = scope.search_documents(db)
     if scope.doc_ids == [] or db.con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] == 0:
@@ -198,8 +210,10 @@ def search_only(db: Database, question: str, scope: QueryScope | None = None,
                 "SELECT c.id FROM chunks c JOIN documents d ON d.id=c.doc_id "
                 f"WHERE d.missing_since IS NULL AND ({clause}){restriction} ORDER BY c.id LIMIT ?",
                 (*values, RANK_POOL))]
-    selected = _select_context(db, [(cid, 1 / (i + 1)) for i, cid in enumerate(ranked)],
-                               set(ranked), scope, question)
+    from .graph import augment
+    combined, strong, graph_trace = augment(db, question, scope,
+                                           [(cid, 1 / (i + 1)) for i, cid in enumerate(ranked)], set(ranked))
+    selected = _select_context(db, combined, strong, scope, question)
     rows = _load_chunk_context(db, [cid for cid, _ in selected])
     official = provenance.official_sources(db, [row["doc_id"] for row in rows])
     citations = [Citation(i, row["doc_id"], row["filename"], row["locator"], row["path"],
@@ -209,16 +223,27 @@ def search_only(db: Database, question: str, scope: QueryScope | None = None,
                  for i, row in enumerate(rows, 1)]
     for citation, row in zip(citations, rows):
         citation.chunk_id = row["chunk_id"]
+        citation.graph_paths = [path for path in graph_trace.get('paths', []) if path['chunk_id'] == citation.chunk_id]
     return Answer(question, message if citations else message + " 일치하는 자료를 찾지 못했습니다.",
                   True, citations=citations, inferred_years=scope.years,
-                  generation={"mode": "search_only"})
+                  generation={"mode": "search_only", "graph": graph_trace})
 
 
 def ask(db: Database, question: str, client: OllamaClient | None = None,
         scope: QueryScope | None = None, expander=None) -> Answer:
     """모든 반환 경로에 원문 없는 검색 진단을 붙인다."""
     trace = RetrievalTrace()
-    return trace.finish(_ask(db, question, client, scope, expander, trace))
+    from .graph import revisions
+    snapshot = revisions(db)
+    scope_snapshot = scope.fingerprint() if scope is not None else None
+    answer = _ask(db, question, client, scope, expander, trace)
+    if revisions(db) != snapshot or (scope is not None and scope.fingerprint() != scope_snapshot):
+        answer = Answer(question, "", True, error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
+    if 'paths' in trace.counts.get('graph', {}):
+        for citation in answer.citations:
+            citation.graph_paths = [path for path in trace.counts['graph']['paths']
+                                   if path['chunk_id'] == citation.chunk_id]
+    return trace.finish(answer)
 
 
 def _ask(db: Database, question: str, client: OllamaClient | None,
@@ -240,7 +265,8 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
     with trace.stage("scope"):
         search_docs = scope.search_documents(db)
     trace.record(scope_documents=len(search_docs) if search_docs is not None else None,
-                 years=list(scope.years), task_scoped=scope.has_task)
+                 years=list(scope.years), task_scoped=scope.has_task,
+                 year_basis=scope.year_basis, case_id=scope.case_id)
 
     client = client or project_client(db, OllamaClient)
     health = client.health()
@@ -253,6 +279,13 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         labelled = _labelled_answer(db, question, scope)
     if labelled is not None:
         trace.path = "direct_fields"
+        from .graph import augment
+        # Direct-field answers still inspect all allowed originals and are not
+        # replaced by ranked graph candidates. Record scoped graph diagnostics.
+        _, _, graph_trace = augment(db, question, scope,
+            [(c.chunk_id, 1/(60+i)) for i,c in enumerate(labelled.citations, 1) if c.chunk_id is not None], set())
+        graph_trace['direct_fields_preserved'] = True
+        trace.record(graph=graph_trace)
         if db.get_meta("content_revision") != content_revision:
             return Answer(question, "", True, error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
         return labelled
@@ -309,6 +342,10 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         strong_ids |= widened
 
     scope = infer_scope(question).merged_with(scope)
+    from .graph import augment
+    with trace.stage("graph"):
+        combined, strong_ids, graph_trace = augment(db, question, scope, combined, strong_ids)
+    trace.record(graph=graph_trace)
     with trace.stage("selection"):
         strong = _select_context(db, combined, strong_ids, scope, question, trace)
     trace.record(fused_candidates=len(combined), selected_chunks=len(strong))
@@ -1027,7 +1064,7 @@ def _select_context(
         matching = [c for c in candidates if c.chunk_id in in_task]
         candidates = matching
 
-    if scope.has_year:
+    if scope.has_year and scope.year_basis == "document_date":
         matching = [c for c in candidates if c.eff_year in scope.years]
         candidates = matching
 
