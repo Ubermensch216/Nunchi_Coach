@@ -102,9 +102,16 @@ def find_gaps(db, task_id: int, basis: date | None = None,
         "WHERE td.task_id = ? AND d.missing_since IS NULL", (task_id,)).fetchone()[0]
     context = _Context(db, task_id, by_kind, cases, docs_in_task)
 
+    shape = _shape(db, task_id)
     gaps: list[dict] = []
     for kind in ESSENTIAL:
-        if kind == rc.PROCEDURE and stated:
+        if kind == rc.PROCEDURE and (stated or (shape["classified"] and len(cases) >= 2)):
+            # 지난 회차에 어떤 순서로 했는지가 둘 이상 남아 있으면 따라 할 순서가 있다.
+            continue
+        if kind in _CLOSING_KINDS and shape["classified"] and not shape["requested"]:
+            # 어디서 요청받아 내는 일이 아니다. 요청·시행 공문이 없는 업무에 '제출처를
+            # 모른다'고 적으면 업무마다 같은 공백이 붙어 정말 확인할 것이 묻힌다
+            # (실측: 공백 750건 중 732건이 업무마다 똑같은 네 가지였다).
             continue
         if not by_kind.get(kind):
             gaps.append(_missing(context, kind, closing))
@@ -120,10 +127,34 @@ def find_gaps(db, task_id: int, basis: date | None = None,
         if item["basis_state"] == ws.CONFLICT:
             gaps.append(_conflict(db, item, blocked))
         elif item["kind"] == rc.DEADLINE and item["applicability"] == ws.PAST:
+            if rc.is_schedule(item["slot"]):
+                # 지난 회차 추진일정의 한 줄이다. 지난 것이 당연하고, 올해 일정의
+                # 선례로 보이면 된다. 줄마다 '기한이 지났다'고 묻지 않는다.
+                continue
             gaps.append(_past_deadline(context, item, blocked, basis))
         elif item["kind"] == rc.RECORD and item["slot"] == rc.SLOT_AFTERWARDS:
+            if shape["classified"] and shape["one_off"]:
+                continue    # 한 번 있었던 일에 '이번 회차를 시작했는지'를 묻지 않는다
             gaps.append(_afterwards(context, item))
     return gaps
+
+
+def _shape(db, task_id: int) -> dict:
+    """이 업무가 어떤 꼴의 일인지 — 공백을 물을지 말지 정하는 데만 쓴다.
+
+    문서 갈래가 아직 정해지지 않았으면(classified=False) 아무것도 걸러 내지 않는다.
+    """
+    roles = [row["role"] for row in db.con.execute(
+        "SELECT r.role FROM task_docs td JOIN doc_roles r ON r.doc_id = td.doc_id "
+        "WHERE td.task_id = ?", (task_id,))]
+    years = db.con.execute(
+        "SELECT COUNT(DISTINCT d.eff_year) FROM task_docs td JOIN documents d ON d.id = td.doc_id "
+        "WHERE td.task_id = ? AND d.missing_since IS NULL AND d.eff_year IS NOT NULL "
+        "AND d.eff_date_kind != 'fs'", (task_id,)).fetchone()[0]
+    recurring = db.con.execute(
+        "SELECT 1 FROM task_cycles WHERE task_id = ? AND kind != 'none'", (task_id,)).fetchone()
+    return {"classified": bool(roles), "requested": "directive" in roles,
+            "one_off": years <= 1 and not recurring}
 
 
 # 공백마다 붙는 안내. 화면은 이 문장을 줄마다 되풀이하지 않고 한 번만 적기

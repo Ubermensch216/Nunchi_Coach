@@ -22,6 +22,7 @@ from pathlib import Path
 
 import olefile
 
+from ._aes import decrypt_ecb
 from .base import (
     EMPTY,
     ENCRYPTED,
@@ -40,6 +41,7 @@ PARSER = "hwp"
 
 HWPTAG_BEGIN = 0x10
 HWPTAG_PARA_TEXT = HWPTAG_BEGIN + 51  # 67
+HWPTAG_DISTRIBUTE_DOC_DATA = HWPTAG_BEGIN + 12  # 28
 
 # HWP 제어문자 분류 (한글 문서 파일 형식 5.0 기준)
 CHAR_CTRL = {0, 10, 13, 24, 25, 26, 27, 28, 29, 30, 31}          # 1 wchar
@@ -74,10 +76,17 @@ def parse(path: Path) -> ParseResult:
             return failed(PARSER, "암호로 보호된 문서", ENCRYPTED)
 
         meta = _read_summary(ole)
+        # 배포용 문서는 본문이 ViewText에 암호화돼 있고, BodyText에는 "상위 버전의
+        # 배포용 문서입니다…" 안내문만 있다. 안내문을 본문으로 읽으면 핵심 계획서가
+        # 106자짜리 '읽은 문서'가 된다(실측 23건).
+        distributed = bool(props & 0x04)
+        folder = "ViewText" if distributed else "BodyText"
         streams = sorted(
-            (e for e in ole.listdir() if len(e) == 2 and e[0] == "BodyText"),
+            (e for e in ole.listdir() if len(e) == 2 and e[0] == folder),
             key=lambda e: e[1],
         )
+        if distributed and not streams:
+            return failed(PARSER, "배포용 문서 — 본문(ViewText)이 없음", UNSUPPORTED)
 
         budget = [MAX_CHARS]
         out: list[Section] = []
@@ -111,8 +120,10 @@ def parse(path: Path) -> ParseResult:
             visited += 1
             try:
                 data = ole.openstream(entry).read()
+                if distributed:
+                    data = _open_distributed(data)
                 if compressed:
-                    data = zlib.decompress(data, -15)
+                    data = zlib.decompressobj(-15).decompress(data)
             except Exception as exc:
                 errors.append(f"{'/'.join(entry)}: {exc}")
                 continue
@@ -140,6 +151,13 @@ def parse(path: Path) -> ParseResult:
                 status=status, parser=PARSER, sections=out, meta=meta, note=note, coverage=scope()
             )
 
+        if distributed:
+            # 미리보기로 물러서지 않는다 — 배포용 문서의 미리보기도 안내문일 수 있다.
+            result = failed(PARSER, "배포용 문서 — 본문을 풀지 못함"
+                            + (f" ({'; '.join(errors)})" if errors else ""), UNSUPPORTED)
+            result.meta, result.coverage = meta, scope()
+            return result
+
         # 본문을 못 읽으면 미리보기 텍스트로 폴백한다.
         preview = _preview_text(ole)
         if preview:
@@ -159,6 +177,40 @@ def parse(path: Path) -> ParseResult:
         result.coverage = scope()
         return result
     return ParseResult(status=EMPTY, parser=PARSER, meta=meta, coverage=scope())
+
+
+def _open_distributed(data: bytes) -> bytes:
+    """배포용 문서의 ViewText 스트림을 푼다.
+
+    스트림 맨 앞 레코드(HWPTAG_DISTRIBUTE_DOC_DATA, 256바이트)에 키가 들어 있다.
+    앞 4바이트를 씨앗으로 MSVC rand()를 돌려 나머지를 XOR로 풀면, 그 안의
+    한 자리(4 + 씨앗 아래 4비트)부터 16바이트가 AES-128 키다. 레코드 뒤의
+    나머지가 ECB로 암호화된 본문이다.
+
+    암호 문서(속성 비트 0x02)와 다르다. 배포용 문서는 암호를 묻지 않고 누구나
+    열어 읽는 문서이고, 막는 것은 편집·복사다. 이 프로그램은 읽기만 한다.
+    """
+    header = next(_records(data), None)
+    if header is None or header[0] != HWPTAG_DISTRIBUTE_DOC_DATA or len(header[2]) != 256:
+        raise ValueError("배포용 문서 키 레코드가 없음")
+    payload = bytearray(header[2])
+    seed = state = int.from_bytes(payload[:4], "little")
+
+    def rand() -> int:
+        nonlocal state
+        state = (state * 214013 + 2531011) & 0xFFFFFFFF
+        return (state >> 16) & 0x7FFF
+
+    left = key = 0
+    for index in range(256):
+        if left == 0:
+            key = rand() & 0xFF
+            left = (rand() & 0x0F) + 1
+        if index >= 4:
+            payload[index] ^= key
+        left -= 1
+    offset = 4 + (seed & 0x0F)
+    return decrypt_ecb(bytes(payload[offset:offset + 16]), data[4 + 256:])
 
 
 def _records(buf: bytes):

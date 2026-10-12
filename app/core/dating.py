@@ -11,12 +11,23 @@ When(언제 하는 일인가)과 How(작년엔 어떤 순서였나)가 전부 �
 
     ① body      본문 내 날짜        "2024. 9. 12."      가장 신뢰
     ② filename  파일명 내 날짜      2024_행감_요구자료
-    ③ meta      문서 속성 작성일
-    ④ folder    경로 내 연도        \2024\
+    ③ folder    경로 내 날짜·연도   '2024' 폴더 · '[2023-06-23] 결과 보고' 폴더
+    ④ meta      문서 속성 작성일
     ⑤ fs        파일 수정일                              최후 수단
 
 ⑤로만 판정된 문서는 주기 계산에서 제외한다. 오염된 근거로 일정을 만드느니
 만들지 않는 편이 낫다.
+
+실제 전임자 자료에서 드러난 세 가지를 반영한다(2026-10-12).
+  · 전임자가 폴더 이름에 기안일을 적어 둔 경우(`[2023-06-23] …`) 그 날짜가 그 안
+    문서의 시점이다. 그 단계에서 쓴 서식·붙임에는 자기 날짜가 없거나 다른 해의
+    날짜가 적혀 있다.
+  · 문서 속성의 작성일은 서식 파일을 복사해 쓰면 서식을 만든 날이다. 서로 다른
+    문서 여러 건이 같은 작성일을 가지면 서식 날짜로 보고 채택하지 않는다.
+    파일명·폴더의 연도와 한 해 넘게 어긋나는 작성일도 마찬가지다.
+  · 본문 앞머리의 날짜가 사례 속 연혁(사업 연도, 통계 연도)일 수 있다. 표지가
+    붙지 않은 본문 날짜가 파일명·폴더의 연도와 한 해 넘게 어긋나면 채택하지 않는다.
+채택하지 않은 후보도 목록에는 남긴다.
 """
 
 from __future__ import annotations
@@ -30,7 +41,14 @@ from pathlib import Path
 
 # 근거 갈래 (우선순위 순)
 BODY, FILENAME, META, FOLDER, FS = "body", "filename", "meta", "folder", "fs"
-PRIORITY = (BODY, FILENAME, META, FOLDER, FS)
+PRIORITY = (BODY, FILENAME, FOLDER, META, FS)
+# 채택 규칙이 바뀌면 올린다. 파이프라인이 이 값을 보고 기존 문서의 시점을 다시 정한다
+# (사람이 정한 시점은 그대로 둔다).
+DATING_VERSION = "2"
+# 파일명·폴더의 연도와 이보다 크게 어긋나는 본문·문서속성 날짜는 그 문서의 시점이 아니다.
+YEAR_TOLERANCE = 1
+# 이름에 연도가 없을 때, 파일 수정 연도보다 이만큼 넘게 앞선 본문·문서속성 날짜는 버린다.
+STALE_YEARS = 5
 
 # 정밀도
 DAY, MONTH, YEAR = "day", "month", "year"
@@ -114,7 +132,12 @@ class Resolution:
 
     @property
     def month(self) -> int | None:
-        return int(self.value[5:7]) if self.value else None
+        # 연도만 아는 날짜는 값의 달 자리를 01로 채워 둔 것이다. 그것을 1월로 읽으면
+        # 연도만 적힌 문서가 전부 1월 문서가 되고, 반복 업무가 모두 "매년 1월"이 된다
+        # (실측: 반복 업무 20개 중 17개).
+        if not self.value or self.precision == YEAR:
+            return None
+        return int(self.value[5:7])
 
     @property
     def trustworthy(self) -> bool:
@@ -223,11 +246,16 @@ def collect(
     meta_created: str | None = None,
     meta_modified: str | None = None,
     fs_mtime: str | float | None = None,
+    meta_shared: bool = False,
 ) -> Resolution:
     """문서 하나의 모든 갈래를 모아 채택까지 한 번에 처리한다.
 
     sections를 주면 (locator, text) 순서대로 훑어 어느 조각에서 나온
     날짜인지 근거 위치까지 남긴다.
+
+    meta_shared는 이 문서의 문서속성 작성일을 서로 다른 문서 여러 건이 함께 갖고
+    있다는 뜻이다(서식을 복사해 쓴 흔적). 문서 하나만 보고는 알 수 없어 부르는
+    쪽이 세어 넘긴다.
     """
     candidates: list[DateCandidate] = []
 
@@ -253,7 +281,39 @@ def collect(
         candidates.extend(from_path(path))
     candidates.extend(from_filesystem(fs_mtime))
 
-    return resolve(candidates)
+    chosen = resolve(_usable(candidates, meta_shared))
+    return Resolution(chosen.value, chosen.kind, chosen.precision, candidates)
+
+
+def _usable(candidates: list[DateCandidate], meta_shared: bool) -> list[DateCandidate]:
+    """채택에 쓸 후보만 고른다. 버린 후보도 부르는 쪽이 목록에는 남긴다."""
+    folder = next((c for c in candidates if c.kind == FOLDER), None)
+    if folder is not None and folder.precision == DAY:
+        # 전임자가 폴더에 적어 둔 기안일. 그 안의 문서는 그날의 것이다.
+        return [folder]
+
+    named = [c.year for c in candidates if c.kind in (FILENAME, FOLDER)]
+
+    modified = next((c.year for c in candidates if c.kind == FS), None)
+
+    def off(candidate: DateCandidate) -> bool:
+        if modified is not None and candidate.year > modified:
+            # 마지막으로 고친 해보다 뒤의 날짜는 계획·전망에 적힌 미래의 날짜다.
+            return True
+        if named:
+            return all(abs(candidate.year - year) > YEAR_TOLERANCE for year in named)
+        # 이름에 단서가 없을 때: 파일을 고친 해보다 한참 앞선 날짜는 본문 속 연혁이나
+        # 서식의 날짜다. 오래된 문서를 나중에 복사한 경우와 가르려고 폭을 넓게 둔다.
+        return modified is not None and modified - candidate.year > STALE_YEARS
+
+    usable = []
+    for candidate in candidates:
+        if candidate.kind == META and (meta_shared or off(candidate)):
+            continue
+        if candidate.kind == BODY and not candidate.labeled and off(candidate):
+            continue
+        usable.append(candidate)
+    return usable
 
 
 # ── 내부 ────────────────────────────────────────────────────────────

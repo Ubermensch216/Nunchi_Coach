@@ -20,7 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 import json
 
-from ..core import scoring, discovery_index
+from ..core import docrole, folders, scoring, discovery_index
 from ..core.clustering import DEFAULT_MIN_SIZE, Cluster, _tokenize, cluster, common_tokens
 from ..db import Database
 from ..search.vector import VectorStore
@@ -43,9 +43,12 @@ class Discovery:
     singleton_candidates: int = 0
     held_groups: int = 0
     cancelled: bool = False
+    named_by_folder: int = 0         # 전임자의 폴더 구조로 찾은 업무
 
     def summary(self) -> str:
         parts = [f"업무 {self.tasks}개", f"배정 {self.assigned:,}건"]
+        if self.named_by_folder:
+            parts.append(f"폴더 구조로 찾은 업무 {self.named_by_folder}개")
         if self.grouped_by_filename:
             parts.append(f"파일명으로 묶은 제안 {self.grouped_by_filename}개")
         if self.unassigned:
@@ -89,12 +92,19 @@ def _discover(
         import numpy as np
         keep = np.asarray([int(doc) not in protected for doc in store.ids])
         store = VectorStore(store.ids[keep], store.matrix[keep])
-    if store.size == 0:
+    if store.size == 0 and _folder_plan(db, protected) is None:
         result.tasks = len(db.tasks())
         result.unassigned = db.unclassified_count()
         if not protected:
             result.errors.append("의미 색인이 없습니다. 먼저 분석을 끝내세요.")
         return result
+
+    # 전임자가 폴더로 일을 정리해 두었으면 그 구조가 업무의 1차 단서다. 본문이
+    # 닮았는지는 그다음이다. 폴더가 평평하면 plan이 없고, 아래의 본문 묶기로 간다.
+    plan = _folder_plan(db, protected)
+    if plan is not None:
+        with db.transaction():
+            return _save_folder_discovery(db, result, plan, store, contributions, model)
 
     kwargs = {}
     if threshold is not None:
@@ -219,6 +229,188 @@ def _protected_documents(db: Database) -> set[int]:
     return {r[0] for r in rows}
 
 
+# ── 폴더 구조로 업무 찾기 ───────────────────────────────────────────
+# 사람이 전임자 폴더를 받아 들고 하는 일을 그대로 한다.
+#   1. 맨 위 폴더(연도·old 묶음은 지나쳐서)를 업무로 본다.
+#   2. 이름의 알맹이가 같은 폴더는 한 업무다. '2024년 적극행정 실행계획'과
+#      '[0. old]\[2023년도]\[적극행정 실행계획]'은 같은 일의 다른 회차다.
+#   3. 폴더에 들지 않은 낱장은 이름에 업무 이름이 들어 있을 때만 그 업무에 붙인다.
+#      아니면 미분류로 둔다 — 확신 없는 문서를 업무에 밀어 넣지 않는다.
+# 본문을 읽지 못한 문서(스캔 PDF 등)도 폴더가 알려 주는 업무에는 붙인다. 내용은
+# 몰라도 그 일의 자료라는 것은 전임자가 이미 정해 두었다.
+
+FOLDER_MIN_DOCS = 2        # 문서가 이만큼은 있어야 폴더를 업무로 올린다
+FOLDER_MODE_SHARE = 0.5    # 문서의 절반 이상이 업무 폴더 안에 있어야 폴더를 믿는다
+FOLDER_EVIDENCE = "폴더 위치"
+NAME_EVIDENCE = "파일 이름에 업무 이름"
+
+
+@dataclass(slots=True)
+class FolderTask:
+    name: str
+    cores: list[str]                       # 이 업무로 합친 폴더 이름의 알맹이들
+    folders: list[str] = field(default_factory=list)
+    rounds: list[str] = field(default_factory=list)
+    doc_ids: list[int] = field(default_factory=list)       # 폴더로 정한 문서
+    named_ids: list[int] = field(default_factory=list)     # 이름으로 붙인 낱장
+    unread: set[int] = field(default_factory=set)
+
+
+def _folder_plan(db: Database, protected: set[int]) -> list[FolderTask] | None:
+    rows = db.con.execute(
+        "SELECT d.id, d.path, d.filename, d.parse_status, s.id AS source_id, s.path AS root "
+        "FROM documents d JOIN sources s ON s.id = d.source_id AND s.kind != 'upload' "
+        "WHERE d.missing_since IS NULL AND d.parse_status NOT IN ('skipped', 'pending') "
+        "ORDER BY d.id").fetchall()
+    rows = [row for row in rows if row["id"] not in protected]
+    if not rows:
+        return None
+
+    trees: dict[int, folders.Tree] = {}
+    for row in rows:
+        trees.setdefault(row["source_id"], folders.Tree(row["root"]))
+    by_source: dict[int, list[str]] = {}
+    for row in rows:
+        by_source.setdefault(row["source_id"], []).append(row["path"])
+    for source_id, paths in by_source.items():
+        trees[source_id] = folders.Tree.build(trees[source_id].root, paths)
+
+    groups: dict[tuple, list] = {}
+    loose = []
+    for row in rows:
+        placement = trees[row["source_id"]].place(row["path"])
+        if placement.loose:
+            loose.append(row)
+        else:
+            groups.setdefault((row["source_id"], placement.task_parts), []).append((row, placement))
+    foldered = sum(len(members) for members in groups.values())
+    if len(groups) < 2 or foldered < len(rows) * FOLDER_MODE_SHARE:
+        return None
+
+    labels = {key: members[0][1].label for key, members in groups.items()}
+    common = folders.common_tokens(list(labels.values()))
+    cores = {key: folders.core(label, common) for key, label in labels.items()}
+    target = _merge_targets(sorted(set(cores.values())))
+
+    merged: dict[str, list[tuple]] = {}
+    for key in groups:
+        merged.setdefault(target[cores[key]], []).append(key)
+
+    tasks: list[FolderTask] = []
+    for canonical, keys in merged.items():
+        members = [item for key in keys for item in groups[key]]
+        if len(members) < FOLDER_MIN_DOCS:
+            loose.extend(row for row, _ in members)
+            continue
+        # 이름은 알맹이가 같은 폴더의 것. 여럿이면 문서가 많은 폴더의 것.
+        named = max(keys, key=lambda key: (cores[key] == canonical, len(groups[key])))
+        task = FolderTask(name=labels[named][:60], cores=sorted({cores[key] for key in keys}, key=len))
+        task.folders = ["\\".join(key[1]) for key in sorted(keys, key=lambda key: -len(groups[key]))]
+        task.rounds = sorted({placement.round_key for _, placement in members if placement.round_key})
+        task.doc_ids = [row["id"] for row, _ in members]
+        task.unread = {row["id"] for row, _ in members if row["parse_status"] not in ("ok", "partial")}
+        tasks.append(task)
+    if len(tasks) < 2:
+        return None
+
+    for row in loose:
+        owner = _owner_by_name(row["filename"], tasks, common)
+        if owner is not None:
+            owner.named_ids.append(row["id"])
+            if row["parse_status"] not in ("ok", "partial"):
+                owner.unread.add(row["id"])
+    tasks.sort(key=lambda task: -(len(task.doc_ids) + len(task.named_ids)))
+    return tasks
+
+
+def has_folder_tasks(db: Database) -> bool:
+    """폴더 구조만으로 업무를 찾을 수 있는 자료인가(의미 색인이 없어도 된다)."""
+    return _folder_plan(db, _protected_documents(db)) is not None
+
+
+def _merge_targets(cores: list[str]) -> dict[str, str]:
+    """알맹이가 다른 알맹이를 품고 있으면 품긴 쪽으로 합친다.
+
+    '중점과제선정계획'·'중점과제추진결과보고'는 '중점과제'의 일이다. 둘 이상을 품으면
+    뒤에 나온 것을 고른다 — 우리말은 뒤가 중심어라 '위원회우수공무원선발'은 위원회가
+    아니라 우수공무원 선발이다.
+    """
+    target = {core: core for core in cores}
+    for core in sorted(cores, key=len):
+        inside = [(core.rfind(other), len(other), other) for other in cores
+                  if other != core and len(other) >= 2 and len(other) < len(core) and other in core]
+        if inside:
+            target[core] = target[max(inside)[2]]
+    return target
+
+
+def _owner_by_name(filename: str, tasks: list[FolderTask], common: list[str]) -> FolderTask | None:
+    """낱장의 이름에 업무 이름이 들어 있으면 그 업무. 둘 이상이면 더 긴 이름 쪽."""
+    from pathlib import Path
+
+    stem = folders.compact(Path(filename).stem)
+    hits = [(hit, index) for index, task in enumerate(tasks)
+            if (hit := max((len(core) for core in task.cores if len(core) >= 2 and core in stem),
+                           default=0))]
+    if not hits:
+        # 띄어 쓴 이름('소송 지원 관련')은 낱말 둘 이상이 겹치면 같은 일로 본다.
+        for index, task in enumerate(tasks):
+            words = {word for word in task.name.split() if len(word) >= 2 and word not in common}
+            shared = [word for word in words if word in stem]
+            if len(shared) >= 2:
+                hits.append((sum(map(len, shared)), index))
+    if not hits:
+        return None
+    hits.sort(reverse=True)
+    if len(hits) > 1 and hits[0][0] == hits[1][0]:
+        return None      # 비기면 정하지 않는다
+    return tasks[hits[0][1]]
+
+
+def _save_folder_discovery(db, result, plan, store, contributions, model) -> Discovery:
+    _clear_proposals(db)
+    db.con.execute("DELETE FROM discovery_holds")
+    for task in plan:
+        every = task.doc_ids + task.named_ids
+        places = len(task.folders)
+        where = f"‘{task.folders[0]}’ 폴더" + (f" 등 {places}곳" if places > 1 else "")
+        description = f"{where}의 문서 {len(every):,}건입니다."
+        if task.rounds:
+            description += " 회차: " + " · ".join(task.rounds[:8]) + "."
+        if task.named_ids:
+            description += f" 폴더 밖 문서 {len(task.named_ids)}건은 이름을 보고 붙였습니다."
+        if task.unread:
+            description += f" 본문을 읽지 못한 문서 {len(task.unread)}건은 위치만 보고 붙였습니다."
+        group = Cluster(seed_id=min(every), doc_ids=every)
+        task_id = _upsert_task(db, Named(task.name, description), group, confidence="medium")
+        read = [doc_id for doc_id in task.doc_ids if doc_id not in task.unread]
+        result.assigned += _attach(db, task_id, read, evidence=FOLDER_EVIDENCE)
+        _attach(db, task_id, [d for d in task.named_ids if d not in task.unread],
+                evidence=NAME_EVIDENCE)
+        _attach(db, task_id, sorted(task.unread), confidence="low", evidence=FOLDER_EVIDENCE)
+        _store_reading(db, task_id, every)
+        result.named_by_folder += 1
+
+    for row in db.con.execute("SELECT td.task_id,td.doc_id FROM task_docs td "
+                              "JOIN tasks t ON t.id=td.task_id WHERE t.origin='ai' AND t.status='proposed'"):
+        for piece in contributions.get(row["doc_id"], []):
+            db.con.execute(
+                "INSERT OR REPLACE INTO discovery_evidence(task_id,doc_id,piece_key,chunk_id,doc_hash,locator,"
+                "basis,score,model,index_version,reviewed_by_model) VALUES(?,?,?,?,?,?,?,?,?,?,0)",
+                (row["task_id"], row["doc_id"], str(piece["chunk_id"] or "prefix"), piece["chunk_id"],
+                 piece["doc_hash"], piece["locator"], piece["basis"], piece["score"], model,
+                 discovery_index.VERSION))
+
+    result.clusters = len(plan)
+    result.assigned = db.con.execute(
+        "SELECT COUNT(DISTINCT td.doc_id) FROM task_docs td JOIN tasks t ON t.id=td.task_id "
+        "WHERE t.not_a_task=0 AND t.merged_into IS NULL").fetchone()[0]
+    result.unassigned = db.unclassified_count()
+    result.tasks = db.con.execute("SELECT COUNT(*) AS n FROM tasks").fetchone()["n"]
+    db.audit("task.discover", detail=result.summary(), result="ok")
+    return result
+
+
 # ── 묶이지 않은 문서 ────────────────────────────────────────────────
 # 업무 복원('지금 할 일')은 업무에 묶인 문서에서만 일어난다. 문서가 몇 건뿐이고
 # 형식이 섞인 업무(계약 체결 보고·회의록·정산 보고)는 내용이 충분히 비슷하지
@@ -336,8 +528,9 @@ def _clear_proposals(db: Database) -> None:
     )
 
 
-def _upsert_task(db: Database, named: Named, group: Cluster) -> int:
+def _upsert_task(db: Database, named: Named, group: Cluster, confidence: str | None = None) -> int:
     """Names are labels, not proof of business identity. Keep distinct groups separate."""
+    confidence = confidence or group.confidence
     label = named.label
     suffix = 0
     while db.con.execute("SELECT 1 FROM tasks WHERE name=?", (label,)).fetchone():
@@ -350,7 +543,7 @@ def _upsert_task(db: Database, named: Named, group: Cluster) -> int:
     db.con.execute(
         "INSERT INTO tasks(name, description, origin, status, confidence) "
         "VALUES (?, ?, 'ai', 'proposed', ?) ON CONFLICT(name) DO NOTHING",
-        (label, description, group.confidence),
+        (label, description, confidence),
     )
     row = db.con.execute("SELECT id FROM tasks WHERE name = ?", (label,)).fetchone()
     task_id = row["id"]
@@ -359,12 +552,13 @@ def _upsert_task(db: Database, named: Named, group: Cluster) -> int:
         "UPDATE tasks SET description = ? WHERE id = ? AND status = 'proposed'",
         (description, task_id),
     )
-    if group.confidence == "low":
+    if confidence == "low":
         db.con.execute("UPDATE tasks SET review_state='weak' WHERE id=?", (task_id,))
     return task_id
 
 
-def _attach(db: Database, task_id: int, doc_ids: list[int]) -> int:
+def _attach(db: Database, task_id: int, doc_ids: list[int], confidence: str = "medium",
+            evidence: str | None = None) -> int:
     """문서를 업무에 붙인다. 사용자가 직접 배정한 문서는 건드리지 않는다."""
     if not doc_ids:
         return 0
@@ -378,9 +572,9 @@ def _attach(db: Database, task_id: int, doc_ids: list[int]) -> int:
     }
     targets = [doc_id for doc_id in doc_ids if doc_id not in manual]
     db.con.executemany(
-        "INSERT INTO task_docs(task_id, doc_id, origin, confidence) "
-        "VALUES (?, ?, 'ai', 'medium') ON CONFLICT(task_id, doc_id) DO NOTHING",
-        [(task_id, doc_id) for doc_id in targets],
+        "INSERT INTO task_docs(task_id, doc_id, origin, confidence, evidence) "
+        "VALUES (?, ?, 'ai', ?, ?) ON CONFLICT(task_id, doc_id) DO NOTHING",
+        [(task_id, doc_id, confidence, evidence) for doc_id in targets],
     )
     return len(targets)
 
@@ -409,7 +603,8 @@ def _facts(db: Database, doc_ids: list[int]) -> list[scoring.DocFacts]:
     rows = db.con.execute(
         f"""
         SELECT d.id, d.filename, d.eff_year, d.eff_month, d.eff_date_kind,
-               d.char_count,
+               d.char_count, d.path,
+               (SELECT path FROM sources s WHERE s.id = d.source_id) AS root,
                (SELECT COUNT(*) FROM documents x
                  WHERE x.hash = d.hash AND d.hash IS NOT NULL
                    AND x.missing_since IS NULL) AS dup_n,
@@ -432,6 +627,9 @@ def _facts(db: Database, doc_ids: list[int]) -> list[scoring.DocFacts]:
             duplicate_count=max(1, row["dup_n"] or 1),
             char_count=row["char_count"] or 0,
             is_version_representative=bool(row["is_rep"]),
+            memo=docrole.classify(row["filename"]).role == docrole.MEMO,
+            aside=bool(set(docrole.path_modifiers(row["path"] or "", row["root"] or ""))
+                       & {folders.OLD, folders.BACKUP, folders.REFERENCE, folders.RECEIVED}),
         )
         for row in rows
     ]

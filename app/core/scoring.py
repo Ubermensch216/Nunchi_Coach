@@ -41,7 +41,8 @@ RECENCY_SPAN_YEARS = 4
 
 # 이유를 두 문장만 보여준다. 어느 것을 남길지는 중요도로 정한다.
 PRIORITY_PINNED = 100
-PRIORITY_FINAL = 70      # '송부'·'결재' 같은 결정적 단서
+PRIORITY_MEMO = 90
+PRIORITY_FINAL = 70     # '송부'·'결재' 같은 결정적 단서
 PRIORITY_TYPE = 60
 PRIORITY_RECENCY = 50
 PRIORITY_DUPLICATE = 40
@@ -70,6 +71,8 @@ class DocFacts:
     char_count: int = 0
     is_version_representative: bool = False
     user_pinned: bool = False
+    memo: bool = False      # 전임자가 남긴 메모(주의사항·행사준비 등)
+    aside: bool = False     # old·bak·참고·받은 자료 폴더 안의 문서
 
 
 def recommend(
@@ -93,6 +96,13 @@ def recommend(
         if item.user_pinned:
             parts["사용자 지정"] = 10.0
             reasons.append((PRIORITY_PINNED, "사용자가 대표 문서로 지정했습니다"))
+
+        if item.memo:
+            # 문서에 적히지 않은 것(준비물, 자주 틀리는 것, 순서)은 여기에만 있다.
+            parts["전임자 메모"] = 4.0
+            reasons.append((PRIORITY_MEMO, "전임자가 직접 남긴 메모입니다"))
+        if item.aside:
+            parts["참고·이전 자료"] = -1.5
 
         recency, recency_reason = _recency(item, this_year)
         parts["최근성"] = recency

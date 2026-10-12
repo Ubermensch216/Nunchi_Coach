@@ -19,6 +19,8 @@ from pathlib import Path
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
+from .bridge import service as bridge_service
+from .bridge.store import FILE_NAME as BRIDGE_FILE, BridgeStore
 from .db import default_project_dir, open_project_at, registry
 from .db.registry import ProjectEntry
 from .ui import theme
@@ -64,17 +66,25 @@ def main(argv: list[str] | None = None) -> int:
     theme.apply(app, "medium", "system")   # 시작 화면에도 같은 옷을 입힌다
     target = _from_args(args, root)
 
-    # 프로젝트를 바꾸면 창을 새로 만든다. MainWindow가 db를 생성자에서 받아
-    # 뷰마다 들고 있어(shell.py), 열린 창의 db만 갈아 끼우는 것은 안전하지
-    # 않다 — 백그라운드 스레드까지 옛 DB를 가리키고 있다.
-    while True:
-        if target is None:
-            target = _choose(root)
+    # onNara.sAIde 브리지는 인수인계가 아니라 앱에 딸려 있다. 설정에서 켜 둔 경우에만 포트를 연다.
+    bridge = bridge_service.BridgeService(BridgeStore((root or default_project_dir().parent) / BRIDGE_FILE))
+    bridge_service.install(bridge)
+    bridge.start_if_enabled()
+    try:
+        # 프로젝트를 바꾸면 창을 새로 만든다. MainWindow가 db를 생성자에서 받아
+        # 뷰마다 들고 있어(shell.py), 열린 창의 db만 갈아 끼우는 것은 안전하지
+        # 않다 — 백그라운드 스레드까지 옛 DB를 가리키고 있다.
+        while True:
+            if target is None:
+                target = _choose(root)
+                if target is None:
+                    return 0
+            target = _run(app, target, root)
             if target is None:
                 return 0
-        target = _run(app, target, root)
-        if target is None:
-            return 0
+    finally:
+        bridge.stop()
+        bridge_service.install(None)
 
 
 def _speak_korean(app: QApplication) -> bool:
@@ -109,6 +119,9 @@ def _run(app: QApplication, entry: ProjectEntry, root: Path | None) -> ProjectEn
     theme.apply(app, _text_size(db), theme.normalize_mode(db.get_meta("theme_mode")))
 
     window = MainWindow(db, project_name=entry.name)
+    bridge = bridge_service.current()
+    if bridge is not None:
+        bridge.describe = lambda: {"project": entry.name}
     switch_to: list[ProjectEntry] = []
 
     def request_switch() -> None:
@@ -125,6 +138,8 @@ def _run(app: QApplication, entry: ProjectEntry, root: Path | None) -> ProjectEn
         app.exec()
     finally:
         disconnect()
+        if bridge is not None:
+            bridge.describe = dict
         db.audit("app.stop")
         diagnostics.record("app.stop")
         db.close()

@@ -6,8 +6,13 @@
 읽어도 화면에서는 원문처럼 보이기 때문이다.
 
 폴더 훑기(ingest/scanner.py)는 이 모듈을 쓰지 않는다. 전임자 폴더의 사진을
-전부 문서로 읽어 들이면 건당 수십 초씩 걸린다. 사용자가 노트북에 직접 올린
-파일만 읽는다(core/notebook_ingest.py).
+전부 문서로 읽어 들이면 건당 수십 초씩 걸린다. 읽는 것은 두 곳뿐이다.
+  · 사용자가 노트북에 직접 올린 파일(core/notebook_ingest.py)
+  · 자료 폴더에서 골라낸 스캔본과 화면 캡처(core/pictures.py) — 한 번에 정해진 쪽수만
+
+작은 그림은 키워서 보낸다. 화면 캡처(가로 900픽셀 안팎, 작은 글씨)를 그대로 보내면
+모델이 없는 글자를 지어낸다 — 실측에서 공문 목록 캡처의 제목이 전부 엉뚱한 말로
+나왔고, 2배로 키워 보내자 제대로 읽혔다.
 """
 
 from __future__ import annotations
@@ -26,7 +31,12 @@ IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".
 MAX_PAGES = 20
 # 긴 변 기준. 더 크게 보내도 모델이 줄여서 보고, 전송과 처리만 느려진다.
 MAX_SIDE = 1600
-NOTE = "로컬 AI가 그림에서 읽은 글자입니다. 숫자·이름은 원본과 대조하세요."
+# 작은 그림을 키우는 한도. 이보다 키우면 글씨가 뭉개질 뿐 더 읽히지 않는다.
+# 쪽 크기(page.rect)에 곱하는 값이다. 그림 파일의 쪽 크기는 포인트로 환산돼 있어
+# (96dpi 그림이면 픽셀의 0.75배) 픽셀로는 2배 가까이 커진다. 배율을 1로 묶어 두었던
+# 예전에는 그림을 원본보다 작게 보내고 있었다.
+MAX_UPSCALE = 2.5
+NOTE ="로컬 AI가 그림에서 읽은 글자입니다. 숫자·이름은 원본과 대조하세요."
 NOTHING = "글자 없음"
 
 PROMPT = (
@@ -51,20 +61,22 @@ def render_pages(path: Path, limit: int = MAX_PAGES) -> tuple[list[tuple[str, by
                 break
             longest = max(page.rect.width, page.rect.height) or 1
             # PDF는 72dpi 좌표라 그대로 찍으면 글자가 뭉개진다. 긴 변을 MAX_SIDE에 맞춘다.
-            scale = MAX_SIDE / longest if path.suffix.lower() == ".pdf" else min(1.0, MAX_SIDE / longest)
+            scale = (MAX_SIDE / longest if path.suffix.lower() == ".pdf"
+                     else min(MAX_UPSCALE, MAX_SIDE / longest))
             pixmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
             pages.append((f"{index}쪽" if total > 1 else "그림", pixmap.tobytes("png")))
     return pages, total
 
 
-def read(client, path: str | Path, should_stop: Callable[[], bool] = lambda: False) -> ParseResult:
+def read(client, path: str | Path, should_stop: Callable[[], bool] = lambda: False,
+         max_pages: int = MAX_PAGES) -> ParseResult:
     """그림을 모델에 보여 주고 읽은 글자를 파서 결과로 돌려준다. 예외를 던지지 않는다."""
     path = Path(path)
     if not client._supports("vision"):   # noqa: SLF001 — 같은 꾸러미의 기능 조회
         return ParseResult(status=EMPTY, parser=PARSER,
                            note="그림의 글자를 읽으려면 그림을 읽을 수 있는 로컬 모델이 필요합니다.")
     try:
-        pages, total = render_pages(path)
+        pages, total = render_pages(path, max_pages)
     except Exception as exc:
         return failed(PARSER, f"그림 열기 실패: {exc}")
 

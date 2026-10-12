@@ -45,6 +45,8 @@ from ...law.client import LawError
 from ...ai.settings import model_names, project_client, save_models
 from ...jobs.ai_status import check_status
 from ...db import Database
+from ...bridge import service as bridge_service
+from ...core import onnara_import
 from ...core.output_policy import UnsafeOutputError, safe_text_writer
 from .. import icons, theme
 from ..widgets import (
@@ -64,7 +66,7 @@ SECTIONS = [
     ("system", "system", "시스템", "AI·저장 위치·최근 활동·오픈소스 고지"),
 ]
 
-SOURCE_KIND_LABEL = {"local": "내 PC", "unc": "네트워크", "removable": "이동식"}
+SOURCE_KIND_LABEL = {"local": "내 PC", "unc": "네트워크", "removable": "이동식", "onnara": "온나라 수집본"}
 AUDIT_ROWS = 20
 
 
@@ -275,6 +277,10 @@ class SettingsDialog(QDialog):
         head = QHBoxLayout()
         head.addWidget(section_title("업무 자료가 있는 폴더"))
         head.addStretch(1)
+        onnara = QPushButton("+ 온나라 자료 가져오기")
+        onnara.setToolTip("onNara.sAIde로 내려받은 꾸러미 폴더나 온나라 수집본 폴더를 자료 폴더로 등록합니다")
+        onnara.clicked.connect(self._pick_onnara)
+        head.addWidget(onnara)
         add = QPushButton("+ 폴더 추가")
         add.clicked.connect(self._add_source)
         head.addWidget(add)
@@ -334,6 +340,42 @@ class SettingsDialog(QDialog):
         self.db.add_source(path, kind=_source_kind(path))
         self._after_sources_changed()
 
+    def _pick_onnara(self) -> None:
+        chosen = QFileDialog.getExistingDirectory(
+            self, "sAIde 꾸러미 폴더 (package.json) 또는 온나라 수집본 폴더 (manifest.json)")
+        if not chosen:
+            return
+        try:
+            packaged = onnara_import.is_package(chosen)
+            summary = (onnara_import.describe_package(chosen) if packaged
+                       else onnara_import.describe(onnara_import.read_manifest(chosen)[1]))
+        except ValueError as exc:
+            QMessageBox.information(self, "온나라 자료 가져오기", str(exc))
+            return
+        note = ("꾸러미의 파일을 프로젝트 안에 수집본으로 복사한 뒤 자료 폴더로 등록합니다. "
+                if packaged else "이 수집본을 자료 폴더로 등록합니다. ")
+        answer = QMessageBox.question(
+            self, "온나라 자료 가져오기",
+            f"{summary}\n\n{note}등록하면 다른 자료 폴더와 함께 분석합니다. "
+            "고른 폴더의 파일은 읽기만 하고, 이 프로그램이 온나라에 접속하지는 않습니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.add_onnara(chosen)
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self, "온나라 자료 가져오기", str(exc))
+
+    def add_onnara(self, folder: str) -> dict:
+        """꾸러미·수집본을 자료 폴더로 등록하고 분석을 다시 돌리게 한다."""
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            result = onnara_import.add_to_project(self.db, folder)
+        finally:
+            QApplication.restoreOverrideCursor()
+        self._after_sources_changed()
+        return result
+
     def _change_source(self, source_id: int, old_path: str) -> None:
         """폴더 위치를 바꾼다 — 최초 지정이 곧 확정이던 것을 푼다.
 
@@ -389,6 +431,8 @@ class SettingsDialog(QDialog):
     def _build_system(self, body: QVBoxLayout) -> None:
         body.addWidget(self._ai_card())
         body.addWidget(self._law_card())
+        if bridge_service.current() is not None:
+            body.addWidget(self._bridge_card())
         body.addWidget(self._storage_card())
         body.addWidget(self._audit_card())
         body.addWidget(self._notices_card())
@@ -493,6 +537,125 @@ class SettingsDialog(QDialog):
             "들어가지 않습니다. 켜고 끄는 것은 인수인계마다 따로입니다.", small=True))
         self._sync_law_state()
         return card
+
+    # ── onNara.sAIde 연결(로컬 브리지) ──────────────────────────────
+    def _bridge_card(self) -> Card:
+        """이 PC의 onNara.sAIde 확장과의 연결. 기본은 꺼져 있고, 켜도 이 PC 안에서만 통한다."""
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QCheckBox
+
+        bridge = bridge_service.current()
+        card = Card(tone="static")
+        card.body.addWidget(section_title("onNara.sAIde 연결"))
+        card.body.addWidget(muted_label(
+            "이 PC의 Edge에 설치한 onNara.sAIde 확장이 눈치코치에 꾸러미 준비를 알리고 상태를 확인할 수 있게 합니다. "
+            "<b>이 PC 안(127.0.0.1)에서만</b> 통하고, 공문 파일은 이 길로 오가지 않습니다(꾸러미 폴더로 옵니다)."))
+        self.bridge_enabled = QCheckBox("이 PC의 onNara.sAIde 확장과 연결 허용")
+        self.bridge_enabled.setChecked(bridge.store.enabled)
+        self.bridge_enabled.toggled.connect(self._toggle_bridge)
+        card.body.addWidget(self.bridge_enabled)
+        self.bridge_state = muted_label("")
+        self.bridge_state.setAccessibleName("onNara.sAIde 연결 상태")
+        card.body.addWidget(self.bridge_state)
+
+        line = QHBoxLayout()
+        self.bridge_code_button = QPushButton("연결 코드 만들기")
+        self.bridge_code_button.clicked.connect(self._new_bridge_code)
+        line.addWidget(self.bridge_code_button)
+        port = QPushButton("포트 변경")
+        port.setObjectName("Quiet")
+        port.clicked.connect(self._change_bridge_port)
+        line.addWidget(port)
+        line.addStretch(1)
+        card.body.addLayout(line)
+        self.bridge_code = muted_label("")
+        self.bridge_code.setObjectName("Mono")
+        self.bridge_code.setAccessibleName("연결 코드")
+        self.bridge_code.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        card.body.addWidget(self.bridge_code)
+
+        clients = bridge.clients()
+        self._bridge_seen = [client["id"] for client in clients]
+        for client in clients:
+            row = QHBoxLayout()
+            name = client["label"] or "onNara.sAIde"
+            row.addWidget(muted_label(
+                f"{name} · 확장 ID {client['extension_id'][:6]}… · {client['paired_at'][:10]} 연결", small=True), 1)
+            revoke = QPushButton("연결 해제")
+            revoke.setObjectName("Destructive")
+            revoke.clicked.connect(lambda _=False, key=client["id"]: self._revoke_bridge(key))
+            row.addWidget(revoke)
+            card.body.addLayout(row)
+        card.body.addWidget(muted_label(
+            "연결 정보는 인수인계가 아니라 이 PC에 저장합니다(토큰은 해시만). 인수인계를 바꿔 열어도 그대로이고, "
+            "인수인계 폴더·내보내기 묶음에는 들어가지 않습니다.", small=True))
+
+        # 확장이 코드를 입력해 연결을 맺는 일은 이 창 밖(서버 스레드)에서 일어난다. 상태를 읽어 와 맞춘다.
+        if getattr(self, "_bridge_timer", None) is None:
+            self._bridge_timer = QTimer(self)
+            self._bridge_timer.setInterval(1000)
+            self._bridge_timer.timeout.connect(self._sync_bridge)
+            self._bridge_timer.start()
+        self._sync_bridge()
+        return card
+
+    def _sync_bridge(self) -> None:
+        bridge = bridge_service.current()
+        if bridge is None:
+            return
+        if [client["id"] for client in bridge.clients()] != self._bridge_seen:
+            # 연결이 새로 맺어졌거나 끊겼다. 목록을 다시 그린다.
+            current = self.stack.currentWidget()
+            self.refresh()
+            self.stack.setCurrentWidget(current)
+            return
+        if bridge.running:
+            self.bridge_state.setText(f"켜져 있습니다 · 127.0.0.1:{bridge.port} · 연결된 확장 {len(self._bridge_seen)}개")
+        elif bridge.store.enabled:
+            self.bridge_state.setText(bridge.error or "켜지 못했습니다.")
+        else:
+            self.bridge_state.setText("꺼져 있습니다. 이 프로그램은 포트를 열지 않습니다.")
+        self.bridge_code_button.setEnabled(bridge.running)
+        pending = bridge.pending_code()
+        import time
+        if pending is not None and time.time() <= pending.expires_at:
+            left = max(0, int(pending.expires_at - time.time()))
+            self.bridge_code.setText(
+                f"연결 코드  {pending.code[:3]} {pending.code[3:]}   ·   {left // 60}분 {left % 60:02d}초 남음   ·   "
+                "확장의 설정 › 눈치코치 연동에 입력하세요")
+        else:
+            self.bridge_code.setText("")
+
+    def _toggle_bridge(self, on: bool) -> None:
+        bridge_service.current().set_enabled(on)
+        self.db.audit("bridge.enable" if on else "bridge.disable")
+        self._sync_bridge()
+
+    def _new_bridge_code(self) -> None:
+        try:
+            bridge_service.current().new_code()
+        except ValueError as exc:
+            self.bridge_state.setText(str(exc))
+            return
+        self._sync_bridge()
+
+    def _change_bridge_port(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+
+        bridge = bridge_service.current()
+        port, ok = QInputDialog.getInt(self, "포트 변경", "확장의 연동 설정에도 같은 번호를 적어야 합니다.",
+                                       bridge.store.port, 1024, 65535)
+        if ok and port != bridge.store.port:
+            self.set_bridge_port(port)
+
+    def set_bridge_port(self, port: int) -> None:
+        bridge_service.current().set_port(port)
+        self._sync_bridge()
+
+    def _revoke_bridge(self, client_id: str) -> None:
+        bridge_service.current().revoke(client_id)
+        self.db.audit("bridge.revoke", client_id)
+        self._sync_bridge()
 
     def _sync_law_state(self) -> None:
         if not law_service.enabled(self.db):

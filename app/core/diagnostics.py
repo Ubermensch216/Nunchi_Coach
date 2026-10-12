@@ -10,7 +10,10 @@ _logger = logging.getLogger("nunchicoach.diagnostics")
 _logger.propagate = False
 _logger.setLevel(logging.INFO)
 _FIELDS = {"stage", "doc_id", "count", "elapsed_ms", "version"}
-_EVENTS = {"app.start", "app.stop", "app.unhandled", "pipeline.start", "pipeline.stop",
+# 단계 이름은 정해진 낱말만 받는다. 자유문이 들어올 길을 열지 않는다.
+_STAGES = {"scan", "hash", "parse", "pictures", "date", "embed", "chunks", "discover", "roles", "cycles",
+           "steps", "restore", "ask", "summary"}
+_EVENTS = {"app.start", "app.stop", "app.unhandled", "pipeline.start", "pipeline.stop", "pipeline.stage",
            "pipeline.error", "question.error", "summary.error", "generation.prompt_truncated",
            "notebook.ingest.error", "notebook.summary.error", "studio.compose.error", "action.error", "proactive.error"}
 
@@ -42,7 +45,7 @@ def record(event: str, error: BaseException | None = None, **fields) -> None:
             item[key] = value
         elif key == "version" and isinstance(value, str) and len(value) < 32:
             item[key] = value
-        elif key == "stage" and value in {"scan", "parse", "embed", "ask", "summary"}:
+        elif key == "stage" and value in _STAGES:
             item[key] = value
     if error is not None:
         item["error_type"] = type(error).__name__

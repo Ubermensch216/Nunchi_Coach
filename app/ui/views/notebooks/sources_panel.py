@@ -490,14 +490,21 @@ class SourcesPanel(Panel):
 
     def _pick_collection(self) -> None:
         notebook.require(self.db, self.notebook_id)
-        folder = QFileDialog.getExistingDirectory(self, "온나라 수집본 폴더 (manifest.json이 있는 폴더)")
+        folder = QFileDialog.getExistingDirectory(
+            self, "온나라 수집본 폴더 (manifest.json) 또는 sAIde 꾸러미 폴더 (package.json)")
         if not folder:
             return
-        _root, state = onnara_import.read_manifest(folder)
+        if onnara_import.is_package(folder):
+            summary = onnara_import.describe_package(folder)
+            note = ("이 꾸러미의 파일을 프로젝트 안에 수집본으로 복사한 뒤 읽어 노트북 자료로 연결합니다. "
+                    "꾸러미 폴더의 파일은 읽기만 하고 바꾸지 않습니다.")
+        else:
+            summary = onnara_import.describe(onnara_import.read_manifest(folder)[1])
+            note = ("이 수집본의 문서를 읽어 노트북 자료로 연결합니다. "
+                    "수집 폴더의 파일은 읽기만 하고 바꾸지 않습니다.")
         answer = QMessageBox.question(
             self, "온나라 수집본 가져오기",
-            f"{onnara_import.describe(state)}\n\n이 수집본의 문서를 읽어 노트북 자료로 연결합니다. "
-            "수집 폴더의 파일은 읽기만 하고 바꾸지 않습니다. 이 프로그램이 온나라에 접속하지는 않습니다.",
+            f"{summary}\n\n{note} 이 프로그램이 온나라에 접속하지는 않습니다.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if answer == QMessageBox.StandardButton.Yes:
             self.import_collection(folder)

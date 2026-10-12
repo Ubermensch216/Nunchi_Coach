@@ -88,6 +88,10 @@ class Collection:
         else:
             self.state = {"schema_version": 1, "identity": self.identity,
                           "started_at": _now(), "documents": {}, "assets": {}}
+        # 연결부가 밝힌 수집 근거(작성자 식별 방식·본문 충실도 등). 지문에는 넣지 않는다.
+        details = getattr(connector, "details", None)
+        if details:
+            self.state["package"] = json.loads(json.dumps(details))
 
     def _save(self):
         self.state["updated_at"] = _now()

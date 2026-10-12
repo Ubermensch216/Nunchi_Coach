@@ -359,7 +359,8 @@ CREATE TABLE IF NOT EXISTS collection_runs (
     failed             INTEGER NOT NULL DEFAULT 0,
     started_at         TEXT,
     collected_at       TEXT,
-    registered_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    registered_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    author_identity    TEXT NOT NULL DEFAULT ''  -- id | name(동명이인 구분 안 됨) | ''(미상)
 );
 
 CREATE TABLE IF NOT EXISTS source_records (
@@ -380,6 +381,8 @@ CREATE TABLE IF NOT EXISTS source_records (
     approved_at     TEXT,
     first_collected TEXT NOT NULL DEFAULT (datetime('now')),
     last_collected  TEXT NOT NULL DEFAULT (datetime('now')),
+    -- document_id가 무엇으로 만들어졌는가. list-row면 원 시스템의 문서 ID가 아니다.
+    id_basis        TEXT NOT NULL DEFAULT '',  -- source-document-id | management-number-and-date | list-row | ''
     UNIQUE (institution, system_id, document_id)
 );
 
@@ -398,6 +401,7 @@ CREATE TABLE IF NOT EXISTS source_assets (
     error         TEXT,
     downloaded_at TEXT,
     doc_id        INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+    fidelity      TEXT NOT NULL DEFAULT '',    -- original | rendered-text | extracted-text | ''
     UNIQUE (record_id, asset_id)
 );
 CREATE INDEX IF NOT EXISTS idx_source_assets_doc  ON source_assets(doc_id);

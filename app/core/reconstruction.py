@@ -121,8 +121,12 @@ def _normalize(text: str) -> str:
 # ── 한 조각에서 읽기 ────────────────────────────────────────────────
 
 def read_section(text: str, doc_id: int, locator: str, doc_year: int | None = None,
-                 official: bool = False) -> list[Found]:
-    """문서 조각 하나에서 이름표가 붙은 값을 모두 읽는다."""
+                 official: bool = False, title: str = "") -> list[Found]:
+    """문서 조각 하나에서 이름표가 붙은 값과, 문장으로 적힌 일정·기한을 읽는다.
+
+    title은 그 문서의 이름이다. '…까지 제출'처럼 무엇의 기한인지가 문장에 없을 때
+    어느 문서의 기한인지로 구분하는 데 쓴다.
+    """
     lines = [" ".join(line.split()) for line in (text or "").splitlines()]
     lines = [line for line in lines if line]
     if not lines:
@@ -134,6 +138,8 @@ def read_section(text: str, doc_id: int, locator: str, doc_year: int | None = No
     found: list[Found] = []
     for position, line in enumerate(lines):
         matches = list(_LABEL_RE.finditer(line))
+        if not matches:
+            found.extend(_read_schedule(line, doc_id, locator, doc_year, official, title))
         for index, match in enumerate(matches):
             last = index + 1 == len(matches)
             end = matches[index + 1].start() if not last else len(line)
@@ -148,6 +154,85 @@ def read_section(text: str, doc_id: int, locator: str, doc_year: int | None = No
             if item is not None:
                 found.append(item)
     return found
+
+
+# ── 문장으로 적힌 일정·기한 ─────────────────────────────────────────
+# 계획서와 공문은 기한을 이름표로 적지 않는다. 실제 자료의 꼴은 둘이다.
+#     우수공무원 추천(전부서) : 6. 17.(월) 한          ← 추진일정의 한 줄
+#     …실행계획을 수립하여 2024. 6. 14.(금)까지 제출하여 주시기 바랍니다
+# 이름표('제출기한:')만 읽었을 때 업무 184개에서 기한이 3건 나왔다. 후임자가 가장
+# 먼저 묻는 것이 "언제까지 무엇을 하는가"인데 그 답이 여기 있다.
+#
+# 끝에 '한(限)·까지'가 붙은 날짜만 읽는다. '일시: 6. 28. 10:00'이나 '기간: 11. 1. ~
+# 4. 30.'까지 읽으면 행사일과 공적 기간이 기한으로 올라온다.
+SCHEDULE_PREFIX = "일정 · "
+_WEEKDAY = r"(?:\s*\(\s*[월화수목금토일]\s*\))?"
+_SHORT_YEAR = r"['’‘]\s*(?P<yy>\d{2})\s*[.년]\s*(?P<m2>1[0-2]|0?[1-9])\s*[.월]\s*(?P<d2>3[01]|[12]\d|0?[1-9])\s*[.일]?"
+_DAY_ANY = r"(?:" + _FULL + r"\.?|" + _SHORT_YEAR + r"|(?P<m3>1[0-2]|0?[1-9])\s*(?:월\s*|\.\s*)(?P<d3>3[01]|[12]\d|0?[1-9])\s*[.일]?)"
+_VAGUE_MONTH = r"(?P<vm>1[0-2]|0?[1-9])\s*월\s*(?P<vp>초순|중순|하순|초|중|말)?"
+_SCHEDULE_LINE = re.compile(
+    r"^[^\w가-힣(「『\[<]*(?P<what>[^:：]{2,45}?)\s*[:：]\s*(?P<lead>[^:：]{0,24}?)"
+    r"(?P<when>" + _DAY_ANY + r"|" + _VAGUE_MONTH + r")" + _WEEKDAY
+    + r"\s*(?:\d{1,2}\s*[:시]\s*\d{0,2}\s*분?\s*)?(?:한|限|까지)\s*[.)]?\s*$")
+_UNTIL = re.compile(
+    r"(?P<when>" + _DAY_ANY + r")" + _WEEKDAY + r"\s*(?:오전|오후)?\s*(?:\d{1,2}\s*시\s*)?까지"
+    r"[^.。]{0,30}?(?P<verb>제출|회신|신청|추천|통보|보고|송부|등록|납부|접수|작성|입력)")
+_TITLE_NOISE = re.compile(
+    r"\([^()]*\)|\[[^\[\]]*\]|(?:19|20)\d{2}\s*(?:년도|년)?|\d{6,8}|제\s*\d+\s*(?:회|차)"
+    r"|(?:진짜|최)*(?:최종|수정|결재전|결재)\d*|[_\-]+")
+
+
+def _read_schedule(line: str, doc_id: int, locator: str, doc_year: int | None,
+                   official: bool, title: str) -> list[Found]:
+    whole = _SCHEDULE_LINE.match(line)
+    if whole:
+        what = whole.group("what").strip(" -·")
+        item = _schedule_item(whole, f"{SCHEDULE_PREFIX}{what[:40]}", line, doc_id, locator,
+                              doc_year, official)
+        return [item] if item and len(what) >= 2 else []
+    found = []
+    for match in _UNTIL.finditer(line):
+        slot = SCHEDULE_PREFIX + match.group("verb") + (f" · {_short_title(title)}" if title else "")
+        item = _schedule_item(match, slot, line[:_MAX_VALUE * 2], doc_id, locator, doc_year, official)
+        if item:
+            found.append(item)
+    return found
+
+
+def _schedule_item(match: re.Match, slot: str, quote: str, doc_id: int, locator: str,
+                   doc_year: int | None, official: bool) -> Found | None:
+    groups = match.groupdict()
+    year = month = day = None
+    if groups.get("y"):
+        year, month, day = int(groups["y"]), int(groups["m"]), int(groups["d"])
+    elif groups.get("yy"):
+        year, month, day = 2000 + int(groups["yy"]), int(groups["m2"]), int(groups["d2"])
+    elif groups.get("m3"):
+        month, day = int(groups["m3"]), int(groups["d3"])
+    if month is None:
+        if not groups.get("vm"):
+            return None
+        value = f"{int(groups['vm'])}월" + (f" {groups['vp']}" if groups.get("vp") else "")
+        return Found(DEADLINE, slot, value, doc_id, locator, quote, doc_year, None, official)
+    try:
+        when = date(year or doc_year, month, day) if (year or doc_year) else None
+        if when is None:
+            date(2000, month, day)      # 2월 30일 같은 것은 날짜가 아니다
+    except ValueError:
+        return None
+    # 문서에 연도가 적혀 있을 때만 연도를 보인다. 없는 연도를 써 넣지 않는다.
+    value = when.isoformat() if year and when else f"{month}월 {day}일"
+    return Found(DEADLINE, slot, value, doc_id, locator, quote, doc_year, when, official)
+
+
+def _short_title(title: str) -> str:
+    stem = title.rsplit(".", 1)[0] if "." in title[-6:] else title
+    return " ".join(_TITLE_NOISE.sub(" ", stem).split())[:30]
+
+
+def is_schedule(slot: str) -> bool:
+    """문장으로 적힌 일정에서 읽은 항목인가(이름표 '제출기한:'으로 읽은 것과 구분)."""
+    return (slot or "").startswith(SCHEDULE_PREFIX)
 
 
 _STEP_LINE = re.compile(r"^\s*(?:[①-⑳]|\d{1,2}[.)]\s|(?:→|⇒|⇨|➜|➡|▶|->|=>))")
@@ -285,11 +370,16 @@ def _verified(item: Found, raw: str) -> bool:
 def choose(found: list[Found], basis: date) -> list[dict]:
     """읽어 낸 값들을 업무 항목 후보로 접는다. `sync_task_items`에 그대로 넘긴다."""
     groups: dict[tuple[str, str], list[Found]] = {}
+    shown_slot: dict[tuple[str, str], str] = {}
     for item in found:
-        groups.setdefault((item.kind, item.slot), []).append(item)
+        # 같은 일정 줄이 한글 원본과 PDF 사본에서 띄어쓰기만 다르게 읽힌다.
+        key = (item.kind, re.sub(r"\s+", "", item.slot) if is_schedule(item.slot) else item.slot)
+        groups.setdefault(key, []).append(item)
+        shown_slot.setdefault(key, item.slot)
 
     candidates = []
-    for (kind, slot), items in groups.items():
+    for key, items in groups.items():
+        kind, slot = key[0], shown_slot[key]
         # 가장 최근 시기의 값만 본다. 시기를 모르는 값은 가장 오래된 것으로 친다.
         def period(item: Found) -> int:
             return item.when.year if item.when else (item.doc_year or 0)
@@ -301,8 +391,14 @@ def choose(found: list[Found], basis: date) -> list[dict]:
         values: dict[str, Found] = {}
         for item in current:
             values.setdefault(item.key, item)
-        conflict = len(values) > 1
-        shown = list(values.values())[:_MAX_CONFLICT_VALUES]
+        # 추진일정의 같은 줄이 한 해에 두 번 나오는 것은 엇갈림이 아니다. 상·하반기에
+        # 한 번씩 하는 일이다. 날짜순으로 나란히 보인다.
+        schedule = is_schedule(slot)
+        conflict = len(values) > 1 and not schedule
+        shown = list(values.values())
+        if schedule:
+            shown.sort(key=lambda item: (item.when or date.max, item.value))
+        shown = shown[:_MAX_CONFLICT_VALUES]
 
         candidates.append({
             "kind": kind, "slot": slot,
@@ -362,9 +458,23 @@ def _evidence(current: list[Found], shown: list[Found]) -> list[tuple[int, str, 
 
 def extract_task(db, task_id: int, basis: date | None = None) -> list[dict]:
     """업무 하나의 문서들에서 항목 후보를 만든다. 저장하지 않는다."""
-    basis = basis or date.today()
+    return choose(read_task(db, task_id), basis or date.today())
+
+
+def schedule_dates(db, task_id: int) -> list[tuple[int, date]]:
+    """이 업무의 문서에 적힌 일정·기한의 날짜들 (문서, 날짜).
+
+    '언제 하는 일인가'의 가장 직접적인 근거다. 문서가 남은 달이 아니라 문서가
+    스스로 말한 날짜이기 때문이다.
+    """
+    return [(item.doc_id, item.when) for item in read_task(db, task_id)
+            if item.kind == DEADLINE and item.when is not None]
+
+
+def read_task(db, task_id: int) -> list[Found]:
+    """업무 하나의 문서들에서 읽어 낸 값 전부(고르기 전)."""
     documents = db.con.execute(
-        "SELECT d.id, d.eff_year FROM task_docs td JOIN documents d ON d.id = td.doc_id "
+        "SELECT d.id, d.eff_year, d.filename FROM task_docs td JOIN documents d ON d.id = td.doc_id "
         "WHERE td.task_id = ? AND d.missing_since IS NULL "
         "  AND d.parse_status IN ('ok', 'partial') "
         # 같은 파일의 사본이 근거 자리를 여러 번 차지하지 않게 한다.
@@ -372,6 +482,13 @@ def extract_task(db, task_id: int, basis: date | None = None) -> list[dict]:
         "       JOIN documents x ON x.id = tx.doc_id "
         "       WHERE tx.task_id = td.task_id AND x.hash = d.hash AND x.missing_since IS NULL)) "
         "ORDER BY d.id", (task_id,)).fetchall()
+    # 남에게 받은 자료·참고자료·이전 판·홍보 결과물에 적힌 금액과 기한은 이 업무의
+    # 것이 아니다. 실제 자료에서 부서가 낸 우수사례의 사업비(34억, 205억)가 이 업무의
+    # '총사업비'로 올라와 서로 엇갈린다고 표시됐다.
+    from . import foldersteps
+
+    outside = foldersteps.outside_the_work(db, [row["id"] for row in documents])
+    documents = [row for row in documents if row["id"] not in outside]
     if not documents:
         return []
     official = provenance.official_sources(db, [row["id"] for row in documents])
@@ -384,8 +501,8 @@ def extract_task(db, task_id: int, basis: date | None = None) -> list[dict]:
         ):
             found.extend(read_section(
                 section["text"], document["id"], section["locator"], document["eff_year"],
-                official=document["id"] in official))
-    return choose(found, basis)
+                official=document["id"] in official, title=document["filename"] or ""))
+    return found
 
 
 # ── 현재까지의 기록 (C03) ───────────────────────────────────────────

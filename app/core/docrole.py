@@ -24,16 +24,31 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import provenance
+from . import folders, provenance
 
 DIRECTIVE, CRITERIA, PLAN, PERFORMANCE = "directive", "criteria", "plan", "performance"
 EVIDENCE, SUBMISSION, RESULT, FORM, OTHER = "evidence", "submission", "result", "form", "other"
-ROLES = (DIRECTIVE, CRITERIA, PLAN, PERFORMANCE, EVIDENCE, SUBMISSION, RESULT, FORM, OTHER)
+# 실제 전임자 자료에서 절반 넘는 문서가 '정하지 못함'이었다(648건 중 361건). 추천서,
+# 의결서, 회의록, 시나리오, 견적서, 보도자료, 그리고 전임자가 남긴 메모가 모두 거기
+# 들어갔다. 아래 갈래는 그 문서들을 가른다. 앞의 아홉 갈래가 먼저 이긴다 —
+# 연도별 비교가 기대는 판정(시행문·지표·서식·실적)은 바뀌지 않는다.
+MEMO, DECISION, MEETING, EXPENSE = "memo", "decision", "meeting", "expense"
+PUBLICITY, LEGAL, RECEIVED, REFERENCE = "publicity", "legal", "received", "reference"
+ROLES = (DIRECTIVE, CRITERIA, PLAN, PERFORMANCE, EVIDENCE, SUBMISSION, RESULT, FORM,
+         MEMO, DECISION, MEETING, EXPENSE, PUBLICITY, LEGAL, RECEIVED, REFERENCE, OTHER)
 
 ROLE_LABEL = {
     DIRECTIVE: "시행문·요청", CRITERIA: "평가지표·기준", PLAN: "계획", PERFORMANCE: "실적 자료",
-    EVIDENCE: "증빙", SUBMISSION: "제출본", RESULT: "결과", FORM: "서식", OTHER: "정하지 못함",
+    EVIDENCE: "증빙", SUBMISSION: "제출본", RESULT: "결과", FORM: "서식",
+    MEMO: "전임자 메모", DECISION: "심사·의결", MEETING: "회의·행사 준비", EXPENSE: "지출",
+    PUBLICITY: "홍보물", LEGAL: "법령·규정", RECEIVED: "받은 자료", REFERENCE: "참고 자료",
+    OTHER: "정하지 못함",
 }
+# 업무의 기한·금액·담당자를 읽어 낼 문서가 아닌 갈래. 남이 만든 자료이거나
+# 결과물이라, 거기 적힌 금액과 날짜는 이 업무의 것이 아니다.
+OUTSIDE_ROLES = frozenset({RECEIVED, REFERENCE, PUBLICITY})
+# 규칙이 바뀌면 올린다. 파이프라인이 규칙으로 정한 갈래를 다시 정한다.
+VERSION = "2"
 
 # (역할, 이름에서 찾는 꼴). 앞의 것이 이긴다.
 _NAME_RULES: tuple[tuple[str, re.Pattern], ...] = (
@@ -45,7 +60,17 @@ _NAME_RULES: tuple[tuple[str, re.Pattern], ...] = (
     (EVIDENCE, re.compile(r"증빙|증거\s*자료|근거\s*자료")),
     (PERFORMANCE, re.compile(r"실적|성과|취합|추진\s*현황")),
     (PLAN, re.compile(r"계획|추진\s*방안")),
+    # '메모'라는 낱말만으로는 정하지 않는다 — 회의 메모처럼 잡다한 글에도 붙는 이름이다.
+    (MEMO, re.compile(r"주의\s*사항|유의\s*사항|체크\s*리스트|쪽지|행사\s*준비|준비\s*사항|인수\s*인계")),
+    (DECISION, re.compile(r"의결서|심의\s*의결|심사\s*의결|평가표|심사표|총괄표|회의록")),
+    # 현수막 견적서는 행사 준비물이기 전에 지출이다.
+    (EXPENSE, re.compile(r"견적|지출|수령부|지급|계산서|청구서|영수증|수당")),
+    (MEETING, re.compile(r"시나리오|명패|좌석\s*배치|참석자|식순|현수막|대기\s*화면|발표\s*자료")),
+    (PUBLICITY, re.compile(r"보도\s*자료|카드\s*뉴스|웹툰|포스터|홍보")),
+    (LEGAL, re.compile(r"조례|규칙|운영\s*규정|시행령|법률|지침")),
 )
+# 폴더가 알려 주는 성격(core/folders.py). 이름에 단서가 없을 때만 쓴다.
+_FOLDER_ROLES = {"received": RECEIVED, "reference": REFERENCE}
 
 # 본문 앞머리의 꼴. 이름에 단서가 없을 때만 쓰고, 확신은 낮다.
 _LETTER_HEAD = re.compile(r"^\s*수신\s*[:：]?\s*\S", re.MULTILINE)
@@ -66,8 +91,11 @@ class Role:
 
 
 def classify(filename: str, title: str = "", head: str = "", table_headers: str = "",
-             official: bool = False) -> Role:
-    """이름·제목·본문 앞머리·표 머리글에서 역할을 읽는다."""
+             official: bool = False, modifiers: tuple[str, ...] = ()) -> Role:
+    """이름·제목·본문 앞머리·표 머리글에서 역할을 읽는다.
+
+    modifiers는 이 문서가 놓인 폴더의 성격이다('부서제출' 폴더 → received).
+    """
     # 파일 이름은 낱말을 밑줄·붙임표로 잇는다. '결과_통보'도 '결과 통보'다.
     name = _SEPARATORS.sub(" ", f"{Path(filename).stem} {title or ''}")
     for role, pattern in _NAME_RULES:
@@ -87,7 +115,30 @@ def classify(filename: str, title: str = "", head: str = "", table_headers: str 
         return Role(CRITERIA, "표 머리글에 지표·배점", "low")
     if _looks_like_letter(head):
         return Role(DIRECTIVE, "본문이 공문 꼴(수신·붙임)", "low")
+    for modifier in modifiers:
+        if modifier in _FOLDER_ROLES:
+            return Role(_FOLDER_ROLES[modifier], f"'{folders.MODIFIER_LABEL[modifier]}' 폴더", "medium")
     return Role(OTHER, "", "low")
+
+
+def path_modifiers(path: str, root: str) -> tuple[str, ...]:
+    """자료 폴더 아래의 폴더 이름들이 말하는 성격(old·reference·received …)."""
+    names = folders.relative_parts(path, root)
+    return tuple(dict.fromkeys(
+        part.modifier for part in map(folders.parse_part, names) if part.modifier))
+
+
+def reset_outdated(db) -> bool:
+    """갈래 규칙이 바뀌었으면 규칙으로 정한 갈래를 지워 다시 정하게 한다.
+
+    사람이 정한 갈래는 그대로 둔다.
+    """
+    if db.get_meta("docrole_version") == VERSION:
+        return False
+    with db.transaction():
+        db.con.execute("DELETE FROM doc_roles WHERE decided_by != 'user'")
+        db.set_meta("docrole_version", VERSION)
+    return True
 
 
 def _looks_like_letter(head: str) -> bool:
@@ -110,13 +161,14 @@ def classify_documents(db, doc_ids=None) -> dict[str, int]:
     """
     if doc_ids is None:
         rows = db.con.execute(
-            "SELECT d.id, d.filename, d.doc_title FROM documents d "
+            "SELECT d.id, d.filename, d.doc_title, d.path, s.path AS root FROM documents d "
             "JOIN sources s ON s.id = d.source_id AND s.kind != 'upload' "
             "WHERE d.parse_status IN ('ok', 'partial') AND d.missing_since IS NULL").fetchall()
     else:
         ids = [int(i) for i in doc_ids]
         rows = db.con.execute(
-            f"SELECT id, filename, doc_title FROM documents WHERE id IN ({', '.join('?' * len(ids))})",
+            "SELECT d.id, d.filename, d.doc_title, d.path, s.path AS root FROM documents d "
+            f"LEFT JOIN sources s ON s.id = d.source_id WHERE d.id IN ({', '.join('?' * len(ids))})",
             ids).fetchall() if ids else []
     kept = {row["doc_id"] for row in db.con.execute(
         "SELECT doc_id FROM doc_roles WHERE decided_by = 'user'")}
@@ -128,7 +180,8 @@ def classify_documents(db, doc_ids=None) -> dict[str, int]:
                 continue
             head, headers = _head(db, row["id"])
             found = classify(row["filename"], row["doc_title"] or "", head, headers,
-                             official=row["id"] in official)
+                             official=row["id"] in official,
+                             modifiers=path_modifiers(row["path"] or "", row["root"] or ""))
             db.con.execute(
                 "INSERT INTO doc_roles(doc_id, role, basis, confidence, decided_by) "
                 "VALUES (?, ?, ?, ?, 'ai') ON CONFLICT(doc_id) DO UPDATE SET "

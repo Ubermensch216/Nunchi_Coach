@@ -61,6 +61,8 @@ class DocumentRecord:
     author_role: str = "author"
     registered_at: str | None = None
     approved_at: str | None = None
+    # document_id의 근거. list-row면 원 시스템의 문서 ID가 아니라 목록 행으로 만든 식별자다.
+    id_basis: str = ""
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,8 @@ class Asset:
     media_type: str
     size: int | None = None
     sha256: str | None = None
+    # original | rendered-text | extracted-text. 빈 값은 연결부가 밝히지 않은 것이다.
+    fidelity: str = ""
 
 
 @dataclass(frozen=True)

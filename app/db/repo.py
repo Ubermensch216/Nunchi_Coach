@@ -34,6 +34,10 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # 구조 보존 조각(노트북 RAG 2단계). 본문과 따로 두는 구조 정보와 조각의 제목 문맥.
     ("document_sections", "meta", "meta TEXT NOT NULL DEFAULT '{}'"),
     ("chunks", "context", "context TEXT NOT NULL DEFAULT ''"),
+    # 온나라 출처의 근거(sAIde 꾸러미). 빈 값은 연결부가 밝히지 않은 것이다.
+    ("collection_runs", "author_identity", "author_identity TEXT NOT NULL DEFAULT ''"),
+    ("source_records", "id_basis", "id_basis TEXT NOT NULL DEFAULT ''"),
+    ("source_assets", "fidelity", "fidelity TEXT NOT NULL DEFAULT ''"),
 )
 
 APP_DIR_NAME = "NunchiCoach"
@@ -788,7 +792,7 @@ class Database(WorkStore, ActionStore):
         return self.con.execute(
             f"""
             SELECT d.id, d.eff_year AS year, d.eff_month AS month,
-                   d.eff_date, d.eff_precision, d.eff_date_kind
+                   d.eff_date, d.eff_precision, d.eff_date_kind, d.fs_mtime
             FROM task_docs td
             JOIN documents d ON d.id = td.doc_id
             WHERE td.task_id = ? AND d.missing_since IS NULL AND d.eff_year IS NOT NULL
@@ -807,7 +811,7 @@ class Database(WorkStore, ActionStore):
         return self.con.execute(
             f"""
             SELECT d.id, d.filename, d.eff_month AS month, d.eff_date,
-                   d.eff_precision
+                   d.eff_precision, d.eff_date_kind, d.fs_mtime
             FROM task_docs td
             JOIN documents d ON d.id = td.doc_id
             WHERE td.task_id = ? AND d.eff_year = ? AND d.missing_since IS NULL
@@ -818,6 +822,8 @@ class Database(WorkStore, ActionStore):
         ).fetchall()
 
     def task_years(self, task_id: int) -> list[int]:
+        # 단계가 이미 적힌 해도 넣는다. 전임자가 폴더에 번호로 순서를 적어 둔 해는
+        # 달을 아는 문서가 하나도 없어도 처리 순서가 있다(core/foldersteps.py).
         rows = self.con.execute(
             """
             SELECT DISTINCT d.eff_year AS year
@@ -825,9 +831,10 @@ class Database(WorkStore, ActionStore):
             WHERE td.task_id = ? AND d.missing_since IS NULL
               AND d.eff_year IS NOT NULL AND d.eff_month IS NOT NULL
               AND d.eff_date_kind != 'fs'
-            ORDER BY d.eff_year
+            UNION SELECT year FROM task_steps WHERE task_id = ?
+            ORDER BY year
             """,
-            (task_id,),
+            (task_id, task_id),
         ).fetchall()
         return [row["year"] for row in rows]
 

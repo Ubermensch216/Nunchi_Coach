@@ -161,12 +161,25 @@ def test_scope_persists_and_reparse_replaces_old_omissions(tmp_path, monkeypatch
         db.close()
 
 
+def as_v10(db):
+    """최신 DB를 v10 모양으로 되돌린다.
+
+    실제 v10 DB에는 지식그래프 변경 추적 트리거가 없다(v12에서 생겼다). 그 트리거는
+    documents의 모든 열을 참조하므로, 남겨 둔 채로는 SQLite가 열 삭제를 거절한다.
+    """
+    triggers = db.con.execute(
+        "SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'kg!_dirty!_%' ESCAPE '!'").fetchall()
+    for (name,) in triggers:
+        db.con.execute(f'DROP TRIGGER "{name}"')
+    db.con.execute("ALTER TABLE documents DROP COLUMN extraction_coverage")
+    db.set_meta('schema_version', '10')
+
+
 def test_v10_upgrade_keeps_human_records_and_creates_backup(tmp_path):
     path = tmp_path / 'project.db'
     db = Database(path)
     db.init()
-    db.con.execute("ALTER TABLE documents DROP COLUMN extraction_coverage")
-    db.set_meta('schema_version', '10')
+    as_v10(db)
     db.con.execute("INSERT INTO tasks(name, origin) VALUES ('사용자 업무','user')")
     db.close()
     db.init()
@@ -176,6 +189,10 @@ def test_v10_upgrade_keeps_human_records_and_creates_backup(tmp_path):
         assert db.con.execute('SELECT name,origin FROM tasks').fetchone()[:] == ('사용자 업무', 'user')
         assert path.with_name('project.db.bak-v10').exists()
         assert coverage.snapshot(db)['extraction_scope_measured_documents'] == 0
+        # 승격 뒤에는 변경 추적 트리거가 새 열까지 보고 다시 걸려 있어야 한다.
+        trigger = db.con.execute(
+            "SELECT sql FROM sqlite_master WHERE name='kg_dirty_documents_update'").fetchone()
+        assert trigger and 'extraction_coverage' in trigger[0]
     finally:
         db.close()
 
@@ -184,8 +201,7 @@ def test_readonly_legacy_diagnostics_do_not_require_new_column(tmp_path):
     db = Database(tmp_path / 'legacy.db')
     db.init()
     try:
-        db.con.execute('ALTER TABLE documents DROP COLUMN extraction_coverage')
-        db.set_meta('schema_version', '10')
+        as_v10(db)
         report = coverage.snapshot(db)
         assert report['schema_version'] == '10'
         assert report['extraction_scope_measured_documents'] == 0

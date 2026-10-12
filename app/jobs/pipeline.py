@@ -22,16 +22,17 @@ from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
 
 from ..ai import OllamaClient
 from ..ai.settings import project_client
-from ..ai.discover import discover
+from ..ai.discover import discover, has_folder_tasks
 from ..core import dating, handover_release, reconstruction, timeline, transfer
 from ..core import diagnostics, coverage
+from ..core import onnara_import
 from ..core import reindex
-from ..core import docrole, docyears, versions
+from ..core import docrole, docyears, foldersteps, pictures, versions
 from ..core.chunking import build_chunks_with_context
-from ..core.labeling import label_document
+from ..core.labeling import FALLBACK_LABEL, label_document
 from ..core.workcard import OUTPUT_DIR
 from ..db import Database
-from ..ingest import scanner
+from ..ingest import scanner, vision
 from ..search import pack
 from ..ingest.hasher import sha256, too_large
 from ..ingest.parsers import parse
@@ -55,6 +56,13 @@ STAGE_CYCLES = "일정 파악"
 STAGE_STEPS = "처리 순서 파악"
 STAGE_RESTORE = "업무 복원"
 STAGE_CHUNKS = "질문 준비"
+STAGE_PICTURES = "그림·스캔본 읽기"
+_STAGE_KEYS = {
+    STAGE_PICTURES: "pictures",
+    STAGE_SCAN: "scan", STAGE_HASH: "hash", STAGE_PARSE: "parse", STAGE_DATE: "date",
+    STAGE_EMBED: "embed", STAGE_CHUNKS: "chunks", STAGE_DISCOVER: "discover",
+    STAGE_ROLES: "roles", STAGE_CYCLES: "cycles", STAGE_STEPS: "steps", STAGE_RESTORE: "restore",
+}
 CHUNK_EMBED_BATCH = 32
 
 # 임베딩에 쓸 글자 수. 파일명과 앞부분만으로도 문서의 정체는 거의 드러난다.
@@ -63,6 +71,8 @@ EMBED_BATCH = 32
 
 # 시점 추정에 쓸 앞쪽 조각 수. 문서 자신의 날짜는 표지·머리말에 있다.
 DATE_SECTIONS = 6
+# 같은 문서속성 작성일을 가진 서로 다른 문서가 이만큼이면 서식 날짜로 본다.
+SHARED_META_MIN = 3
 
 
 @dataclass
@@ -106,6 +116,7 @@ class Pipeline(QObject):
         try:
             db.audit("pipeline.start")
             diagnostics.record("pipeline.start")
+            self._stage_started = time.monotonic()
             db.con.execute("UPDATE pipeline_stage_results SET state='pending',done=0,total=0,"
                            "note='',errors='[]',updated_at=datetime('now')")
             # 예전 실행이 문서 하나를 반쯤 쓰다 죽었으면 여기서 되돌린다.
@@ -114,7 +125,15 @@ class Pipeline(QObject):
             if not self._stop:
                 self._hash(db)
             if not self._stop:
+                # 자료 폴더로 등록한 온나라 수집본 — 파일을 찾고 해시한 뒤에야 공식 출처가 이어진다.
+                try:
+                    onnara_import.relink(db)
+                except Exception as exc:
+                    diagnostics.record("onnara.relink.error", exc)
+            if not self._stop:
                 self._parse(db)
+            if not self._stop:
+                self._pictures(db)
             if not self._stop:
                 self._date(db)
             if not self._stop:
@@ -158,6 +177,12 @@ class Pipeline(QObject):
                             "pending" if "보류" in report.note or "건너뜀" in report.note or "남음" in report.note
                             else "completed")
         coverage.save_stage(db, report, report.state)
+        # 어느 단계가 얼마나 걸렸는지 진단 로그에 남긴다(건수와 시간만 — 이름·본문은 없다).
+        now = time.monotonic()
+        diagnostics.record("pipeline.stage", stage=_STAGE_KEYS.get(report.stage, ""),
+                           count=report.done,
+                           elapsed_ms=int((now - getattr(self, "_stage_started", now)) * 1000))
+        self._stage_started = now
         self.stage_done.emit(report)
 
     def _scan(self, db: Database) -> None:
@@ -233,7 +258,9 @@ class Pipeline(QObject):
             LEFT JOIN jobs j ON j.doc_id = d.id AND j.kind = 'parse'
             WHERE d.missing_since IS NULL
               AND (d.parse_status = 'pending'
-                   OR (d.parse_status IN ('ok','partial') AND """ + outdated_clause("d") + """))
+                   OR (d.parse_status IN ('ok','partial') AND COALESCE(d.parser,'') != 'vision'
+                       AND """ + outdated_clause("d") + """)
+                   OR """ + _DISTRIBUTION_NOTICE + """)
               AND COALESCE(j.attempts, 0) < ?
             ORDER BY d.id
             """,
@@ -328,6 +355,72 @@ class Pipeline(QObject):
         self._report(db, report)
 
 
+    # ── 그림·스캔본 읽기 ────────────────────────────────────────────
+    def _pictures(self, db: Database) -> None:
+        """글자 레이어 없는 PDF와 화면 캡처를 로컬 모델로 읽는다.
+
+        한 쪽에 15~40초가 걸려서 고른 것만(core/pictures.py), 한 번에 정해진 쪽수만
+        읽는다. 남은 것은 다음 분석에서 이어 읽는다. 읽은 문서는 그 뒤의 단계(시점·
+        색인·업무 파악·항목)에서 다른 문서와 똑같이 쓰인다 — 다만 '일부만 읽음'이고
+        모델이 읽은 글이라는 표시가 붙는다.
+        """
+        report = StageReport(STAGE_PICTURES)
+        budget = int(db.get_meta("vision_pages_per_run") or pictures.PAGES_PER_RUN)
+        todo = pictures.candidates(db) if budget > 0 else []
+        report.total = len(todo)
+        if not todo:
+            report.note = "읽을 그림·스캔본이 없습니다" if budget > 0 else "꺼 둠"
+            self._report(db, report)
+            return
+        client = self._client = project_client(db, OllamaClient)
+        if not client._supports("vision"):   # noqa: SLF001
+            report.note = f"건너뜀 — 그림을 읽을 수 있는 로컬 모델이 없습니다 ({len(todo):,}건)"
+            self._report(db, report)
+            return
+
+        read = blank = used = 0
+        for index, item in enumerate(todo, start=1):
+            if self._stop or used >= budget:
+                break
+            self.progress.emit(STAGE_PICTURES, index, len(todo), item.filename)
+            digest, _hash_error = sha256(item.path)
+            if digest is None:
+                continue        # 잠겨 있거나 사라졌다. 다음 실행에서 다시 본다
+            result = vision.read(client, item.path, self._stopped,
+                                 max_pages=min(pictures.PAGES_PER_DOCUMENT, budget - used))
+            if self._stop:
+                break           # 읽다 만 것은 남기지 않는다
+            used += max(1, len(result.sections)) if result.ok else 1
+            with db.transaction():
+                if result.ok:
+                    db.invalidate_document_analysis(item.doc_id)
+                    db.update_document(
+                        item.doc_id, hash=digest, parse_status=result.status, parse_error=None,
+                        parse_note=result.note, parser=result.parser,
+                        parser_version=result.parser_version, char_count=result.char_count)
+                    db.replace_sections(
+                        item.doc_id,
+                        [(s.kind, s.ordinal, s.locator, s.text, s.meta) for s in result.sections])
+                    db.index_document(item.doc_id, item.filename, item.path, "", result.text)
+                    coverage.clear_issue(db, item.doc_id, "parse")
+                    read += 1
+                else:
+                    # 읽어 봤지만 글자가 없었다. 상태는 그대로 두고, 다시 읽지 않게만 적는다.
+                    db.update_document(item.doc_id, parser=result.parser,
+                                       parser_version=result.parser_version,
+                                       parse_note=result.note or result.error)
+                    blank += 1
+            report.done = index
+
+        left = len(todo) - read - blank
+        report.note = f"읽음 {read:,}건"
+        if blank:
+            report.note += f" · 글자 없음 {blank:,}건"
+        if left:
+            report.note += f" · {left:,}건 남음"
+        self._report(db, report)
+
+
     # ── 4단계: 시점 확인 ────────────────────────────────────────────
     def _date(self, db: Database) -> None:
         """When과 How 전체가 이 단계에 걸려 있다.
@@ -336,6 +429,15 @@ class Pipeline(QObject):
         후보도 남긴다. 화면에서 "무엇을 근거로 2024년이라 했는지" 보여줘야
         사용자가 검증하고 고칠 수 있다.
         """
+        # 채택 규칙이 바뀌었으면 사람이 정하지 않은 시점을 전부 다시 정한다. 그러지
+        # 않으면 예전 규칙으로 잡힌 '1월'과 서식 날짜가 그대로 남는다.
+        if db.get_meta("dating_version") != dating.DATING_VERSION:
+            with db.transaction():
+                db.con.execute(
+                    "UPDATE documents SET eff_date=NULL, eff_date_kind=NULL, eff_precision=NULL, "
+                    "eff_year=NULL, eff_month=NULL WHERE date_decided_by != 'user'")
+                db.set_meta("dating_version", dating.DATING_VERSION)
+
         # date_decided_by='user' 제외가 핵심이다. 사용자가 "날짜 모름"으로
         # 확정하면 eff_date가 비는데, 그 빈칸만 보고 다시 추정하면 사용자의
         # 판단을 조용히 지우게 된다 (NFR-SAF-004).
@@ -347,6 +449,15 @@ class Pipeline(QObject):
         ).fetchall()
         report = StageReport(STAGE_DATE, total=len(rows))
         undated = 0
+        # 서로 다른 문서 여러 건이 같은 문서속성 작성일을 가지면 서식을 복사해 쓴
+        # 것이다. 그 날짜는 서식을 만든 날이지 문서를 쓴 날이 아니다.
+        shared_meta = {
+            row["meta_created"] for row in db.con.execute(
+                "SELECT meta_created FROM documents "
+                "WHERE meta_created IS NOT NULL AND missing_since IS NULL "
+                "GROUP BY meta_created HAVING COUNT(DISTINCT COALESCE(hash, id)) >= ?",
+                (SHARED_META_MIN,))
+        }
 
         for index, row in enumerate(rows, start=1):
             if self._stop:
@@ -364,6 +475,7 @@ class Pipeline(QObject):
                 meta_created=row["meta_created"],
                 meta_modified=row["meta_modified"],
                 fs_mtime=row["fs_mtime"],
+                meta_shared=row["meta_created"] in shared_meta,
             )
 
             with db.transaction():
@@ -463,7 +575,11 @@ class Pipeline(QObject):
         문서마다 모델에게 분류를 물으면 1만 건에 7시간이 걸리지만, 묶은 뒤
         묶음당 한 번만 부르면 수십 번으로 끝난다. 이름이 흩어지는 것도 막는다.
         """
-        if db.counts()["embedded"] == 0 and not db.con.execute("SELECT 1 FROM embeddings LIMIT 1").fetchone():
+        # 의미 색인이 없어도 전임자가 폴더로 일을 정리해 두었으면 업무를 찾을 수 있다
+        # (ai/discover.py의 폴더 구조로 업무 찾기). 폴더도 평평하면 그때 건너뛴다.
+        if (db.counts()["embedded"] == 0
+                and not db.con.execute("SELECT 1 FROM embeddings LIMIT 1").fetchone()
+                and not has_folder_tasks(db)):
             self._report(db,
                 StageReport(STAGE_DISCOVER, note="건너뜀 — 의미 색인이 없습니다")
             )
@@ -492,6 +608,7 @@ class Pipeline(QObject):
         문서만 본다(내용이 바뀐 문서는 역할이 지워져 다시 들어온다). 판 묶음은
         업무에 묶인 문서가 달라지면 달라지므로 매번 다시 만든다.
         """
+        docrole.reset_outdated(db)
         pending = docrole.pending(db)
         report = StageReport(STAGE_ROLES, total=len(pending))
         for start in range(0, len(pending), COMMIT_EVERY):
@@ -520,21 +637,35 @@ class Pipeline(QObject):
         tasks = db.tasks()
         report = StageReport(STAGE_CYCLES, total=len(tasks))
         found = 0
+        bulk_days = timeline.bulk_copy_days(
+            (row["fs_mtime"], str(Path(row["path"]).parent)) for row in db.con.execute(
+                "SELECT fs_mtime, path FROM documents WHERE missing_since IS NULL"))
 
         for index, task in enumerate(tasks, start=1):
             if self._stop:
                 break
             rows = db.task_grid_documents(task["id"])
-            docs = [
-                timeline.DatedDoc(
+            # 받은 자료·참고자료·이전 판의 날짜는 이 일의 일정이 아니다.
+            outside = foldersteps.outside_the_work(db, [row["id"] for row in rows])
+            rows = [row for row in rows if row["id"] not in outside]
+            docs = []
+            for row in rows:
+                month, trusted = timeline.work_month(
+                    row["year"], row["month"], row["eff_date_kind"], row["eff_precision"],
+                    row["fs_mtime"], bulk_days)
+                same = month == row["month"] and row["eff_precision"] == "day"
+                docs.append(timeline.DatedDoc(
                     doc_id=row["id"],
                     year=row["year"],
-                    month=row["month"],
-                    day=int(row["eff_date"][8:10]) if row["eff_precision"] == "day" else None,
-                    trustworthy=row["eff_date_kind"] != "fs",
-                )
-                for row in rows
-            ]
+                    month=month,
+                    day=int(row["eff_date"][8:10]) if same else None,
+                    trustworthy=trusted,
+                ))
+            # 문서가 스스로 적은 일정·기한('6. 17.(월) 한', '…까지 제출')의 달도 넣는다.
+            # 문서가 남은 달보다 직접적인 근거다.
+            docs += [timeline.DatedDoc(doc_id=doc_id, year=when.year, month=when.month,
+                                       day=when.day, trustworthy=True)
+                     for doc_id, when in reconstruction.schedule_dates(db, task["id"])]
             grid = timeline.build_grid(docs)
             guess = timeline.detect_cycle(grid)
 
@@ -583,23 +714,43 @@ class Pipeline(QObject):
         report = StageReport(STAGE_STEPS, total=total_years)
         done = 0
         steps_made = 0
+        bulk_days = timeline.bulk_copy_days(
+            (row["fs_mtime"], str(Path(row["path"]).parent)) for row in db.con.execute(
+                "SELECT fs_mtime, path FROM documents WHERE missing_since IS NULL"))
 
         for task in tasks:
             if self._stop:
                 break
+            # 전임자가 폴더에 번호·날짜로 적어 둔 순서가 있는 해는 그것을 그대로 쓴다.
+            # 문서를 날짜순으로 늘어놓는 재구성은 그런 기록이 없는 해에만 한다.
+            recorded = foldersteps.plan(db, task["id"])
+            for year, steps in recorded.items():
+                with db.transaction():
+                    db.replace_task_steps(task["id"], year, steps)
+                steps_made += len(steps)
             for year in db.task_years(task["id"]):
                 if self._stop:
                     break
+                if year in recorded:
+                    done += 1
+                    continue
                 rows = db.task_year_documents(task["id"], year)
-                candidates = [
-                    timeline.StepCandidate(
+                outside = foldersteps.outside_the_work(db, [row["id"] for row in rows])
+                rows = [row for row in rows if row["id"] not in outside]
+                candidates = []
+                for row in rows:
+                    # 일정 파악과 같은 달을 쓴다 — 본문 속 기간의 달이 아니라 일한 달.
+                    month, _ = timeline.work_month(
+                        year, row["month"], row["eff_date_kind"], row["eff_precision"],
+                        row["fs_mtime"], bulk_days)
+                    month = month or row["month"]
+                    same = month == row["month"] and row["eff_precision"] == "day"
+                    candidates.append(timeline.StepCandidate(
                         doc_id=row["id"],
-                        month=row["month"],
-                        day=int(row["eff_date"][8:10]) if row["eff_precision"] == "day" else None,
-                        label=label_document(row["filename"]),
-                    )
-                    for row in rows
-                ]
+                        month=month,
+                        day=int(row["eff_date"][8:10]) if same else None,
+                        label=_step_label(row["filename"]),
+                    ))
                 steps = timeline.reconstruct_steps(candidates, year)
                 with db.transaction():
                     db.replace_task_steps(task["id"], year, [
@@ -800,6 +951,15 @@ class Pipeline(QObject):
         self._report(db, report)
 
 
+# 예전 파서가 한글 배포용 문서의 안내문만 읽고 '읽음'으로 남긴 문서. 한글 문서
+# 전체를 다시 읽히지(=의미 색인까지 다시 만들지) 않으려고 파서 판을 올리는 대신
+# 이 문서들만 골라 다시 읽는다. 다시 읽으면 본문이 바뀌어 더는 걸리지 않는다.
+_DISTRIBUTION_NOTICE = (
+    "(d.parser = 'hwp' AND d.parse_status = 'ok' AND d.char_count < 400 AND EXISTS ("
+    "SELECT 1 FROM document_index x WHERE x.doc_id = d.id "
+    "AND x.body LIKE '%배포용 문서입니다%'))")
+
+
 def _own_paths(db: Database) -> list[Path]:
     """이 프로그램이 프로젝트 폴더에 만든 것들 — 자료로 훑으면 안 된다."""
     folder = db.path.parent
@@ -808,6 +968,18 @@ def _own_paths(db: Database) -> list[Path]:
     own = [folder / "logs", folder / OUTPUT_DIR, *folder.glob(db.path.name + "*")]
     own += [Path(s["path"]) for s in db.sources() if s["kind"] == "upload"]
     return own
+
+
+def _step_label(filename: str) -> str:
+    """단계 이름. 처리 동사를 못 찾으면 문서의 갈래로 부른다('문서 처리'보다 낫다)."""
+    label = label_document(filename)
+    if label != FALLBACK_LABEL:
+        return label
+    role = docrole.classify(filename).role
+    if role in (docrole.DECISION, docrole.MEETING, docrole.EXPENSE, docrole.PUBLICITY,
+                docrole.RESULT, docrole.FORM):
+        return docrole.ROLE_LABEL[role]
+    return label
 
 
 def _valid_vectors(vectors, expected: int) -> bool:

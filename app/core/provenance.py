@@ -32,6 +32,8 @@ STATUS_LABELS = {
     "": "상태 미상",
 }
 ROLE_LABELS = {"body": "본문", "attachment": "붙임"}
+# 온나라가 준 파일 그대로(original)는 표시하지 않는다 — 그것이 기본이다.
+FIDELITY_LABELS = {"rendered-text": "화면 글자로 만든 PDF", "extracted-text": "추출한 글자"}
 
 
 def collection_key(identity: dict) -> str:
@@ -57,21 +59,23 @@ def register_collection(db, state: dict, collection_root: str | Path) -> dict:
         con.execute(
             "INSERT INTO collection_runs(collection_key, adapter, institution, system_id, scope,"
             " simulation, live_verified, status, completeness, expected_documents, documents,"
-            " assets, downloaded, failed, started_at, collected_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+            " assets, downloaded, failed, started_at, collected_at, author_identity)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             " ON CONFLICT(collection_key) DO UPDATE SET"
             " simulation=excluded.simulation, live_verified=excluded.live_verified,"
             " status=excluded.status, completeness=excluded.completeness,"
             " expected_documents=excluded.expected_documents, documents=excluded.documents,"
             " assets=excluded.assets, downloaded=excluded.downloaded, failed=excluded.failed,"
-            " collected_at=excluded.collected_at, registered_at=datetime('now')",
+            " collected_at=excluded.collected_at, registered_at=datetime('now'),"
+            " author_identity=excluded.author_identity",
             (key, adapter["adapter"], adapter["institution"], adapter["system_id"],
              json.dumps(state["identity"]["scope"], ensure_ascii=False),
              int(bool(adapter.get("simulation"))), int(bool(adapter.get("live_verified"))),
              state.get("status"), summary.get("completeness"), summary.get("expected_documents"),
              summary.get("documents", 0), summary.get("assets", 0),
              summary.get("downloaded", 0), summary.get("failed", 0),
-             state.get("started_at"), state.get("updated_at")),
+             state.get("started_at"), state.get("updated_at"),
+             str((state.get("package") or {}).get("author_identity") or "")),
         )
         run_id = con.execute(
             "SELECT id FROM collection_runs WHERE collection_key=?", (key,)
@@ -89,20 +93,20 @@ def register_collection(db, state: dict, collection_root: str | Path) -> dict:
                       record.get("author_id", ""), record.get("author_name", ""),
                       record.get("department", ""), record.get("author_role", ""), status,
                       record.get("authored_at"), record.get("registered_at"),
-                      record.get("approved_at"))
+                      record.get("approved_at"), record.get("id_basis") or "")
             if old is None:
                 cursor = con.execute(
                     "INSERT INTO source_records(run_id, title, document_number, author_id,"
                     " author_name, department, author_role, status, authored_at, registered_at,"
-                    " approved_at, institution, system_id, document_id)"
-                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (*fields, *origin),
+                    " approved_at, id_basis, institution, system_id, document_id)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (*fields, *origin),
                 )
                 record_ids[document_id] = cursor.lastrowid
             else:
                 con.execute(
                     "UPDATE source_records SET run_id=?, title=?, document_number=?, author_id=?,"
                     " author_name=?, department=?, author_role=?, status=?, authored_at=?,"
-                    " registered_at=?, approved_at=?, last_collected=datetime('now') WHERE id=?",
+                    " registered_at=?, approved_at=?, id_basis=?, last_collected=datetime('now') WHERE id=?",
                     (*fields, old["id"]),
                 )
                 record_ids[document_id] = old["id"]
@@ -123,10 +127,10 @@ def register_collection(db, state: dict, collection_root: str | Path) -> dict:
             doc_id = _linked_document(con, root, entry) if downloaded else None
             con.execute(
                 "INSERT INTO source_assets(record_id, asset_id, role, filename, media_type,"
-                " sha256, size, status, error, downloaded_at, doc_id)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?)"
+                " sha256, size, status, error, downloaded_at, doc_id, fidelity)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
                 " ON CONFLICT(record_id, asset_id) DO UPDATE SET"
-                " role=excluded.role, filename=excluded.filename,"
+                " role=excluded.role, filename=excluded.filename, fidelity=excluded.fidelity,"
                 " media_type=excluded.media_type, sha256=excluded.sha256, size=excluded.size,"
                 " status=excluded.status, error=excluded.error,"
                 " downloaded_at=excluded.downloaded_at,"
@@ -135,7 +139,7 @@ def register_collection(db, state: dict, collection_root: str | Path) -> dict:
                  asset.get("media_type", ""), digest,
                  entry.get("size") if downloaded else asset.get("size"),
                  entry.get("status", "pending"), entry.get("error"),
-                 entry.get("downloaded_at"), doc_id),
+                 entry.get("downloaded_at"), doc_id, asset.get("fidelity") or ""),
             )
             result["assets"] += 1
             if doc_id is not None:
@@ -166,7 +170,8 @@ def _linked_document(con, root: Path, entry: dict) -> int | None:
 
 _SELECT = (
     "SELECT a.id AS asset_row, a.doc_id AS linked_doc_id, a.sha256,"
-    " a.role, a.filename AS asset_filename, a.asset_id,"
+    " a.role, a.filename AS asset_filename, a.asset_id, a.fidelity,"
+    " r.id_basis, c.author_identity,"
     " r.document_id, r.title, r.document_number, r.author_name, r.department,"
     " r.author_role, r.status, r.authored_at, r.registered_at, r.approved_at,"
     " r.institution, r.system_id, c.simulation, c.live_verified, c.collected_at"
@@ -223,5 +228,10 @@ def describe(official: dict | None) -> str:
     status = official.get("status") or ""
     parts.append(STATUS_LABELS.get(status, status))
     role = official.get("role") or ""
-    parts.append(ROLE_LABELS.get(role, role))
+    label = ROLE_LABELS.get(role, role)
+    # 원본이 아닌 파일을 원본처럼 보이게 두지 않는다. 밝히지 않은 값(빈 값)은 덧붙이지 않는다.
+    fidelity = FIDELITY_LABELS.get(official.get("fidelity") or "")
+    parts.append(f"{label}({fidelity})" if label and fidelity else label or fidelity or "")
+    if official.get("id_basis") == "list-row":
+        parts.append("문서 ID 미확인")
     return " · ".join(part for part in parts if part)

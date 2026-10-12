@@ -53,6 +53,52 @@ class Grid:
         return {m for (y, m), ids in self.cells.items() if y == year and ids}
 
 
+# ── 일한 달 ─────────────────────────────────────────────────────────
+# 문서의 시점(eff_date)은 '어느 해의 문서인가'에는 믿을 만하지만 '몇 월에 한 일인가'
+# 에는 자주 틀린다. 결재 전 초안은 등록일자가 비어 있고, 본문 앞머리의 날짜는 공적
+# 기간이나 사업 기간이다. 실제 자료에서 '추천 현황'의 달이 공적 기간의 끝(4월)으로,
+# '우수사례'의 달이 기간의 시작(1월)으로 잡혔다. 실제로 일한 달은 6월과 11월이었고,
+# 그것은 파일을 고친 날짜에 남아 있었다.
+#
+# 파일 날짜는 복사하면 바뀐다는 약점이 그대로다. 그래서 두 조건을 건다.
+#   · 파일을 고친 해가 문서의 해와 같을 때만 쓴다(이듬해에 폴더째 복사한 것은 걸러진다).
+#   · 여러 폴더의 파일 수십 개가 한날에 바뀌었으면 그날은 복사한 날이다. 쓰지 않는다.
+BULK_COPY_FILES = 30
+BULK_COPY_FOLDERS = 5
+
+
+def bulk_copy_days(stamps) -> set[str]:
+    """(파일 수정 시각, 폴더) 목록에서 '폴더째 복사한 날'을 고른다."""
+    files: dict[str, int] = defaultdict(int)
+    places: dict[str, set] = defaultdict(set)
+    for stamp, folder in stamps:
+        day = str(stamp or "")[:10]
+        if len(day) == 10:
+            files[day] += 1
+            places[day].add(folder)
+    return {day for day, count in files.items()
+            if count >= BULK_COPY_FILES and len(places[day]) >= BULK_COPY_FOLDERS}
+
+
+def work_month(year: int | None, month: int | None, kind: str | None, precision: str | None,
+               fs_mtime, bulk_days: set[str] | frozenset = frozenset()) -> tuple[int | None, bool]:
+    """(일한 달, 믿을 만한가). 달을 알 수 없으면 (None, False)."""
+    if year is None or kind == "fs":
+        return None, False      # 해조차 파일 날짜로 정한 문서는 일정의 근거가 못 된다
+    # 전임자가 폴더·파일 이름에 적어 둔 날짜는 그대로 믿는다.
+    if kind in ("folder", "filename") and precision in ("day", "month") and month:
+        return month, True
+    stamp = str(fs_mtime or "")
+    if len(stamp) >= 7 and stamp[:4] == str(year) and stamp[:10] not in bulk_days:
+        try:
+            return int(stamp[5:7]), True
+        except ValueError:
+            pass
+    if month and kind != "fs":
+        return month, True
+    return None, False
+
+
 def build_grid(docs: list[DatedDoc]) -> Grid:
     """신뢰할 수 있는 문서만 격자에 놓는다."""
     trusted = [d for d in docs if d.trustworthy and d.month]

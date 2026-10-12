@@ -18,13 +18,70 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+from ..connectors.onnara import saide_package
 from ..ingest import scanner
 from ..ingest.hasher import sha256
 from . import notebook, notebook_ingest, provenance
 from .notebook_ingest import Ingested
 
 MANIFEST = "manifest.json"
+COLLECTION_DIR = "onnara"
 PHASE_SCAN = "수집본을 확인하는 중"
+PHASE_PACKAGE = "꾸러미의 파일을 확인하는 중"
+FIDELITY_NOTES = {"rendered-text": "본문 {n}건은 화면 글자로 만든 PDF",
+                  "extracted-text": "본문 {n}건은 추출한 글자",
+                  "unstated": "본문 {n}건은 원본 여부 미상"}
+
+
+def is_package(folder: str | Path) -> bool:
+    """sAIde 꾸러미 폴더인가 — 수집본(manifest.json)이 아니라 아직 수집 전인 폴더."""
+    folder = Path(folder)
+    return saide_package.is_package(folder) and not (folder / MANIFEST).is_file()
+
+
+def describe_package(folder: str | Path) -> str:
+    """꾸러미를 가져오기 전에 보여 줄 한마디. 꾸러미가 아니면 이유를 말하며 거절한다."""
+    connector = saide_package.SaidePackageConnector(folder)
+    assets = [asset for items in connector.assets.values() for asset in items]
+    parts = [f"sAIde 꾸러미 · 문서 {len(connector.records)}건 · 파일 {len(assets)}개"]
+    return " · ".join(parts + _package_notes(connector.details))
+
+
+def _package_notes(details: dict) -> list[str]:
+    notes = []
+    if details.get("author_identity") == "name":
+        notes.append("작성자는 이름 기준(동명이인 구분 안 됨)")
+    weak = details.get("id_basis", {}).get("list-row", 0)
+    if weak:
+        notes.append(f"문서 {weak}건은 문서 ID 없이 목록 행으로 식별")
+    for key, text in FIDELITY_NOTES.items():
+        count = details.get("body_fidelity", {}).get(key, 0)
+        if count:
+            notes.append(text.format(n=count))
+    if details.get("body_truncated"):
+        notes.append(f"본문 {details['body_truncated']}건은 일부만 담김")
+    return notes
+
+
+def collect_package(db, folder: str | Path,
+                    on_progress: Callable[[str, str], None] = lambda phase, label: None,
+                    should_stop: Callable[[], bool] = lambda: False) -> Path:
+    """꾸러미를 프로젝트 안의 수집본으로 만든다. 꾸러미 폴더는 읽기만 한다.
+
+    같은 꾸러미를 다시 가져오면 같은 수집본을 이어 쓴다(받은 파일은 다시 복사하지 않는다).
+    """
+    from ..jobs.onnara_collect import Collection  # jobs 묶음은 화면 쪽 모듈을 함께 싣는다
+    connector = saide_package.SaidePackageConnector(folder)
+    key = connector.run_id or provenance.collection_key(
+        {"adapter": connector.details, "scope": str(connector.root)})[:16]
+    target = db.path.parent / COLLECTION_DIR / key
+    state = Collection(connector, connector.scope(), target).run(should_stop, on_progress)
+    db.audit("onnara.package.collect", key,
+             detail="; ".join(f"{name}={state['summary'].get(name)}"
+                              for name in ("documents", "downloaded", "failed", "completeness")))
+    if not (target / "files").is_dir():
+        raise ValueError("꾸러미에서 가져올 수 있는 파일이 없습니다. 내려받기가 끝난 꾸러미인지 확인하세요.")
+    return target
 
 
 def read_manifest(folder: str | Path) -> tuple[Path, dict]:
@@ -56,14 +113,60 @@ def describe(state: dict) -> str:
         parts.append("합성(모의) 수집본")
     elif not (adapter.get("live_verified") or summary.get("live_verified")):
         parts.append("실환경 검증 전 연결부")
-    return " · ".join(parts)
+    return " · ".join(parts + _package_notes(state.get("package") or {}))
+
+
+def add_to_project(db, folder: str | Path,
+                   should_stop: Callable[[], bool] = lambda: False) -> dict:
+    """수집본(또는 sAIde 꾸러미)을 프로젝트의 자료 폴더로 등록한다 — 노트북을 거치지 않는다.
+
+    여기서는 등록만 한다. 파일을 읽고 업무를 파악하는 일은 다른 자료 폴더와 똑같이
+    분석(jobs/pipeline.py)이 하고, 분석이 파일을 읽은 뒤 `relink`가 공식 출처를 잇는다.
+    """
+    if is_package(folder):
+        folder = collect_package(db, folder, should_stop=should_stop)
+    root, state = read_manifest(folder)
+    source_id = db.add_source(str(root / "files"), kind="onnara")
+    # 문서 행이 아직 없으면 출처 기록만 남는다(unlinked). 분석 뒤 relink가 잇는다.
+    linked = provenance.register_collection(db, state, root)
+    db.audit("onnara.project.add", str(source_id),
+             detail=f"records={linked['records']}; assets={linked['assets']}")
+    return {"source_id": source_id, "root": root, "summary": describe(state), **linked}
+
+
+def relink(db) -> int:
+    """읽기를 마친 수집본 파일에 공식 출처를 잇는다. 새로 이어진 파일 수를 돌려준다.
+
+    이을 것이 없으면 아무것도 하지 않는다 — 분석을 돌릴 때마다 불린다.
+    """
+    pending = "SELECT COUNT(*) FROM source_assets WHERE status='downloaded' AND doc_id IS NULL"
+    before = db.con.execute(pending).fetchone()[0]
+    if not before:
+        return 0
+    for source in db.sources():
+        if source["kind"] != "onnara":
+            continue
+        try:
+            root, state = read_manifest(Path(source["path"]).parent)
+        except ValueError:      # 수집본 폴더를 옮겼거나 지웠다. 출처 기록은 그대로 둔다.
+            continue
+        provenance.register_collection(db, state, root)
+    return before - db.con.execute(pending).fetchone()[0]
 
 
 def import_collection(db, notebook_id: int, folder: str | Path, client=None,
                       on_phase: Callable[[str, str], None] = lambda name, phase: None,
                       should_stop: Callable[[], bool] = lambda: False) -> list[Ingested]:
-    """수집본의 문서를 읽고 공식 출처를 이어 노트북에 연결한다."""
+    """수집본의 문서를 읽고 공식 출처를 이어 노트북에 연결한다.
+
+    sAIde 꾸러미 폴더를 받으면 먼저 프로젝트 안에 수집본을 만든다.
+    """
     notebook.require(db, notebook_id)
+    if is_package(folder):
+        on_phase(Path(folder).name, PHASE_PACKAGE)
+        folder = collect_package(db, folder, should_stop=should_stop)
+        if should_stop():
+            return []
     root, state = read_manifest(folder)
     files = root / "files"
     on_phase(root.name, PHASE_SCAN)
