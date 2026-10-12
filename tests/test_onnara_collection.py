@@ -156,6 +156,50 @@ def test_cancelled_download_can_resume_without_losing_successes(tmp_path):
     assert resumed["summary"]["completeness"] == "complete"
 
 
+def lock_manifest(monkeypatch, refusals):
+    """백신·색인기가 방금 쓴 manifest를 붙들고 있는 상황. 앞의 `refusals`번은 덮어쓰기를 거절한다."""
+    import app.jobs.onnara_collect as engine
+    real, refused, slept = engine.os.replace, [], []
+
+    def replace(source, target):
+        if str(target).endswith("manifest.json") and len(refused) < refusals:
+            refused.append(target)
+            raise PermissionError(5, "액세스가 거부되었습니다")
+        return real(source, target)
+
+    monkeypatch.setattr(engine.os, "replace", replace)
+    monkeypatch.setattr(engine.time, "sleep", slept.append)      # 실제로 기다리지 않는다
+    return refused
+
+
+def test_manifest_held_by_another_program_does_not_fail_the_collection(tmp_path, monkeypatch):
+    """N1: 전체 실행에서만 가끔 '첫 파일만 받고 실패'(downloaded 1) 하던 원인.
+
+    중간 기록 한 번이 거절됐다고 수집을 끝내지 않는다 — 다음 파일 뒤에 다시 쓴다.
+    """
+    connector = FixtureConnector(make_catalog(tmp_path / "source", count=5))
+    refused = lock_manifest(monkeypatch, 20)       # 예전 재시도 한도(8번)를 훌쩍 넘는다
+    state = Collection(connector, SCOPE, tmp_path / "collected").run()
+    assert len(refused) == 20
+    assert state["status"] == "finished" and state["listing_errors"] == []
+    assert state["summary"]["downloaded"] == 6 and state["summary"]["completeness"] == "complete"
+    saved = json.loads((tmp_path / "collected" / "manifest.json").read_text(encoding="utf-8"))
+    assert saved["summary"] == state["summary"]                   # 끝난 뒤의 기록은 디스크에 있다
+    assert not list((tmp_path / "collected").glob(".checkpoint-*"))
+
+
+def test_manifest_that_can_never_be_written_is_an_error_not_a_quiet_success(tmp_path, monkeypatch):
+    connector = FixtureConnector(make_catalog(tmp_path / "source", count=5))
+    output = tmp_path / "collected"
+    lock_manifest(monkeypatch, 10_000)
+    with pytest.raises(PermissionError):           # 받았다고 해 놓고 기록이 없는 상태를 만들지 않는다
+        Collection(connector, SCOPE, output).run()
+    assert not list(output.glob(".checkpoint-*"))
+    monkeypatch.undo()                             # 붙들던 프로그램이 놓았다
+    resumed = Collection(connector, SCOPE, output).run()
+    assert resumed["summary"]["downloaded"] == 6 and resumed["summary"]["completeness"] == "complete"
+
+
 def test_unverified_total_never_claims_complete_collection(tmp_path):
     connector = FixtureConnector(make_catalog(tmp_path / "source", count=5))
     connector._capabilities = replace(connector.capabilities, authoritative_total=False)

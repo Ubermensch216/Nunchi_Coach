@@ -4,9 +4,10 @@
 자료에서 반복 시기를 **발견**한다. 그래서 제목부터 "자료에서 발견한 업무
 일정"이며, 자료가 한 해치뿐이면 반복을 주장하지 않는다.
 
-네 개의 탭으로 나눈다.
+다섯 개의 탭으로 나눈다.
 
   연간 패턴      1년 전체 그림은 어떻게 생겼나?   ← 첫 화면
+  월별 일정      몇 월 며칠까지 무엇을 했나?      ← 문서에 적힌 일정·기한
   지금 챙길 일   지금 당장 손대야 하는 게 있나?
   앞으로 올 일   몇 달 뒤엔 뭐가 오나?
   확인 필요      이 예측을 믿어도 되나?
@@ -41,7 +42,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...core import status
+from ...core import schedule, status
 from ...db import Database
 from .. import theme
 from ..widgets import (
@@ -74,13 +75,16 @@ from .cycle_format import (
 )
 
 MONTH_NAMES = [f"{m}월" for m in range(1, 13)]
+# 문서가 날짜 없이 '7월 초'라고만 적은 일정의 표시
+_WHEN_WORDS = {"초": "월초", "초순": "월초", "중": "월중", "중순": "월중", "말": "월말", "하순": "월말"}
 MAX_UPCOMING = 8
 MAX_REVIEW = 12
 EVIDENCE_PER_ITEM = 2
 
-YEAR, NOW, LATER, REVIEW = "year", "now", "later", "review"
+YEAR, DATES, NOW, LATER, REVIEW = "year", "dates", "now", "later", "review"
 TABS = (
     (YEAR, "연간 패턴"),
+    (DATES, "월별 일정"),
     (NOW, "지금 챙길 일"),
     (LATER, "앞으로 올 일"),
     (REVIEW, "확인 필요"),
@@ -96,6 +100,7 @@ class CalendarView(QWidget):
         super().__init__(parent)
         self.db = db
         self._tab = YEAR
+        self._chosen = False      # 사용자가 탭을 직접 골랐는가
         self.setObjectName("Canvas")
         self.setAutoFillBackground(True)
 
@@ -138,7 +143,7 @@ class CalendarView(QWidget):
         head_column.addWidget(self.lead)
 
         self.tabs = TabBar(TABS)
-        self.tabs.switched.connect(self._switch)
+        self.tabs.switched.connect(self._choose)
         head_column.addSpacing(theme.SP_MD)
         head_column.addWidget(self.tabs)
         outer.addWidget(header)
@@ -162,8 +167,9 @@ class CalendarView(QWidget):
         """분석 중에는 1.5초마다 불린다. 보고 있던 탭을 절대 빼앗지 않는다."""
         today = date.today()
         cycles = self.db.all_cycles()
+        dated = schedule.entries(self.db)
 
-        if not cycles:
+        if not cycles and not dated:
             self.tabs.setVisible(False)
             self.stack.setVisible(False)
             self.blank.setVisible(True)
@@ -179,12 +185,20 @@ class CalendarView(QWidget):
         later = [e for e in entries if not is_now(e)]
         pending = [c for c in cycles if status.of_cycle(c) != status.CONFIRMED]
 
-        self._render_year(self.pages[YEAR].reset(), cycles, today)
+        if cycles:
+            self._render_year(self.pages[YEAR].reset(), cycles, today)
+        else:
+            # 반복은 못 찾았어도 문서에 적힌 일정은 있다. 그쪽을 먼저 보인다.
+            self._render_empty(self.pages[YEAR].reset(), today)
+            if not self._chosen:
+                self._tab = DATES
+        self._render_dates(self.pages[DATES].reset(), dated, today)
         self._render_now(self.pages[NOW].reset(), now, today)
         self._render_later(self.pages[LATER].reset(), later, today)
         self._render_review(self.pages[REVIEW].reset(), pending)
 
         self.tabs.set_count(YEAR, "연간 패턴", len(cycles))
+        self.tabs.set_count(DATES, "월별 일정", len(dated))
         self.tabs.set_count(NOW, "지금 챙길 일", len(now))
         self.tabs.set_count(LATER, "앞으로 올 일", len(later))
         self.tabs.set_count(REVIEW, "확인 필요", len(pending))
@@ -195,6 +209,90 @@ class CalendarView(QWidget):
         self._tab = key if key in self.pages else YEAR
         self.stack.setCurrentWidget(self.pages[self._tab])
         self.tabs.select(self._tab)
+
+    def _choose(self, key: str) -> None:
+        """사용자가 탭을 눌렀다. 그 뒤로는 화면이 탭을 대신 고르지 않는다."""
+        self._chosen = True
+        self._switch(key)
+
+    # ── 월별 일정 ──────────────────────────────────────────────────
+    def _render_dates(self, column: QVBoxLayout, dated: list, today: date) -> None:
+        """문서에 적힌 일정·기한을 이번 달부터 한 해 치 늘어놓는다.
+
+        연간 패턴이 "6월에 한다"까지라면 여기는 "6월 17일까지 추천을 받았다"다.
+        지난 회차의 날짜이므로 줄마다 어느 해의 기록인지와 근거 문서를 함께 둔다 —
+        올해의 날짜로 읽히면 안 된다.
+        """
+        if not dated:
+            column.addWidget(
+                EmptyState(
+                    "문서에 적힌 일정·기한을 찾지 못했습니다",
+                    "계획서의 추진일정(‘… : 6. 17.(월) 한’)이나 공문의 ‘…까지 제출’ 같은 "
+                    "문장에서 읽습니다. 그런 문장이 있는 문서가 업무에 묶여 있지 않으면 "
+                    "여기에 나오지 않습니다.",
+                )
+            )
+            return
+
+        column.addWidget(
+            hint_row(
+                "지난 회차에 문서가 적은 날짜",
+                "계획서의 추진일정과 공문의 제출 기한을 그대로 옮긴 것입니다. 올해의 "
+                "날짜가 아닙니다 — 올해 일정은 이번 회차의 공문과 계획으로 확인하세요. "
+                "줄 끝의 문서를 누르면 원본이 열립니다.",
+                strong=True,
+            )
+        )
+        months = schedule.by_month(dated)
+        for offset in range(12):
+            month = (today.month - 1 + offset) % 12 + 1
+            lines = months.get(month)
+            if not lines:
+                continue
+            head = f"{month}월"
+            if offset == 0:
+                head += " · 이번 달"
+            elif month < today.month:
+                head += " · 내년"
+            label = QLabel(head)
+            label.setObjectName("Answer" if offset == 0 else "BlockLabel")
+            column.addSpacing(theme.SP_SM)
+            column.addWidget(label)
+            for entry in lines:
+                column.addWidget(self._date_row(entry))
+
+    def _date_row(self, entry) -> QWidget:
+        line = ListRow()
+        line.row.setSpacing(theme.SP_SM)
+
+        when = QLabel(_WHEN_WORDS.get(entry.when, entry.when) or "날짜 미정")
+        when.setObjectName("WhenChip")
+        when.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        when.setFixedWidth(64)
+        line.row.addWidget(when)
+
+        what = QLabel(entry.what)
+        what.setToolTip(entry.what)
+        line.row.addWidget(what)
+
+        name = QPushButton(entry.task_name)
+        name.setObjectName("Link")
+        name.setCursor(Qt.CursorShape.PointingHandCursor)
+        name.setToolTip("눌러서 업무 상세로 갑니다")
+        name.clicked.connect(lambda _=False, t=entry.task_id: self.open_task.emit(t))
+        line.row.addWidget(name)
+        line.row.addStretch(1)
+
+        year = f"{entry.year}년 기록" if entry.year else "해를 알 수 없는 기록"
+        line.row.addWidget(muted_label(year, small=True, wrap=False))
+        if entry.path:
+            source = doc_icon(QPushButton(_elide(entry.filename, 220)))
+            source.setObjectName("Link")
+            source.setCursor(Qt.CursorShape.PointingHandCursor)
+            source.setToolTip(f"{entry.filename}\n클릭하면 원본을 엽니다")
+            source.clicked.connect(lambda _=False, p=entry.path: self._open(p))
+            line.row.addWidget(source)
+        return line
 
     # ── 자료 부족 ───────────────────────────────────────────────────
     def _render_empty(self, column: QVBoxLayout, today: date) -> None:

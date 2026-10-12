@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import threading
+import time
 import uuid
 
 from .policy import DEFAULT_PORT, SCOPES, is_valid_port
@@ -77,7 +78,15 @@ class BridgeStore:
         temporary.write_text(json.dumps({"enabled": self.enabled, "port": self.port, "clients": self._clients,
                                          "receive_roots": self.receive_roots},
                                         ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(temporary, self.path)
+        # 백신·색인기가 방금 쓴 파일을 잠깐 붙들면 윈도우가 덮어쓰기를 거절한다. 짧게 다시 시도한다.
+        for attempt in range(20):
+            try:
+                os.replace(temporary, self.path)
+                return
+            except PermissionError:
+                if attempt == 19:
+                    raise
+                time.sleep(0.1)
 
     def set_enabled(self, enabled: bool) -> None:
         with self._lock:

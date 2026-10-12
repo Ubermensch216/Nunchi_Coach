@@ -29,6 +29,11 @@ def _digest(path: Path):
     return hasher.hexdigest()
 
 
+# 중간 기록은 금방 포기하고(다음 파일 뒤에 다시 쓴다), 마지막 기록은 오래 기다린다.
+CHECKPOINT_ATTEMPTS = 3
+FINAL_ATTEMPTS = 60
+
+
 def _replace(source: Path, target: Path, attempts: int = 8):
     """Windows에서 백신·색인기가 방금 쓴 파일을 잠시 잡고 있으면 PermissionError가 난다. 짧게 다시 시도한다."""
     for attempt in range(attempts):
@@ -38,10 +43,10 @@ def _replace(source: Path, target: Path, attempts: int = 8):
         except PermissionError:
             if attempt == attempts - 1:
                 raise
-            time.sleep(0.05 * (attempt + 1))
+            time.sleep(min(0.05 * (attempt + 1), 0.25))
 
 
-def _write_json(path: Path, value):
+def _write_json(path: Path, value, attempts: int = 8):
     temporary = None
     try:
         with NamedTemporaryFile("w", encoding="utf-8", dir=path.parent,
@@ -50,7 +55,7 @@ def _write_json(path: Path, value):
             json.dump(value, handle, ensure_ascii=False, indent=2)
             handle.flush()
             os.fsync(handle.fileno())
-        _replace(temporary, path)
+        _replace(temporary, path, attempts)
     finally:
         if temporary and temporary.exists():
             temporary.unlink()
@@ -93,9 +98,24 @@ class Collection:
         if details:
             self.state["package"] = json.loads(json.dumps(details))
 
-    def _save(self):
+    def _save(self, final: bool = False):
+        """manifest를 쓴다.
+
+        manifest는 파일 하나를 받을 때마다 같은 이름으로 다시 쓴다. 윈도우에서는 백신·색인기가
+        방금 쓴 manifest를 열어 보는 동안 덮어쓰기가 거절되는데, 장비가 바쁘면 그 시간이 길어진다.
+        예전에는 그 한 번의 거절로 수집 전체가 '실패'로 끝나거나(첫 파일만 받고 멈춤) 예외로
+        중단됐다(docs/온나라_연동_구현계획서_2026-10-12.md N1).
+
+        중간 기록은 놓쳐도 된다 — 상태는 메모리에 있고 다음 파일 뒤에 다시 쓴다. 그사이 프로그램이
+        죽으면 기록되지 않은 파일을 다시 받을 뿐이다. 마지막 기록은 놓치면 안 되므로 오래 기다리고,
+        끝내 못 쓰면 예외로 알린다(받았다고 해 놓고 기록이 없는 상태를 만들지 않는다).
+        """
         self.state["updated_at"] = _now()
-        _write_json(self.manifest, self.state)
+        try:
+            _write_json(self.manifest, self.state, FINAL_ATTEMPTS if final else CHECKPOINT_ATTEMPTS)
+        except PermissionError:
+            if final:
+                raise
 
     def _summarize(self):
         assets = list(self.state["assets"].values())
@@ -117,7 +137,7 @@ class Collection:
             "simulation": self.connector.capabilities.simulation,
             "live_verified": self.connector.capabilities.live_verified,
         }
-        self._save()
+        self._save(final=True)
         return self.state
 
     def run(self, should_stop: Callable[[], bool] = lambda: False,

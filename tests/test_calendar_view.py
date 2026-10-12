@@ -292,3 +292,80 @@ def test_tabs_are_hidden_when_there_is_nothing_to_tab_through(tmp_path, qapp):
     assert not widget.tabs.isVisible()
     widget.setParent(None)
     empty.close()
+
+
+# ── 월별 일정 ───────────────────────────────────────────────────────
+# 연간 패턴은 "9월에 한다"까지다. 문서에 적힌 일정·기한("9. 20.(금) 한")을 달별로
+# 펴서 "며칠까지 무엇을 했나"를 보인다. 지난 회차의 날짜라는 것이 줄마다 보여야 한다.
+
+def _schedule(db: Database, task_id: int, slot: str, content: str, doc_id: int, quote: str) -> None:
+    from app.core import workstate as ws
+
+    db.sync_task_items(task_id, [{
+        "kind": "deadline", "slot": slot, "content": content, "basis_state": ws.STATED,
+        "applicability": ws.PAST, "evidence": [(doc_id, "1문단", quote)]}])
+
+
+def _doc_id(db: Database, name: str) -> int:
+    return db.con.execute("SELECT id FROM documents WHERE filename = ?", (name,)).fetchone()[0]
+
+
+def test_dates_written_in_documents_are_listed_by_month_from_this_month(db, qapp, monkeypatch):
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return TODAY
+
+    monkeypatch.setattr(cal, "date", FixedDate)
+    plan = _doc_id(db, "2025_행감_9월.hwp")
+    _schedule(db, 1, "일정 · 요구자료 제출", "9월 20일 / 10월 5일", plan,
+              "요구자료 제출 : 9. 20.(금) 한 … 10. 5.(일) 한")
+    _schedule(db, 2, "일정 · 계약 준비", "5월 초", _doc_id(db, "2025_계약.hwp"), "계약 준비 : 5월 초 한")
+    widget = CalendarView(db)
+
+    assert any(label.startswith("월별 일정") and label.rstrip().endswith("3")
+               for label in tab_labels(widget))
+    assert tab_labels(widget)[0].startswith("연간 패턴")                 # 첫 탭은 그대로다
+    shown = texts(widget.pages[cal.DATES])
+    # 이번 달(8월)에는 없으니 9월부터 나오고, 지나간 5월은 내년으로 뒤에 온다.
+    heads = [t for t in shown if t.endswith("월") or "· " in t and t.split(" · ")[0].endswith("월")]
+    assert heads == ["9월", "10월", "5월 · 내년"]
+    assert "20일" in shown and "5일" in shown and "월초" in shown
+    assert "요구자료 제출" in shown and "행정사무감사" in shown
+    assert "2025년 기록" in shown                                       # 올해 날짜가 아니다
+    assert "올해의" in "\n".join(
+        child.toolTip() for child in widget.pages[cal.DATES].findChildren(QWidget) if child.toolTip())
+    widget.setParent(None)
+
+
+def test_dates_tab_opens_when_documents_state_dates_but_nothing_recurs(tmp_path, qapp):
+    """한 해 자료뿐이라 반복은 못 찾아도, 계획서가 적은 일정은 보여 줄 수 있다."""
+    project = Database(tmp_path / "once.db")
+    project.init()
+    source_id = project.add_source(tmp_path / "자료")
+    doc_id = project.upsert_document(source_id, {
+        "path": str(tmp_path / "2025년 선발 계획.hwp"), "filename": "2025년 선발 계획.hwp",
+        "ext": ".hwp", "parse_status": "ok", "eff_year": 2025})
+    project.con.execute("INSERT INTO tasks(id, name) VALUES (1, '우수부서 선발')")
+    _schedule(project, 1, "일정 · 부서 추천", "6월 17일", doc_id, "부서 추천 : 6. 17.(월) 한")
+    widget = CalendarView(project)
+
+    assert not widget.tabs.isHidden() and widget.blank.isHidden()
+    assert widget.stack.currentWidget() is widget.pages[cal.DATES]
+    assert "반복 업무를 아직 찾지 못했습니다" in blob(widget.pages[cal.YEAR])
+    widget._choose(cal.YEAR)                     # 사용자가 고른 탭은 다시 그려도 빼앗지 않는다
+    widget.refresh()
+    assert widget.stack.currentWidget() is widget.pages[cal.YEAR]
+    widget.setParent(None)
+    project.close()
+
+
+def test_the_same_plan_filed_under_two_tasks_is_one_line(db):
+    from app.core import schedule
+
+    plan = _doc_id(db, "2025_행감_9월.hwp")
+    _schedule(db, 1, "일정 · 우수공무원 추천(전부서)", "2025-06-17", plan, "우수공무원 추천(전부서) : 2025. 6. 17.(화) 한")
+    _schedule(db, 2, "일정 · 우수공무원 부서 추천", "2025-06-17", plan, "우수공무원 부서 추천 : 2025. 6. 17.(화) 한")
+    found = schedule.entries(db)
+    assert [(e.month, e.day, e.year, e.what) for e in found] == [(6, 17, 2025, "우수공무원 부서 추천")]
+    assert found[0].filename == "2025_행감_9월.hwp" and found[0].path
