@@ -138,13 +138,13 @@ def test_pairing_by_code_gives_one_token_bound_to_that_extension(service):
     assert pair(service, code, origin=None)[1]["code"] == "origin_required"                       # 확장이 아닌 곳에서는 못 맺는다
     assert pair(service, code, origin="https://evil.test")[1]["code"] == "origin_rejected"
     status, body = pair(service, code)
-    assert status == 200 and body["scopes"] == ["read"] and len(body["token"]) >= 43
+    assert status == 200 and body["scopes"] == ["read", "write"] and len(body["token"]) >= 43
     assert pair(service, code)[1]["code"] == "pairing_not_started"                                # 코드는 한 번만 쓴다
     assert service.pending_code() is None
 
     headers = {"Authorization": f"Bearer {body['token']}"}
     status, state = call(service.port, "GET", "/bridge/v1/status", {**headers, "Origin": ORIGIN})
-    assert state["paired"] is True and state["project"] == "시험 인수인계" and state["scopes"] == ["read"]
+    assert state["paired"] is True and state["project"] == "시험 인수인계" and state["scopes"] == ["read", "write"]
     assert call(service.port, "GET", "/bridge/v1/status", {**headers, "Origin": f"chrome-extension://{OTHER}"})[1]["code"] == "origin_mismatch"
 
     [client] = service.clients()

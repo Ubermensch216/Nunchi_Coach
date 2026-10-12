@@ -68,6 +68,14 @@ def render_pages(path: Path, limit: int = MAX_PAGES) -> tuple[list[tuple[str, by
     return pages, total
 
 
+def _has_words(text: str) -> bool:
+    """글이라고 할 만한가. 손글씨 서명부 같은 그림에서 모델은 빈 칸마다 숫자와 줄만
+    되풀이해 적는다(실측: 참석자 명부). 그런 것을 본문으로 남기지 않는다."""
+    solid = [ch for ch in text if not ch.isspace()]
+    letters = sum(1 for ch in solid if "가" <= ch <= "힣" or ch.isalpha())
+    return letters >= 2 and letters >= len(solid) * 0.2
+
+
 def read(client, path: str | Path, should_stop: Callable[[], bool] = lambda: False,
          max_pages: int = MAX_PAGES) -> ParseResult:
     """그림을 모델에 보여 주고 읽은 글자를 파서 결과로 돌려준다. 예외를 던지지 않는다."""
@@ -92,7 +100,7 @@ def read(client, path: str | Path, should_stop: Callable[[], bool] = lambda: Fal
             errors.append(f"{locator}: {error}")
             continue
         text = (text or "").strip()
-        if not text or text.replace(".", "").strip() == NOTHING:
+        if not text or text.replace(".", "").strip() == NOTHING or not _has_words(text):
             continue
         body = clip(text, budget)
         if not body:

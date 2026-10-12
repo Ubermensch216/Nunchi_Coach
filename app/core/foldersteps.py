@@ -162,6 +162,11 @@ def outside_the_work(db, doc_ids) -> set[int]:
         parsed = [folders.parse_part(name)
                   for name in folders.relative_parts(row["path"] or "", row["root"] or "")]
         named = next((i for i, part in enumerate(parsed) if not part.transparent), len(parsed))
-        if any(part.modifier in aside for part in parsed[named + 1:]):
+        found = {part.modifier for part in parsed[named + 1:]} & aside
+        # 전임자는 받은 요청 공문과 평가 기준도 '참고' 폴더에 넣어 둔다. 그것은 남의
+        # 자료가 아니라 이 일의 기한과 기준이 적힌 문서다.
+        if found == {folders.REFERENCE} and row["role"] in (docrole.DIRECTIVE, docrole.CRITERIA):
+            continue
+        if found:
             out.add(row["id"])
     return out

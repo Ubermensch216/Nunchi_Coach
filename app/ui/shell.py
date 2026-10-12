@@ -369,6 +369,8 @@ class MainWindow(QMainWindow):
         self._knowledge_tick = QTimer(self)
         self._knowledge_tick.setInterval(2000)
         self._knowledge_tick.timeout.connect(self._resume_knowledge)
+        self._knowledge_tick.timeout.connect(self._ask_about_arrivals)
+        self._asking_arrival = False
         self._knowledge_tick.start()
 
         self._tick = QTimer(self)
@@ -627,6 +629,64 @@ class MainWindow(QMainWindow):
         from ..law import service as law_service
         self.topbar.show_promise(law_service.available(self.db))
         self._refresh_current()
+
+    def _ask_about_arrivals(self) -> None:
+        """onNara.sAIde가 알려 온 꾸러미를 자료 폴더로 등록할지 묻는다.
+
+        알림은 브리지의 서버 스레드에 도착한다. 화면은 여기(주 스레드)에서 읽어 와 묻는다.
+        알림만으로는 아무것도 등록하지 않는다 — 사용자가 고른 뒤에만 가져온다.
+        """
+        from ..bridge import service as bridge_service
+
+        bridge = bridge_service.current()
+        if bridge is None or self._asking_arrival or not self.isVisible():
+            return
+        self._asking_arrival = True
+        try:
+            for arrival in bridge.take_arrivals():
+                self.import_arrival(arrival, self._confirm_arrival(arrival))
+        finally:
+            self._asking_arrival = False
+
+    def _confirm_arrival(self, arrival: dict) -> bool:
+        from PySide6.QtWidgets import QMessageBox
+
+        from ..core import onnara_import
+
+        try:
+            summary = onnara_import.describe_package(arrival["path"])
+        except ValueError as exc:
+            summary = str(exc)
+        answer = QMessageBox.question(
+            self, "onNara.sAIde 꾸러미",
+            f"onNara.sAIde에서 꾸러미를 내보냈습니다.\n\n{summary}\n{arrival['path']}\n\n"
+            f"이 인수인계({self.project_name})의 자료 폴더로 등록할까요? 등록하면 다른 자료와 함께 분석합니다. "
+            "지금 등록하지 않아도 설정 › 자료 폴더 › 온나라 자료 가져오기에서 이 폴더를 고를 수 있습니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        return answer == QMessageBox.StandardButton.Yes
+
+    def import_arrival(self, arrival: dict, accepted: bool) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        from ..bridge import service as bridge_service
+        from ..core import onnara_import
+
+        bridge = bridge_service.current()
+        if not accepted:
+            if bridge is not None:
+                bridge.settle_arrival(arrival["run_id"], "dismissed")
+            return
+        try:
+            onnara_import.add_to_project(self.db, arrival["path"])
+        except (ValueError, OSError) as exc:
+            if bridge is not None:
+                bridge.settle_arrival(arrival["run_id"], "failed")
+            QMessageBox.warning(self, "onNara.sAIde 꾸러미", str(exc))
+            return
+        if bridge is not None:
+            bridge.settle_arrival(arrival["run_id"], "imported")
+        self.db.audit("bridge.package.import", arrival["run_id"])
+        self._on_sources_changed()
 
     def _on_sources_changed(self) -> None:
         """자료 폴더를 더하거나 바꾸거나 뺐다 — 화면과 분석을 다시 맞춘다.

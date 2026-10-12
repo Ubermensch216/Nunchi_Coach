@@ -315,9 +315,13 @@ def test_other_peoples_material_is_not_this_works_record(project):
     received = _add(project, r"우수부서\부서제출\건설과 추천서.hwp")
     backup = _add(project, r"우수부서\bak\2024년 선발 계획_결재전.hwp")
     last_round = _add(project, r"[0. old]\[2023년도]\[우수부서]\2023년 선발 계획.hwp")
+    request = _add(project, r"우수부서\ref\2024년 평가 계획 안내.hwp")       # 받은 요청 공문
+    other_plan = _add(project, r"우수부서\ref\이웃 구 실행계획.pdf")
     docrole.classify_documents(project)
-    outside = foldersteps.outside_the_work(project, [own, received, backup, last_round])
-    assert outside == {received, backup}             # 지난 회차의 기록은 이 일의 선례다
+    outside = foldersteps.outside_the_work(
+        project, [own, received, backup, last_round, request, other_plan])
+    # 지난 회차의 기록은 이 일의 선례다. 참고 폴더에 넣어 둔 요청 공문은 이 일의 기한이 적힌 문서다.
+    assert outside == {received, backup, other_plan}
 
 
 # ── 배포용 한글 문서 ────────────────────────────────────────────────

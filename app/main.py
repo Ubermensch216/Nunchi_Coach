@@ -122,6 +122,7 @@ def _run(app: QApplication, entry: ProjectEntry, root: Path | None) -> ProjectEn
     bridge = bridge_service.current()
     if bridge is not None:
         bridge.describe = lambda: {"project": entry.name}
+        bridge.project_db = db.path
     switch_to: list[ProjectEntry] = []
 
     def request_switch() -> None:
@@ -140,6 +141,7 @@ def _run(app: QApplication, entry: ProjectEntry, root: Path | None) -> ProjectEn
         disconnect()
         if bridge is not None:
             bridge.describe = dict
+            bridge.project_db = None
         db.audit("app.stop")
         diagnostics.record("app.stop")
         db.close()

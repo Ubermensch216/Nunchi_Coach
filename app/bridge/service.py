@@ -7,17 +7,25 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 import re
+import sqlite3
 import threading
+import time
+from urllib.parse import urlsplit
 
 from . import pairing
+from .packages import downloads_folder, resolve_package
 from .policy import API_VERSION
 from .routes import status_route
 from .server import BridgeError, BridgeServer, Client, Context, Route
 from .store import BridgeStore
 
-# 연결할 때 주는 권한. 꾸러미 알림(쓰기)이 생겨도 이미 맺은 연결에 저절로 붙이지 않는다.
-PAIRED_SCOPES = ("read",)
+# 연결할 때 주는 권한. read: 상태·보유 문서 조회, write: 꾸러미 준비 알림.
+# 권한을 늘려도 이미 맺은 연결에 저절로 붙이지 않는다 — 다시 연결해야 받는다.
+PAIRED_SCOPES = ("read", "write")
+MAX_ARRIVALS = 20
+MAX_KNOWN_IDS = 500
 
 
 class BridgeService:
@@ -29,6 +37,10 @@ class BridgeService:
         self._server: BridgeServer | None = None
         self._pending: pairing.PairingCode | None = None
         self._lock = threading.Lock()
+        # 지금 열어 둔 인수인계의 DB 파일. 보유 문서 조회가 읽기 전용으로 따로 연다(서버 스레드).
+        self.project_db: Path | None = None
+        # 확장이 알려 온 꾸러미. 메모리에만 둔다 — 앱을 다시 켜면 폴더를 직접 고르면 된다.
+        self._arrivals: dict[str, dict] = {}
 
     # ── 켜고 끄기 ───────────────────────────────────────────────────
     @property
@@ -108,7 +120,99 @@ class BridgeService:
 
     def _routes(self) -> list[Route]:
         return [status_route(lambda: self.describe()),
-                Route("POST", re.compile(r"/bridge/v1/pair"), self._pair), *self._extra_routes]
+                Route("POST", re.compile(r"/bridge/v1/pair"), self._pair),
+                Route("POST", re.compile(r"/bridge/v1/packages"), self._announce, auth="write"),
+                Route("GET", re.compile(r"/bridge/v1/packages/(?P<run>[A-Za-z0-9_-]{6,80})"), self._arrival, auth="read"),
+                Route("POST", re.compile(r"/bridge/v1/known"), self._known, auth="read"),
+                *self._extra_routes]
+
+    # ── 꾸러미 알림 ─────────────────────────────────────────────────
+    def receive_roots(self) -> list[Path]:
+        """꾸러미 알림을 받는 폴더 — 다운로드 폴더와 사용자가 더한 폴더."""
+        default = downloads_folder()
+        return ([default] if default else []) + [Path(root) for root in self.store.receive_roots]
+
+    def _announce(self, context: Context):
+        """`POST /bridge/v1/packages {runId, path}` — 꾸러미가 준비됐다는 알림.
+
+        받아 두기만 한다. 자료로 등록할지는 사용자가 눈치코치 화면에서 정한다.
+        """
+        body = context.body if isinstance(context.body, dict) else {}
+        run_id = body.get("runId")
+        try:
+            folder, connector = resolve_package(body.get("path"), run_id, self.receive_roots())
+        except BridgeError as error:
+            self.store.audit("package", client_id=context.client.id, result=error.code)
+            raise
+        files = sum(len(items) for items in connector.assets.values())
+        with self._lock:
+            known = self._arrivals.get(run_id)
+            # 이미 묻고 있거나 등록한 꾸러미는 다시 묻지 않는다. 닫았거나 실패한 것은 다시 알리면 다시 묻는다.
+            if known is None or known["state"] in ("dismissed", "failed"):
+                self._arrivals[run_id] = {"run_id": run_id, "path": str(folder), "state": "queued",
+                                          "documents": len(connector.records), "files": files,
+                                          "received_at": time.time()}
+                for stale in list(self._arrivals)[:-MAX_ARRIVALS]:
+                    del self._arrivals[stale]
+            state = self._arrivals[run_id]["state"]
+        self.store.audit("package", client_id=context.client.id, run_id=run_id, result="ok")
+        return 202, {"runId": run_id, "state": state, "documents": len(connector.records), "files": files,
+                     "project": self.describe().get("project")}
+
+    def _arrival(self, context: Context):
+        """`GET /bridge/v1/packages/{runId}` — 알린 꾸러미가 어떻게 됐는지."""
+        with self._lock:
+            arrival = self._arrivals.get(context.params["run"])
+            if arrival is None:
+                raise BridgeError(404, "not_found", "알린 적이 없는 꾸러미입니다.")
+            return 200, {"runId": arrival["run_id"], "state": arrival["state"],
+                         "documents": arrival["documents"], "files": arrival["files"]}
+
+    def take_arrivals(self) -> list[dict]:
+        """화면이 아직 묻지 않은 꾸러미를 가져간다(주 스레드). 가져간 것은 'asked'가 된다."""
+        with self._lock:
+            fresh = [dict(item) for item in self._arrivals.values() if item["state"] == "queued"]
+            for item in fresh:
+                self._arrivals[item["run_id"]]["state"] = "asked"
+            return fresh
+
+    def settle_arrival(self, run_id: str, state: str) -> None:
+        """사용자의 결정을 적는다 — 'imported' · 'dismissed' · 'failed'."""
+        with self._lock:
+            if run_id in self._arrivals and state in ("imported", "dismissed", "failed"):
+                self._arrivals[run_id]["state"] = state
+
+    # ── 보유 문서 조회 ──────────────────────────────────────────────
+    def _known(self, context: Context):
+        """`POST /bridge/v1/known {origin, ids}` — 열어 둔 인수인계가 이미 온전히 가진 문서.
+
+        '온전히'는 본문을 받았고 받지 못한 파일이 없다는 뜻이다. 붙임 하나라도 빠진 문서는
+        가진 것으로 치지 않는다 — 다시 내보내면 채울 수 있어야 한다.
+        """
+        body = context.body if isinstance(context.body, dict) else {}
+        ids = body.get("ids")
+        host = urlsplit(str(body.get("origin") or "")).netloc
+        if (not host or not isinstance(ids, list) or len(ids) > MAX_KNOWN_IDS
+                or not all(isinstance(item, str) and 0 < len(item) <= 200 for item in ids)):
+            raise BridgeError(400, "invalid_request", "보유 문서 조회의 형식이 올바르지 않습니다.")
+        database = self.project_db
+        if database is None or not Path(database).is_file():
+            raise BridgeError(409, "no_project", "눈치코치에서 인수인계를 먼저 여세요.")
+        if not ids:
+            return 200, {"known": [], "project": self.describe().get("project")}
+        connection = sqlite3.connect(f"{Path(database).as_uri()}?mode=ro", uri=True, timeout=5)
+        try:
+            marks = ",".join("?" * len(ids))
+            rows = connection.execute(
+                f"SELECT r.document_id FROM source_records r WHERE r.system_id=? AND r.document_id IN ({marks})"
+                " AND EXISTS (SELECT 1 FROM source_assets a WHERE a.record_id=r.id AND a.role='body' AND a.status='downloaded')"
+                " AND NOT EXISTS (SELECT 1 FROM source_assets a WHERE a.record_id=r.id AND a.status!='downloaded')",
+                (f"onnara@{host}", *ids)).fetchall()
+        except sqlite3.Error:
+            raise BridgeError(503, "project_busy", "인수인계 자료를 지금 읽을 수 없습니다. 잠시 후 다시 시도하세요.") from None
+        finally:
+            connection.close()
+        return 200, {"known": [row[0] for row in rows], "project": self.describe().get("project")}
 
     def _pair(self, context: Context):
         """`POST /bridge/v1/pair {code, label}` — 코드가 맞으면 토큰을 한 번 내준다.

@@ -46,6 +46,7 @@ from ...ai.settings import model_names, project_client, save_models
 from ...jobs.ai_status import check_status
 from ...db import Database
 from ...bridge import service as bridge_service
+from ...bridge.packages import downloads_folder
 from ...core import onnara_import
 from ...core.output_policy import UnsafeOutputError, safe_text_writer
 from .. import icons, theme
@@ -586,6 +587,22 @@ class SettingsDialog(QDialog):
             revoke.clicked.connect(lambda _=False, key=client["id"]: self._revoke_bridge(key))
             row.addWidget(revoke)
             card.body.addLayout(row)
+        # 꾸러미 알림을 받는 폴더. 밖에서 알려 온 경로는 이 폴더들 아래일 때만 받는다.
+        roots = QHBoxLayout()
+        default = downloads_folder()
+        names = ([f"{default} (다운로드 폴더)"] if default else []) + list(bridge.store.receive_roots)
+        roots.addWidget(muted_label("꾸러미 알림을 받는 폴더: " + (" · ".join(names) or "없음"), small=True), 1)
+        add_root = QPushButton("수신 폴더 추가")
+        add_root.setObjectName("Quiet")
+        add_root.setToolTip("브라우저의 다운로드 위치를 따로 정해 두었다면 그 폴더를 더하세요")
+        add_root.clicked.connect(self._pick_bridge_root)
+        roots.addWidget(add_root)
+        if bridge.store.receive_roots:
+            clear = QPushButton("추가한 폴더 지우기")
+            clear.setObjectName("Quiet")
+            clear.clicked.connect(lambda: self.set_bridge_roots([]))
+            roots.addWidget(clear)
+        card.body.addLayout(roots)
         card.body.addWidget(muted_label(
             "연결 정보는 인수인계가 아니라 이 PC에 저장합니다(토큰은 해시만). 인수인계를 바꿔 열어도 그대로이고, "
             "인수인계 폴더·내보내기 묶음에는 들어가지 않습니다.", small=True))
@@ -651,6 +668,21 @@ class SettingsDialog(QDialog):
     def set_bridge_port(self, port: int) -> None:
         bridge_service.current().set_port(port)
         self._sync_bridge()
+
+    def _pick_bridge_root(self) -> None:
+        chosen = QFileDialog.getExistingDirectory(self, "꾸러미 알림을 받을 폴더 (브라우저의 다운로드 위치)")
+        if chosen:
+            bridge = bridge_service.current()
+            try:
+                self.set_bridge_roots([*bridge.store.receive_roots, str(Path(chosen))])
+            except ValueError as exc:
+                QMessageBox.information(self, "수신 폴더 추가", str(exc))
+
+    def set_bridge_roots(self, roots: list[str]) -> None:
+        bridge_service.current().store.set_receive_roots(roots)
+        current = self.stack.currentWidget()
+        self.refresh()
+        self.stack.setCurrentWidget(current)
 
     def _revoke_bridge(self, client_id: str) -> None:
         bridge_service.current().revoke(client_id)

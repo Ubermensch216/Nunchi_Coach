@@ -22,6 +22,7 @@ from .policy import DEFAULT_PORT, SCOPES, is_valid_port
 FILE_NAME = "bridge.json"
 AUDIT_NAME = "bridge-audit.jsonl"
 MAX_CLIENTS = 8
+MAX_ROOTS = 8
 _EXTENSION_ID = re.compile(r"^[a-p]{32}$")
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 
@@ -50,6 +51,8 @@ class BridgeStore:
         self.enabled = False
         self.port = DEFAULT_PORT
         self._clients: list[dict] = []
+        # 다운로드 폴더 말고도 꾸러미 알림을 받을 폴더(브라우저의 저장 위치를 따로 정한 경우).
+        self.receive_roots: list[str] = []
         self._load()
 
     def _load(self) -> None:
@@ -64,11 +67,15 @@ class BridgeStore:
             self.port = data["port"]
         clients = data.get("clients") if isinstance(data.get("clients"), list) else []
         self._clients = [item for item in map(_client, clients) if item][:MAX_CLIENTS]
+        roots = data.get("receive_roots") if isinstance(data.get("receive_roots"), list) else []
+        self.receive_roots = [root for root in roots if isinstance(root, str) and Path(root).is_absolute()
+                              and not root.startswith(("\\\\", "//"))][:MAX_ROOTS]
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_name(self.path.name + ".tmp")
-        temporary.write_text(json.dumps({"enabled": self.enabled, "port": self.port, "clients": self._clients},
+        temporary.write_text(json.dumps({"enabled": self.enabled, "port": self.port, "clients": self._clients,
+                                         "receive_roots": self.receive_roots},
                                         ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(temporary, self.path)
 
@@ -82,6 +89,19 @@ class BridgeStore:
             raise ValueError("포트는 1024~65535 사이의 숫자여야 합니다.")
         with self._lock:
             self.port = port
+            self._save()
+
+    def set_receive_roots(self, roots: list[str]) -> None:
+        """수신 폴더 목록을 바꾼다. 네트워크 경로는 받지 않는다 — 꾸러미는 이 PC의 확장이 만든다."""
+        cleaned = []
+        for root in roots:
+            text = str(root)
+            if text.startswith(("\\\\", "//")) or not Path(text).is_absolute():
+                raise ValueError("이 PC의 폴더만 수신 폴더로 쓸 수 있습니다.")
+            if text not in cleaned:
+                cleaned.append(text)
+        with self._lock:
+            self.receive_roots = cleaned[:MAX_ROOTS]
             self._save()
 
     def clients(self) -> list[dict]:
