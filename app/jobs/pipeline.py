@@ -114,6 +114,7 @@ class Pipeline(QObject):
     def run(self) -> None:
         db = Database(self._db_path)
         try:
+            db.set_meta("analysis_run_state", "running")
             db.audit("pipeline.start")
             diagnostics.record("pipeline.start")
             self._stage_started = time.monotonic()
@@ -157,12 +158,17 @@ class Pipeline(QObject):
                 except Exception as exc:
                     diagnostics.record('knowledge.jobs.error', exc)
             db.audit("pipeline.stop", result="cancelled" if self._stop else "completed")
+            db.set_meta("analysis_run_state", "cancelled" if self._stop else "completed")
             diagnostics.record("pipeline.stop")
         except Exception as exc:  # 워커가 조용히 죽으면 사용자는 영문을 모른다
             diagnostics.record("pipeline.error", exc)
             import traceback
 
-            db.audit("pipeline.error", detail=type(exc).__name__, result="failed")
+            try:
+                db.set_meta("analysis_run_state", "failed")
+                db.audit("pipeline.error", detail=type(exc).__name__, result="failed")
+            except Exception as save_error:
+                diagnostics.record("pipeline.error_save", save_error)
             self.failed.emit(
                 f"{type(exc).__name__}: {exc}\n{traceback.format_exc(limit=6)}"
             )

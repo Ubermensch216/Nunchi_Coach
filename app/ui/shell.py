@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core import handover
+from ..core import initial_analysis
 from ..db import Database
 from ..jobs import PipelineRunner
 from ..jobs.knowledge_task import KnowledgeRunner
@@ -39,6 +40,7 @@ from . import icons, stages, theme
 from .views.calendar import CalendarView
 from .views.documents import DocumentsView
 from .views.onboarding import OnboardingView
+from .views.initial_analysis import InitialAnalysisView
 from .views.tasks import TasksView
 from .views.today import TodayView
 from .views.notebooks import NotebooksView
@@ -322,11 +324,13 @@ class MainWindow(QMainWindow):
         self.topbar.handover_clicked.connect(lambda: self.go("tasks"))
         outer.addWidget(self.topbar)
         self.stage_reports: dict[str, object] = {}
+        self._pipeline_error = False
         self._status_dialog = None
 
         self.stack = QStackedWidget()
         self.views: dict[str, QWidget] = {
             "onboarding": OnboardingView(self.db),
+            "initial_analysis": InitialAnalysisView(self.db),
             "today": TodayView(self.db),
             "tasks": TasksView(self.db),
             "notebooks": NotebooksView(self.db),
@@ -365,6 +369,12 @@ class MainWindow(QMainWindow):
         self.runner.stage_done.connect(self._on_stage_done)
         self.runner.finished.connect(self._on_pipeline_finished)
         self.runner.failed.connect(self._on_pipeline_failed)
+        initial = self.views["initial_analysis"]
+        initial.resume.connect(self._start_pipeline)
+        initial.pause.connect(lambda: self.runner.stop(wait_ms=0))
+        initial.open_results.connect(self._open_initial_results)
+        initial.show_status.connect(self._open_status)
+        initial.change_sources.connect(self._open_settings)
         self._knowledge = KnowledgeRunner(self.db.path, self)
         self._knowledge_tick = QTimer(self)
         self._knowledge_tick.setInterval(2000)
@@ -401,11 +411,13 @@ class MainWindow(QMainWindow):
         self.go("tasks")
 
     def go(self, key: str) -> None:
+        if key == "tasks" and initial_analysis.pending(self.db):
+            key = "initial_analysis"
         view = self.views.get(key)
         if view is None:
             return
         self.stack.setCurrentWidget(view)
-        self.topbar.select("tasks" if key == "today" else key)
+        self.topbar.select("tasks" if key in ("today", "initial_analysis") else key)
         if hasattr(view, "refresh"):
             view.refresh()
         self._sync_handover()
@@ -435,6 +447,9 @@ class MainWindow(QMainWindow):
             self.go("tasks")
 
     def _show_idle_status(self) -> None:
+        if initial_analysis.pending(self.db):
+            self.topbar.show_idle(initial_analysis.outcome(self.db, failed=self._pipeline_error).title)
+            return
         counts = self.db.counts()
         parts = [f"파일 {counts['total']:,}건"]
         if counts["parse_failed"]:
@@ -453,6 +468,9 @@ class MainWindow(QMainWindow):
         # 준비 작업을 하다 프로그램이 죽은 흔적은 ‘일부만 완료’로 되돌린다(이어서 할 수 있다).
         self.db.recover_actions()
         if not self.db.work_sources():
+            return
+        if initial_analysis.pending(self.db) and self.db.get_meta("analysis_run_state") in ("cancelled", "failed", "completed"):
+            # 명시적으로 멈춘 최초 분석이나 실패 결과를 앱 재실행으로 지우지 않는다.
             return
         from ..ai.settings import model_names
         from ..core import docrole
@@ -487,18 +505,25 @@ class MainWindow(QMainWindow):
         )
         # 역할을 아직 정하지 않은 문서(스키마를 올린 옛 프로젝트 포함).
         needs_roles = bool(docrole.pending(self.db, limit=1))
-        if (pending or needs_discovery or needs_cycles or needs_steps or needs_items
+        if (initial_analysis.pending(self.db) or pending or needs_discovery or needs_cycles or needs_steps or needs_items
                 or needs_chunks or needs_roles):
             self._start_pipeline()
 
     def _start_pipeline(self) -> None:
         if self.runner.running:
             return
+        if initial_analysis.pending(self.db):
+            self.db.set_meta("initial_analysis_state", "pending")
+        self._pipeline_error = False
+        self.stage_reports.clear()
+        self.views["initial_analysis"].set_run(True)
         self.runner.start()
         self._tick.start()
         self.topbar.show_progress(0, 1, "시작하는 중")
 
     def _on_scan_started(self) -> None:
+        if not self.db.tasks() and self.db.get_meta("initial_analysis_state") != "ready":
+            self.db.set_meta("initial_analysis_state", "pending")
         self.refresh()
         self._start_pipeline()
 
@@ -506,6 +531,7 @@ class MainWindow(QMainWindow):
         # 상시 화면에는 일감 이름이 아니라 지금 무엇이 일어나는지를 적는다
         # (계획서 §24). 기술 이름은 상태 상세에만 둔다.
         self.topbar.show_progress(done, total, stages.running(stage))
+        self.views["initial_analysis"].show_progress(stage, done, total)
 
     # ── 선제 감지 ───────────────────────────────────────────────────
     def _scan_proactive(self) -> None:
@@ -534,12 +560,29 @@ class MainWindow(QMainWindow):
     def _on_pipeline_finished(self) -> None:
         self._tick.stop()
         self._scan_proactive()
-        self._show_idle_status()
+        initial = self.views["initial_analysis"]
+        initial.set_run(False, self._pipeline_error)
+        if initial_analysis.pending(self.db):
+            # 완료를 기다리며 보고 있던 화면만 전환한다. 노트북의 선택·초점은 유지한다.
+            if initial.result.state == "ready" and self.stack.currentWidget() is initial:
+                self._open_initial_results()
+            self.topbar.show_idle(initial.result.title)
+        elif not self._pipeline_error:
+            self._show_idle_status()
         self._refresh_current()
 
     def _on_pipeline_failed(self, message: str) -> None:
+        self._pipeline_error = True
         self._tick.stop()
         self.topbar.show_idle(f"⚠ 처리 중 오류: {message}")
+        self.views["initial_analysis"].set_run(False, True)
+
+    def _open_initial_results(self) -> None:
+        result = initial_analysis.outcome(self.db, running=self.runner.running, failed=self._pipeline_error)
+        if not result.can_open:
+            return
+        self.db.set_meta("initial_analysis_state", "ready")
+        self._go_home()
 
     def _refresh_current(self) -> None:
         view = self.stack.currentWidget()
