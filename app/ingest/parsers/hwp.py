@@ -51,9 +51,15 @@ EXTENDED_CTRL = {1, 2, 3, 11, 12, 14, 15, 16, 17, 18, 21, 22, 23}  # 8 wchar
 
 def parse(path: Path) -> ParseResult:
     if not olefile.isOleFile(str(path)):
-        head = path.open("rb").read(32)
+        head = path.open("rb").read(400)
         if head.startswith(b"HWP Document File V3"):
             return failed(PARSER, "HWP 3.0 형식 — 지원하지 않음", UNSUPPORTED)
+        if head.lstrip(b"\xef\xbb\xbf \r\n\t").startswith(b"<?xml") and b"HWPML" in head:
+            return _parse_hwpml(path)
+        if head.startswith(b"PK\x03\x04"):
+            # 이름만 .hwp인 HWPX. 법제처·국가법령정보센터에서 받은 파일에 흔하다.
+            from . import hwpx
+            return hwpx.parse(path)
         return failed(PARSER, "OLE 복합문서가 아님", UNSUPPORTED)
 
     try:
@@ -177,6 +183,54 @@ def parse(path: Path) -> ParseResult:
         result.coverage = scope()
         return result
     return ParseResult(status=EMPTY, parser=PARSER, meta=meta, coverage=scope())
+
+
+def _parse_hwpml(path: Path) -> ParseResult:
+    """HWPML(한글의 XML 저장 형식). 확장자는 .hwp지만 속은 XML이다.
+
+    국가법령정보센터에서 내려받은 법령·조례가 이 형식이다(실측: 조례·운영규정·법
+    조문 6건이 'OLE 복합문서가 아님'으로 빠졌다). 문단은 <P>, 글자는 <P>/<TEXT>/<CHAR>에
+    있다. 표 안의 문단도 <P>라서 바로 아래의 글자만 모으면 겹치지 않는다.
+
+    DOCTYPE은 떼고 읽는다 — 외부 개체를 풀 길을 열지 않는다.
+    """
+    import re
+
+    from lxml import etree
+
+    raw = path.read_bytes()
+    raw = re.sub(rb"<!DOCTYPE[^>\[]*(\[[^\]]*\])?\s*>", b"", raw, count=1)
+    raw = raw.replace(b"&nbsp;", b"&#160;")
+    try:
+        root = etree.fromstring(raw, etree.XMLParser(
+            resolve_entities=False, no_network=True, recover=True, huge_tree=False))
+    except etree.XMLSyntaxError as exc:
+        return failed(PARSER, f"HWPML 구조 손상: {exc}")
+    if root is None:
+        return failed(PARSER, "HWPML 구조 손상")
+
+    meta = DocMeta(title=_clean(root.findtext(".//DOCSUMMARY/TITLE")),
+                   author=_clean(root.findtext(".//DOCSUMMARY/AUTHOR")))
+    budget = [MAX_CHARS]
+    out: list[Section] = []
+    limited = False
+    for paragraph in root.iter("P"):
+        text = "".join(paragraph.xpath("./TEXT/CHAR/text()")).replace("\xa0", " ").strip()
+        if not text:
+            continue
+        body = clip(text, budget)
+        if len(body) < len(text):
+            limited = True
+        if not body:
+            break
+        out.append(Section("paragraph", len(out) + 1, f"{len(out) + 1}문단", body))
+    scope = {"version": 1, "scope": "hwpml_paragraphs", "completeness": "unverified",
+             "paragraphs_emitted": len(out), "characters_emitted": sum(len(s.text) for s in out),
+             "limitations": ["table_structure_not_preserved", "images_and_layout_not_extracted"]}
+    if not out:
+        return ParseResult(status=EMPTY, parser=PARSER, meta=meta, coverage=scope)
+    return ParseResult(status=PARTIAL if limited else OK, parser=PARSER, sections=out, meta=meta,
+                       note="글자 상한으로 일부만 읽음" if limited else None, coverage=scope)
 
 
 def _open_distributed(data: bytes) -> bytes:

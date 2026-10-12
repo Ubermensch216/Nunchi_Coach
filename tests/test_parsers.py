@@ -1,4 +1,4 @@
-"""파서 계약 시험.
+﻿"""파서 계약 시험.
 
 HWP 5.0은 합성이 어려워 실파일 표본이 없다. 대신 컨테이너(OLE) 밖의 순수
 로직 — 레코드 스트림 파싱과 제어문자 디코딩 — 을 합성 바이트로 검증한다.
@@ -116,8 +116,8 @@ def test_parse_never_raises_on_garbage(tmp_path: Path):
 
 
 def test_parse_rejects_unknown_extension(tmp_path: Path):
-    path = tmp_path / "sample.zip"
-    path.write_bytes(b"PK")
+    path = tmp_path / "sample.exe"
+    path.write_bytes(b"MZ")
     assert parse(path).status == UNSUPPORTED
 
 

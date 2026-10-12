@@ -135,6 +135,12 @@ def scan_source(
             unchanged = bool(digest and old_hash == digest)
         if unchanged:
             db.mark_seen(previous["id"])
+            if is_document:
+                # 예전에는 대상이 아니던 형식을 이제 읽는다(압축파일의 이름 목록 등).
+                # 파일이 그대로여도 '대상 아님'으로 남아 있으면 다시 읽게 올린다.
+                db.con.execute(
+                    "UPDATE documents SET parse_status = 'pending' "
+                    "WHERE id = ? AND parse_status = 'skipped'", (previous["id"],))
             observe(path, "file", "included" if is_document else "unsupported",
                     "unchanged" if is_document else "unsupported_extension", previous["id"])
             stats.unchanged += 1

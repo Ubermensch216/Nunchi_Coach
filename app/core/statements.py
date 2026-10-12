@@ -139,6 +139,22 @@ def _gather(db, task_id: int) -> list[dict]:
         "       JOIN documents x ON x.id = tx.doc_id "
         "       WHERE tx.task_id = td.task_id AND x.hash = d.hash AND x.missing_since IS NULL)) "
         "ORDER BY d.eff_date DESC, d.id", (task_id,)).fetchall()
+    # 남의 자료·참고자료·이전 판은 이 일의 사정을 말하지 않는다. 실적 보고서와 증빙의
+    # 문장은 성과를 서술한 글이다 — 실제 자료에서 "업무 효율이 평균 20% 증가했다"가
+    # 이 업무의 '진행 상황'으로 올라왔다. 모델이 읽은 글(그림·스캔본)도 뺀다 — 문장
+    # 값은 원문 그대로여야 하는데 그 글은 원문이 아니다.
+    from . import docrole, foldersteps
+
+    ids = [row["id"] for row in documents]
+    skip = foldersteps.outside_the_work(db, ids)
+    if ids:
+        marks = ", ".join("?" * len(ids))
+        skip |= {row["doc_id"] for row in db.con.execute(
+            f"SELECT doc_id FROM doc_roles WHERE doc_id IN ({marks}) AND role IN (?, ?)",
+            (*ids, docrole.PERFORMANCE, docrole.EVIDENCE))}
+        skip |= {row["id"] for row in db.con.execute(
+            f"SELECT id FROM documents WHERE id IN ({marks}) AND parser = 'vision'", ids)}
+    documents = [row for row in documents if row["id"] not in skip]
     if not documents:
         return []
     # 지난 회차의 문장은 그때의 사정이다. 가장 최근 시기의 문서만 본다.

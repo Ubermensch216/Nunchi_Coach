@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
-from . import korean, provenance, workstate as ws
+from . import docrole, korean, provenance, workstate as ws
 from .dating import _FULL
 from .labeling import label_document
 
@@ -182,8 +182,54 @@ _TITLE_NOISE = re.compile(
     r"|(?:진짜|최)*(?:최종|수정|결재전|결재)\d*|[_\-]+")
 
 
+# 회의·행사가 열린 날. 기한은 아니지만 "언제 했나"의 가장 분명한 기록이다.
+#     ❑ 일 시 : 2024. 6. 28.(금) 10:00
+_EVENT_LINE = re.compile(
+    r"^[^\w가-힣]*(?P<label>일\s*시|개최\s*일\s*시?|행사\s*일\s*시?|교육\s*일\s*시?|회의\s*일\s*시?)"
+    r"\s*[:：]\s*(?P<when>" + _DAY_ANY + r")")
+# 전임자가 캡처해 둔 공문 목록(온나라 문서함 화면)을 읽은 줄. 문서번호·보고일자·제목.
+#     6423 | 2023.04.03 | 2023년 적극행정 중점과제 선정을 위한 자료 제출 요청 | …
+# 그 일을 실제로 한 날짜들이다 — 지난 회차의 순서가 여기 그대로 있다.
+_LEDGER_LINE = re.compile(
+    r"^\s*\|?\s*\d{3,6}\s*\|\s*(?P<y>(?:19|20)\d{2})\s*[.\-]\s*(?P<m>1[0-2]|0?[1-9])\s*[.\-]\s*"
+    r"(?P<d>3[01]|[12]\d|0?[1-9])\s*\|\s*(?P<title>[^|]{4,80}?)\s*(?:\||$)")
+# 이름만 적힌 담당자 칸('김명진', '노정란 팀장'은 위에서 걸린다). 두세 글자 한글 한 낱말.
+_KOREAN_NAME = re.compile(r"[가-힣]{2,4}(?:\s*[가-힣]{2,4})?")
+_PERSON_OR_OFFICE = re.compile(
+    r"\d{2,4}\s*[-)]\s*\d{3,4}\s*-\s*\d{4}|☎|내선|@|주무관|사무관|서기관|주사|팀장|계장|과장|국장|"
+    r"실장|담당관|[가-힣]{2,}(?:과|팀|실|계|단|센터|담당관)(?![가-힣])")
+
+
+def same_line(left: str, right: str, least: int = 5) -> bool:
+    """두 일정 이름이 같은 일을 가리키는가 — 같은 글자를 least자 이상 이어서 품고 있는가.
+
+    한 계획서가 같은 일정을 요약과 본문에 다른 말로 적는다('우수공무원 추천(전부서)',
+    '우수공무원 부서 추천', '적극행정 사례 및 우수공무원 추천(전부서 및 전동)').
+    """
+    from difflib import SequenceMatcher
+
+    a = re.sub(r"\s+", "", left.removeprefix(SCHEDULE_PREFIX))
+    b = re.sub(r"\s+", "", right.removeprefix(SCHEDULE_PREFIX))
+    if a == b:
+        return True
+    return SequenceMatcher(None, a, b, autojunk=False).find_longest_match(
+        0, len(a), 0, len(b)).size >= least
+
+
 def _read_schedule(line: str, doc_id: int, locator: str, doc_year: int | None,
                    official: bool, title: str) -> list[Found]:
+    event = _EVENT_LINE.match(line)
+    if event:
+        label = re.sub(r"\s+", "", event.group("label"))
+        slot = SCHEDULE_PREFIX + label + (f" · {_short_title(title)}" if title else "")
+        item = _schedule_item(event, slot, line[:_MAX_VALUE * 2], doc_id, locator, doc_year, official)
+        return [item] if item else []
+    ledger = _LEDGER_LINE.match(line)
+    if ledger:
+        what = " ".join(ledger.group("title").split())
+        item = _schedule_item(ledger, f"{SCHEDULE_PREFIX}기안 · {what[:40]}", line[:_MAX_VALUE * 2],
+                              doc_id, locator, doc_year, official)
+        return [item] if item else []
     whole = _SCHEDULE_LINE.match(line)
     if whole:
         what = whole.group("what").strip(" -·")
@@ -325,6 +371,13 @@ def _build(kind, slot, raw, unit, quote, doc_id, locator, doc_year, official) ->
             return None            # 숫자 없는 '예산: 미정'은 금액이 아니다
         if unit and unit not in raw:
             value = f"{raw} {unit.strip()}"
+    elif kind == CONTACT:
+        # 담당자 칸에는 사람·부서·전화가 적힌다. 표에서 '담당자 · 추진분야 / ◇ 선제적 해결이
+        # 필요한 현안 …'처럼 과제 유형 문구가 들어온 것은 담당자가 아니다(실측).
+        if _PERSON_OR_OFFICE.search(raw) is None and not _KOREAN_NAME.fullmatch(raw.strip()):
+            return None
+        if len(raw) > 60 or raw.lstrip().startswith(("◇", "○", "▷", "※", "-")):
+            return None
     item = Found(kind, slot, value, doc_id, locator, quote, doc_year, when, official)
     return item if _verified(item, raw) else None
 
@@ -376,6 +429,24 @@ def choose(found: list[Found], basis: date) -> list[dict]:
         key = (item.kind, re.sub(r"\s+", "", item.slot) if is_schedule(item.slot) else item.slot)
         groups.setdefault(key, []).append(item)
         shown_slot.setdefault(key, item.slot)
+
+    # 한 계획서가 같은 일정을 요약과 본문에 다른 말로 적는다. 날짜가 같고 이름이 비슷하면
+    # 한 일정이다. 이름만 비슷하고 날짜가 다른 것('제출'과 '신청')은 따로 둔다.
+    merged: dict[tuple[str, str], list[Found]] = {}
+    for key, items in groups.items():
+        if not is_schedule(shown_slot[key]):
+            merged[key] = items
+            continue
+        dates = {item.key for item in items}
+        twin = next((other for other in merged
+                     if other[0] == key[0] and is_schedule(shown_slot[other])
+                     and same_line(shown_slot[other], shown_slot[key])
+                     and dates & {item.key for item in merged[other]}), None)
+        if twin is None:
+            merged[key] = items
+        else:
+            merged[twin] = merged[twin] + items
+    groups = merged
 
     candidates = []
     for key, items in groups.items():
@@ -493,15 +564,27 @@ def read_task(db, task_id: int) -> list[Found]:
         return []
     official = provenance.official_sources(db, [row["id"] for row in documents])
 
+    marks = ", ".join("?" * len(documents))
+    roles = {row["doc_id"]: row["role"] for row in db.con.execute(
+        f"SELECT doc_id, role FROM doc_roles WHERE doc_id IN ({marks})",
+        [row["id"] for row in documents])}
     found: list[Found] = []
     for document in documents:
+        mine = []
         for section in db.con.execute(
             "SELECT locator, text FROM document_sections WHERE doc_id = ? ORDER BY ordinal",
             (document["id"],),
         ):
-            found.extend(read_section(
+            mine.extend(read_section(
                 section["text"], document["id"], section["locator"], document["eff_year"],
                 official=document["id"] in official, title=document["filename"] or ""))
+        if roles.get(document["id"]) in (docrole.DIRECTIVE, docrole.CRITERIA):
+            # 상급기관의 요청 공문·평가 기준에 적힌 담당자는 그 기관의 사람이다. 이 업무의
+            # 담당자와 같은 칸에 섞이지 않게 어디서 온 것인지 밝힌다.
+            for item in mine:
+                if item.kind == CONTACT:
+                    item.slot = f"{item.slot} · 공문을 보낸 쪽"
+        found.extend(mine)
     return found
 
 

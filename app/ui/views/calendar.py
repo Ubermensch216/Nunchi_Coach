@@ -285,6 +285,8 @@ class CalendarView(QWidget):
 
         year = f"{entry.year}년 기록" if entry.year else "해를 알 수 없는 기록"
         line.row.addWidget(muted_label(year, small=True, wrap=False))
+        if entry.confirmed:
+            line.row.addWidget(Badge.state(status.CONFIRMED))
         if entry.path:
             source = doc_icon(QPushButton(_elide(entry.filename, 220)))
             source.setObjectName("Link")
@@ -292,7 +294,47 @@ class CalendarView(QWidget):
             source.setToolTip(f"{entry.filename}\n클릭하면 원본을 엽니다")
             source.clicked.connect(lambda _=False, p=entry.path: self._open(p))
             line.row.addWidget(source)
+
+        # 틀린 날짜를 가장 먼저 알아채는 자리가 이 목록이다. 업무 상세까지 찾아가게 하면
+        # 대부분 고치지 않고 넘어간다. 고치거나 빼는 단위는 이 날짜가 든 항목이다.
+        more = QPushButton(MORE)
+        more.setObjectName("IconButton")
+        more.setFixedWidth(28)
+        more.setCursor(Qt.CursorShape.PointingHandCursor)
+        more.setToolTip("이 일정을 확인하거나 고치거나 뺍니다")
+        menu = QMenu(more)
+        menu.addAction("맞습니다", lambda i=entry.item_id: self._confirm_date(i))
+        menu.addAction("날짜 고치기", lambda e=entry: self._edit_date(e))
+        menu.addAction("이 일정 빼기", lambda e=entry: self._drop_date(e))
+        more.setMenu(menu)
+        more.setEnabled(bool(entry.item_id))
+        line.row.addWidget(more)
         return line
+
+    def _confirm_date(self, item_id: int) -> None:
+        self.db.review_task_item(item_id, "confirm")
+        self.refresh()
+
+    def _edit_date(self, entry) -> None:
+        text, ok = QInputDialog.getText(
+            self, "일정 고치기",
+            f"‘{entry.what}’의 날짜를 적어 주세요. 여러 개면 ‘ / ’로 나눕니다.\n"
+            "예: 6월 17일 / 10월 18일",
+            text=entry.content)
+        if not ok or not text.strip():
+            return
+        self.db.review_task_item(entry.item_id, "edit", text.strip())
+        self.refresh()
+
+    def _drop_date(self, entry) -> None:
+        many = " / " in entry.content
+        answer = QMessageBox.question(
+            self, "이 일정 빼기",
+            f"‘{entry.what}’" + (f"의 날짜 전체({entry.content})" if many else f"({entry.content})")
+            + "를 일정에서 뺄까요?\n\n다시 분석해도 되살아나지 않습니다.")
+        if answer == QMessageBox.StandardButton.Yes:
+            self.db.review_task_item(entry.item_id, "exclude")
+            self.refresh()
 
     # ── 자료 부족 ───────────────────────────────────────────────────
     def _render_empty(self, column: QVBoxLayout, today: date) -> None:
@@ -444,7 +486,15 @@ class CalendarView(QWidget):
             entry.task_id, month, limit=EVIDENCE_PER_ITEM
         )
 
-        if step is None and not docs:
+        # 문서가 그 달에 적어 둔 날짜가 있으면 그것이 가장 구체적인 말이다.
+        dated = schedule.for_month(schedule.entries(self.db), entry.task_id, month)[:4]
+        for item in dated:
+            when = f"{item.year}년 " if item.year else ""
+            day = _WHEN_WORDS.get(item.when, item.when)
+            card.body.addWidget(muted_label(
+                f"{when}{month}월 {day}".replace("월 월", "월 ") + f" · {item.what}", small=True))
+
+        if step is None and not docs and not dated:
             card.body.addWidget(
                 UnknownBlock(f"{month}월에 무엇부터 했는지는 자료에서 확인되지 않았습니다.")
             )

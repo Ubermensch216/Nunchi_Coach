@@ -196,6 +196,7 @@ CREATE TABLE IF NOT EXISTS task_docs (
     confidence TEXT NOT NULL DEFAULT 'medium',
     evidence   TEXT,
     is_primary INTEGER NOT NULL DEFAULT 0,    -- v2: 이 업무의 대표 문서
+    round_key  TEXT NOT NULL DEFAULT '',      -- 회차 ('2024 하반기'). 빈 값은 모름
     PRIMARY KEY (task_id, doc_id)
 );
 CREATE INDEX IF NOT EXISTS idx_task_docs_doc ON task_docs(doc_id);

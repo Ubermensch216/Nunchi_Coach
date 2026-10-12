@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
 from contextlib import contextmanager
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -38,6 +39,8 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("collection_runs", "author_identity", "author_identity TEXT NOT NULL DEFAULT ''"),
     ("source_records", "id_basis", "id_basis TEXT NOT NULL DEFAULT ''"),
     ("source_assets", "fidelity", "fidelity TEXT NOT NULL DEFAULT ''"),
+    # 업무 아래의 회차('2024 하반기', '2023 제2차'). 전임자의 폴더 이름에서 읽는다.
+    ("task_docs", "round_key", "round_key TEXT NOT NULL DEFAULT ''"),
 )
 
 APP_DIR_NAME = "NunchiCoach"
@@ -96,6 +99,24 @@ def open_project_at(directory: Path | str) -> "Database":
     return db
 
 
+# DB를 여는 순간의 'disk I/O error'는 잠깐 기다렸다 다시 연다(최대 약 3초).
+#
+# WAL DB를 처음 여는 연결은 색인 파일(-shm)을 0바이트로 줄인 뒤 다시 만든다. 윈도우에서는
+# 다른 쪽이 그 파일을 메모리에 올려(매핑) 둔 동안 줄일 수 없어 SQLite가 곧바로
+# 'disk I/O error'를 낸다. 강제 종료된 직후의 이전 프로세스나 방금 쓴 파일을 검사하는
+# 백신이 그렇게 붙든다. 디스크가 망가진 것이 아니고 놓으면 그대로 열린다 —
+# 재현과 근거는 docs/온나라_연동_구현계획서_2026-10-12.md 11차 기록에 있다.
+# 진짜 디스크 오류라면 3초 뒤에 같은 예외가 그대로 나간다.
+OPEN_ATTEMPTS = 16
+OPEN_RETRY_SECONDS = 0.2
+_SQLITE_IOERR = 10
+
+
+def _io_error(exc: sqlite3.OperationalError) -> bool:
+    code = getattr(exc, "sqlite_errorcode", None)
+    return (code & 0xFF) == _SQLITE_IOERR if isinstance(code, int) else "disk I/O error" in str(exc)
+
+
 class Database(WorkStore, ActionStore):
     def __init__(self, path: Path | str, *, readonly: bool = False) -> None:
         self.path = Path(path)
@@ -106,16 +127,27 @@ class Database(WorkStore, ActionStore):
     @property
     def con(self) -> sqlite3.Connection:
         if self._con is None:
-            if self.readonly:
-                con = sqlite3.connect(self.path.resolve().as_uri() + '?mode=ro', uri=True, isolation_level=None)
-            else:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                con = sqlite3.connect(self.path, isolation_level=None)
-            con.row_factory = sqlite3.Row
             if not self.readonly:
-                con.execute("PRAGMA journal_mode = WAL")
-            con.execute("PRAGMA foreign_keys = ON")
-            con.execute("PRAGMA synchronous = NORMAL")
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+            for attempt in range(OPEN_ATTEMPTS):
+                con = None
+                try:
+                    if self.readonly:
+                        con = sqlite3.connect(self.path.resolve().as_uri() + '?mode=ro', uri=True, isolation_level=None)
+                    else:
+                        con = sqlite3.connect(self.path, isolation_level=None)
+                    con.row_factory = sqlite3.Row
+                    if not self.readonly:
+                        con.execute("PRAGMA journal_mode = WAL")
+                    con.execute("PRAGMA foreign_keys = ON")
+                    con.execute("PRAGMA synchronous = NORMAL")
+                    break
+                except sqlite3.OperationalError as exc:
+                    if con is not None:
+                        con.close()
+                    if attempt == OPEN_ATTEMPTS - 1 or not _io_error(exc):
+                        raise
+                    time.sleep(OPEN_RETRY_SECONDS)
             self._con = con
         return self._con
 
@@ -646,6 +678,24 @@ class Database(WorkStore, ActionStore):
             "SELECT r.*, d.filename, d.path, d.eff_date, d.eff_precision, d.eff_date_kind "
             "FROM task_reading r JOIN documents d ON d.id = r.doc_id "
             "WHERE r.task_id = ? ORDER BY r.ordinal",
+            (task_id,),
+        ).fetchall()
+
+    def task_rounds(self, task_id: int) -> list[sqlite3.Row]:
+        """이 업무의 회차와 회차마다의 문서 수. 최근 회차부터.
+
+        회차는 전임자의 폴더 이름이 말한 것('2024년 …\\하반기' → 2024 하반기)이다.
+        폴더가 말하지 않은 문서는 그 문서의 해로 센다. 해도 모르면 빈 회차다.
+        """
+        return self.con.execute(
+            """
+            SELECT COALESCE(NULLIF(td.round_key, ''), CAST(d.eff_year AS TEXT), '') AS round,
+                   COUNT(*) AS documents,
+                   SUM(CASE WHEN d.parse_status IN ('ok', 'partial') THEN 1 ELSE 0 END) AS read
+            FROM task_docs td JOIN documents d ON d.id = td.doc_id
+            WHERE td.task_id = ? AND d.missing_since IS NULL
+            GROUP BY 1 ORDER BY (round = '') ASC, round DESC
+            """,
             (task_id,),
         ).fetchall()
 

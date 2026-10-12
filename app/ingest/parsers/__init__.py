@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+from . import archive as _archive
 from . import docx as _docx
 from . import hwp as _hwp
 from . import hwpx as _hwpx
@@ -21,6 +22,8 @@ from .base import (
     FAILED,
     LOCKED,
     MAX_BYTES,
+    OK,
+    PARTIAL,
     TOO_LARGE,
     UNSUPPORTED,
     DocMeta,
@@ -70,12 +73,28 @@ _REGISTRY = {
     ".csv": _text.parse,
     ".md": _text.parse,
     ".log": _text.parse,
+    # 압축파일은 풀지 않고 안의 파일 이름만 읽는다(parsers/archive.py).
+    ".zip": _archive.parse,
     # 구형 포맷은 명시적으로 '지원 안 함'을 돌려준다. 조용히 빠지면
     # 사용자가 왜 검색에 안 걸리는지 알 수 없다.
     ".xls": _xlsx.parse,
     ".doc": _docx.parse,
     ".ppt": _pptx.parse,
 }
+
+
+# 파일은 큰데 읽은 글이 거의 없으면 본문이 그림이거나 읽지 못한 부분이 있다는 뜻이다.
+# 그런 문서를 '읽음'으로 두면 좌석배치도·상장·사건위치도 같은 것이 다 읽은 문서로
+# 보인다(실측: 본문 200자 미만인 '읽음' 58건, 그중 7MB에 17자인 것도 있었다).
+THIN_CHARS = 200
+THIN_BYTES = 50_000
+THIN_NOTE = "파일 크기에 비해 읽은 글이 거의 없습니다 — 그림이나 읽지 못한 부분이 있을 수 있습니다."
+
+
+def _flag_thin(result: ParseResult, size: int) -> None:
+    if result.status == OK and result.char_count < THIN_CHARS and size >= THIN_BYTES:
+        result.status = PARTIAL
+        result.note = f"{result.note}; {THIN_NOTE}" if result.note else THIN_NOTE
 
 
 def supported_extensions() -> tuple[str, ...]:
@@ -113,5 +132,6 @@ def parse(path: str | Path) -> ParseResult:
     # 뒤지는 대신 파일을 실제로 열어 보고 판단한다.
     if result.status == FAILED and (_looks_locked(result.error) or _is_locked_now(path)):
         result.status = LOCKED
+    _flag_thin(result, size)
     result.elapsed_ms = int((time.perf_counter() - started) * 1000)
     return result

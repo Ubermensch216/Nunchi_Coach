@@ -148,6 +148,78 @@ def test_force_killed_scan_leaves_a_valid_database_and_resumes(tmp_path: Path, m
         db.close()
 
 
+def _wal_database(path: Path) -> None:
+    db = Database(path)
+    db.con.execute("CREATE TABLE t(x)")
+    db.con.execute("INSERT INTO t VALUES (1)")
+    db.close()
+
+
+def test_database_opens_once_the_other_side_lets_go_of_the_wal_index(tmp_path: Path):
+    """이 파일의 강제 종료 시험이 전체 실행에서 가끔 'disk I/O error'로 실패하던 원인.
+
+    WAL 색인 파일(-shm)을 다른 쪽이 메모리에 올려 둔 동안에는 윈도우에서 DB가 열리지 않는다.
+    막 죽은 프로세스나 방금 쓴 파일을 검사하는 백신이 그렇게 붙든다. 놓으면 열려야 한다.
+    """
+    import mmap
+    import threading
+
+    path = tmp_path / "project.db"
+    keeper = Database(path)
+    keeper.con.execute("CREATE TABLE t(x)")
+    keeper.con.execute("INSERT INTO t VALUES (1)")
+    with open(str(path) + "-shm", "rb") as shm:
+        view = mmap.mmap(shm.fileno(), 0, access=mmap.ACCESS_READ)
+        keeper.close()                               # 마지막 연결. 붙들린 -shm은 지워지지 않고 남는다
+        threading.Timer(0.7, view.close).start()     # 잠시 뒤 놓는다
+        if sys.platform == "win32":                  # 붙든 동안 실제로 막히는지부터 확인한다(윈도우에서만 막힌다)
+            with pytest.raises(sqlite3.OperationalError, match="disk I/O error"):
+                raw = sqlite3.connect(path)
+                try:
+                    raw.execute("PRAGMA journal_mode = WAL")
+                finally:
+                    raw.close()
+        db = Database(path)
+        try:
+            assert db.con.execute("SELECT COUNT(*) FROM t").fetchone()[0] == 1      # 자료는 그대로다
+        finally:
+            db.close()
+
+
+def test_open_retries_only_io_errors_and_gives_up_in_the_end(tmp_path: Path, monkeypatch):
+    import app.db.repo as repo
+
+    path = tmp_path / "project.db"
+    _wal_database(path)
+    real, calls, slept = sqlite3.connect, [], []
+    monkeypatch.setattr(repo.time, "sleep", slept.append)
+
+    def flaky(failures, message):
+        def connect(*args, **kwargs):
+            calls.append(args)
+            if len(calls) <= failures:
+                raise sqlite3.OperationalError(message)
+            return real(*args, **kwargs)
+        return connect
+
+    monkeypatch.setattr(repo.sqlite3, "connect", flaky(3, "disk I/O error"))
+    db = Database(path)
+    assert db.con.execute("SELECT COUNT(*) FROM t").fetchone()[0] == 1 and len(calls) == 4 and len(slept) == 3
+    db.close()
+
+    calls.clear()
+    monkeypatch.setattr(repo.sqlite3, "connect", flaky(10_000, "disk I/O error"))
+    with pytest.raises(sqlite3.OperationalError, match="disk I/O error"):      # 진짜 디스크 오류는 끝내 드러난다
+        Database(path).con
+    assert len(calls) == repo.OPEN_ATTEMPTS
+
+    calls.clear()
+    monkeypatch.setattr(repo.sqlite3, "connect", flaky(10_000, "unable to open database file"))
+    with pytest.raises(sqlite3.OperationalError, match="unable to open"):      # 다른 오류는 기다리지 않는다
+        Database(path).con
+    assert len(calls) == 1
+
+
 def _scanned(db_path: Path) -> int:
     """자식이 지금까지 넣은 문서 수. 아직 못 읽을 상태면 0.
 
@@ -175,6 +247,11 @@ def _open_after_kill(db_path: Path, attempts: int = 10) -> Database:
     윈도우는 죽은 프로세스의 파일 핸들을 곧바로 놓지 않아서, 그 사이의 열기
     시도가 'disk I/O error'로 떨어진다. 제품의 결함이 아니라 종료 직후의
     한때이므로 짧게 기다렸다 다시 연다.
+
+    (2026-10-12) 정확히는 WAL 색인 파일(-shm)이 아직 메모리에 올려져 있는 동안
+    SQLite가 그 파일을 줄이지 못해 나는 오류다. 이제 `Database`가 여는 순간의
+    이 오류를 스스로 약 3초까지 다시 시도한다(app/db/repo.py). 여기의 재시도는
+    그보다 오래 걸리는 경우를 위해 남겨 둔다.
     """
     for attempt in range(attempts):
         db = Database(db_path)

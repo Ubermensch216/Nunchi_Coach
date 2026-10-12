@@ -869,6 +869,14 @@ class TasksView(QWidget):
                 )
             self.head.addLayout(about)
 
+        # 회차 — 이 업무를 언제 언제 했는지. 전임자의 폴더가 말한 것이 있을 때만 보인다
+        # (해만 아는 문서뿐이면 위의 기간 표시와 같은 말이 된다).
+        rounds = [r for r in self.db.task_rounds(task_id) if r["round"]]
+        if len(rounds) > 1 and any(" " in r["round"] for r in rounds):
+            shown = " · ".join(f"{r['round']} {r['documents']}건" for r in rounds[:8])
+            more = f" · 외 {len(rounds) - 8}회차" if len(rounds) > 8 else ""
+            self.head.addWidget(muted_label(f"회차  {shown}{more}", small=True))
+
         cycle = self.db.task_cycle(task_id)
         work = workcard.build(self.db, task_id)
         # 확인할 것이 남은 탭은 열어 보기 전에 알려 준다.

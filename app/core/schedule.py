@@ -12,10 +12,9 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from difflib import SequenceMatcher
+from dataclasses import dataclass, replace
 
-from . import reconstruction as rc
+from . import reconstruction as rc, workstate as ws
 
 _ISO = re.compile(r"^\s*(\d{4})-(\d{2})-(\d{2})\s*$")
 _MONTH_DAY = re.compile(r"^\s*(\d{1,2})월\s*(\d{1,2})일\s*$")
@@ -38,6 +37,9 @@ class Entry:
     doc_id: int | None
     filename: str
     path: str
+    item_id: int = 0         # 이 날짜가 든 업무 항목. 고치거나 뺄 때 쓴다
+    content: str = ""        # 그 항목의 값 전체 ('6월 17일 / 10월 18일')
+    confirmed: bool = False  # 사람이 확인한 항목인가
 
     @property
     def order(self) -> tuple:
@@ -57,8 +59,14 @@ def entries(db) -> list[Entry]:
             for value in (item["content"] or "").split(" / "):
                 entry = _entry(value, what, task, item["evidence"])
                 if entry is not None:
-                    found.append(entry)
+                    found.append(replace(entry, item_id=item["id"], content=item["content"] or "",
+                                         confirmed=item["human_state"] in ws.CONFIRMED_BY))
     return _dedupe(sorted(found, key=lambda e: e.order))
+
+
+def for_month(found: list[Entry], task_id: int, month: int) -> list[Entry]:
+    """이 업무가 그 달에 문서에 적어 둔 일정. '작년 이맘때'를 날짜로 말하는 데 쓴다."""
+    return [e for e in found if e.task_id == task_id and e.month == month]
 
 
 def by_month(found: list[Entry]) -> dict[int, list[Entry]]:
@@ -125,11 +133,7 @@ def _dedupe(found: list[Entry]) -> list[Entry]:
 
 
 def _same_line(left: str, right: str) -> bool:
-    a, b = re.sub(r"\s+", "", left), re.sub(r"\s+", "", right)
-    if a == b:
-        return True
-    match = SequenceMatcher(None, a, b, autojunk=False).find_longest_match(0, len(a), 0, len(b))
-    return match.size >= SAME_LINE_CHARS
+    return rc.same_line(left, right, SAME_LINE_CHARS)
 
 
 def attach_years(db, found_evidence: list[dict]) -> None:

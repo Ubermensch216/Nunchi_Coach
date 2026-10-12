@@ -82,14 +82,39 @@ def test_until_sentences_are_told_apart_by_the_document_they_come_from():
 
 
 @pytest.mark.parametrize("line", [
-    "❑ 일 시 : 2024. 6. 28.(금) 10:00",                       # 행사일이지 기한이 아니다
     "공적 기간 : 2023. 11. 1. ~ 2024. 4. 30.",                # 기간
     "❑ 추천기간 : 2024. 6. 4.(화) ~ 6. 17.(월) ▷ 14일간",
     "교육 후 7일 이내 강사평가서 제출",                        # 날짜가 없다
     "사업비 : 513,000원 한도",
 ])
-def test_event_dates_and_periods_are_not_deadlines(line):
+def test_periods_and_undated_phrases_are_not_deadlines(line):
     assert [f for f in _read(line) if f.kind == rc.DEADLINE] == []
+
+
+def test_the_day_a_meeting_was_held_is_a_dated_record_of_when_the_work_happened():
+    found = _read("❑ 일 시 : 2024. 6. 28.(금) 10:00", title="2024년 제3차 위원회 개최 계획.hwp")
+    assert [(f.slot, f.value) for f in found] == [("일정 · 일시 · 위원회 개최 계획", "2024-06-28")]
+    # 기간(~)이 적힌 줄은 여전히 읽지 않는다.
+    assert _read("❑ 일 시 : 2024. 6. 4.(화) ~ 6. 7.(금)") == [] or all(
+        f.value != "2024-06-07" for f in _read("❑ 일 시 : 2024. 6. 4.(화) ~ 6. 7.(금)"))
+
+
+def test_the_captured_document_list_gives_the_dates_the_work_was_really_done():
+    ledger = ("---|---|---|---|---\n"
+              "6423 | 2023.04.03 | 2023년 적극행정 중점과제 선정을 위한 자료 요청 | 고01~고31 | 설정회\n"
+              "7000 | 2023.04.12 | 2023년 적극행정 중점과제 선정(안) 보고 | 설정회 | 정영란")
+    found = _read(ledger, year=2023)
+    assert [(f.value, f.slot.split(" · ", 1)[1].startswith("기안 · ")) for f in found] == [
+        ("2023-04-03", True), ("2023-04-12", True)]
+
+
+def test_a_contact_cell_must_hold_a_person_an_office_or_a_phone():
+    table = ("머리글: 구분 | 담당자 | 연락처\n"
+             "1열: 광역 | 2열: 노정란 팀장 | 3열: 044-205-3293")
+    assert [(f.slot, f.value) for f in _read(table) if f.kind == rc.CONTACT] == [
+        ("담당자 · 광역", "노정란 팀장"), ("연락처 · 광역", "044-205-3293")]
+    kinds = ("머리글: 구분 | 담당자\n1열: 추진분야 | 2열: ◇ 선제적 해결이 필요한 현안 ◇ 혁신·창의적 해법이 필요한 과제")
+    assert [f for f in _read(kinds) if f.kind == rc.CONTACT] == []
 
 
 def test_a_labeled_deadline_is_still_read_by_its_label_once():

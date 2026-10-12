@@ -31,8 +31,12 @@ from . import provenance
 _MARKERS = re.compile(
     r"진짜|최최종|최종본?|수정본?|초안|\(안\)|확정본?|송부용|복사본|사본|"
     r"(?<![A-Za-z])(?:final|copy|rev\s*\d*|ver\s*\.?\s*\d+(?:\.\d+)*|v\s*\.?\s*\d+(?:\.\d+)*)(?![A-Za-z])|"
-    r"\(\d{1,2}\)|(?<!\d)\d{6}(?!\d)|(?<!\d)\d{8}(?!\d)",
+    r"\(\d{1,2}\)|(?<!\d)\d{6}(?!\d)|(?<!\d)\d{8}(?!\d)|"
+    # 실제 폴더에서 본 꼬리표: '_결재전'·'(결재)', 날짜 '_0107'·'-2024.05.22.', 사본 '-1'·끝의 '_'
+    r"결재\s*전|결재|[_\-](?:0[1-9]|1[0-2])[0-3]\d(?!\d)|[_\-]\d{1,2}$|[_\-]+$",
     re.IGNORECASE)
+_DATE_TAIL = re.compile(r"[_\-]((?:0[1-9]|1[0-2])[0-3]\d)(?!\d)")
+_ASIDE_FOLDER = re.compile(r"^(?:old|bak|backup|백업|이전|구버전)$|[_\s]old$", re.IGNORECASE)
 _FINAL = re.compile(r"최종|확정|(?<![A-Za-z])final(?![A-Za-z])|송부", re.IGNORECASE)
 _JUNK = re.compile(r"[\s_\-.·()\[\]]+")
 
@@ -69,7 +73,7 @@ def rebuild(db, task_id: int | None = None) -> int:
 
 def _rebuild_task(db, task_id: int) -> int:
     rows = db.con.execute(
-        "SELECT d.id, d.filename, d.hash, d.eff_year, d.eff_date, d.eff_date_kind, d.fs_mtime, "
+        "SELECT d.id, d.filename, d.path, d.hash, d.eff_year, d.eff_date, d.eff_date_kind, d.fs_mtime, "
         f"       substr(COALESCE(i.body, ''), 1, {BODY_CHARS}) AS body "
         "FROM task_docs td JOIN documents d ON d.id = td.doc_id "
         "LEFT JOIN document_index i ON i.doc_id = d.id "
@@ -119,8 +123,19 @@ def _when(row) -> str:
     return f"|{row['fs_mtime'] or ''}"
 
 
+def _set_aside(row) -> bool:
+    """전임자가 old·bak 폴더로 치워 둔 판인가."""
+    return bool(_ASIDE_FOLDER.search(Path(row["path"] or "").parent.name.strip("[] ")))
+
+
+def _date_tail(row) -> str:
+    found = _DATE_TAIL.search(Path(row["filename"]).stem)
+    return found.group(1) if found else ""
+
+
 def _store(db, group: list, official: dict) -> None:
-    ordered = sorted(group, key=lambda row: (_when(row), row["id"]))
+    # 치워 둔 판이 먼저(오래된 것), 그다음 이름의 날짜 꼬리표, 그다음 시각.
+    ordered = sorted(group, key=lambda row: (not _set_aside(row), _date_tail(row), _when(row), row["id"]))
     latest, reason, confidence = _candidate(ordered, official)
     group_id = db.con.execute(
         "INSERT INTO version_groups(label, latest_doc_id, latest_reason, confidence) "
@@ -132,6 +147,8 @@ def _store(db, group: list, official: dict) -> None:
             note.append("이름에 최종·확정 표시")
         if row["id"] in official:
             note.append("온나라 등록본")
+        if _set_aside(row):
+            note.append("old·bak 폴더에 치워 둔 판")
         db.con.execute(
             "INSERT OR REPLACE INTO version_members(group_id, doc_id, ordinal, reason) "
             "VALUES (?, ?, ?, ?)", (group_id, row["id"], ordinal, " · ".join(note) or None))
@@ -153,6 +170,13 @@ def _candidate(ordered: list, official: dict) -> tuple[int | None, str, str]:
         return None, "최종 표시가 붙은 판보다 나중에 고친 판이 있습니다.", "low"
     if marked:
         return newest["id"], "최종 표시가 있고 가장 나중에 고친 판", "medium"
+    # 전임자가 스스로 남긴 정리의 흔적은 '최종' 표시만큼의 단서다.
+    kept = [row for row in ordered if not _set_aside(row)]
+    if len(kept) < len(ordered) and len({row["hash"] for row in kept}) == 1:
+        return kept[-1]["id"], "나머지 판은 old·bak 폴더에 치워져 있습니다", "medium"
+    tails = [_date_tail(row) for row in ordered]
+    if all(tails) and len(set(tails)) == len(tails):
+        return newest["id"], f"이름의 날짜 꼬리표가 가장 늦은 판({tails[-1][:2]}.{tails[-1][2:]}.)", "medium"
     return newest["id"], "가장 나중에 고친 판", "low"
 
 

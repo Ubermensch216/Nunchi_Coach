@@ -431,6 +431,7 @@ class SettingsDialog(QDialog):
     # ── 시스템 ──────────────────────────────────────────────────────
     def _build_system(self, body: QVBoxLayout) -> None:
         body.addWidget(self._ai_card())
+        body.addWidget(self._pictures_card())
         body.addWidget(self._law_card())
         if bridge_service.current() is not None:
             body.addWidget(self._bridge_card())
@@ -498,6 +499,37 @@ class SettingsDialog(QDialog):
             )
         )
         return card
+
+    def _pictures_card(self) -> Card:
+        """스캔한 문서·화면 캡처를 로컬 AI로 읽는 분량. 한 쪽에 1분쯤 걸려서 정할 수 있어야 한다."""
+        from ...core import pictures
+
+        card = Card(tone="static")
+        card.body.addWidget(section_title("스캔한 문서·화면 캡처 읽기"))
+        card.body.addWidget(muted_label(
+            "글자 레이어가 없는 PDF와 화면 캡처는 로컬 AI가 그림을 보고 읽습니다. 이 PC에서는 한 쪽에 "
+            "1분쯤 걸려서, 분석 한 번에 읽을 쪽수를 정해 둡니다. 못 읽고 남은 것은 다음 분석에서 이어 "
+            "읽습니다. 읽은 글에는 오자가 섞일 수 있어 ‘원본과 대조하세요’가 붙습니다.", small=True))
+        self.picture_pages = QComboBox()
+        self.picture_pages.setMinimumHeight(theme.CONTROL_H)
+        self.picture_pages.setAccessibleName("스캔본·캡처 읽기 분량")
+        options = [("읽지 않음", 0), ("적게 — 한 번에 15쪽", 15),
+                   (f"보통 — 한 번에 {pictures.PAGES_PER_RUN}쪽", pictures.PAGES_PER_RUN),
+                   ("많이 — 한 번에 100쪽", 100), ("남은 것 모두", 100000)]
+        for label, value in options:
+            self.picture_pages.addItem(label, value)
+        stored = self.db.get_meta("vision_pages_per_run")
+        current = int(stored) if stored and stored.lstrip("-").isdigit() else pictures.PAGES_PER_RUN
+        self.picture_pages.setCurrentIndex(
+            next((i for i, (_l, v) in enumerate(options) if v == current), 2))
+        self.picture_pages.currentIndexChanged.connect(self._choose_picture_pages)
+        card.body.addWidget(self.picture_pages)
+        card.body.addWidget(muted_label(
+            "다음 분석부터 적용됩니다. 문서가 PC 밖으로 나가지 않습니다.", small=True))
+        return card
+
+    def _choose_picture_pages(self, _index: int) -> None:
+        self.db.set_meta("vision_pages_per_run", str(int(self.picture_pages.currentData())))
 
     def _law_card(self) -> Card:
         """현행 법령 조회. 이 프로그램에서 유일하게 PC 밖과 통신하는 기능이라 기본은 꺼져 있다."""

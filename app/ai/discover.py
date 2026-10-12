@@ -254,6 +254,8 @@ class FolderTask:
     doc_ids: list[int] = field(default_factory=list)       # 폴더로 정한 문서
     named_ids: list[int] = field(default_factory=list)     # 이름으로 붙인 낱장
     unread: set[int] = field(default_factory=set)
+    round_of: dict[int, str] = field(default_factory=dict)  # 문서 → 회차('2024 하반기')
+    not_documents: int = 0                 # 이 폴더의 그림·글꼴 등 문서로 다루지 않은 파일 수
 
 
 def _folder_plan(db: Database, protected: set[int]) -> list[FolderTask] | None:
@@ -287,6 +289,19 @@ def _folder_plan(db: Database, protected: set[int]) -> list[FolderTask] | None:
     if len(groups) < 2 or foldered < len(rows) * FOLDER_MODE_SHARE:
         return None
 
+    # 업무 폴더 안의, 문서로 다루지 않은 파일(사진·글꼴 등). 업무에 붙이지는 않지만
+    # 있다는 사실은 알린다 — 행사 사진이 수십 장 있는 폴더를 '문서 12건'이라고만
+    # 말하면 후임자가 폴더를 열었을 때 본 것과 다르다.
+    skipped: dict[tuple, int] = {}
+    for row in db.con.execute(
+            "SELECT d.path, s.id AS source_id FROM documents d JOIN sources s ON s.id = d.source_id "
+            "AND s.kind != 'upload' WHERE d.missing_since IS NULL AND d.parse_status = 'skipped'"):
+        if row["source_id"] in trees:
+            placement = trees[row["source_id"]].place(row["path"])
+            if not placement.loose:
+                key = (row["source_id"], placement.task_parts)
+                skipped[key] = skipped.get(key, 0) + 1
+
     labels = {key: members[0][1].label for key, members in groups.items()}
     common = folders.common_tokens(list(labels.values()))
     cores = {key: folders.core(label, common) for key, label in labels.items()}
@@ -309,6 +324,8 @@ def _folder_plan(db: Database, protected: set[int]) -> list[FolderTask] | None:
         task.rounds = sorted({placement.round_key for _, placement in members if placement.round_key})
         task.doc_ids = [row["id"] for row, _ in members]
         task.unread = {row["id"] for row, _ in members if row["parse_status"] not in ("ok", "partial")}
+        task.round_of = {row["id"]: placement.round_key for row, placement in members}
+        task.not_documents = sum(skipped.get(key, 0) for key in keys)
         tasks.append(task)
     if len(tasks) < 2:
         return None
@@ -317,6 +334,7 @@ def _folder_plan(db: Database, protected: set[int]) -> list[FolderTask] | None:
         owner = _owner_by_name(row["filename"], tasks, common)
         if owner is not None:
             owner.named_ids.append(row["id"])
+            owner.round_of[row["id"]] = folders.parse_part(row["filename"].rsplit(".", 1)[0]).round_key
             if row["parse_status"] not in ("ok", "partial"):
                 owner.unread.add(row["id"])
     tasks.sort(key=lambda task: -(len(task.doc_ids) + len(task.named_ids)))
@@ -381,13 +399,17 @@ def _save_folder_discovery(db, result, plan, store, contributions, model) -> Dis
             description += f" 폴더 밖 문서 {len(task.named_ids)}건은 이름을 보고 붙였습니다."
         if task.unread:
             description += f" 본문을 읽지 못한 문서 {len(task.unread)}건은 위치만 보고 붙였습니다."
+        if task.not_documents:
+            description += (f" 이 폴더에는 사진·그림 등 문서로 다루지 않은 파일이 "
+                            f"{task.not_documents}개 더 있습니다.")
         group = Cluster(seed_id=min(every), doc_ids=every)
         task_id = _upsert_task(db, Named(task.name, description), group, confidence="medium")
         read = [doc_id for doc_id in task.doc_ids if doc_id not in task.unread]
-        result.assigned += _attach(db, task_id, read, evidence=FOLDER_EVIDENCE)
+        result.assigned += _attach(db, task_id, read, evidence=FOLDER_EVIDENCE, rounds=task.round_of)
         _attach(db, task_id, [d for d in task.named_ids if d not in task.unread],
-                evidence=NAME_EVIDENCE)
-        _attach(db, task_id, sorted(task.unread), confidence="low", evidence=FOLDER_EVIDENCE)
+                evidence=NAME_EVIDENCE, rounds=task.round_of)
+        _attach(db, task_id, sorted(task.unread), confidence="low", evidence=FOLDER_EVIDENCE,
+                rounds=task.round_of)
         _store_reading(db, task_id, every)
         result.named_by_folder += 1
 
@@ -558,7 +580,7 @@ def _upsert_task(db: Database, named: Named, group: Cluster, confidence: str | N
 
 
 def _attach(db: Database, task_id: int, doc_ids: list[int], confidence: str = "medium",
-            evidence: str | None = None) -> int:
+            evidence: str | None = None, rounds: dict[int, str] | None = None) -> int:
     """문서를 업무에 붙인다. 사용자가 직접 배정한 문서는 건드리지 않는다."""
     if not doc_ids:
         return 0
@@ -572,9 +594,10 @@ def _attach(db: Database, task_id: int, doc_ids: list[int], confidence: str = "m
     }
     targets = [doc_id for doc_id in doc_ids if doc_id not in manual]
     db.con.executemany(
-        "INSERT INTO task_docs(task_id, doc_id, origin, confidence, evidence) "
-        "VALUES (?, ?, 'ai', ?, ?) ON CONFLICT(task_id, doc_id) DO NOTHING",
-        [(task_id, doc_id, confidence, evidence) for doc_id in targets],
+        "INSERT INTO task_docs(task_id, doc_id, origin, confidence, evidence, round_key) "
+        "VALUES (?, ?, 'ai', ?, ?, ?) ON CONFLICT(task_id, doc_id) DO NOTHING",
+        [(task_id, doc_id, confidence, evidence, (rounds or {}).get(doc_id, ""))
+         for doc_id in targets],
     )
     return len(targets)
 
