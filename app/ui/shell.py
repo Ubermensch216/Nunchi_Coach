@@ -1,10 +1,7 @@
-"""애플리케이션 셸 — 상단 띠(메뉴 넷 + 상태) + 본문.
+"""애플리케이션 셸 — 업무·노트북 상단 메뉴와 분석 상태.
 
-메뉴는 넷뿐이다. 각각 후임자의 질문 하나에 대응한다.
-  업무  What + How   내 업무는 뭐고, 뭐부터 읽고, 어떻게 처리하나
-  일정  When         이번 달엔 뭘 해야 하나
-  문서  검증         이 파일이 뭐지, 최신본 맞나
-  노트북 자유 탐색   위 화면에 없는 걸 묻고, 정리해 문서로 남긴다
+주 메뉴는 업무와 노트북이다. 일정·자료는 선택 업무 안에서 보며,
+미분류 자료 점검은 보조 문서 화면에서 연다.
 
 묻는 일은 노트북이 한다. 예전의 '질문' 메뉴는 자료 전체에 한 번 묻고 끝나는
 화면이었다 — 지금은 눈치코치가 파악한 업무와 그 문서를 노트북의 자료로 넣고
@@ -50,8 +47,6 @@ from .views.notebooks import NotebooksView
 # 안다 — 인수인계 도구에서 첫 5분이 그 차이로 갈린다.
 NAV = [
     ("tasks", "tasks", "업무", "내 업무는 무엇인가"),
-    ("calendar", "calendar", "일정", "언제 무엇을 하나"),
-    ("documents", "documents", "문서", "이 파일이 최신본인가"),
     ("notebooks", "ask", "노트북", "파악한 업무와 자료에 묻고, 정리해 남긴다"),
 ]
 
@@ -128,7 +123,7 @@ class AnalysisStatus(QPushButton):
 class TopBar(QWidget):
     """흰 띠 하나에 길과 상태를 담는다.
 
-    왼쪽부터 제품·프로젝트 → 메뉴 넷 → 오른쪽에 지금 상태. 세로 사이드바 대신
+    왼쪽부터 제품·프로젝트 → 업무·노트북 메뉴 → 오른쪽에 지금 상태. 세로 사이드바 대신
     가로 띠를 쓰는 이유는 본문이다 — 노트북이 '출처 | 대화 | 스튜디오' 세 판을
     쓰는데 왼쪽에 메뉴 기둥까지 서면 원문을 대조하기 어려운 폭이 된다.
     메뉴는 하루에 몇 번 누르고 본문은 내내 읽는다.
@@ -347,12 +342,13 @@ class MainWindow(QMainWindow):
         for key in ("tasks", "calendar"):
             view = self.views[key]
             if hasattr(view, "go_documents"):
-                view.go_documents.connect(lambda: self.go("documents"))
+                view.go_documents.connect(self._open_task_documents if key == "tasks" else lambda: self.go("documents"))
 
         # When(일정)과 What(업무)은 서로 되돌아간다 — 일정에서 업무를 열고,
         # 업무 상세에서 일정으로 넘어간다.
-        self.views["tasks"].go_calendar.connect(lambda: self.go("calendar"))
+        self.views["tasks"].go_calendar.connect(self.views["tasks"]._show_schedule)
         self.views["tasks"].open_notebook.connect(self._open_notebook_for_task)
+        self.views["today"].workbox_opener = self.views["tasks"]._open_workbox
         self.views["today"].open_task.connect(self._open_task_from_calendar)
         self.views["today"].changed.connect(self._sync_today)
         self.views["today"].go_tasks.connect(lambda: self.go("tasks"))
@@ -410,6 +406,17 @@ class MainWindow(QMainWindow):
             tasks_view.back()
         self.go("tasks")
 
+    def _open_task_documents(self) -> None:
+        tasks = self.views["tasks"]
+        if tasks._task_id is not None:
+            tasks._switch("docs")
+            return
+        documents = self.views["documents"]
+        documents.unclassified_only.blockSignals(True)
+        documents.unclassified_only.setChecked(True)
+        documents.unclassified_only.blockSignals(False)
+        self.go("documents")
+
     def go(self, key: str) -> None:
         if key == "tasks" and initial_analysis.pending(self.db):
             key = "initial_analysis"
@@ -417,7 +424,7 @@ class MainWindow(QMainWindow):
         if view is None:
             return
         self.stack.setCurrentWidget(view)
-        self.topbar.select("tasks" if key in ("today", "initial_analysis") else key)
+        self.topbar.select("tasks" if key in ("today", "initial_analysis", "calendar", "documents") else key)
         if hasattr(view, "refresh"):
             view.refresh()
         self._sync_handover()
@@ -761,7 +768,12 @@ class MainWindow(QMainWindow):
         """
         self._tick.stop()
         self._knowledge_tick.stop()
+        tasks = self.views.get("tasks")
+        if tasks is not None:
+            tasks.stop()
         runners = [self.runner, self._knowledge]
+        if tasks is not None:
+            runners.extend(dialog._job for dialog in tasks._workboxes.values())
         for view in self.views.values():
             for name in ("_runner", "_summaries", "_warmup", "_ingest", "_studio"):
                 runner = getattr(view, name, None)

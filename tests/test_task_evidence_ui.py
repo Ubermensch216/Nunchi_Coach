@@ -69,7 +69,8 @@ def view(tmp_path: Path, qapp):
 
     widget = TasksView(db)
     yield widget
-    widget.setParent(None)
+    widget.close()
+    widget.deleteLater()
     db.close()
 
 

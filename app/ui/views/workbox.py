@@ -1,6 +1,6 @@
 """준비 작업 창 — 한 업무의 올해 수행 건을 만들고, 실행·승인·산출물을 한 곳에서 본다.
 
-업무 화면의 ‘지금 할 일’ 탭에서 연다. 하는 일은 이렇다.
+업무 화면의 ‘일정·진행’ 탭에서 연다. 하는 일은 이렇다.
 
     ① 연도를 고르고 ‘준비 작업 실행’을 누른다 (수행 건이 만들어진다)
     ② 관련 자료 찾기 → 비교 → 취합 서식 → 체크리스트 초안 → 검증이 차례로 돈다
@@ -61,9 +61,26 @@ def approval_text(pending: dict) -> tuple[str, str, str]:
 
 class WorkboxDialog(QDialog):
     def __init__(self, parent: QWidget | None, db, task_id: int, today: date | None = None,
-                 runner_factory=Runner, run_id: int | None = None, year: int | None = None) -> None:
+                 runner_factory=Runner, run_id: int | None = None, year: int | None = None,
+                 case_id: int | None = None, keep_running_on_close: bool = False) -> None:
         super().__init__(parent)
         self.db, self.task_id = db, task_id
+        chosen_case = db.case(case_id) if case_id is not None else None
+        if case_id is not None and (chosen_case is None or chosen_case["task_id"] != task_id):
+            raise ValueError("다른 업무의 수행 건을 열 수 없습니다")
+        if chosen_case is not None and year is not None and chosen_case["period_year"] != year:
+            raise ValueError("선택한 연도와 수행 건이 다릅니다")
+        self._case_id = case_id
+        self._keep_running_on_close = keep_running_on_close
+        self._case_bound = case_id is not None or run_id is not None
+        self._disposed = False
+        if run_id is not None:
+            chosen_run = db.run(run_id)
+            run_case = db.case(chosen_run["case_id"]) if chosen_run and chosen_run["case_id"] else None
+            if chosen_run is None or chosen_run["task_id"] != task_id or run_case is None or (case_id is not None and chosen_run["case_id"] != case_id) or (year is not None and run_case["period_year"] != year):
+                raise ValueError("선택한 업무·연도·수행 건과 다른 실행입니다")
+            year = run_case["period_year"]
+            self._case_id = run_case["id"]
         self.today = today or date.today()
         self._factory = runner_factory
         self._run_id: int | None = None
@@ -87,8 +104,9 @@ class WorkboxDialog(QDialog):
         start.addWidget(QLabel("대상 연도"))
         self.year = QSpinBox()
         self.year.setRange(2000, 2100)
-        self.year.setValue(year or self.today.year)
+        self.year.setValue(year or (chosen_case["period_year"] if chosen_case else self.today.year))
         self.year.setAccessibleName("대상 연도")
+        self.year.setEnabled(not keep_running_on_close and not self._case_bound)
         start.addWidget(self.year)
         self.run_button = QPushButton("준비 작업 실행")
         self.run_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -117,6 +135,7 @@ class WorkboxDialog(QDialog):
         close.setObjectName("Quiet")
         close.clicked.connect(self.accept)
         outer.addWidget(close, 0, Qt.AlignmentFlag.AlignRight)
+        self.year.valueChanged.connect(self._year_changed)
         self.refresh()
         if run_id is not None:          # 제안을 받아들여 열렸다 — 만들어 둔 실행을 곧바로 돌린다
             self._run_id = run_id
@@ -126,12 +145,17 @@ class WorkboxDialog(QDialog):
     def start(self) -> None:
         if self._busy:
             return
-        _, run_id = catalog.prepare(self.db, self.task_id, self.year.value(), today=self.today)
+        if self._case_id is not None:
+            _, run_id = catalog.start_plan(self.db, catalog.RECURRING_PREP, self._case_id, today=self.today)
+        else:
+            _, run_id = catalog.prepare(self.db, self.task_id, self.year.value(), today=self.today)
         self._run_id = run_id
+        self._case_id = self.db.run(run_id)["case_id"]
         self._run(run_id)
 
     def _run(self, run_id: int) -> None:
         self._busy = True
+        self.year.setEnabled(False)
         self.run_button.setEnabled(False)
         self.cancel_button.setVisible(True)
         self.status.setText("실행하는 중…")
@@ -146,10 +170,12 @@ class WorkboxDialog(QDialog):
     def _on_done(self, run_id: int, state: str, message: str) -> None:
         self._finish_ui()
         self.status.setText(message or RUN_LABEL.get(state, state))
-        self.refresh()
+        if not self._disposed:
+            self.refresh()
 
     def _finish_ui(self) -> None:
         self._busy = False
+        self.year.setEnabled(not self._keep_running_on_close and not self._case_bound)
         self.run_button.setEnabled(True)
         self.cancel_button.setVisible(False)
 
@@ -157,10 +183,24 @@ class WorkboxDialog(QDialog):
         Runner(self.db, today=self.today).decide(step_id, approved)
         self._run(self._current_run()["id"])
 
+    def _year_changed(self, _year):
+        self._case_id = None
+        self._run_id = None
+        self.refresh()
+
     def _current_run(self):
-        runs = self.db.runs(task_id=self.task_id)
+        case_id = self._case_id
+        if case_id is None:
+            default = next((c for c in self.db.cases(task_id=self.task_id)
+                            if c["period_year"] == self.year.value() and not c["label"]), None)
+            if default is None:
+                return None
+            case_id = default["id"]
+        runs = self.db.runs(task_id=self.task_id, case_id=case_id)
+        runs = [run for run in runs if (case := self.db.case(run["case_id"])) is not None
+                and case["task_id"] == self.task_id and case["period_year"] == self.year.value()]
         if self._run_id is not None:
-            chosen = self.db.run(self._run_id)
+            chosen = next((run for run in runs if run["id"] == self._run_id), None)
             if chosen is not None:
                 return chosen
         return runs[0] if runs else None
@@ -324,5 +364,6 @@ class WorkboxDialog(QDialog):
         self.db.set_check_state(item_id, "done" if on else "todo")
 
     def done(self, result: int) -> None:
-        self._job.stop()
+        if not self._keep_running_on_close:
+            self._job.stop()
         super().done(result)

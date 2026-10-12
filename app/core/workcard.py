@@ -110,6 +110,9 @@ FOUND_NOTE = ("이름표 없이 문장으로만 적혀 있어 AI가 골라낸 �
 
 def item_label(item: dict) -> str:
     """'기한 · 회신기한', '제출처'. 종류와 이름표가 같은 말이면 한 번만 적는다."""
+    slot = item["slot"] or ""
+    if slot.startswith("user-") and slot[5:].isdigit():
+        return rc.KIND_LABEL.get(item["kind"], item["kind"])
     if item["kind"] == rc.RECORD:
         return _RECORD_LABEL.get(item["slot"], rc.KIND_LABEL[rc.RECORD])
     if item["kind"] == rc.STATEMENT:

@@ -19,8 +19,13 @@
 from __future__ import annotations
 
 from datetime import date
-from PySide6.QtCore import Qt, Signal
+from .work_workspace import WorkspaceMixin
+from ...core import task_manual
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import (
+    QApplication,
+    QScrollArea,
+    QSplitter,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -99,11 +104,10 @@ STAGES = [
 # 상세 화면의 네 질문. 라벨은 개념 이름이 아니라 사용자가 실제로 품는 질문이다.
 WORK, READ, WHEN, HOW, DOCS = "work", "read", "when", "how", "docs"
 DETAIL_TABS = (
-    (WORK, "지금 할 일"),
-    (READ, "먼저 읽을 문서"),
-    (WHEN, "언제 하는 일인가"),
-    (HOW, "어떻게 처리했나"),
-    (DOCS, "이 업무의 문서"),
+    ("guide", "업무 안내"),
+    (WORK, "일정·진행"),
+    (DOCS, "업무 자료"),
+    ("manual", "매뉴얼"),
 )
 # 건강도 판에 세워 둘 업무 수. 넘치면 판이 목록이 되어 '요약'이 아니게 된다.
 HEALTH_ROWS = 5
@@ -144,7 +148,7 @@ DETAIL_HINTS = {
 
 
 
-class TasksView(QWidget):
+class TasksView(WorkspaceMixin, QWidget):
     go_documents = Signal()
     go_calendar = Signal()
     go_attention = Signal()
@@ -157,7 +161,10 @@ class TasksView(QWidget):
         self._task_id: int | None = None   # None이면 목록, 값이 있으면 상세
         self._how_year: dict[int, int] = {}   # task_id -> 사용자가 고른 연도
         self._how_against: dict[int, int] = {}   # task_id -> 견줘 볼 다른 연도
-        self._tab = READ
+        self._tab = "guide"
+        self._init_workspace()
+        self._workboxes = {}
+        self._shutting_down = False
         self._checks_open = False   # 목록 아래 '인계 준비 점검'을 펴 두었는가
         self.setObjectName("Canvas")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -173,12 +180,23 @@ class TasksView(QWidget):
         self.sidebar.task_selected.connect(self.open_task)
         self.sidebar.back_to_home.connect(self.back)
         self.sidebar.hide()
-        outer.addWidget(self.sidebar)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.setChildrenCollapsible(True)
+        self.splitter.addWidget(self.sidebar)
+        outer.addWidget(self.splitter, 1)
 
-        main = QVBoxLayout()
+        self.main_panel = QWidget()
+        main = QVBoxLayout(self.main_panel)
         main.setContentsMargins(0, 0, 0, 0)
         main.setSpacing(0)
-        outer.addLayout(main, 1)
+        self.splitter.addWidget(self.main_panel)
+        self.splitter.setCollapsible(1, False)
+        self.splitter.setStretchFactor(1, 1)
+        sizes = self._ui_state.get("splitter", [240, 900])
+        if not isinstance(sizes, list) or len(sizes) != 2 or not all(isinstance(n, int) and n >= 0 for n in sizes):
+            sizes = [240, 900]
+        self.splitter.setSizes(sizes)
+        self.splitter.splitterMoved.connect(self._save_splitter)
 
         # "지금 무엇을 보고 있는가"는 스크롤을 따라 사라지면 안 된다.
         # 제목·조작·탭을 흰 띠에 고정하고, 그 아래를 회색 본문으로 둔다.
@@ -220,7 +238,7 @@ class TasksView(QWidget):
         self.list_page = Page(max_width=theme.CONTENT_MAX_W)
         self.stack.addWidget(self.list_page)
         self.pages: dict[str, Page] = {}
-        for key, _label in DETAIL_TABS:
+        for key, _label in (*DETAIL_TABS, (READ, ""), (WHEN, ""), (HOW, "")):
             page = Page()
             self.pages[key] = page
             self.stack.addWidget(page)
@@ -238,52 +256,105 @@ class TasksView(QWidget):
         self.drawer.open_original.connect(self._open)
         outer.addWidget(self.drawer)
 
+        for page in [self.list_page, *self.pages.values()]:
+            page.findChild(QScrollArea).verticalScrollBar().valueChanged.connect(self._scroll_changed)
         self.column = self.list_page.column
-        self.refresh()
+        self.refresh(capture=False)
 
     # ── 진입점 ──────────────────────────────────────────────────────
     def set_attention_count(self, count: int) -> None:
         self.attention.setText(f"챙길 일 {count}" if count else "챙길 일")
 
-    def refresh(self) -> None:
-        """분석 중에는 1.5초마다 불린다. 보고 있던 탭을 절대 빼앗지 않는다."""
-        clear_layout(self.head)
+    def closeEvent(self, event) -> None:
+        if not self.stop():
+            event.ignore()
+            QTimer.singleShot(250, self.close)
+            return
+        super().closeEvent(event)
+
+    def _save_splitter(self, *_):
+        self._ui_state["splitter"] = self.splitter.sizes()
+        self._persist()
+
+    def refresh(self, force=False, capture=True) -> None:
+        """자료 갱신 중에도 탭과 열람 위치를 보존한다."""
+        if self._shutting_down:
+            return
+        focused = QApplication.focusWidget()
+        if not force and isinstance(focused, QLineEdit) and self.isAncestorOf(focused):
+            self._refresh_timer.start(500)
+            return
+        if QApplication.activeModalWidget() is not None or QApplication.activePopupWidget() is not None:
+            self._refresh_timer.start(500)
+            return
+        self._refresh_timer.stop()
         tasks = self.db.tasks()
-        if self._task_id is not None and self.db.task(self._task_id):
+        active = {row["id"] for row in tasks}
+        if self._task_id is not None and self._task_id not in active:
+            self._capture_workspace()
+            self._task_id = None
+            self.drawer.dismiss()
+            force = True
+        if not force and self._data_stamp == self._stamp():
+            return
+        if capture and not self._rendering:
+            self._capture_workspace()
+        self._rendering = True
+        self._render_generation += 1
+        clear_layout(self.head)
+        self._ui_state["tasks"] = {key: value for key, value in self._ui_state["tasks"].items() if key in {str(t) for t in active}}
+        if self._task_id is not None:
             self.attention.hide()
             self.sidebar.show()
             self.sidebar.set_tasks(tasks, self._task_id)
             self._render_detail(self._task_id)
         else:
-            self._task_id = None
             self.sidebar.hide()
             self.attention.show()
             self.tabs.setVisible(False)
             self._head_pad.setVisible(True)
             self.stack.setCurrentWidget(self.list_page)
             self.column = self.list_page.reset()
+            self._home_cards = []
             self._render_list()
+        self._data_stamp = self._stamp()
+        self._restore_workspace()
         self.state_changed.emit()
 
     def _switch(self, key: str) -> None:
+        self._capture_workspace()
+        self._rendering = True
+        self._render_generation += 1
         self._tab = key
-        # 다른 탭의 주장을 짚어 둔 근거가 그대로 남으면, 지금 보는 화면의
-        # 근거인 줄 알고 읽는다. 화면이 바뀌면 서랍도 닫는다.
         self.drawer.dismiss()
+        self.tabs.select(key if key in dict(DETAIL_TABS) else WORK if key in (WHEN, HOW) else "guide")
         self.stack.setCurrentWidget(self.pages[key])
+        self._state()["tab"] = key
+        self._persist()
+        self._restore_workspace()
 
     def open_task(self, task_id: int, tab: str | None = None) -> None:
+        if task_id not in {row["id"] for row in self.db.tasks()}:
+            return
+        self._capture_workspace()
         self._task_id = task_id
-        # 자료에서 복원한 내용이 있으면 "지금 할 일"부터, 없으면 "무엇부터 읽나"부터다.
-        # 빈 카드를 첫 화면으로 내밀지 않는다.
-        self._tab = tab or (READ if workcard.build(self.db, task_id).empty else WORK)
+        state = self._state()
+        self._tab = tab or state.get("tab", "guide")
+        if self._tab not in self.pages:
+            self._tab = "guide"
+        state["tab"] = self._tab
+        self._persist()
+        for key, target in (("how_year", self._how_year), ("how_against", self._how_against)):
+            if isinstance(state.get(key), int):
+                target[task_id] = state[key]
         self.drawer.dismiss()
-        self.refresh()
+        self.refresh(force=True, capture=False)
 
     def back(self) -> None:
+        self._capture_workspace()
         self._task_id = None
         self.drawer.dismiss()
-        self.refresh()
+        self.refresh(force=True, capture=False)
 
     # ── 목록 ────────────────────────────────────────────────────────
     def _render_list(self) -> None:
@@ -350,15 +421,19 @@ class TasksView(QWidget):
         today = date.today()
         cycles = self.db.all_cycles()
         soon = [entry for entry in upcoming(cycles, today) if is_now(entry)]
-        self._render_start_here(tasks, progress, tally, cycles, soon)
+        self._home_workspace(tasks, cycles)
 
         # 카드 그리드로 한 화면 조망. 창을 넓히면 열이 늘어난다.
         this_month = {entry.task_id for entry in soon}
         grid = FlowGrid(min_card_width=CARD_MIN_W, max_columns=CARD_COLUMNS,
                         spacing=theme.SP_LG)
-        for row in tasks:
-            grid.add_card(self._task_card(row, row["id"] in this_month))
+        for row in sorted(tasks, key=lambda row: row["id"]):
+            card = self._task_card(row, row["id"] in this_month)
+            self._home_cards.append((row, card))
+            grid.add_card(card)
         self.column.addWidget(grid)
+        self._update_home_filter()
+        self._render_start_here(tasks, progress, tally, cycles, soon)
 
         self._render_health()
         self._render_leftovers(counts)
@@ -688,7 +763,7 @@ class TasksView(QWidget):
         deliverable = ""
         next_act = ""
         if work.todo:
-            deliverable = work.todo[0].get("content", "")
+            deliverable = next((item["content"] for item in work.todo if item["kind"] == reconstruction.OUTPUT), "")
         if work.actions:
             next_act = work.actions[0].get("text", "")
         card = WorkFolderCard(
@@ -794,22 +869,32 @@ class TasksView(QWidget):
         # 스크롤을 내려도 이 줄은 머리 띠에 남는다.
         title_row = QHBoxLayout()
         title_row.setSpacing(theme.SP_SM)
-        title_row.addWidget(view_title(row["name"]))
+        title = view_title(row["name"])
+        title.setWordWrap(True)
+        title_row.addWidget(title, 1)
         title_row.addStretch(1)
+        list_button = QPushButton("업무 목록")
+        list_button.setToolTip("좌측 목록을 접거나 다시 펼칩니다")
+        list_button.clicked.connect(self._toggle_sidebar)
+        action_row = QHBoxLayout()
+        action_row.addWidget(list_button)
+        guide_button = QPushButton("처음부터 안내 보기")
+        guide_button.clicked.connect(self._reset_guide)
+        action_row.addWidget(guide_button)
 
         ask_btn = QPushButton("노트북에서 묻기")
         ask_btn.setObjectName("Quiet")
         ask_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         ask_btn.setToolTip("이 업무의 설명과 근거 문서를 바탕으로 노트북에서 질문하고 정리합니다")
         ask_btn.clicked.connect(lambda _=False, tid=task_id: self.open_notebook.emit(tid))
-        title_row.addWidget(ask_btn)
+        action_row.addWidget(ask_btn)
 
         edit = QPushButton("수정 ▾")
         edit.setObjectName("MenuButton")
         edit.setCursor(Qt.CursorShape.PointingHandCursor)
         edit.setToolTip("업무명·설명을 고치거나 다른 업무와 합치고 나눕니다")
         edit.setMenu(self._edit_menu(task_id, edit))
-        title_row.addWidget(edit)
+        action_row.addWidget(edit)
         state = status.of_task(row)
         if state != status.CONFIRMED:
             approve = QPushButton(CONFIRM_TASK)
@@ -818,8 +903,10 @@ class TasksView(QWidget):
             approve.setToolTip("업무 이름과 문서 묶음이 맞다고 남깁니다. "
                                "다시 분석해도 바뀌지 않습니다")
             approve.clicked.connect(lambda: self._approve(task_id))
-            title_row.addWidget(approve)
+            action_row.addWidget(approve)
         self.head.addLayout(title_row)
+        action_row.addStretch(1)
+        self.head.addLayout(action_row)
 
         # 규모 한 조각과, **예외일 때만** 상태를 한 줄에 둔다.
         #
@@ -849,7 +936,7 @@ class TasksView(QWidget):
             # 무엇이 빠졌는지 말하지 않는 등급은 채근일 뿐이다. 등급 뱃지 대신
             # 빠진 것을 그대로 적는다.
             lacks = " · ".join(check.label for check in report.missing)
-            marks.addWidget(muted_label(f"아직 없는 것 — {lacks}", small=True, wrap=False))
+            marks.addWidget(muted_label(f"아직 없는 것 — {lacks}", small=True))
         marks.addStretch(1)
         self.head.addLayout(marks)
 
@@ -880,27 +967,20 @@ class TasksView(QWidget):
         cycle = self.db.task_cycle(task_id)
         work = workcard.build(self.db, task_id)
         # 확인할 것이 남은 탭은 열어 보기 전에 알려 준다.
-        self.tabs.set_label(WORK, "지금 할 일" + ("  ◐" if work.gaps else ""))
-        # 숫자는 '아직 안 읽은 문서'의 건수다. 읽음 표시를 했는데도 남아 있으면
-        # 할 일이 남은 것처럼 읽힌다. 다 읽으면 0이 되어 숫자가 사라진다.
-        read_marks = self.db.reading_marks()
-        unread = sum(1 for pick in picks if pick["doc_id"] not in read_marks)
-        self.tabs.set_count(READ, "먼저 읽을 문서", unread)
-        self.tabs.set_count(DOCS, "이 업무의 문서", len(docs))
-        # 손댈 곳이 있는 탭은 열어 보기 전에 알려 준다.
-        self.tabs.set_label(
-            WHEN,
-            "언제 하는 일인가"
-            + ("  ◐" if cycle and status.of_cycle(cycle) != status.CONFIRMED else ""),
-        )
-
-        self._render_work(self.pages[WORK].reset(), task_id, work)
+        self.tabs.set_label(WORK, "일정·진행" + ("  ◐" if work.gaps else ""))
+        self.tabs.set_count(DOCS, "업무 자료", len(docs))
+        manual = task_manual.build(self.db, task_id, card=work)
+        self._render_manual(self.pages["guide"].reset(), manual, compact=True)
+        self._render_manual(self.pages["manual"].reset(), manual)
+        column = self.pages[WORK].reset()
+        self._render_schedule_controls(column, task_id)
+        self._render_work(column, task_id, work)
         self._render_reading(self.pages[READ].reset(), picks)
         self._render_when(self.pages[WHEN].reset(), task_id, cycle)
         self._render_how(self.pages[HOW].reset(), task_id)
-        self._render_by_year(self.pages[DOCS].reset(), task_id, docs)
+        self._render_document_browser(self.pages[DOCS].reset(), task_id, docs)
 
-        self.tabs.select(self._tab)
+        self.tabs.select(self._tab if self._tab in dict(DETAIL_TABS) else WORK if self._tab in (WHEN, HOW) else "guide")
         self.stack.setCurrentWidget(self.pages[self._tab])
 
     def _health_of(self, task_id: int):
@@ -1482,10 +1562,12 @@ class TasksView(QWidget):
         return menu
 
     def _change_how_year(self, task_id: int, year: int) -> None:
+        self._data_stamp = None
         self._how_year[task_id] = year
         self.refresh()
 
     def _change_how_against(self, task_id: int, year: int) -> None:
+        self._data_stamp = None
         if year:
             self._how_against[task_id] = year
         else:
@@ -1517,7 +1599,7 @@ class TasksView(QWidget):
         primary = self.db.primary_document(task_id)
         primary_id = primary["id"] if primary else None
 
-        for row in rows[:30]:
+        for row in rows:
             item = ListRow()
             item.row.setSpacing(theme.SP_MD)
 
@@ -1549,11 +1631,6 @@ class TasksView(QWidget):
             )
             item.row.addWidget(more)
             column.addWidget(item)
-
-        if len(rows) > 30:
-            column.addWidget(
-                muted_label(f"… 외 {len(rows) - 30:,}건은 [문서]에서 볼 수 있습니다", small=True)
-            )
 
     # ── 교정 ────────────────────────────────────────────────────────
     # AI가 지식을 만들고, 사람이 지식을 확정한다. 여기 있는 조작이 그
@@ -2131,6 +2208,7 @@ class TasksView(QWidget):
         row.setSpacing(theme.SP_SM)
         row.addWidget(muted_label("확인·보충을 남기는 사람", small=True, wrap=False))
         who = QComboBox()
+        who.setAccessibleName("검토자 역할")
         for key in (workstate.SUCCESSOR, workstate.PREDECESSOR):
             who.addItem(workstate.ROLE_LABEL[key], key)
         who.setCurrentIndex(who.findData(role))
@@ -2282,12 +2360,48 @@ class TasksView(QWidget):
         button.clicked.connect(lambda _=False: self._open_workbox(task_id))
         return button
 
-    def _open_workbox(self, task_id: int) -> None:
+    def _open_workbox(self, task_id: int, year=None, run_id=None, today=None) -> None:
         from .workbox import WorkboxDialog
 
-        dialog = WorkboxDialog(self, self.db, task_id)
-        dialog.exec()
-        self.refresh()
+        state = self._state() if self._task_id == task_id else {}
+        case_id = state.get("case") if self._task_id == task_id else None
+        chosen = self.db.case(case_id) if case_id is not None else None
+        if chosen is None or chosen["task_id"] != task_id:
+            case_id = None
+        elif year is None:
+            year = chosen["period_year"]
+        elif chosen["period_year"] != year:
+            case_id = None
+        if run_id is not None:
+            run = self.db.run(run_id)
+            run_case = self.db.case(run["case_id"]) if run and run["case_id"] else None
+            if run is None or run["task_id"] != task_id or run_case is None or (year is not None and run_case["period_year"] != year):
+                raise ValueError("다른 업무·연도의 실행을 열 수 없습니다")
+            case_id = run["case_id"]
+            year = run_case["period_year"]
+        year = year or state.get("year") or date.today().year
+        key = (task_id, year, case_id)
+        dialog = self._workboxes.get(key)
+        if dialog is None:
+            for candidate in self._workboxes.values():
+                if candidate.task_id != task_id or candidate.year.value() != year:
+                    continue
+                current = candidate._current_run()
+                if (case_id is None and candidate._case_id is None) or (current is not None and current["case_id"] == case_id):
+                    dialog = candidate
+                    break
+        if dialog is None:
+            dialog = WorkboxDialog(self, self.db, task_id, year=year, run_id=run_id, today=today,
+                                   case_id=case_id, keep_running_on_close=True)
+            self._workboxes[key] = dialog
+            dialog._job.done.connect(lambda *_: self.refresh() if not self._shutting_down else None)
+        if not dialog._busy:
+            if run_id is not None:
+                dialog._run_id = run_id
+            dialog.refresh()
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _export_draft(self, task_id: int) -> None:
         """결과 초안 저장. 경로 묻기와 쓰기를 나눈다(보고서 내보내기와 같은 이유)."""
@@ -2330,7 +2444,7 @@ class TasksView(QWidget):
 
     def _toggle_checks(self) -> None:
         self._checks_open = not self._checks_open
-        self.refresh()
+        self.refresh(force=True)
 
 
 class SplitDialog(QDialog):

@@ -62,7 +62,8 @@ def view(db, qapp):
     widget = TasksView(db)
     widget.open_task(1)
     yield widget
-    widget.setParent(None)
+    widget.close()
+    widget.deleteLater()
 
 
 def page(view):
@@ -241,11 +242,11 @@ def test_reviewer_bar_offers_publishing_only_while_the_predecessor_is_reviewing(
 
     assert "검토 인계본 발행" not in buttons()
     assert "전임자가 없어도 됩니다. 함께 볼 수 있을 때만 바꾸세요." in texts(page(view))
-    who = next(c for c in page(view).findChildren(QComboBox))
+    who = next(c for c in page(view).findChildren(QComboBox) if c.accessibleName() == "검토자 역할")
     assert who.currentData() == ws.SUCCESSOR
     view._set_reviewer("김전임", ws.PREDECESSOR)
     assert "검토 인계본 발행" in buttons()
-    assert next(c for c in page(view).findChildren(QComboBox)).currentData() == ws.PREDECESSOR
+    assert next(c for c in page(view).findChildren(QComboBox) if c.accessibleName() == "검토자 역할").currentData() == ws.PREDECESSOR
     view._set_reviewer("이후임", ws.SUCCESSOR)
     assert "검토 인계본 발행" not in buttons()
     assert {"아는 내용 보태기", "단계 보태기"} <= set(buttons())

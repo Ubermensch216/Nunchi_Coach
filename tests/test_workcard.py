@@ -145,11 +145,15 @@ def view(restored, qapp):
     widget = TasksView(restored)
     widget.open_task(1)
     yield widget
-    widget.setParent(None)
+    widget.close()
+    widget.deleteLater()
 
 
-def test_task_opens_on_the_work_tab_with_the_next_action_first(view):
-    assert view._tab == tasks_view.WORK
+def test_task_opens_on_guide_and_work_tab_keeps_the_next_action_first(view):
+    assert view._tab == "guide"
+    assert view.stack.currentWidget() is view.pages["guide"]
+    assert any("집계 자료 준비" in text for text in texts(view.pages["guide"]))
+    view._switch(tasks_view.WORK)
     assert view.stack.currentWidget() is view.pages[tasks_view.WORK]
     shown = texts(view.pages[tasks_view.WORK])
     # 할 수 있는 일이 '다음 행동'의 첫 줄이다 — 이름표 바로 아래에 값으로 선다.

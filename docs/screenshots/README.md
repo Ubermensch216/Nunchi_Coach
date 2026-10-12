@@ -70,3 +70,18 @@
 저장소에 촬영 스크립트는 없습니다. 이번에는 `MainWindow._resume_if_pending`을 막아 분석이 다시 돌지 않게 하고, 화면을 차례로 열어 `grab()`으로 저장하는 일회용 스크립트로 찍었습니다.
 
 캡처는 화면이 이렇게 생겼다는 기록입니다. 실제 사용자의 사용성, 기관 자료에서의 품질, 저사양 PC의 성능을 확인했다는 뜻이 아닙니다. 2026-09-15의 이전 캡처는 [`doc/screenshots/`](../../doc/screenshots/README.md)에 그대로 있습니다.
+
+
+## 2026-10-12 UI01~UI05 촬영
+
+| 파일 | 내용 |
+|---|---|
+| [27-initial-analysis.png](27-initial-analysis.png) | 최초 분석 상태와 결과 진입 |
+| [28-initial-analysis-paused.png](28-initial-analysis-paused.png) | 명시적 중단과 이어서 분석 경로 |
+| [29-work-home.png](29-work-home.png) | 큰 업무 카드·연간 일정·검색 |
+| [30-work-guide.png](30-work-guide.png) | 좌측 업무 목록과 업무 안내 |
+| [31-work-manual.png](31-work-manual.png) | 같은 구조를 사용하는 9개 항목 매뉴얼 |
+| [32-work-home-dark.png](32-work-home-dark.png) | 다크 테마 홈 |
+| [33-work-schedule-large.png](33-work-schedule-large.png) | 1120×720 다크·큰 글자의 일정·진행 |
+
+27~28은 UI01의 합성 분석 상태를 1120×720에 표시한 촬영이다. 29~33은 `.test_runs/capture_work_workspace.py`로 만든 별도 합성 DB를 `TasksView`에 연결해 `QWidget.grab()`으로 저장했다. 6개 업무·30개 문서 메타데이터, 사람이 보탠 항목/절차/메모와 확인된 수행 건 기한을 촬영용으로 넣었다. 문구를 제품 UI에 하드코딩하거나 모델로 생성하지 않았다. 29~32는 1500×1000·기본 글자, 33은 1120×720·큰 글자다. 실제 분석 경로는 별도 `.test_runs/check_ui0205_flow.py`에서 합성 폴더를 `PipelineRunner`로 처리해 확인한다. 실제 기관 데이터·Windows 125/150% 배율·사용성 결과로 해석하지 않는다.

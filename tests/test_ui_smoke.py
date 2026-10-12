@@ -121,9 +121,9 @@ def test_asking_lives_in_the_notebook_not_in_its_own_menu(make_window, db):
 
     _add_docs(db)
     window = make_window(db)
-    assert [key for key, *_ in NAV] == ["tasks", "calendar", "documents", "notebooks"]
+    assert [key for key, *_ in NAV] == ["tasks", "notebooks"]
     assert "ask" not in window.views and "ask" not in window.topbar._buttons
-    assert "Ctrl+4" in window.topbar._buttons["notebooks"].toolTip()
+    assert "Ctrl+2" in window.topbar._buttons["notebooks"].toolTip()
 
 
 def test_window_starts_on_onboarding_when_no_source(make_window, db):
@@ -355,15 +355,15 @@ def test_task_detail_shows_reading_list_with_reasons(make_window, db):
     assert any("2025_행정사무감사" in t for t in texts)
 
 
-def test_task_detail_opens_on_the_reading_tab(make_window, db):
-    """상세는 언제나 '무엇부터 읽나'로 열린다. 탭은 넷이고, 목록에는 없다."""
+def test_task_detail_opens_on_the_guide_tab(make_window, db):
+    """처음 여는 업무는 업무 안내로 열린다. 주 탭은 넷이고 홈에는 없다."""
     task_id = _seed_task(db)
     view = make_window(db).views["tasks"]
     view.open_task(task_id)
 
     assert view.tabs.isVisible() or not view.isVisible()   # 오프스크린 대비
-    assert view._tab == tasks_view.READ
-    assert view.stack.currentWidget() is view.pages[tasks_view.READ]
+    assert view._tab == "guide"
+    assert view.stack.currentWidget() is view.pages["guide"]
 
     view.back()
     assert view.stack.currentWidget() is view.list_page
@@ -391,7 +391,7 @@ def test_task_detail_tabs_carry_counts(make_window, db):
 
     labels = _buttons(view)
     docs = len(db.task_documents(task_id))
-    assert any(f"이 업무의 문서  {docs}" in t for t in labels), labels
+    assert any(f"업무 자료  {docs}" in t for t in labels), labels
 
 
 def test_task_detail_can_return_to_the_list(make_window, db):
@@ -797,7 +797,7 @@ def test_task_detail_how_year_selector_switches_steps(make_window, db, qapp):
 
     from PySide6.QtWidgets import QComboBox
 
-    combo = view.findChild(QComboBox)
+    combo = view.pages[tasks_view.HOW].findChild(QComboBox)
     assert combo is not None
 
     index_2023 = combo.findData(2023)
@@ -1380,15 +1380,15 @@ def test_navigation_lives_in_the_top_bar(make_window, db, qapp):
     qapp.processEvents()
 
     assert [b.text() for b in window.topbar._buttons.values()] == [
-        "업무", "일정", "문서", "노트북"
+        "업무", "노트북"
     ]
     assert not hasattr(window, "sidebar")
     # 메뉴가 답하는 질문은 버리지 않고 툴팁으로 옮겼다.
     assert "내 업무는 무엇인가" in window.topbar._buttons["tasks"].toolTip()
 
-    window.topbar._buttons["documents"].click()
-    assert window.stack.currentWidget() is window.views["documents"]
-    assert window.topbar._buttons["documents"].isChecked()
+    window.topbar._buttons["notebooks"].click()
+    assert window.stack.currentWidget() is window.views["notebooks"]
+    assert window.topbar._buttons["notebooks"].isChecked()
 
     # 본문은 창 폭을 그대로 받는다.
     assert window.stack.width() == window.width()
@@ -1707,3 +1707,20 @@ def test_open_notebook_for_task(make_window, db):
     window._open_notebook_for_task(task_id)
     assert notebooks_view.notebook_id == nb_id_before
     assert len([nb for nb in db.notebooks() if nb["task_id"] == task_id]) == 1
+
+
+def test_task_documents_stay_scoped_and_home_opens_unclassified(make_window, db, qapp):
+    task_id = _seed_task(db)
+    window = make_window(db)
+    view = window.views["tasks"]
+    view.open_task(task_id)
+    qapp.processEvents()
+    view.go_documents.emit()
+    assert window.stack.currentWidget() is view
+    assert view._tab == "docs"
+    view.back()
+    qapp.processEvents()
+    view.go_documents.emit()
+    assert window.stack.currentWidget() is window.views["documents"]
+    assert window.views["documents"].unclassified_only.isChecked()
+    assert window.topbar._buttons["tasks"].isChecked()

@@ -47,8 +47,8 @@ class Entry:
                 self.what)
 
 
-def entries(db) -> list[Entry]:
-    """모든 업무의 일정·기한. 달 → 날 순서."""
+def entries(db, *, keep_task_links: bool = False) -> list[Entry]:
+    """일정·기한, 달 → 날 순서. 업무별 화면에서는 업무 연결을 보존한다."""
     found: list[Entry] = []
     for task in db.tasks():
         for item in db.task_items(task["id"]):
@@ -61,7 +61,7 @@ def entries(db) -> list[Entry]:
                 if entry is not None:
                     found.append(replace(entry, item_id=item["id"], content=item["content"] or "",
                                          confirmed=item["human_state"] in ws.CONFIRMED_BY))
-    return _dedupe(sorted(found, key=lambda e: e.order))
+    return _dedupe(sorted(found, key=lambda e: e.order), keep_task_links=keep_task_links)
 
 
 def for_month(found: list[Entry], task_id: int, month: int) -> list[Entry]:
@@ -116,13 +116,14 @@ def _source(evidence: list[dict], month: int, day: int | None) -> dict | None:
     return evidence[0]
 
 
-def _dedupe(found: list[Entry]) -> list[Entry]:
+def _dedupe(found: list[Entry], *, keep_task_links: bool = False) -> list[Entry]:
     """같은 계획서가 두 업무 폴더에 들어 있거나, 한 계획서가 같은 일정을 요약과 본문에
     다른 말로 적은 경우를 한 줄로 줄인다. 이름이 짧은 쪽을 남긴다."""
     kept: list[Entry] = []
     for entry in found:
         twin = next((index for index, other in enumerate(kept)
-                     if (other.month, other.day, other.when, other.year)
+                     if (not keep_task_links or other.task_id == entry.task_id)
+                     and (other.month, other.day, other.when, other.year)
                      == (entry.month, entry.day, entry.when, entry.year)
                      and _same_line(other.what, entry.what)), None)
         if twin is None:

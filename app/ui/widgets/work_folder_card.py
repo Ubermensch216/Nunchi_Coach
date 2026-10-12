@@ -74,7 +74,7 @@ class WorkFolderCard(QFrame):
 
     @property
     def cover_color(self) -> str:
-        return color_for(self.name)
+        return color_for(str(self.task_id))
 
     def _build_ui(
         self,
@@ -118,23 +118,24 @@ class WorkFolderCard(QFrame):
         title_label.setObjectName("FolderCardTitle")
         title_label.setWordWrap(True)
         title_font = QFont(self.font())
-        title_font.setPointSize(13)
+        title_font.setPointSizeF(self.font().pointSizeF() + 2)
         title_font.setBold(True)
         title_label.setFont(title_font)
         outer.addWidget(title_label)
 
         # 3. 한 줄 설명 (무슨 일인가)
         desc_text = description.strip() if description else "자료에서 분석 중인 업무입니다."
-        desc_label = ElidedLabel(desc_text)
+        desc_label = QLabel(desc_text)
+        desc_label.setWordWrap(True)
         desc_label.setObjectName("FolderCardDesc")
         outer.addWidget(desc_label)
 
         # 4. 주요 결과물 / 다음 행동 (있을 경우)
-        if deliverable or next_action:
-            action_text = deliverable or next_action
-            action_label = ElidedLabel(f"핵심: {action_text}")
-            action_label.setObjectName("FolderCardAction")
-            outer.addWidget(action_label)
+        for caption, text in (("결과물", deliverable), ("다음 행동", next_action)):
+            if text:
+                action_label = ElidedLabel(f"{caption}: {text}")
+                action_label.setObjectName("FolderCardAction")
+                outer.addWidget(action_label)
 
         # 5. 월간 스트립 (언제 하는 일인가)
         outer.addSpacing(2)

@@ -214,6 +214,11 @@ class TodayView(QWidget):
         self.refresh()
 
     def _open_workbox(self, task_id: int, year: int | None, run_id: int | None) -> None:
+        if hasattr(self, "workbox_opener"):
+            self.workbox_opener(task_id, year=year, run_id=run_id, today=self.today())
+            self.changed.emit()
+            self.refresh()
+            return
         from .workbox import WorkboxDialog
 
         dialog = WorkboxDialog(self, self.db, task_id, today=self.today(), run_id=run_id, year=year)
