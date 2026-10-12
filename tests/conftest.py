@@ -86,6 +86,16 @@ def release_closed_qt_objects():
 
 
 @pytest.fixture(autouse=True)
+def motion_reduced_by_default():
+    # 화면 시험은 전환 효과가 도는 중간 상태에 의존하지 않는다. 효과를 확인하는
+    # 시험이 스스로 motion.set_mode("off")로 켠다.
+    from app.ui import motion
+    motion.set_mode("on")
+    yield
+    motion.set_mode("system")
+
+
+@pytest.fixture(autouse=True)
 def deterministic_closed_ollama_port(monkeypatch):
     # 닫힌 포트는 오프라인 실패를 의도한 표본이다. 방화벽의 대기 시간에 의존하지 않는다.
     import httpx

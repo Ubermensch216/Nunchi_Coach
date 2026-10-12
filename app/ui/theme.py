@@ -770,9 +770,39 @@ def stylesheet(text_size: str = "medium") -> str:
     QFrame#WorkFolderCard:focus {{
         border: 2px solid {TEXT};
     }}
+    QFrame#WorkFolderCard[pressed="true"] {{
+        background: {PRIMARY_SOFT};
+        border-color: {PRIMARY};
+    }}
     QFrame#WorkFolderCard QLabel {{
         background: transparent;
     }}
+    /* 업무 화면 좌측 목록. 선택은 색만이 아니라 왼쪽 띠와 굵은 글자로도 갈린다. */
+    QFrame#WorkSidebar {{
+        background: {BG};
+        border: none;
+        border-right: 1px solid {BORDER};
+    }}
+    QListWidget#WorkList {{
+        background: transparent;
+        border: none;
+        outline: none;
+    }}
+    QListWidget#WorkList::item {{
+        padding: {SP_SM}px {SP_MD}px;
+        margin: 1px 0;
+        border-left: 3px solid transparent;
+        border-radius: {RADIUS_SM}px;
+        color: {TEXT};
+    }}
+    QListWidget#WorkList::item:hover {{ background: {BAND}; }}
+    QListWidget#WorkList::item:selected {{
+        background: {PRIMARY_SOFT};
+        border-left: 3px solid {PRIMARY};
+        color: {TEXT};
+        font-weight: 700;
+    }}
+    QListWidget#WorkList:focus {{ border: 1px solid {PRIMARY}; border-radius: {RADIUS}px; }}
     QLabel#FolderCardTitle {{
         font-size: {lead}px;
         font-weight: 700;
@@ -781,6 +811,10 @@ def stylesheet(text_size: str = "medium") -> str:
     QLabel#FolderCardDesc {{
         font-size: {body}px;
         color: {TEXT_MUTED};
+    }}
+    QLabel#FolderCardHint {{
+        font-size: {small}px;
+        font-weight: 600;
     }}
     QLabel#FolderCardAction {{
         font-size: {small}px;

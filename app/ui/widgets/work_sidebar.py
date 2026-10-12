@@ -21,6 +21,7 @@ class WorkSidebar(QFrame):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("WorkSidebar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMinimumWidth(200)
         self._tasks: list[dict] = []
         self._current_task_id: int | None = None
@@ -43,6 +44,7 @@ class WorkSidebar(QFrame):
 
         # 2. 업무 목록
         self.list_widget = QListWidget()
+        self.list_widget.setObjectName("WorkList")
         self.list_widget.setWordWrap(True)
         self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.list_widget.setAccessibleName("업무 목록 · 방향키로 선택")

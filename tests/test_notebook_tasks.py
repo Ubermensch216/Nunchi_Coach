@@ -249,7 +249,7 @@ def test_sources_panel_offers_tasks_and_labels_the_brief(db, work, panel):
                 if panel.source_list.item(i).data(Qt.ItemDataRole.UserRole) == brief.doc_id)
     assert "눈치코치가 정리한 업무" in item.toolTip()
     panel.show_document(brief.doc_id)
-    assert BRIEF_NOTE in [label.text() for label in panel.findChildren(QLabel)]
+    assert any(BRIEF_NOTE in label.text() for label in panel.findChildren(QLabel))
 
 
 def test_sources_panel_flags_a_brief_whose_task_changed(db, work, panel):
@@ -265,3 +265,102 @@ def test_sources_panel_flags_a_brief_whose_task_changed(db, work, panel):
     assert panel.accept_button.text() == "새 정리본 사용" and panel.accept_button.isEnabled()
     panel.set_notebook(work.book, False)                                  # 보관한 노트북은 고칠 수 없으니 묻지 않는다
     assert not panel.source_list.item(0).text().endswith(STALE_BRIEF)
+
+
+# ── 매뉴얼 판본 (UI07) ──────────────────────────────────────────────
+
+def test_version_rises_only_when_content_changes(db, work):
+    from app.core import manual_versions
+    assert manual_versions.current_state(db, work.task)["version"] == 0
+    first = notebook_tasks.add_brief(db, work.book, work.task, Offline())
+    assert manual_versions.latest(db, work.task)["version"] == 1
+    assert manual_versions.current_state(db, work.task)["current"]
+    # 같은 내용을 다시 넣거나 다른 노트북에 넣어도 판본이 늘지 않는다.
+    notebook_tasks.add_brief(db, work.book, work.task, Offline())
+    other = notebook.create(db, "다른 노트북")
+    notebook_tasks.add_brief(db, other, work.task, Offline())
+    assert manual_versions.latest(db, work.task)["version"] == 1
+    db.edit_task_description(work.task, "감사 자료를 9월 말까지 낸다.")
+    state = manual_versions.current_state(db, work.task)
+    assert state["version"] == 1 and not state["current"]
+    second = notebook_tasks.add_brief(db, work.book, work.task, Offline())
+    assert manual_versions.latest(db, work.task)["version"] == 2
+    assert second.doc_id != first.doc_id and db.document(first.doc_id) is not None   # 옛 판 보존
+    assert [r["version"] for r in manual_versions.history(db, work.task)][0] == 2
+
+
+def test_failed_attempt_is_recorded_without_raising_version(db, work, monkeypatch):
+    from app.core import manual_versions, notebook_ingest
+    notebook_tasks.add_brief(db, work.book, work.task, Offline())
+    db.edit_task_description(work.task, "바뀐 설명")
+    monkeypatch.setattr(notebook_ingest, "ingest_file",
+                        lambda *a, **k: notebook_ingest.Ingested("x", "x", status="unreadable", error="읽지 못함"))
+    outcome = notebook_tasks.add_brief(db, work.book, work.task, Offline())
+    assert not outcome.usable
+    state = manual_versions.current_state(db, work.task)
+    assert state["version"] == 1 and "읽지 못함" in state["failure"]
+    assert manual_versions.history(db, work.task)[0]["status"] == "failed"
+
+
+def test_cancelled_attempt_is_not_a_failure(db, work, monkeypatch):
+    from app.core import manual_versions, notebook_ingest
+    monkeypatch.setattr(notebook_ingest, "ingest_file",
+                        lambda *a, **k: notebook_ingest.Ingested("x", "x", status="cancelled"))
+    notebook_tasks.add_brief(db, work.book, work.task, Offline(), should_stop=lambda: True)
+    assert manual_versions.history(db, work.task) == []
+
+
+def test_open_for_task_creates_links_and_refreshes_changed_manual(db, work):
+    first = notebook_tasks.open_for_task(db, work.task, Offline())
+    assert first.created and first.refreshed and not first.warnings
+    linked = {r["doc_id"] for r in notebook.sources(db, first.notebook_id)}
+    assert set(work.docs) <= linked and work.task in notebook_tasks.linked_tasks(db, first.notebook_id)
+    again = notebook_tasks.open_for_task(db, work.task, Offline())
+    assert again.notebook_id == first.notebook_id and not again.created and not again.refreshed
+    db.edit_task_description(work.task, "감사 자료를 9월 말까지 낸다.")
+    third = notebook_tasks.open_for_task(db, work.task, Offline())
+    assert third.refreshed and notebook_tasks.outdated(db, first.notebook_id) == {}
+
+
+def test_open_for_task_reports_brief_failure_but_still_opens(db, work, monkeypatch):
+    def broken(*args, **kwargs):
+        raise RuntimeError("디스크가 가득 찼습니다")
+    monkeypatch.setattr(notebook_tasks, "add_brief", broken)
+    opened = notebook_tasks.open_for_task(db, work.task, Offline())
+    assert opened.created and any("디스크가 가득" in w for w in opened.warnings)
+    assert set(work.docs) <= {r["doc_id"] for r in notebook.sources(db, opened.notebook_id)}
+
+
+def test_open_for_task_rejects_removed_task(db, work):
+    db.con.execute("UPDATE tasks SET not_a_task=1 WHERE id=?", (work.task,))
+    with pytest.raises(ValueError):
+        notebook_tasks.open_for_task(db, work.task, Offline())
+
+
+def test_past_answer_keeps_citing_the_version_it_was_given(db, work):
+    import json
+    old = notebook_tasks.add_brief(db, work.book, work.task, Offline())
+    old_hash = db.document(old.doc_id)["hash"]
+    citations = json.dumps([{"doc_id": old.doc_id, "version_hash": old_hash, "snippet": "기한"}])
+    db.con.execute("INSERT INTO notebook_messages(notebook_id,question,answer,source_snapshot,citations,"
+                   "generation,withheld) VALUES (?,?,?,?,?,?,0)",
+                   (work.book, "기한은?", "9월 30일", json.dumps({str(old.doc_id): old_hash}), citations, "none"))
+    db.edit_task_description(work.task, "감사 자료를 9월 말까지 낸다.")
+    new = notebook_tasks.add_brief(db, work.book, work.task, Offline())
+    assert new.doc_id != old.doc_id
+    message = db.con.execute("SELECT citations FROM notebook_messages").fetchone()
+    cited = json.loads(message["citations"])[0]
+    assert cited["doc_id"] == old.doc_id and cited["version_hash"] == old_hash
+    assert db.document(old.doc_id)["hash"] == old_hash                  # 인용한 판의 글이 그대로
+    assert db.con.execute("SELECT COUNT(*) FROM chunks WHERE doc_id=?", (old.doc_id,)).fetchone()[0] > 0
+
+
+def test_sources_panel_shows_the_brief_version(db, work, panel):
+    notebook_tasks.add_brief(db, work.book, work.task, Offline())
+    panel.set_notebook(work.book, True)
+    item = panel.source_list.item(0)
+    assert "판본 1" in item.toolTip()
+    db.edit_task_description(work.task, "감사 자료를 9월 말까지 낸다.")
+    notebook_tasks.add_brief(db, work.book, work.task, Offline())
+    panel.refresh(force=True)
+    assert "판본 2" in panel.source_list.item(0).toolTip()

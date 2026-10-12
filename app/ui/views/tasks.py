@@ -51,6 +51,7 @@ from ...core import continuity, handover_release, reconstruction, workcard, work
 from ...core.output_policy import UnsafeOutputError, safe_text_writer
 from ...db import Database
 from .. import icons, stages, theme
+from ..motion import MotionController
 from ..widgets import (
     MORE,
     Badge,
@@ -163,6 +164,8 @@ class TasksView(WorkspaceMixin, QWidget):
         self._how_against: dict[int, int] = {}   # task_id -> 견줘 볼 다른 연도
         self._tab = "guide"
         self._init_workspace()
+        self.motion = MotionController(self)
+        self._reveal_kind = None   # 사용자가 화면을 옮겼을 때만 새 본문을 짧게 나타낸다
         self._workboxes = {}
         self._shutting_down = False
         self._checks_open = False   # 목록 아래 '인계 준비 점검'을 펴 두었는가
@@ -319,6 +322,7 @@ class TasksView(WorkspaceMixin, QWidget):
             self._render_list()
         self._data_stamp = self._stamp()
         self._restore_workspace()
+        self._reveal_body()
         self.state_changed.emit()
 
     def _switch(self, key: str) -> None:
@@ -332,11 +336,20 @@ class TasksView(WorkspaceMixin, QWidget):
         self._state()["tab"] = key
         self._persist()
         self._restore_workspace()
+        self.motion.reveal(self.pages[key], "tab")
+
+    def _reveal_body(self) -> None:
+        kind, self._reveal_kind = self._reveal_kind, None
+        if kind is None:
+            self.motion.cancel()   # 자료 갱신처럼 사용자가 옮기지 않은 재조립에는 움직임이 없다
+        else:
+            self.motion.reveal(self.stack.currentWidget(), kind)
 
     def open_task(self, task_id: int, tab: str | None = None) -> None:
         if task_id not in {row["id"] for row in self.db.tasks()}:
             return
         self._capture_workspace()
+        self._reveal_kind = "select" if self._task_id is not None else "enter"
         self._task_id = task_id
         state = self._state()
         self._tab = tab or state.get("tab", "guide")
@@ -353,6 +366,7 @@ class TasksView(WorkspaceMixin, QWidget):
     def back(self) -> None:
         self._capture_workspace()
         self._task_id = None
+        self._reveal_kind = "select"
         self.drawer.dismiss()
         self.refresh(force=True, capture=False)
 

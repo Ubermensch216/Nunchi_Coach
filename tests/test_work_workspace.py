@@ -498,3 +498,50 @@ def test_destroying_workspace_cancels_pending_restore(project, qapp, close_first
     pending.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     settle(qapp)
+
+
+def test_manual_tab_shows_notebook_version_state_without_creating_one(project, qapp):
+    from app.core import manual_versions
+    db, view = project
+    view.open_task(1, 'manual')
+    settle(qapp)
+    assert '아직 노트북에 넣은 판이 없습니다' in words(view.pages['manual'])
+    assert manual_versions.latest(db, 1) is None          # 열람만으로 판본을 만들지 않는다
+    db.con.execute("INSERT INTO manual_versions(task_id,version,digest,status) VALUES (1,3,'old','ok')")
+    view.refresh(force=True)
+    settle(qapp)
+    text = words(view.pages['manual'])
+    assert '판본 3' in text and '업무 내용이 바뀌었습니다' in text
+    assert '새 판을 노트북에 넣기' in [b.text() for b in view.pages['manual'].findChildren(QPushButton)]
+    assert '판본·노트북' not in words(view.pages['guide'])    # 안내에는 이력 카드를 싣지 않는다
+
+
+def _linked_project(project):
+    from app.core.knowledge import projection
+    db, view = project
+    db.con.execute("INSERT INTO task_items(task_id,kind,slot,content,basis_state,applicability) "
+                   "VALUES (1,'recipient','recipient','복지과','stated','past')")
+    projection.project_task(db, 1)
+    return db, view
+
+
+def test_link_card_is_hidden_until_flag_and_decisions_do_not_touch_sources(project, qapp):
+    from app.core.knowledge import review
+    db, view = _linked_project(project)
+    view.open_task(1, 'manual')
+    settle(qapp)
+    assert '연결 근거' not in words(view.pages['manual'])       # 기본은 꺼짐 — 인계 v2 전 내부 사용
+    db.set_meta(review.FLAG, '1')
+    view.refresh(force=True)
+    settle(qapp)
+    text = words(view.pages['manual'])
+    assert '연결 근거' in text and '제출처 · 복지과' in text and '확인 전' in text
+    before = [tuple(r) for r in db.con.execute('SELECT * FROM task_items ORDER BY id')]
+    buttons = {b.text(): b for b in view.pages['manual'].findChildren(QPushButton)}
+    buttons['아님'].click()
+    settle(qapp)
+    assert '아니라고 거절함' in words(view.pages['manual'])
+    assert [tuple(r) for r in db.con.execute('SELECT * FROM task_items ORDER BY id')] == before
+    next(b for b in view.pages['manual'].findChildren(QPushButton) if b.text() == '되돌리기').click()
+    settle(qapp)
+    assert '확인 전' in words(view.pages['manual'])

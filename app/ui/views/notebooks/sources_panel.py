@@ -344,6 +344,7 @@ class SourcesPanel(Panel):
             return
         self._signature = signature
         current = self._current_doc()
+        versions = self._brief_versions()
         self.source_list.blockSignals(True)
         self.source_list.clear()
         for row in rows:
@@ -355,7 +356,8 @@ class SourcesPanel(Panel):
             item.setData(Qt.ItemDataRole.UserRole + 1, state)
             reason = row["parse_error"] or row["parse_note"] or ""
             item.setToolTip("\n".join(part for part in (
-                row["filename"], ORIGIN_LABELS.get(row["origin"], row["origin"]), state, reason) if part))
+                row["filename"], ORIGIN_LABELS.get(row["origin"], row["origin"]),
+                f"판본 {versions[row['doc_id']]}" if row["doc_id"] in versions else "", state, reason) if part))
             # 보관한 노트북에서도 원문은 읽을 수 있어야 한다. 선택만 잠근다.
             # QListView가 체크 표시 영역을 예약해 위젯을 밀어내지 않도록 ItemIsUserCheckable 플래그는 주지 않는다.
             item.setCheckState(Qt.CheckState.Checked if row["selected"] else Qt.CheckState.Unchecked)
@@ -754,13 +756,23 @@ class SourcesPanel(Panel):
         self.reader_column.addWidget(card)
         self.stack.setCurrentIndex(1)
 
+    def _brief_versions(self) -> dict[int, int]:
+        """업무 정리본 문서 → 판본 번호(core/manual_versions.py). 기록이 없으면 비어 있다."""
+        if self.notebook_id is None:
+            return {}
+        return {r[0]: r[1] for r in self.db.con.execute(
+            "SELECT mv.doc_id, MAX(mv.version) FROM manual_versions mv "
+            "WHERE mv.status='ok' AND mv.notebook_id=? AND mv.doc_id IS NOT NULL GROUP BY mv.doc_id",
+            (self.notebook_id,))}
+
     def _render_guide(self, doc_id: int, document) -> None:
         """자료 안내 — 요약·주제어와, 읽는 방식에 대한 주의."""
         row = next((r for r in self.rows() if r["doc_id"] == doc_id), None)
         if row is None:
             return
         if row["origin"] == notebook_tasks.ORIGIN:
-            self.reader_column.addWidget(UnknownBlock(BRIEF_NOTE))
+            version = self._brief_versions().get(doc_id)
+            self.reader_column.addWidget(UnknownBlock(BRIEF_NOTE + (f" 업무 정리본 판본 {version}." if version else "")))
         if document["parse_note"]:
             self.reader_column.addWidget(UnknownBlock(document["parse_note"]))
         topics = [t for t in json.loads(row["topics"] or "[]") if isinstance(t, str)]

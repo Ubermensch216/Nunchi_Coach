@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -262,15 +263,22 @@ def add_brief(db, notebook_id: int, task_id: int, client=None,
     이 노트북에 같은 업무의 옛 정리본이 있으면 새 판으로 바꾼다. 옛 글은
     보관소에 남는다 — 그 글을 근거로 받은 지난 답을 다시 확인할 수 있어야 한다.
     """
+    from . import manual_versions
     task = _task(db, task_id)
     filename = brief_filename(task["name"])
+    data = brief_markdown(db, task_id).encode("utf-8")
     with TemporaryDirectory() as folder:
         path = Path(folder) / filename
-        path.write_bytes(brief_markdown(db, task_id).encode("utf-8"))
+        path.write_bytes(data)
         outcome = notebook_ingest.ingest_file(db, notebook_id, path, client, on_phase, should_stop,
                                               origin=ORIGIN)
     if outcome.doc_id is None or not outcome.usable:
+        # 실패는 판본을 올리지 않고 사유만 남긴다. 사용자가 멈춘 것은 실패가 아니다.
+        if not should_stop():
+            manual_versions.record_failure(db, task_id, notebook_id,
+                                           outcome.error or outcome.note or outcome.status or "알 수 없는 사유")
         return outcome
+    manual_versions.record(db, task_id, notebook_id, outcome.doc_id, hashlib.sha256(data).hexdigest())
     with db.transaction():
         old = db.con.execute(
             "SELECT doc_id, selected FROM notebook_sources "
@@ -320,3 +328,57 @@ def outdated(db, notebook_id: int) -> dict[int, int]:
         if brief_digest(db, row["task_id"]) != row["hash"]:
             stale[row["doc_id"]] = row["task_id"]
     return stale
+
+
+# ── 업무의 노트북 열기 ──────────────────────────────────────────────
+
+@dataclass
+class Opened:
+    notebook_id: int
+    created: bool = False
+    refreshed: bool = False
+    warnings: list[str] = field(default_factory=list)
+
+
+def open_for_task(db, task_id: int, client=None) -> Opened:
+    """업무의 노트북을 찾거나 만들고, 매뉴얼 정리본과 업무 문서를 연결한다.
+
+    만든 직후이거나 넣어 둔 정리본의 업무 내용이 달라졌으면 새 판으로 바꾼다.
+    일부가 실패해도 노트북은 연다 — 무엇이 빠졌는지는 warnings로 알려, 조용히
+    빈 노트북을 보여 주지 않는다.
+    """
+    task = _task(db, task_id)
+    books = [nb for nb in notebook.overview(db) if not nb["archived"]]
+    target = next((nb for nb in books if nb["task_id"] == task_id), None)         or next((nb for nb in books if nb["title"] == task["name"]), None)
+    created = target is None
+    if created:
+        notebook_id = notebook.create(db, title=task["name"], task_id=task_id)
+    else:
+        notebook_id = target["id"]
+        if not target["task_id"]:
+            with db.transaction():
+                db.con.execute("UPDATE notebooks SET task_id=? WHERE id=?", (task_id, notebook_id))
+    opened = Opened(notebook_id, created=created)
+    stale = created or task_id not in linked_tasks(db, notebook_id)         or task_id in set(outdated(db, notebook_id).values())
+    if stale:
+        try:
+            outcome = add_brief(db, notebook_id, task_id, client)
+            if outcome.usable:
+                opened.refreshed = True
+            else:
+                opened.warnings.append("매뉴얼 정리본을 넣지 못했습니다: "
+                                       + (outcome.error or outcome.note or outcome.status))
+        except Exception as exc:   # 정리본 실패가 노트북 열기를 막지 않는다
+            from . import diagnostics, manual_versions
+            diagnostics.record("notebook.task.brief.error", exc)
+            manual_versions.record_failure(db, task_id, notebook_id, f"{type(exc).__name__}: {exc}")
+            opened.warnings.append(f"매뉴얼 정리본을 넣지 못했습니다: {type(exc).__name__}: {exc}")
+    if created:
+        try:
+            doc_ids = [row["id"] for row in db.task_documents(task_id)
+                       if row["hash"] and not row["missing_since"] and row["parse_status"] in ("ok", "partial")]
+            if doc_ids:
+                add_documents(db, notebook_id, doc_ids)
+        except Exception as exc:
+            opened.warnings.append(f"업무 문서를 연결하지 못했습니다: {type(exc).__name__}: {exc}")
+    return opened

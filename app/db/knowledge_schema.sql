@@ -270,3 +270,16 @@ END;
 CREATE TRIGGER IF NOT EXISTS kg_links_no_update BEFORE UPDATE ON kg_claim_links BEGIN
     SELECT RAISE(ABORT,'kg claim links are immutable');
 END;
+-- 다른 프로젝트에서 가져온 사람 판정의 처리 기록. 적용하지 못한 판정도 지우지 않고 보존한다.
+CREATE TABLE IF NOT EXISTS kg_imported_decisions (
+    source_uuid TEXT PRIMARY KEY,
+    source_project TEXT NOT NULL DEFAULT '',
+    seq INTEGER NOT NULL,
+    payload TEXT NOT NULL CHECK(json_valid(payload)),
+    state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','applied','kept_local')),
+    local_decision TEXT REFERENCES kg_decisions(uuid),
+    note TEXT NOT NULL DEFAULT '',
+    imported_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_kg_imported_state ON kg_imported_decisions(state, seq);
+CREATE INDEX IF NOT EXISTS idx_kg_generation_partition ON kg_generations(partition_key);

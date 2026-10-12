@@ -90,6 +90,9 @@ EXAMPLES = [
 
 # 답변 칸. 너무 넓으면 한 줄이 길어져 다음 줄 첫 글자를 눈이 못 찾고,
 # 너무 좁으면 문장이 두세 낱말마다 끊긴다.
+# 연도 기준 — 검색 범위(search/query.py year_basis)와 같은 값이다.
+YEAR_BASES = (("문서 날짜 기준", "document_date"), ("실적 연도 기준", "performance"),
+              ("평가 연도 기준", "evaluation"), ("제출 연도 기준", "submitted"))
 ANSWER_MIN_W = 380
 ANSWER_MAX_W = 560
 RECENT_LIMIT = 5
@@ -222,12 +225,22 @@ class AskView(QWidget):
         self.year_scope = QComboBox()
         self.year_scope.setToolTip("특정 연도의 자료만 근거로 삼습니다")
         self.year_scope.setMinimumWidth(160)
+        # 같은 '2025년'도 문서를 쓴 해와 실적·평가·제출의 해가 다르다. 기준을 고를 수 있어야
+        # 작년 실적 보고서를 올해 쓴 문서로 잘못 걸러 내지 않는다.
+        self.year_basis = QComboBox()
+        self.year_basis.setAccessibleName("연도 기준")
+        self.year_basis.setToolTip("연도를 무엇으로 셀지 고릅니다. 문서에 그 연도가 적혀 있을 때만 걸러 냅니다.")
+        for label, value in YEAR_BASES:
+            self.year_basis.addItem(label, value)
+        self.year_basis.currentIndexChanged.connect(self._basis_changed)
+        self.year_scope.currentIndexChanged.connect(lambda *_: self._sync_basis())
         scope_row.addWidget(
             muted_label("찾는 범위", small=True, wrap=False), 0,
             Qt.AlignmentFlag.AlignVCenter,
         )
         scope_row.addWidget(self.task_scope)
         scope_row.addWidget(self.year_scope)
+        scope_row.addWidget(self.year_basis)
         scope_row.addStretch(1)
         head.addLayout(scope_row)
 
@@ -390,22 +403,39 @@ class AskView(QWidget):
             index = combo.findData(chosen)
             combo.setCurrentIndex(index if index >= 0 else 0)
             combo.blockSignals(False)
+        self._sync_basis()
 
     def _task_items(self) -> list[tuple[str, int]]:
         return [(row["name"], row["id"]) for row in self.db.tasks()]
 
     def _year_items(self) -> list[tuple[str, int]]:
-        rows = self.db.con.execute(
-            "SELECT DISTINCT eff_year AS y FROM documents "
-            "WHERE eff_year IS NOT NULL AND missing_since IS NULL ORDER BY y DESC"
-        ).fetchall()
+        basis = self.year_basis.currentData() or "document_date"
+        if basis == "document_date":
+            rows = self.db.con.execute(
+                "SELECT DISTINCT eff_year AS y FROM documents "
+                "WHERE eff_year IS NOT NULL AND missing_since IS NULL ORDER BY y DESC"
+            ).fetchall()
+        else:
+            rows = self.db.con.execute(
+                "SELECT DISTINCT y.year AS y FROM doc_years y JOIN documents d ON d.id = y.doc_id "
+                "WHERE y.kind = ? AND d.missing_since IS NULL ORDER BY y DESC", (basis,)
+            ).fetchall()
         return [(f"{row['y']}년", row["y"]) for row in rows]
+
+    def _basis_changed(self) -> None:
+        self._reload_scopes()
+        self._sync_basis()
+
+    def _sync_basis(self) -> None:
+        # 연도를 고르지 않았으면 기준은 쓰이지 않는다. 눌러도 되는 것처럼 두지 않는다.
+        self.year_basis.setEnabled(self.year_scope.currentData() is not None)
 
     def _chosen_scope(self) -> QueryScope:
         year = self.year_scope.currentData()
         return QueryScope(
             years=[year] if year is not None else [],
             task_id=self.task_scope.currentData(),
+            year_basis=self.year_basis.currentData() if year is not None else "document_date",
         )
 
     def _readiness(self) -> tuple[bool, str]:

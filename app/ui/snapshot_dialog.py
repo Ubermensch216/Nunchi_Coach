@@ -228,6 +228,13 @@ class SnapshotDialog(QDialog):
         ]
         if result["kept_local"]:
             lines.append(f"여기서 이미 고치거나 수행한 {result['kept_local']}건은 그대로 두었습니다.")
+        decisions = result.get("decisions")
+        if decisions:
+            line = (f"연결 근거에 대한 사람의 판정 {decisions['received']}건을 받았습니다 — "
+                    f"적용 {decisions['applied']}건 · 대상을 아직 못 찾음 {decisions['pending']}건")
+            if decisions["kept_local"]:
+                line += f" · 여기의 더 나중 판정을 지킴 {decisions['kept_local']}건"
+            lines.append(line + ". 못 찾은 판정은 분석이 끝난 뒤 다시 잇습니다.")
         lines.append("자료 폴더를 지정하고 분석을 돌리면 아직 못 찾은 근거를 다시 찾습니다. "
                      "가져왔다는 것이 내용을 모두 확인했다는 뜻은 아닙니다.")
         return "\n".join(lines)

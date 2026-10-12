@@ -33,7 +33,7 @@ from ..core import initial_analysis
 from ..db import Database
 from ..jobs import PipelineRunner
 from ..jobs.knowledge_task import KnowledgeRunner
-from . import icons, stages, theme
+from . import icons, motion, stages, theme
 from .views.calendar import CalendarView
 from .views.documents import DocumentsView
 from .views.onboarding import OnboardingView
@@ -100,7 +100,7 @@ class AnalysisStatus(QPushButton):
             if reset or target != self._target:
                 self.animation.stop()
                 self.progress.setRange(0, 1000)
-                if reset or target < self.progress.value():
+                if reset or target < self.progress.value() or motion.is_reduced():
                     self.progress.setValue(target)
                 else:
                     self.animation.setStartValue(max(0, self.progress.value()))
@@ -626,47 +626,18 @@ class MainWindow(QMainWindow):
         self.views["tasks"].open_task(task_id)
 
     def _open_notebook_for_task(self, task_id: int) -> None:
-        """업무 상세에서 '노트북에서 묻기'를 눌렀을 때 해당 업무의 기본 노트북을 열거나 생성 (개편계획서 §7)."""
-        task = self.db.task(task_id)
-        if not task:
-            return
-        from ..core import notebook, notebook_tasks
-        # 업무와 연결되었거나 이름이 일치하는 열려 있는 노트북 조회
-        notebooks = self.db.notebooks() if hasattr(self.db, "notebooks") else notebook.overview(self.db)
-        target_nb = next(
-            (nb for nb in notebooks if nb["task_id"] == task_id and not nb["archived"]),
-            None,
-        )
-        if not target_nb:
-            target_nb = next(
-                (nb for nb in notebooks if nb["title"] == task["name"] and not nb["archived"]),
-                None,
-            )
-        if not target_nb:
-            target_nb_id = notebook.create(self.db, title=task["name"], task_id=task_id)
-            try:
-                notebook_tasks.add_brief(self.db, target_nb_id, task_id)
-            except Exception:
-                pass
-            try:
-                doc_ids = [
-                    row["id"] for row in self.db.task_documents(task_id)
-                    if row["hash"] and not row["missing_since"] and row["parse_status"] in ("ok", "partial")
-                ]
-                if doc_ids:
-                    notebook_tasks.add_documents(self.db, target_nb_id, doc_ids)
-            except Exception:
-                pass
-        else:
-            target_nb_id = target_nb["id"]
-            if not target_nb["task_id"]:
-                try:
-                    self.db.con.execute("UPDATE notebooks SET task_id=? WHERE id=?", (task_id, target_nb_id))
-                except Exception:
-                    pass
+        """업무 상세에서 '노트북에서 묻기'를 눌렀을 때 해당 업무의 노트북을 열거나 생성 (개편계획서 §7)."""
+        from PySide6.QtWidgets import QMessageBox
 
+        from ..core import notebook_tasks
+        try:
+            opened = notebook_tasks.open_for_task(self.db, task_id)
+        except ValueError:   # 그사이 업무가 없어졌거나 합쳐졌다
+            return
+        if opened.warnings:
+            QMessageBox.warning(self, "노트북에 일부만 넣었습니다", chr(10).join(opened.warnings))
         self.go("notebooks")
-        self.views["notebooks"].open_notebook(target_nb_id)
+        self.views["notebooks"].open_notebook(opened.notebook_id)
 
     def _open_settings(self) -> None:
         from .views.settings import SettingsDialog

@@ -8,7 +8,8 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel,
                               QLineEdit, QPushButton, QScrollArea, QVBoxLayout)
 
-from ...core import work_schedule, workcard
+from ...core import manual_versions, work_schedule, workcard, workstate as ws
+from ...core.knowledge import review
 from ..widgets import Card, Evidence, WorkYearDashboard, clear_layout, muted_label, section_title
 
 STATE_KEY = 'ui.work_workspace.v1'
@@ -223,6 +224,10 @@ class WorkspaceMixin:
                 button.clicked.connect(lambda: self._switch('manual'))
                 card.body.addWidget(button)
             column.addWidget(card)
+        if not compact:
+            column.addWidget(self._version_card(manual.task_id))
+            if review.enabled(self.db):
+                column.addWidget(self._link_card(manual.task_id))
         shortcuts = QHBoxLayout()
         for text, key in (('먼저 읽을 문서', 'read'), ('일정·진행', 'work'),
                           ('업무 자료', 'docs'), ('매뉴얼', 'manual')):
@@ -230,6 +235,117 @@ class WorkspaceMixin:
             button.clicked.connect(lambda _=False, k=key: self._switch(k))
             shortcuts.addWidget(button)
         column.addLayout(shortcuts)
+
+    def _version_card(self, task_id):
+        """노트북에 넣은 매뉴얼 판본과 현재 내용의 차이. 열람만으로 새 판을 만들지 않는다."""
+        card = Card()
+        card.body.addWidget(section_title('판본·노트북'))
+        state = manual_versions.current_state(self.db, task_id)
+        if state['version']:
+            same = '현재 내용과 같습니다.' if state['current'] else '넣은 뒤 업무 내용이 바뀌었습니다. 새 판을 넣을 수 있습니다.'
+            card.body.addWidget(muted_label(f"노트북에 넣은 판: 판본 {state['version']} · {state['created_at']} · {same}"))
+        else:
+            card.body.addWidget(muted_label('아직 노트북에 넣은 판이 없습니다. 노트북에서 묻기를 누르면 현재 내용으로 첫 판을 만듭니다.'))
+        if state['failure']:
+            card.body.addWidget(muted_label(f"최근 시도가 실패했습니다: {state['failure']}"))
+        rows = manual_versions.history(self.db, task_id, 5)
+        for row in rows:
+            mark = '실패' if row['status'] == 'failed' else f"판본 {row['version']}"
+            where = row['notebook_title'] or '삭제된 노트북'
+            card.body.addWidget(muted_label(f"{row['created_at']} · {mark} · {where}", small=True))
+        card.body.addWidget(muted_label('옛 판은 보관소에 남아 지난 답의 인용을 그대로 열 수 있습니다.', small=True))
+        button = QPushButton('새 판을 노트북에 넣기' if state['version'] and not state['current'] else '노트북에서 묻기')
+        button.clicked.connect(lambda _=False, tid=task_id: self.open_notebook.emit(tid))
+        card.body.addWidget(button)
+        return card
+
+    def _link_card(self, task_id):
+        """연결 근거 — 필요한 서식·제출처·기한을 원문과 함께 보고 맞음/아님을 남긴다.
+
+        판정은 이 앱의 기록이다. 수행 완료·공식 기한·외부 제출의 승인이 아니다.
+        """
+        card = Card()
+        card.body.addWidget(section_title('연결 근거'))
+        card.body.addWidget(muted_label(
+            '자료에서 읽어 연결한 내용입니다. 맞음·아님은 이 앱에 남기는 확인이며 실행 승인이 아닙니다.', small=True))
+        items = review.items_for_task(self.db, task_id)
+        if not items:
+            card.body.addWidget(muted_label('아직 연결된 근거가 없습니다. 분석이 끝나면 여기에 나타납니다.'))
+        for item in items:
+            card.body.addWidget(self._link_row(item))
+        pairs = review.alias_candidates(self.db)
+        if pairs:
+            card.body.addWidget(section_title('같은 이름의 다른 개체'))
+            card.body.addWidget(muted_label('이름이 같아도 같은 기관·서식이라는 증거는 아닙니다. 합치기 전에 근거를 비교하세요.', small=True))
+            for pair in pairs:
+                card.body.addWidget(self._pair_row(pair))
+        return card
+
+    def _evidence_for(self, proofs):
+        found = []
+        for proof in proofs:
+            document = self.db.document(proof.doc_id) if proof.doc_id else None
+            found.append(Evidence(label=proof.filename, locator=proof.locator, snippet=proof.quote,
+                                  path=document['path'] if document else '',
+                                  note='' if proof.current else '이 근거를 읽은 뒤 원문이 바뀌었거나 사라졌습니다'))
+        return found
+
+    def _link_row(self, item):
+        row = Card(tone='static')
+        year = f' · {item.year}년' if item.year else ''
+        state = {'confirm': '맞다고 확인함', 'reject': '아니라고 거절함'}.get(item.decision, '확인 전')
+        row.body.addWidget(QLabel(f'{item.title} · {item.value}{year}'))
+        row.body.addWidget(muted_label(
+            f'{state} · {ws.basis_label(item.basis_state)} · {ws.applicability_label(item.applicability)}', small=True))
+        for link in item.links:
+            kind = '이 값과 엇갈리는' if link['kind'] == 'conflicts' else '이 값과 이어지는 이전/이후'
+            row.body.addWidget(muted_label(
+                f"{kind} 기록: {link['value']}{f' · {link['year']}년' if link['year'] else ''} — 대체 여부는 확정하지 않았습니다.", small=True))
+        buttons = QHBoxLayout()
+        if item.proofs:
+            buttons.addWidget(self._evidence_button(
+                '원문 열기', '이 연결의 원문과 위치', lambda i=item: self._show_evidence(self._evidence_for(i.proofs), f'{i.title}의 근거')))
+        else:
+            buttons.addWidget(muted_label('원문 인용 없음', small=True))
+        for text, action in (('맞음', review.confirm), ('아님', review.reject)):
+            button = QPushButton(text)
+            button.setEnabled(item.decision is None or item.lifecycle != 'retracted' or text == '맞음')
+            button.clicked.connect(lambda _=False, a=action, i=item: self._decide_link(a, i.claim_uuid))
+            buttons.addWidget(button)
+        if item.decision:
+            undo = QPushButton('되돌리기')
+            undo.clicked.connect(lambda _=False, i=item: self._decide_link(review.undo_claim, i.claim_uuid))
+            buttons.addWidget(undo)
+        buttons.addStretch(1)
+        row.body.addLayout(buttons)
+        return row
+
+    def _pair_row(self, pair):
+        row = Card(tone='static')
+        row.body.addWidget(QLabel(f"{pair['type']} · {pair['first']['label']}"))
+        for side in (pair['first'], pair['second']):
+            row.body.addWidget(muted_label(
+                f"업무: {', '.join(side['tasks']) or '없음'} · 근거 {len(side['proofs'])}건", small=True))
+        buttons = QHBoxLayout()
+        for text, action in (('같은 것', review.merge), ('다른 것', review.separate)):
+            button = QPushButton(text)
+            button.clicked.connect(lambda _=False, a=action, p=pair: self._decide_pair(a, p))
+            buttons.addWidget(button)
+        for index, side in enumerate((pair['first'], pair['second']), 1):
+            buttons.addWidget(self._evidence_button(
+                f'{index}번 근거', '이 개체의 원문 근거',
+                lambda s=side: self._show_evidence(self._evidence_for(s['proofs']), s['label'] + '의 근거')))
+        buttons.addStretch(1)
+        row.body.addLayout(buttons)
+        return row
+
+    def _decide_link(self, action, claim_uuid):
+        action(self.db, claim_uuid)
+        self.refresh(force=True)
+
+    def _decide_pair(self, action, pair):
+        action(self.db, pair['first']['uuid'], pair['second']['uuid'])
+        self.refresh(force=True)
 
     def _render_schedule_controls(self, column, task_id):
         state = self._state()

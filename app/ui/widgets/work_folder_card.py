@@ -162,24 +162,75 @@ class WorkFolderCard(QFrame):
         self.hint_label = QLabel("열기 →")
         self.hint_label.setObjectName("FolderCardHint")
         self.hint_label.setStyleSheet(
-            f"color: {self.cover_color}; font-size: 11px; font-weight: 600;"
+            f"color: {self.cover_color};"
         )
         bottom_row.addWidget(self.hint_label)
 
         outer.addLayout(bottom_row)
 
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+    def _set_pressed(self, pressed: bool) -> None:
+        # 누른 순간의 눌림은 모션이 아니라 정적 상태다 — 동작 줄이기에서도 그대로 보인다.
+        if self.property("pressed") != pressed:
+            self.setProperty("pressed", pressed)
+            self.style().unpolish(self)
+            self.style().polish(self)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
-            if self.rect().contains(event.pos()):
+            self._set_pressed(True)
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        self._set_pressed(False)
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.rect().contains(event.position().toPoint()):
                 self.opened.emit(self.task_id)
         super().mouseReleaseEvent(event)
+
+    def neighbor(self, key: int) -> "WorkFolderCard | None":
+        """방향키·Home·End로 옮겨 갈 같은 격자의 카드. 보이는 카드만 대상이다."""
+        parent = self.parentWidget()
+        if parent is None:
+            return None
+        cards = [c for c in parent.findChildren(WorkFolderCard)
+                 if c.parentWidget() is parent and c.isVisibleTo(parent)]
+        cards.sort(key=lambda c: (c.y(), c.x()))
+        if self not in cards:
+            return None
+        index = cards.index(self)
+        if key == Qt.Key.Key_Home:
+            return cards[0]
+        if key == Qt.Key.Key_End:
+            return cards[-1]
+        if key == Qt.Key.Key_Left:
+            return cards[index - 1] if index > 0 else None
+        if key == Qt.Key.Key_Right:
+            return cards[index + 1] if index + 1 < len(cards) else None
+        # 위·아래는 다음 줄에서 가로 위치가 가장 가까운 카드
+        down = key == Qt.Key.Key_Down
+        rows = [c for c in cards if (c.y() > self.y() if down else c.y() < self.y())]
+        if not rows:
+            return None
+        row_y = min(c.y() for c in rows) if down else max(c.y() for c in rows)
+        return min((c for c in rows if c.y() == row_y), key=lambda c: abs(c.x() - self.x()))
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
             self.opened.emit(self.task_id)
             event.accept()
             return
+        if event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up,
+                           Qt.Key.Key_Down, Qt.Key.Key_Home, Qt.Key.Key_End):
+            target = self.neighbor(event.key())
+            if target is not None:
+                target.setFocus(Qt.FocusReason.TabFocusReason)
+                event.accept()
+                return
         super().keyPressEvent(event)
+
+    def focusOutEvent(self, event) -> None:  # noqa: N802
+        self._set_pressed(False)
+        super().focusOutEvent(event)
 
     def changeEvent(self, event) -> None:  # noqa: N802
         if event.type() in (event.Type.PaletteChange, event.Type.StyleChange):
@@ -187,6 +238,6 @@ class WorkFolderCard(QFrame):
                 f"background-color: {self.cover_color}; border-radius: 4px;"
             )
             self.hint_label.setStyleSheet(
-                f"color: {self.cover_color}; font-size: 11px; font-weight: 600;"
+                f"color: {self.cover_color};"
             )
         super().changeEvent(event)

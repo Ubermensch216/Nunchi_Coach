@@ -25,6 +25,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
+    QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -48,8 +49,9 @@ from ...db import Database
 from ...bridge import service as bridge_service
 from ...bridge.packages import downloads_folder
 from ...core import onnara_import
+from ...core.knowledge import review
 from ...core.output_policy import UnsafeOutputError, safe_text_writer
-from .. import icons, theme
+from .. import icons, motion, theme
 from ..widgets import (
     Badge,
     Card,
@@ -201,6 +203,36 @@ class SettingsDialog(QDialog):
         theme_card.body.addWidget(self.theme_state)
         body.addWidget(theme_card)
 
+        motion_card = Card(tone="static")
+        motion_card.body.addWidget(section_title("움직임"))
+        motion_card.body.addWidget(
+            muted_label("화면이 바뀔 때 새 내용이 나타나는 짧은 효과입니다. "
+                        "끄면 효과 없이 바로 바뀝니다. 선택·진행 표시는 효과와 관계없이 그대로입니다.",
+                        small=True)
+        )
+        self.reduce_motion = QCheckBox("애니메이션 줄이기")
+        self.reduce_motion.setAccessibleName("애니메이션 줄이기")
+        self.reduce_motion.setChecked(motion.is_reduced())
+        self.reduce_motion.toggled.connect(self._choose_motion)
+        motion_card.body.addWidget(self.reduce_motion)
+        self.motion_state = muted_label(self._motion_state_text(), small=True)
+        motion_card.body.addWidget(self.motion_state)
+        body.addWidget(motion_card)
+
+        link_card = Card(tone="static")
+        link_card.body.addWidget(section_title("연결 근거 확인 (실험 기능)"))
+        link_card.body.addWidget(
+            muted_label("업무 매뉴얼에 ‘연결 근거’ 영역을 보입니다. 자료에서 읽어 연결한 서식·제출처·기한을 "
+                        "원문과 함께 보고 맞음/아님을 남깁니다. 켜도 검색 결과와 답변은 달라지지 않으며, "
+                        "남긴 판정은 인계본에 실려 다음 담당자에게 전달됩니다.", small=True)
+        )
+        self.link_review = QCheckBox("연결 근거 확인 보이기")
+        self.link_review.setAccessibleName("연결 근거 확인 보이기")
+        self.link_review.setChecked(review.enabled(self.db))
+        self.link_review.toggled.connect(self._choose_link_review)
+        link_card.body.addWidget(self.link_review)
+        body.addWidget(link_card)
+
         note = Card(tone="static")
         note.body.addWidget(section_title("미리 보기"))
         note.body.addWidget(
@@ -243,6 +275,23 @@ class SettingsDialog(QDialog):
         self.db.set_meta("theme_mode", self.theme_mode)
         self._apply_appearance()
         self.theme_state.setText(self._theme_state_text())
+
+    def _choose_link_review(self, checked: bool) -> None:
+        self.db.set_meta(review.FLAG, "1" if checked else "0")
+        window = self.parent()
+        if hasattr(window, "restyle"):
+            window.restyle()       # 지금 보이는 업무 화면이 바뀐 설정을 바로 따른다
+
+    def _choose_motion(self, checked: bool) -> None:
+        motion.set_mode("on" if checked else "off")
+        self.db.set_meta("reduce_motion", motion.mode())
+        self.motion_state.setText(self._motion_state_text())
+
+    def _motion_state_text(self) -> str:
+        if motion.mode() == "system":
+            shown = "줄여" if motion.is_reduced() else "보통으로"
+            return f"윈도우의 애니메이션 설정을 따릅니다 — 지금은 {shown} 표시합니다."
+        return "이 설정을 따릅니다." if motion.mode() == "on" else "효과를 그대로 보여 줍니다."
 
     def _theme_state_text(self) -> str:
         resolved = theme.resolve_mode(self.theme_mode)

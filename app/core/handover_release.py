@@ -26,7 +26,11 @@ from datetime import datetime
 from . import provenance, reconstruction as rc, workcard, workstate as ws
 from .paths import relative_to_source
 
-FORMAT_VERSION = 1
+# 형식 1은 업무 복원본만, 형식 2는 사람의 연결 근거 판정(knowledge)을 더 싣는다.
+# 읽기는 둘 다 받고, 쓰기는 실을 판정이 있을 때만 2로 쓴다 — 판정이 없는 프로젝트의
+# 인계본과 지문은 이전 앱의 것과 같다. 한 번 저장한 스냅샷의 본문은 다시 쓰지 않는다.
+FORMAT_VERSION = 2
+SUPPORTED_FORMATS = (1, 2)
 
 
 # ── 스냅샷 본체 ─────────────────────────────────────────────────────
@@ -92,8 +96,10 @@ def build_payload(db, basis_at: str | None = None) -> dict:
                         for action in card.actions],
         })
 
-    return {
-        "format": FORMAT_VERSION,
+    from .knowledge import portable
+    knowledge = portable.export_decisions(db)
+    payload = {
+        "format": 2 if knowledge["decisions"] else 1,
         "basis_at": basis_at or datetime.now().isoformat(timespec="seconds"),
         "context": {"mode": context["mode"] if context else ws.MODE_MATERIALS,
                     "predecessor": context["predecessor"] if context else None},
@@ -101,6 +107,9 @@ def build_payload(db, basis_at: str | None = None) -> dict:
         # 근거로 쓰인 문서만 싣는다. 자료 전체의 목록이 아니다.
         "documents": [documents[key] for key in sorted(documents)],
     }
+    if knowledge["decisions"]:
+        payload["knowledge"] = knowledge
+    return payload
 
 
 def _reviews(db, kind: str, target_id: int) -> list[dict]:
@@ -145,6 +154,7 @@ def summarize(payload: dict) -> dict:
         "gaps_open": sum(gap["state"] == "open" for gap in gaps),
         "gaps_resolved": sum(gap["state"] == "resolved" for gap in gaps),
         "documents": len(payload["documents"]),
+        "link_decisions": len((payload.get("knowledge") or {}).get("decisions", [])),
     }
 
 
@@ -373,6 +383,14 @@ def to_markdown(payload: dict, kind: str = ws.SNAPSHOT_RESTORATION) -> str:
                 f"({ws.basis_label(item['basis_state'])} · {ws.human_label(item['human_state'])})"
                 for name, item in unreviewed] or ["- 없습니다. 모든 항목을 전임자가 확인했습니다."]
         out.append("")
+
+    if payload.get("knowledge"):
+        from .knowledge import portable
+        counts = portable.summarize(payload["knowledge"])
+        out += ["## 연결 근거에 대한 사람의 판정", "",
+                f"- 판정 {counts['decisions']}건 (맞음 {counts['confirm']} · 거절 {counts['reject']} · "
+                f"합침 {counts['merge']} · 분리 {counts['separate']} · 되돌림 {counts['undo']})",
+                "- 받는 쪽에서 같은 대상을 정확히 찾은 판정만 적용하고, 찾지 못한 것은 보존만 합니다.", ""]
 
     out += ["## 근거", ""]
     out += [f"{index}. {line}" for index, line in enumerate(notes, start=1)] or ["근거가 없습니다."]

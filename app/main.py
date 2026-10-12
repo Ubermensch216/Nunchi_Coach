@@ -23,7 +23,7 @@ from .bridge import service as bridge_service
 from .bridge.store import FILE_NAME as BRIDGE_FILE, BridgeStore
 from .db import default_project_dir, open_project_at, registry
 from .db.registry import ProjectEntry
-from .ui import theme
+from .ui import motion, theme
 from .ui.shell import MainWindow
 from .ui.views.launcher import LauncherDialog
 from .core import diagnostics
@@ -117,6 +117,7 @@ def _run(app: QApplication, entry: ProjectEntry, root: Path | None) -> ProjectEn
     registry.touch(entry.path, root)
     db.audit("app.start", detail=f"project={entry.name}")
     theme.apply(app, _text_size(db), theme.normalize_mode(db.get_meta("theme_mode")))
+    motion.configure(db)
 
     window = MainWindow(db, project_name=entry.name)
     bridge = bridge_service.current()

@@ -136,8 +136,10 @@ def test_window_starts_on_onboarding_when_no_source(make_window, db):
 def test_analysis_message_and_gauge_share_state_and_click_target(qapp):
     from PySide6.QtCore import QAbstractAnimation, Qt
     from PySide6.QtTest import QTest
+    from app.ui import motion
     from app.ui.shell import TopBar
 
+    motion.set_mode("off")   # 막대가 부드럽게 차오르는 효과를 확인한다
     bar = TopBar("샘플")
     bar.resize(1272, theme.TOPBAR_H)
     clicks = []
@@ -171,6 +173,12 @@ def test_analysis_message_and_gauge_share_state_and_click_target(qapp):
         assert not bar.progress.isVisible()
         assert bar.status.animation.state() == QAbstractAnimation.State.Stopped
         assert bar.status.text() == "파일 6건 · 업무 2개"
+        # 동작 줄이기: 값만 바로 놓고 애니메이션은 돌지 않는다.
+        motion.set_mode("on")
+        bar.show_progress(1, 6, "업무를 파악하는 중")
+        bar.show_progress(5, 6, "업무를 파악하는 중")
+        assert bar.status.animation.state() == QAbstractAnimation.State.Stopped
+        assert bar.progress.value() == 833
     finally:
         bar.close()
         bar.deleteLater()

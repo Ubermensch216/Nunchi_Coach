@@ -429,3 +429,29 @@ def test_index_revision_first_insert_and_delete_invalidate_current_generation(db
     db.con.execute("DELETE FROM meta WHERE key='index_revision'")
     assert claim(db)['lifecycle'] == 'stale'
     drain(db)
+
+
+def test_a_change_only_stales_claims_of_the_changed_partition(db):
+    """무효화 트리거가 프로젝트 전체 주장을 훑지 않고, 바뀐 파티션의 주장만 stale로 만든다."""
+    source = db.con.execute("SELECT id FROM sources LIMIT 1").fetchone()[0]
+    db.upsert_document(source, {"path": str(db.path.parent / "b.txt"), "filename": "b.txt", "ext": ".txt",
+                                "hash": "hash-b", "parse_status": "ok", "parser": "text", "parser_version": "1"})
+    text = "서식: 별지서식"
+    db.replace_sections(2, [("paragraph", 0, "본문", text)])
+    db.replace_document_chunks(2, [(0, "본문", text)])
+    db.con.execute("INSERT INTO tasks(id,name) VALUES (2,'다른 업무')")
+    db.con.execute("INSERT INTO task_docs(task_id,doc_id,origin) VALUES (2,2,'user')")
+    db.sync_task_items(2, [{"kind": "form", "slot": "form", "content": "별지서식", "basis_state": "stated",
+                            "applicability": "past", "evidence": [(2, "본문", "서식: 별지서식")]}])
+    drain(db)
+    forms = db.con.execute("SELECT uuid FROM kg_claims WHERE predicate='REQUIRES_FORM' AND lifecycle='active'").fetchall()
+    assert len(forms) == 2
+    other = Database(db.path)
+    try:
+        other.sync_task_items(2, [])                      # 업무 2의 항목만 지운다
+    finally:
+        other.close()
+    states = {r["predicate"] + ":" + r["lifecycle"] for r in db.con.execute("SELECT predicate,lifecycle FROM kg_claims")}
+    assert "due_date:active" in states and "amount:active" in states      # 업무 1의 주장은 그대로 현행
+    assert db.con.execute("SELECT COUNT(*) FROM kg_claims WHERE predicate='REQUIRES_FORM' AND lifecycle='stale'").fetchone()[0] == 1
+    assert db.con.execute("SELECT COUNT(*) FROM kg_claims WHERE predicate='REQUIRES_FORM' AND lifecycle='active'").fetchone()[0] == 1

@@ -67,3 +67,15 @@ CREATE TABLE IF NOT EXISTS output_files (
  sha256 TEXT NOT NULL, renderer TEXT NOT NULL,
  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS manual_versions (
+ id INTEGER PRIMARY KEY,
+ task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+ version INTEGER NOT NULL,
+ digest TEXT NOT NULL,
+ notebook_id INTEGER REFERENCES notebooks(id) ON DELETE SET NULL,
+ doc_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+ status TEXT NOT NULL DEFAULT 'ok' CHECK(status IN ('ok','failed')),
+ note TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_manual_versions_task ON manual_versions(task_id, version);

@@ -88,6 +88,17 @@ def _expand_project(db, job):
                        "WHERE partition_key='project' AND lease=?", (job['lease'],))
 
 
+def _apply_imported(db, report: RunReport) -> None:
+    """투영이 모두 끝난 뒤, 가져온 사람 판정 중 대상을 아직 못 찾은 것을 다시 잇는다."""
+    from . import portable
+    try:
+        if portable.pending_count(db):
+            with db.transaction():
+                portable.apply_pending(db)
+    except Exception as exc:   # 판정 연결 실패가 투영 작업을 멈추면 안 된다
+        report.diagnostics.append(f"imported_decisions: {type(exc).__name__}: {str(exc)[:200]}")
+
+
 def run_jobs(db, *, should_stop=lambda: False, max_jobs=100, seconds=5) -> RunReport:
     from .projection import project_document, project_task
 
@@ -99,6 +110,7 @@ def run_jobs(db, *, should_stop=lambda: False, max_jobs=100, seconds=5) -> RunRe
             break
         job = acquire(db)
         if job is None:
+            _apply_imported(db, report)
             break
         key, token = job['partition_key'], job['lease']
         db._kg_lease = (token, job['leased_revision'])

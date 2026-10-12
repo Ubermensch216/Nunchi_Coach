@@ -13,7 +13,10 @@ def invalidate_sql(partitions: str, reason: str) -> str:
           (SELECT id FROM kg_generations WHERE active=1 AND partition_key IN ({partitions}));
         UPDATE kg_generations SET active=0,status='obsolete' WHERE active=1
           AND partition_key IN ({partitions});
-        UPDATE kg_claims SET lifecycle='stale' WHERE lifecycle='active' AND NOT EXISTS
+        UPDATE kg_claims SET lifecycle='stale' WHERE lifecycle='active'
+          AND uuid IN (SELECT s0.claim_id FROM kg_claim_evidence s0 JOIN kg_generations g0 ON g0.id=s0.generation_id
+                       WHERE g0.partition_key IN ({partitions}))
+          AND NOT EXISTS
           (SELECT 1 FROM kg_claim_evidence s WHERE s.claim_id=kg_claims.uuid AND s.active=1
            AND s.support_role='supports' AND s.validation_result IN ('structural','quote_matched','semantic_supported'));
         UPDATE meta SET value=CAST(value AS INTEGER)+1 WHERE key='kg_revision';

@@ -351,3 +351,22 @@ def test_a_withheld_answer_shows_no_reader(view: AskView):
     )
     assert view.reader_tabs.isHidden() or not view.reader_tabs.isVisible()
     assert any("부족합니다" in t for t in _labels(view))
+
+
+def test_year_basis_follows_the_chosen_year_and_reaches_the_scope(db: Database, view: AskView):
+    db.con.execute("INSERT INTO doc_years(doc_id, kind, year) VALUES (3, 'performance', 2021)")
+    view.refresh()
+    assert not view.year_basis.isEnabled()                      # 연도를 고르기 전에는 기준이 쓰이지 않는다
+    assert view._chosen_scope().year_basis == "document_date"
+    view.year_scope.setCurrentIndex(view.year_scope.findData(2024))
+    assert view.year_basis.isEnabled()
+    assert view._chosen_scope().years == [2024] and view._chosen_scope().year_basis == "document_date"
+    view.year_basis.setCurrentIndex(view.year_basis.findData("performance"))
+    assert [view.year_scope.itemData(i) for i in range(view.year_scope.count())] == [None, 2021]
+    assert view.year_scope.currentData() is None                # 기준을 바꾸면 없는 연도 선택은 풀린다
+    assert not view.year_basis.isEnabled()
+    view.year_scope.setCurrentIndex(view.year_scope.findData(2021))
+    scope = view._chosen_scope()
+    assert (scope.years, scope.year_basis) == ([2021], "performance")
+    clause, params = scope.predicate()
+    assert "doc_years" in clause and params[:2] == ["performance", 2021]

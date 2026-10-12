@@ -40,7 +40,8 @@ from . import handover_release as release, workstate as ws
 from .output_policy import validate_output
 from .paths import relative_to_source
 
-PACKAGE_FORMAT = 1
+PACKAGE_FORMAT = 2      # 2는 사람의 연결 근거 판정을 싣는다. 읽기는 1도 받는다.
+SUPPORTED_PACKAGE_FORMATS = (1, 2)
 MANIFEST, SNAPSHOT, REPORT = "manifest.json", "snapshot.json", "report.md"
 MAX_MANIFEST_BYTES = 1024 * 1024
 MAX_MEMBER_BYTES = 64 * 1024 * 1024
@@ -72,8 +73,10 @@ def export_package(db, snapshot_id: int, path: str | Path) -> Path:
     payload_text = row["payload"]
     report = release.to_markdown(json.loads(payload_text), row["kind"])
     members = {SNAPSHOT: payload_text.encode("utf-8"), REPORT: report.encode("utf-8")}
+    carries = json.loads(payload_text).get("format") == 2
     manifest = {
-        "package_format": PACKAGE_FORMAT, "schema_version": SCHEMA_VERSION,
+        # 판정을 싣지 않은 묶음은 이전 앱도 읽을 수 있게 형식 1로 쓴다.
+        "package_format": PACKAGE_FORMAT if carries else 1, "schema_version": SCHEMA_VERSION,
         "kind": row["kind"], "basis_at": row["basis_at"], "content_hash": row["content_hash"],
         "notice": NOTICE,
         "files": {name: {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
@@ -126,7 +129,7 @@ def read_package(path: str | Path) -> tuple[dict, dict]:
         except (ValueError, zipfile.BadZipFile, OSError) as exc:
             raise PackageError("묶음을 읽을 수 없습니다.") from exc
 
-    if not isinstance(manifest, dict) or manifest.get("package_format") != PACKAGE_FORMAT:
+    if not isinstance(manifest, dict) or manifest.get("package_format") not in SUPPORTED_PACKAGE_FORMATS:
         raise PackageError("이 앱이 읽을 수 없는 묶음 형식입니다.")
     try:
         newer = int(manifest.get("schema_version", 0)) > int(SCHEMA_VERSION)
@@ -144,10 +147,20 @@ def read_package(path: str | Path) -> tuple[dict, dict]:
         payload = json.loads(body.decode("utf-8"))
     except (ValueError, UnicodeDecodeError) as exc:
         raise PackageError("묶음의 본체를 읽을 수 없습니다.") from exc
-    if (not isinstance(payload, dict) or payload.get("format") != release.FORMAT_VERSION
+    if (not isinstance(payload, dict) or payload.get("format") not in release.SUPPORTED_FORMATS
             or not isinstance(payload.get("tasks"), list)
             or not isinstance(payload.get("documents"), list)):
         raise PackageError("묶음의 본체 형식이 맞지 않습니다.")
+    if payload["format"] == 1 and "knowledge" in payload:
+        raise PackageError("형식 1 묶음에는 연결 근거 판정이 있을 수 없습니다.")
+    if payload["format"] == 2 and manifest.get("package_format") != 2:
+        raise PackageError("묶음 형식과 본체 형식이 맞지 않습니다.")
+    if "knowledge" in payload:
+        from .knowledge import portable
+        try:
+            portable.validate(payload["knowledge"])
+        except ValueError as exc:
+            raise PackageError(str(exc)) from exc
     if release.content_hash(payload) != manifest.get("content_hash"):
         raise PackageError("묶음의 지문이 본체와 맞지 않습니다.")
     return manifest, payload
@@ -182,6 +195,9 @@ def import_package(db, path: str | Path, receiver_name: str | None = None) -> di
                 json.dumps(payload, ensure_ascii=False), label="가져옴",
                 context_id=result.pop("context_id"))
             relink = relink_evidence(db)
+            if payload.get("knowledge"):
+                from .knowledge import portable
+                result["decisions"] = portable.import_decisions(db, payload["knowledge"])
             db.add_receipt(snapshot_id, manifest["content_hash"], receiver_name,
                            json.dumps(relink, ensure_ascii=False))
     except (KeyError, TypeError, AttributeError, sqlite3.IntegrityError) as exc:
