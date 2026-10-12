@@ -520,8 +520,12 @@ class SettingsDialog(QDialog):
             self.picture_pages.addItem(label, value)
         stored = self.db.get_meta("vision_pages_per_run")
         current = int(stored) if stored and stored.lstrip("-").isdigit() else pictures.PAGES_PER_RUN
+        # 다른 PC에서 meta로 지정한 분량도 실제 분석 설정 그대로 보여 준다.
+        if current > 0 and all(value != current for _label, value in options):
+            options.append((f"직접 지정 — 한 번에 {current:,}쪽", current))
+            self.picture_pages.addItem(options[-1][0], current)
         self.picture_pages.setCurrentIndex(
-            next((i for i, (_l, v) in enumerate(options) if v == current), 2))
+            next((i for i, (_l, v) in enumerate(options) if v == current), 0 if current <= 0 else 2))
         self.picture_pages.currentIndexChanged.connect(self._choose_picture_pages)
         card.body.addWidget(self.picture_pages)
         card.body.addWidget(muted_label(

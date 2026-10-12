@@ -102,8 +102,9 @@ def test_the_numbered_folders_are_the_steps_and_old_or_received_papers_are_left_
     labels = [s["label"] for s in db.task_steps(task_id, 2024)]
     assert labels[:4] == ["선발계획", "부서제출", "1차 심사", "위원회 개최"]
     assert db.task_steps(task_id, 2023)           # 지난 회차는 날짜 폴더 그대로 단계가 된다
+    # 연도·반기는 회차 정보로 분리하고, 단계명에는 폴더의 업무 이름만 남긴다.
     assert [s["label"] for s in db.task_steps(task_id, 2023)][:2] == [
-        "2023년 상반기 우수부서 선발 계획", "1차 심사평가 계획"]
+        "우수부서 선발 계획", "1차 심사평가 계획"]
 
 
 def test_dates_the_plans_state_become_deadlines_cycles_and_the_monthly_calendar(analysed):

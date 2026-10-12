@@ -876,9 +876,9 @@ class Generator:
                    datetime(last, 4, 9, 16, 0))
         base.images = [_jpeg(rng, size) for _ in range(max(2, pages // 2))]
         self.emit_doc(self.place("01_업무별/시설물안전점검/사진", f"{last} 해빙기 현장점검 사진대지", "docx"),
-                      "large", base, year=last)
+                      "large", base, expect=["partial"], year=last)
         self.emit_doc(self.place("01_업무별/시설물안전점검/사진", f"{last} 점검결과 보고(사진 포함)", "pptx"),
-                      "large", base, year=last)
+                      "large", base, expect=["partial"], year=last)
         scan = Doc("준공도면 스캔본", [], datetime(last - 2, 6, 30, 10, 0))
         scan.images = [_jpeg(rng, size) for _ in range(pages)]
         self.emit_doc(self.place("01_업무별/급수공사/준공서류", "준공도면_스캔본", "pdf"), "large", scan,
@@ -1014,7 +1014,8 @@ class Generator:
         def archive(path: Path) -> None:
             with zipfile.ZipFile(path, "w") as zf:
                 zf.writestr("안에 든 문서.txt", "압축 파일 안의 문서는 읽지 않는다.")
-        self.emit("99_기타/2024 제출자료 묶음.zip", "non_document", archive, when=when)
+        # ZIP은 내부 파일 이름만 읽으므로 내용 전체를 읽은 문서로 기대하지 않는다.
+        self.emit("99_기타/2024 제출자료 묶음.zip", "archive", archive, when=when, expect=["partial"])
         for rel, head, size in (("99_기타/뷰어 설치.exe", b"MZ", 300_000),
                                 ("현장사진/누수 복구 영상.mp4", b"\x00\x00\x00\x18ftypmp42", 2_000_000),
                                 ("99_기타/조직도.png", b"\x89PNG\r\n\x1a\n", 40_000)):

@@ -107,8 +107,8 @@ def merge(db, source, target):
         handover_release.save(db, label="업무 합치기 전")
         transfer(db, source, target, plan(db, source))
         db.con.execute(
-            "INSERT OR IGNORE INTO task_docs(task_id,doc_id,origin,confidence,evidence) "
-            "SELECT ?,doc_id,'user',confidence,evidence FROM task_docs WHERE task_id=?", (target, source))
+            "INSERT OR IGNORE INTO task_docs(task_id,doc_id,origin,confidence,evidence,round_key) "
+            "SELECT ?,doc_id,'user',confidence,evidence,round_key FROM task_docs WHERE task_id=?", (target, source))
         db.con.execute("UPDATE task_steps SET task_id=?,decided_by='user' WHERE task_id=?", (target, source))
         db.con.execute("UPDATE task_cycles SET task_id=?,decided_by='user' WHERE task_id=?", (target, source))
         db.con.execute("UPDATE knowledge_cards SET task_id=? WHERE task_id=?", (target, source))
@@ -145,7 +145,8 @@ def split(db, source, doc_ids, name):
         transfer(db, source, target, decision)
         marks = ",".join("?" for _ in chosen)
         args = (target, source, *sorted(chosen))
-        db.con.execute(f"INSERT INTO task_docs SELECT ?,doc_id,'user',confidence,evidence,is_primary "
+        db.con.execute("INSERT INTO task_docs(task_id,doc_id,origin,confidence,evidence,is_primary,round_key) "
+                       f"SELECT ?,doc_id,'user',confidence,evidence,is_primary,round_key "
                        f"FROM task_docs WHERE task_id=? AND doc_id IN ({marks})", args)
         db.con.execute(f"INSERT INTO task_reading SELECT ?,doc_id,ordinal,score,reason "
                        f"FROM task_reading WHERE task_id=? AND doc_id IN ({marks})", args)

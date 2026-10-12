@@ -99,10 +99,12 @@ def test_not_a_task_hides_it_without_deleting(db: Database):
 
 
 def test_merge_moves_documents_and_keeps_a_trace(db: Database):
+    db.con.execute("UPDATE task_docs SET round_key='2024 하반기' WHERE task_id=2 AND doc_id=4")
     assert db.merge_tasks(2, 1)
     assert [t["id"] for t in db.tasks()] == [1]
     assert {d["id"] for d in db.task_documents(1)} == {1, 2, 3, 4, 5}
     assert db.task(2)["merged_into"] == 1
+    assert db.con.execute("SELECT round_key FROM task_docs WHERE task_id=1 AND doc_id=4").fetchone()[0] == "2024 하반기"
 
 
 def test_merge_does_not_duplicate_shared_documents(db: Database):
@@ -117,11 +119,15 @@ def test_merge_refuses_itself(db: Database):
 
 
 def test_split_creates_a_new_task_with_the_chosen_documents(db: Database):
+    db.con.execute("UPDATE task_docs SET round_key='2024 상반기' WHERE task_id=1 AND doc_id=2")
+    db.con.execute("UPDATE task_docs SET round_key='2024 하반기' WHERE task_id=1 AND doc_id=3")
     new_id = db.split_task(1, [2, 3], "행감 질의대응")
     assert new_id is not None
     assert {d["id"] for d in db.task_documents(new_id)} == {2, 3}
     assert {d["id"] for d in db.task_documents(1)} == {1}
     assert status.of_task(db.task(new_id)) == status.CONFIRMED
+    assert [row[0] for row in db.con.execute(
+        "SELECT round_key FROM task_docs WHERE task_id=? ORDER BY doc_id", (new_id,))] == ["2024 상반기", "2024 하반기"]
 
 
 def test_split_refuses_an_existing_name(db: Database):

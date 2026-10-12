@@ -40,6 +40,24 @@ def db(tmp_path: Path):
     database.close()
 
 
+@pytest.mark.parametrize("budget", [0, 15, pictures.PAGES_PER_RUN, 60, 100, 100000, -1])
+def test_picture_settings_show_the_saved_budget_and_save_changes(db, budget):
+    from app.ui.views.settings import SettingsDialog
+
+    db.set_meta("vision_pages_per_run", str(budget))
+    dialog = SettingsDialog(db)
+    try:
+        assert dialog.picture_pages.currentData() == max(0, budget)
+        # 설정창을 열기만 해서는 이전 PC에서 저장한 값을 덮어쓰지 않는다.
+        assert db.get_meta("vision_pages_per_run") == str(budget)
+        dialog.picture_pages.setCurrentIndex(dialog.picture_pages.findData(100 if budget <= 0 else 0))
+        assert db.get_meta("vision_pages_per_run") == ("100" if budget <= 0 else "0")
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        QApplication.instance().processEvents()
+
+
 def _read(text: str, year: int | None = 2024, title: str = "") -> list[rc.Found]:
     return rc.read_section(text, 1, "1문단", year, title=title)
 
