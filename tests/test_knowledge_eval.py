@@ -81,3 +81,15 @@ def test_paraphrase_set_generalizes_to_other_sentence_shapes_and_states_its_limi
     assert _recall(on, 'linked', by_style({1, 2, 3})) - _recall(off, 'linked', by_style({1, 2, 3})) >= 0.3
     # 자유 서술(문체 4)은 규칙이 읽지 못한다 — 개선을 주장하지 않는다.
     assert _recall(on, 'linked', by_style({4})) == _recall(off, 'linked', by_style({4}))
+
+
+def test_graph_precision_cost_is_reported_not_hidden():
+    """그래프가 문맥에 문서를 더 올리는 비용(정밀도)을 지표로 남긴다. 줄었다고 주장하지 않는다."""
+    off, on = run('all', 'off', PARAPHRASE), run('all', 'on', PARAPHRASE)
+    for category in ('simple', 'linked', 'missing'):
+        before, after = off['categories'][category], on['categories'][category]
+        assert before['documents_per_question'] is not None
+        assert after['documents_per_question'] >= before['documents_per_question']
+    # 근거 없는 질문에도 같은 업무의 문서가 더 붙는다 — 기본 off의 이유 중 하나.
+    assert (on['categories']['missing']['unexpected_documents_per_question']
+            > off['categories']['missing']['unexpected_documents_per_question'])

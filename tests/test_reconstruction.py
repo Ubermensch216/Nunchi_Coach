@@ -47,6 +47,11 @@ def test_statement_does_not_cross_a_sentence_or_swallow_a_date_period():
     assert one("제출기한은 2024. 6. 14.까지입니다.").when == date(2024, 6, 14)
 
 
+def test_amount_statement_keeps_money_units():
+    assert [(f.kind, f.value) for f in read("예산은 2,500천원입니다. 사업비는 1억원입니다.")] == [
+        (rc.AMOUNT, "2,500천원"), (rc.AMOUNT, "1억원")]
+
+
 def test_statements_for_where_and_which_form():
     found = read("작성한 결과는 11구청 기획과에 제출합니다. 신청서식을 사용합니다.")
     assert [(f.kind, f.value) for f in found] == [(rc.RECIPIENT, "11구청 기획과"), (rc.FORM, "신청서식")]
@@ -58,6 +63,9 @@ def test_statements_for_where_and_which_form():
     "제출기한은 추후 통보입니다.",                    # 날짜 없는 기한
     "예산은 미정입니다.",                            # 숫자 없는 금액
     "담당 업무는 환경관리입니다.",                    # 이름표가 아니다
+    "금액은 총 3건입니다.",                           # 금액이 아닌 개수
+    "예산은 12명입니다.",
+    "담당은 홍길동 주무관이며 문의는 내선 1234입니다.",   # 이름표가 둘이면 값의 경계를 알 수 없다
 ])
 def test_unstated_statements_are_not_extracted(text):
     assert read(text) == []

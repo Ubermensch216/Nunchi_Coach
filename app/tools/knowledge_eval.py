@@ -31,6 +31,11 @@ def load_fixture(folder=FIXTURES):
     return corpus, manifest
 
 
+def _mean(values):
+    values = list(values)
+    return round(statistics.mean(values), 3) if values else None
+
+
 def run(split: str = "all", graph_mode: str = "off", folder: Path = FIXTURES) -> dict:
     if graph_mode not in ('off', 'shadow', 'on'):
         raise ValueError('올바르지 않은 그래프 모드입니다.')
@@ -101,7 +106,11 @@ def run(split: str = "all", graph_mode: str = "off", folder: Path = FIXTURES) ->
         metrics[category] = {"questions": sum(r["category"] == category for r in rows),
                              "scored_questions": len(scored),
                              "all_evidence_found": sum(r["recall_at_10"] == 1 for r in scored),
-                             "recall_at_10": statistics.mean(r["recall_at_10"] for r in scored) if scored else None}
+                             "recall_at_10": statistics.mean(r["recall_at_10"] for r in scored) if scored else None,
+                             # 정밀도 쪽 비용: 질문마다 문맥에 오른 문서 수와, 그중 정답이 아닌 문서 수
+                             "documents_per_question": _mean(len(r["retrieved"]) for r in rows if r["category"] == category),
+                             "unexpected_documents_per_question": _mean(
+                                 len(set(r["retrieved"]) - set(r["expected"])) for r in rows if r["category"] == category)}
     return {"comparison": 'B' if graph_mode == 'on' else 'A',
             "retrieval": 'FTS + structure graph, model OFF' if graph_mode == 'on' else 'existing FTS, model OFF',
             "graph_mode": graph_mode, "graph_current_claims": graph_claims,

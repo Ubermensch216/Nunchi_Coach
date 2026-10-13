@@ -169,6 +169,9 @@ _STATEMENT = re.compile(
     + "|".join(re.escape(label) for label in sorted(_KIND_OF, key=len, reverse=True))
     + r")\s*(?:은|는)\s*(?P<value>(?:(?![가-힣]\.(?:\s|$)).){1,120}?)\s*(?:입니다|이다)(?![가-힣])"
 )
+_STATEMENT_LABEL = re.compile(r"(?<![가-힣A-Za-z])(?:" + "|".join(
+    re.escape(label) for label in sorted(_KIND_OF, key=len, reverse=True)) + r")\s*(?:은|는)")
+_MONEY = re.compile(r"\d\s*(?:원|천원|만원|억원|백만원|KRW)|[원]\s*$")
 _ORG_TAIL = r"(?:과|팀|부|처|국|실|청|원|소|단|센터|위원회|사무국|기관|부서)"
 _SUBMIT_TO = re.compile(
     r"(?<![가-힣A-Za-z0-9])(?P<value>(?:[가-힣A-Za-z0-9]+\s)?[가-힣A-Za-z0-9]*" + _ORG_TAIL + r")\s*(?:에|으로)\s*"
@@ -185,8 +188,12 @@ def _read_statements(line: str, doc_id: int, locator: str, doc_year: int | None,
     found: list[Found] = []
     for match in _STATEMENT.finditer(line):
         label = match.group("label").replace(" ", "")
-        item = _build(_KIND_OF[match.group("label")], label, match.group("value").strip(" .;,·-"), None,
-                      match.group(0).strip(), doc_id, locator, doc_year, official)
+        kind, value = _KIND_OF[match.group("label")], match.group("value").strip(" .;,·-")
+        # 한 문장에 이름표가 둘이면('담당은 …이며 문의는 …입니다') 어디까지가 값인지 알 수 없다.
+        # 금액은 통화 단위가 있어야 한다 — '총 3건'·'12명'은 금액이 아니다.
+        if _STATEMENT_LABEL.search(value) or (kind == AMOUNT and not _MONEY.search(value)):
+            continue
+        item = _build(kind, label, value, None, match.group(0).strip(), doc_id, locator, doc_year, official)
         if item is not None:
             found.append(item)
     for pattern, kind, slot in ((_SUBMIT_TO, RECIPIENT, "제출처"), (_USES_FORM, FORM, "서식")):
