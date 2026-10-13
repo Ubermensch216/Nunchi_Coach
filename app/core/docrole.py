@@ -48,7 +48,7 @@ ROLE_LABEL = {
 # 결과물이라, 거기 적힌 금액과 날짜는 이 업무의 것이 아니다.
 OUTSIDE_ROLES = frozenset({RECEIVED, REFERENCE, PUBLICITY})
 # 규칙이 바뀌면 올린다. 파이프라인이 규칙으로 정한 갈래를 다시 정한다.
-VERSION = "2"
+VERSION = "3"
 
 # (역할, 이름에서 찾는 꼴). 앞의 것이 이긴다.
 _NAME_RULES: tuple[tuple[str, re.Pattern], ...] = (

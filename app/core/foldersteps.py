@@ -137,7 +137,7 @@ def _mode(values):
     return counted.most_common(1)[0][0] if counted else None
 
 
-def outside_the_work(db, doc_ids) -> set[int]:
+def outside_the_work(db, doc_ids, keep_requests: bool = True) -> set[int]:
     """이 일을 한 기록이 아닌 문서 — 이전 판, 참고자료, 남에게 받은 자료, 홍보 결과물.
 
     이런 문서의 날짜로 '언제 하는 일'과 '어떤 순서'를 읽으면 남의 일정이 섞인다.
@@ -150,11 +150,19 @@ def outside_the_work(db, doc_ids) -> set[int]:
     marks = ", ".join("?" * len(ids))
     aside = {folders.OLD, folders.BACKUP, folders.REFERENCE, folders.RECEIVED}
     out = set()
+    # 압축파일과 이름이 같은 폴더는 받은 압축을 그 자리에 푼 것이다 — 부서가 보낸 증빙,
+    # 메일로 받은 강사 자료. 그 안의 문서는 이 일을 한 기록이 아니다.
+    unpacked = {row["path"][:-4].lower() + "\\" for row in db.con.execute(
+        "SELECT path FROM documents WHERE LOWER(ext) = '.zip' AND missing_since IS NULL")}
     for row in db.con.execute(
             "SELECT d.id, d.path, s.path AS root, r.role FROM documents d "
             "LEFT JOIN sources s ON s.id = d.source_id LEFT JOIN doc_roles r ON r.doc_id = d.id "
             f"WHERE d.id IN ({marks})", ids):
         if row["role"] in docrole.OUTSIDE_ROLES:
+            out.add(row["id"])
+            continue
+        path = (row["path"] or "").replace("/", "\\").lower()
+        if unpacked and any(path.startswith(folder) for folder in unpacked):
             out.add(row["id"])
             continue
         # 맨 위의 old 묶음([0. old])은 지난 회차의 기록이다. 그것은 이 일의 선례다.
@@ -165,7 +173,9 @@ def outside_the_work(db, doc_ids) -> set[int]:
         found = {part.modifier for part in parsed[named + 1:]} & aside
         # 전임자는 받은 요청 공문과 평가 기준도 '참고' 폴더에 넣어 둔다. 그것은 남의
         # 자료가 아니라 이 일의 기한과 기준이 적힌 문서다.
-        if found == {folders.REFERENCE} and row["role"] in (docrole.DIRECTIVE, docrole.CRITERIA):
+        # 받은 공문 폴더('市 공문')도 같다 — 요청 공문은 남기고 붙임만 남의 자료다.
+        if (keep_requests and found and found <= {folders.REFERENCE, folders.RECEIVED}
+                and row["role"] in (docrole.DIRECTIVE, docrole.CRITERIA)):
             continue
         if found:
             out.add(row["id"])

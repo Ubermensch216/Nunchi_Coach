@@ -41,6 +41,17 @@ MAX_SIDE = 1600
 MAX_UPSCALE = 2.5
 NOTE ="로컬 AI가 그림에서 읽은 글자입니다. 숫자·이름은 원본과 대조하세요."
 NOTHING = "글자 없음"
+BLANK_NOTE = "그림에서 읽을 글자를 찾지 못했습니다."
+# 모델이 답은 했지만 글이 아니었다(빈 표, 숫자 격자). 글자 없는 그림과는 다른 일이다 —
+# 그림을 못 읽는 모델·실행 환경에서는 읽을 수 있는 캡처에도 이런 답이 온다(실측: 쪽지
+# 캡처에 '| 1 | 2 | 3 |' 격자). 그래서 따로 적고, 연달아 나오면 점검 그림으로 확인한다.
+GARBLED_NOTE = "로컬 AI가 이 그림을 글로 읽지 못했습니다."
+# '읽어 봤지만 글자가 없었다'는 표시의 판. 바뀌면 그렇게 표시된 문서를 다시 읽는다.
+# 2: 못 읽는 모델의 답을 '글자 없음'으로 굳히던 것을 되돌린다.
+READER_RULES = "2"
+# 점검 그림에 적는 글과, 읽은 글에서 찾을 낱말. 낱말 둘 이상이 나오면 읽는 것으로 본다.
+CANARY_LINES = ("문서번호 2024-0731", "적극행정위원회 개최 계획", "제출기한은 10월 18일까지")
+CANARY_WORDS = ("문서번호", "위원회", "계획", "제출기한")
 
 PROMPT = (
     "이 그림에 보이는 글자를 빠짐없이, 보이는 그대로 옮겨 적으세요.\n"
@@ -71,6 +82,43 @@ def render_pages(path: Path, limit: int = MAX_PAGES) -> tuple[list[tuple[str, by
     return pages, total
 
 
+def reader_mark(client) -> str:
+    """누가 읽었는가. '글자 없음' 표시는 이 값이 같을 때만 믿는다 — 모델을 바꾸면 다시 읽는다."""
+    return f"{READER_RULES}:{getattr(client, 'gen_model', '')}"
+
+
+def canary_png() -> bytes:
+    """정답을 아는 점검 그림. 큰 글씨 세 줄이라 그림을 읽는 모델이면 틀릴 수 없다."""
+    with pymupdf.open() as document:
+        page = document.new_page(width=640, height=240)
+        for index, line in enumerate(CANARY_LINES):
+            page.insert_text((40, 70 + index * 60), line, fontsize=30, fontname="korea")
+        return page.get_pixmap(matrix=pymupdf.Matrix(2, 2), alpha=False).tobytes("png")
+
+
+def selfcheck(client) -> tuple[bool, str]:
+    """이 PC의 모델이 그림의 글자를 실제로 읽는가. (읽음, 사유).
+
+    모델이 '그림을 읽을 수 있다'고 밝혀도 실행 환경에 따라 읽지 못한다(실측: 같은 모델이
+    한 PC에서는 캡처를 읽고 다른 PC에서는 빈 표만 냈다). 못 읽어도 답은 오므로 문서를
+    읽혀 봐서는 고장을 알 수 없다. 정답을 아는 그림을 먼저 읽힌다.
+    """
+    if not client._supports("vision"):   # noqa: SLF001
+        return False, "그림을 읽을 수 있는 로컬 모델이 없습니다"
+    try:
+        png = canary_png()
+    except Exception as exc:
+        return False, f"점검 그림을 만들지 못했습니다: {exc}"
+    text, error = client.generate_text(
+        PROMPT, images=[base64.b64encode(png).decode("ascii")], num_predict=200)
+    if error:
+        return False, error
+    packed = "".join((text or "").split())
+    if sum(1 for word in CANARY_WORDS if word in packed) >= 2:
+        return True, ""
+    return False, "점검 그림의 글자를 읽지 못했습니다"
+
+
 def _has_words(text: str) -> bool:
     """글이라고 할 만한가. 손글씨 서명부 같은 그림에서 모델은 빈 칸마다 숫자와 줄만
     되풀이해 적는다(실측: 참석자 명부). 그런 것을 본문으로 남기지 않는다."""
@@ -94,6 +142,7 @@ def read(client, path: str | Path, should_stop: Callable[[], bool] = lambda: Fal
     budget = [MAX_CHARS]
     sections: list[Section] = []
     errors: list[str] = []
+    garbled = 0
     for ordinal, (locator, png) in enumerate(pages, start=1):
         if should_stop():
             break
@@ -103,7 +152,10 @@ def read(client, path: str | Path, should_stop: Callable[[], bool] = lambda: Fal
             errors.append(f"{locator}: {error}")
             continue
         text = (text or "").strip()
-        if not text or text.replace(".", "").strip() == NOTHING or not _has_words(text):
+        if not text or text.replace(".", "").strip() == NOTHING:
+            continue
+        if not _has_words(text):
+            garbled += 1
             continue
         body = clip(text, budget)
         if not body:
@@ -113,7 +165,7 @@ def read(client, path: str | Path, should_stop: Callable[[], bool] = lambda: Fal
     if not sections:
         if errors:
             return failed(PARSER, "; ".join(errors[:3]), FAILED)
-        return ParseResult(status=EMPTY, parser=PARSER, note="그림에서 읽을 글자를 찾지 못했습니다.")
+        return ParseResult(status=EMPTY, parser=PARSER, note=GARBLED_NOTE if garbled else BLANK_NOTE)
     note = NOTE
     if total > len(pages):
         note += f" 전체 {total}쪽 가운데 앞 {len(pages)}쪽만 읽었습니다."

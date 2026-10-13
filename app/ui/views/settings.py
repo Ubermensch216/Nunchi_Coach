@@ -577,9 +577,29 @@ class SettingsDialog(QDialog):
             next((i for i, (_l, v) in enumerate(options) if v == current), 0 if current <= 0 else 2))
         self.picture_pages.currentIndexChanged.connect(self._choose_picture_pages)
         card.body.addWidget(self.picture_pages)
+        checked = self._picture_check_text()
+        if checked:
+            card.body.addWidget(muted_label(checked, small=True))
         card.body.addWidget(muted_label(
             "다음 분석부터 적용됩니다. 문서가 PC 밖으로 나가지 않습니다.", small=True))
         return card
+
+    def _picture_check_text(self) -> str:
+        """지난 분석에서 점검 그림을 읽혀 본 결과. 못 읽는 모델은 답은 하므로 따로 알린다."""
+        import json
+
+        try:
+            last = json.loads(self.db.get_meta("vision_selfcheck") or "")
+        except ValueError:
+            return ""
+        if not isinstance(last, dict):
+            return ""
+        model, when = last.get("model") or "로컬 모델", last.get("at") or ""
+        if last.get("ok"):
+            return f"지난 점검({when}): {model}이(가) 점검 그림의 글자를 읽었습니다."
+        return (f"지난 점검({when}): {model}이(가) 점검 그림의 글자를 읽지 못했습니다. 이 상태에서는 "
+                "스캔한 문서·화면 캡처를 읽지 않고 남겨 둡니다. 다른 모델을 고르거나 Ollama를 "
+                "확인한 뒤 다시 분석하세요.")
 
     def _choose_picture_pages(self, _index: int) -> None:
         self.db.set_meta("vision_pages_per_run", str(int(self.picture_pages.currentData())))

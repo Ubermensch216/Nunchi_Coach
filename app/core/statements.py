@@ -66,6 +66,7 @@ SCHEMA = {
 _SENTENCE_END = re.compile(r"(?<=[다요음함])\.\s+")
 _PREDICATE = re.compile(r"(?:다|요|음|함)\.?$")
 _QUOTED = re.compile(r"['‘\"“「『][^'’\"”」』]{1,40}['’\"”」』]")
+_MANUAL = re.compile(r"매뉴얼|메뉴얼|사용\s*설명서|사용자\s*안내서|manual", re.I)
 _DATE_LINE = re.compile(r"^(?:작성일|시행일자|등록일|기안일)\s*[:：]")
 
 
@@ -143,17 +144,28 @@ def _gather(db, task_id: int) -> list[dict]:
     # 문장은 성과를 서술한 글이다 — 실제 자료에서 "업무 효율이 평균 20% 증가했다"가
     # 이 업무의 '진행 상황'으로 올라왔다. 모델이 읽은 글(그림·스캔본)도 뺀다 — 문장
     # 값은 원문 그대로여야 하는데 그 글은 원문이 아니다.
-    from . import docrole, foldersteps
+    #
+    # 법령 조문, 심사·의결 서류, 회의 준비물(시나리오·발표 자료), 남의 사례를 옮겨 실은
+    # 문서도 뺀다. 실제 자료에서 문장 145건 대부분이 발표 자료의 표어("디지털 혁신으로
+    # 구민 편의와 행정 효율성을 동시에 실현합니다"), 법 조문, 사례 서술이었다.
+    from . import casedocs, docrole, foldersteps
 
     ids = [row["id"] for row in documents]
-    skip = foldersteps.outside_the_work(db, ids)
+    skip = foldersteps.outside_the_work(db, ids) | casedocs.collections(db, ids)
     if ids:
         marks = ", ".join("?" * len(ids))
+        apart = (docrole.PERFORMANCE, docrole.EVIDENCE, docrole.LEGAL, docrole.DECISION,
+                 docrole.MEETING, docrole.FORM, docrole.OTHER)
         skip |= {row["doc_id"] for row in db.con.execute(
-            f"SELECT doc_id FROM doc_roles WHERE doc_id IN ({marks}) AND role IN (?, ?)",
-            (*ids, docrole.PERFORMANCE, docrole.EVIDENCE))}
+            f"SELECT doc_id FROM doc_roles WHERE doc_id IN ({marks}) "
+            f"AND role IN ({', '.join('?' * len(apart))})", (*ids, *apart))}
         skip |= {row["id"] for row in db.con.execute(
             f"SELECT id FROM documents WHERE id IN ({marks}) AND parser = 'vision'", ids)}
+        # 전산 시스템 사용 설명서의 화면 조작 순서('(3) 등록 버튼을 클릭하면 …')는 이 업무의
+        # 요령이 아니다. 필요하면 그 문서를 연다.
+        skip |= {row["id"] for row in db.con.execute(
+            f"SELECT id, filename FROM documents WHERE id IN ({marks})", ids)
+            if _MANUAL.search(row["filename"] or "")}
     documents = [row for row in documents if row["id"] not in skip]
     if not documents:
         return []
@@ -183,7 +195,9 @@ def _split(text: str) -> list[str]:
         for part in _SENTENCE_END.split(line):
             part = part.strip()
             # 제목·목차 같은 줄을 빼려고 서술어로 끝나는 문장만 남긴다.
-            if _MIN_LENGTH <= len(part) <= _MAX_LENGTH and _PREDICATE.search(part):
+            # 띄어쓰기가 사라진 줄(PDF 표에서 뽑힌 '개인정보를수집및이용합니다')은 뺀다.
+            if (_MIN_LENGTH <= len(part) <= _MAX_LENGTH and _PREDICATE.search(part)
+                    and part.count(" ") >= 2):
                 out.append(part)
     return out
 

@@ -36,7 +36,12 @@ _MODIFIERS: tuple[tuple[str, re.Pattern], ...] = (
     (BACKUP, re.compile(r"^(?:bak|backup|백업)$", re.I)),
     (OLD, re.compile(r"^(?:old|이전|구버전|과거|예전|지난\s*자료)$|[_\s]old$", re.I)),
     (REFERENCE, re.compile(r"^(?:ref|reference|참고|참고\s*자료|참조|참조\s*자료)$", re.I)),
-    (RECEIVED, re.compile(r"^(?:source|취합)$|소스$|^부서\s*(?:별\s*)?(?:제출|추천|취합)", re.I)),
+    # 증빙·별첨은 사례를 낸 부서가 붙여 보낸 것이다(실측: '증빙서류' 안 수사기관 공문의
+    # 담당자가 이 업무의 담당자로, 별첨 과업지시서의 계약금액이 이 업무의 금액으로 올라왔다).
+    (RECEIVED, re.compile(r"^(?:source|취합)$|소스$|^부서\s*(?:별\s*)?(?:제출|추천|취합)"
+                          r"|증빙\s*(?:자료|서류)$|^별첨\s*(?:자료|서류)?$|^관련\s*자료$"
+                          # '市 공문', '시 공문', '수신 공문' — 받은 공문과 그 붙임을 모아 둔 곳
+                          r"|(?:^|\s)공문$", re.I)),
     (SUBMITTED, re.compile(r"^(?:제출|제출본|제출\s*자료)$")),
     (MISC, re.compile(r"^(?:기타|etc|misc|temp|tmp|임시|새\s*폴더(?:\s*\d+)?)$", re.I)),
 )

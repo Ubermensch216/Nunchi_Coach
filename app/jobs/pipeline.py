@@ -13,6 +13,7 @@ jobs 테이블은 재시도 횟수를 세는 데만 쓴다. 실패한 파일을 
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import time
 from dataclasses import dataclass, field
@@ -372,19 +373,47 @@ class Pipeline(QObject):
         """
         report = StageReport(STAGE_PICTURES)
         budget = int(db.get_meta("vision_pages_per_run") or pictures.PAGES_PER_RUN)
-        todo = pictures.candidates(db) if budget > 0 else []
-        report.total = len(todo)
-        if not todo:
-            report.note = "읽을 그림·스캔본이 없습니다" if budget > 0 else "꺼 둠"
+        if budget <= 0:
+            report.note = "꺼 둠"
             self._report(db, report)
             return
         client = self._client = project_client(db, OllamaClient)
+        reader = vision.reader_mark(client)
+        todo = pictures.candidates(db, reader)
+        report.total = len(todo)
+        if not todo:
+            report.note = "읽을 그림·스캔본이 없습니다"
+            self._report(db, report)
+            return
         if not client._supports("vision"):   # noqa: SLF001
             report.note = f"건너뜀 — 그림을 읽을 수 있는 로컬 모델이 없습니다 ({len(todo):,}건)"
             self._report(db, report)
             return
+        # 못 읽는 모델도 답은 한다. 문서를 맡기기 전에 정답을 아는 그림으로 확인한다.
+        if not self._vision_works(db, client):
+            report.note = (f"건너뜀 — 이 PC의 로컬 모델({client.gen_model})이 그림의 글자를 "
+                           f"읽지 못합니다 ({len(todo):,}건 남음)")
+            self._report(db, report)
+            return
 
-        read = blank = used = 0
+        read = blank = unread = used = 0
+        halted = False
+        # 못 읽은 문서의 표시는 바로 적지 않고 모아 둔다. 연달아 못 읽으면 문서 탓인지
+        # 모델 탓인지 점검 그림으로 가리고, 모델 탓이면 표시 없이 버린다 — 못 읽는 모델이
+        # 읽을 수 있는 문서를 '글자 없음'으로 굳히지 않게 하려는 것이다.
+        pending: list[tuple[int, str]] = []
+
+        def settle() -> None:
+            nonlocal blank, unread
+            for doc_id, note in pending:
+                db.update_document(doc_id, parser=vision.PARSER, parser_version=reader,
+                                   parse_note=note)
+                if note == vision.BLANK_NOTE:
+                    blank += 1
+                else:
+                    unread += 1
+            pending.clear()
+
         for index, item in enumerate(todo, start=1):
             if self._stop or used >= budget:
                 break
@@ -397,8 +426,9 @@ class Pipeline(QObject):
             if self._stop:
                 break           # 읽다 만 것은 남기지 않는다
             used += max(1, len(result.sections)) if result.ok else 1
-            with db.transaction():
-                if result.ok:
+            report.done = index
+            if result.ok:
+                with db.transaction():
                     db.invalidate_document_analysis(item.doc_id)
                     db.update_document(
                         item.doc_id, hash=digest, parse_status=result.status, parse_error=None,
@@ -409,22 +439,44 @@ class Pipeline(QObject):
                         [(s.kind, s.ordinal, s.locator, s.text, s.meta) for s in result.sections])
                     db.index_document(item.doc_id, item.filename, item.path, "", result.text)
                     coverage.clear_issue(db, item.doc_id, "parse")
-                    read += 1
+                    settle()    # 모델이 읽고 있다. 앞의 것은 정말 못 읽는 문서였다
+                read += 1
+                continue
+            # 글자가 없었거나, 모델이 글이 아닌 것을 냈거나, 호출이 실패했다. 호출 실패는
+            # 표시하지 않는다(다음에 다시 읽는다).
+            if result.note in (vision.BLANK_NOTE, vision.GARBLED_NOTE):
+                pending.append((item.doc_id, result.note))
+            if len(pending) >= pictures.FAILURES_BEFORE_RECHECK:
+                if self._vision_works(db, client):
+                    with db.transaction():
+                        settle()
                 else:
-                    # 읽어 봤지만 글자가 없었다. 상태는 그대로 두고, 다시 읽지 않게만 적는다.
-                    db.update_document(item.doc_id, parser=result.parser,
-                                       parser_version=result.parser_version,
-                                       parse_note=result.note or result.error)
-                    blank += 1
-            report.done = index
+                    pending.clear()
+                    halted = True
+                    break
+        if not halted and pending:
+            with db.transaction():
+                settle()
 
-        left = len(todo) - read - blank
+        left = len(todo) - read - blank - unread
         report.note = f"읽음 {read:,}건"
         if blank:
             report.note += f" · 글자 없음 {blank:,}건"
+        if unread:
+            report.note += f" · 읽지 못함 {unread:,}건"
         if left:
             report.note += f" · {left:,}건 남음"
+        if halted:
+            report.note += " · 중단 — 로컬 모델이 그림의 글자를 읽지 못합니다"
         self._report(db, report)
+
+    def _vision_works(self, db: Database, client) -> bool:
+        """점검 그림을 읽혀 보고 결과를 남긴다(설정 화면이 보여 준다)."""
+        works, why = vision.selfcheck(client)
+        db.set_meta("vision_selfcheck", json.dumps(
+            {"ok": works, "model": client.gen_model, "why": why,
+             "at": datetime.now().strftime("%Y-%m-%d %H:%M")}, ensure_ascii=False))
+        return works
 
 
     # ── 4단계: 시점 확인 ────────────────────────────────────────────

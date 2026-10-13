@@ -53,13 +53,23 @@ class Candidate:
     hinted: bool
 
 
-def candidates(db) -> list[Candidate]:
-    """읽을 그림·스캔본. 먼저 읽을 것부터."""
+# 연달아 이만큼 못 읽으면 문서 탓인지 모델 탓인지 점검 그림으로 가린다.
+FAILURES_BEFORE_RECHECK = 5
+
+
+def candidates(db, reader: str | None = None) -> list[Candidate]:
+    """읽을 그림·스캔본. 먼저 읽을 것부터.
+
+    '읽어 봤지만 글자가 없었다'고 표시된 문서는 뺀다. reader(vision.reader_mark)를 주면
+    그 표시를 **같은 모델·같은 판이 남겼을 때만** 믿는다. 못 읽는 모델이 남긴 표시가
+    모델을 바꾼 뒤에도 문서를 막아 두지 않게 하려는 것이다.
+    """
     rows = db.con.execute(
         "SELECT d.id, d.path, d.filename, d.ext, d.parse_status, s.path AS root "
         "FROM documents d JOIN sources s ON s.id = d.source_id AND s.kind != 'upload' "
-        "WHERE d.missing_since IS NULL AND COALESCE(d.parser, '') != ? "
-        "ORDER BY d.path", (vision.PARSER,)).fetchall()
+        "WHERE d.missing_since IS NULL "
+        "AND (COALESCE(d.parser, '') != ? OR (? IS NOT NULL AND COALESCE(d.parser_version, '') != ?)) "
+        "ORDER BY d.path", (vision.PARSER, reader, reader)).fetchall()
     images_in: Counter = Counter()
     documents_in: Counter = Counter()
     for row in rows:

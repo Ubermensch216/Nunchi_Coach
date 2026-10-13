@@ -27,9 +27,9 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
-from . import docrole, korean, provenance, workstate as ws
+from . import casedocs, docrole, korean, provenance, workstate as ws
 from .dating import _FULL
-from .labeling import label_document
+from .labeling import FALLBACK_LABEL, label_document
 
 EXTRACTOR = "rule@1"
 
@@ -60,7 +60,8 @@ _LABELS: dict[str, tuple[str, ...]] = {
                "접수기한", "접수 마감", "제출마감", "제출 마감", "보고기한", "보고 기한",
                "처리기한", "처리 기한", "납부기한", "납부 기한", "마감일", "마감", "납기", "기한"),
     AMOUNT: ("총사업비", "사업비", "소요예산", "예산액", "예산요구액", "요구액", "계약금액",
-             "지급액", "정산액", "집행액", "예산", "금액"),
+             "지급금액", "지급 금액", "지급액", "지 급 액", "정산액", "집행액",
+             "회의참석수당 지급", "회의참석수당", "참석수당", "강사수당", "예산", "금액"),
     RECIPIENT: ("제출처", "제출 대상", "제출기관", "제출 기관", "보고처", "회신처"),
     PURPOSE: ("추진 목적", "추진목적", "목적"),
     INPUT: ("준비 자료", "준비자료", "구비서류", "구비 서류", "제출서류", "제출 서류",
@@ -177,6 +178,10 @@ _SUBMIT_TO = re.compile(
     r"(?<![가-힣A-Za-z0-9])(?P<value>(?:[가-힣A-Za-z0-9]+\s)?[가-힣A-Za-z0-9]*" + _ORG_TAIL + r")\s*(?:에|으로)\s*"
     r"(?:제출|보고|회신|송부)\s*(?:합니다|한다|하여야 합니다|해야 합니다)"
 )
+# 평가 안내문의 꼴: "'25. 1. 10.(금) 18시까지 행안부 공무원단체과로 공문 제출"
+_SUBMIT_BY_LETTER = re.compile(
+    r"(?<![가-힣A-Za-z0-9])(?P<value>(?:[가-힣A-Za-z0-9]+\s)?[가-힣A-Za-z0-9]*" + _ORG_TAIL + r")\s*(?:에|으로|로)\s*"
+    r"공문(?:으로)?\s*제출")
 _USES_FORM = re.compile(
     r"(?<![가-힣A-Za-z0-9\-])(?P<value>(?:[가-힣A-Za-z0-9\-]+\s)?[가-힣A-Za-z0-9\-]*(?:서식|양식|신청서))\s*(?:을|를)\s*"
     r"(?:사용|이용|작성)\s*(?:합니다|한다|하여야 합니다|해야 합니다)"
@@ -196,7 +201,8 @@ def _read_statements(line: str, doc_id: int, locator: str, doc_year: int | None,
         item = _build(kind, label, value, None, match.group(0).strip(), doc_id, locator, doc_year, official)
         if item is not None:
             found.append(item)
-    for pattern, kind, slot in ((_SUBMIT_TO, RECIPIENT, "제출처"), (_USES_FORM, FORM, "서식")):
+    for pattern, kind, slot in ((_SUBMIT_TO, RECIPIENT, "제출처"), (_SUBMIT_BY_LETTER, RECIPIENT, "제출처"),
+                                (_USES_FORM, FORM, "서식")):
         for match in pattern.finditer(line):
             item = _build(kind, slot, match.group("value").strip(), None, match.group(0).strip(),
                           doc_id, locator, doc_year, official)
@@ -428,6 +434,11 @@ def _build(kind, slot, raw, unit, quote, doc_id, locator, doc_year, official) ->
         if len(raw) > 60 or raw.lstrip().startswith(("◇", "○", "▷", "※", "-")):
             return None
     item = Found(kind, slot, value, doc_id, locator, quote, doc_year, when, official)
+    if kind == AMOUNT:
+        # 같은 금액에 붙은 꼬리말('513,000원 ※실비에 따라 변동 가능')로 엇갈림이 되지 않게
+        # 수와 단위로 견준다.
+        unit_word = re.match(r"\s*(천원|만원|백만원|억원|억|원)", raw[number.end():])
+        item.key = number.group(0).replace(",", "") + (unit_word.group(1) if unit_word else _normalize(unit or ""))
     return item if _verified(item, raw) else None
 
 
@@ -514,16 +525,20 @@ def choose(found: list[Found], basis: date) -> list[dict]:
         # 추진일정의 같은 줄이 한 해에 두 번 나오는 것은 엇갈림이 아니다. 상·하반기에
         # 한 번씩 하는 일이다. 날짜순으로 나란히 보인다.
         schedule = is_schedule(slot)
-        conflict = len(values) > 1 and not schedule
+        # 요청 공문을 보낸 곳이 여럿이면(중앙부처와 그것을 전달한 시) 엇갈림이 아니라 둘 다다.
+        # 계획서마다 적힌 목적 문장도 엇갈림이 아니다 — 가장 최근 회차의 첫 계획서 것을 보인다.
+        sender, purpose = slot == SENDER_SLOT, (kind, slot) == (PURPOSE, PURPOSE_SLOT)
+        conflict = len(values) > 1 and not (schedule or sender or purpose)
         shown = list(values.values())
         if schedule:
             shown.sort(key=lambda item: (item.when or date.max, item.value))
-        shown = shown[:_MAX_CONFLICT_VALUES]
+        shown = shown[:1 if purpose else _MAX_CONFLICT_VALUES]
 
         candidates.append({
             "kind": kind, "slot": slot,
             "content": " / ".join(item.value for item in shown),
-            "basis_state": ws.CONFLICT if conflict else ws.STATED,
+            # 보낸 곳이 낼 곳이라는 것은 문서가 말한 것이 아니라 읽어 낸 것이다.
+            "basis_state": ws.CONFLICT if conflict else (ws.INFERRED if sender else ws.STATED),
             "applicability": _applicability(shown, newest, basis, conflict),
             "evidence": _evidence(current, shown),
             # 항목으로 올리지는 않지만 버리지도 않는다. 최근 문서라는 이유만으로
@@ -578,7 +593,11 @@ def _evidence(current: list[Found], shown: list[Found]) -> list[tuple[int, str, 
 
 def extract_task(db, task_id: int, basis: date | None = None) -> list[dict]:
     """업무 하나의 문서들에서 항목 후보를 만든다. 저장하지 않는다."""
-    return choose(read_task(db, task_id), basis or date.today())
+    candidates = choose(read_task(db, task_id), basis or date.today())
+    # 다른 업무의 절차를 인용한 것은 이 업무의 절차 항목이 아니다(build_steps 참고).
+    return [item for item in candidates
+            if item["kind"] != PROCEDURE
+            or not _belongs_elsewhere(db, task_id, split_procedure(item["content"]))]
 
 
 def schedule_dates(db, task_id: int) -> list[tuple[int, date]]:
@@ -607,7 +626,11 @@ def read_task(db, task_id: int) -> list[Found]:
     # '총사업비'로 올라와 서로 엇갈린다고 표시됐다.
     from . import foldersteps
 
-    outside = foldersteps.outside_the_work(db, [row["id"] for row in documents])
+    every = [row["id"] for row in documents]
+    outside = foldersteps.outside_the_work(db, every)
+    # 참고 폴더에 넣어 둔 요청 공문·평가 기준은 기한과 담당을 읽으려고 남긴다. 금액은
+    # 읽지 않는다 — 다른 위원회의 심사기준에 적힌 예산이 이 업무의 예산이 됐다(실측).
+    kept_from_aside = foldersteps.outside_the_work(db, every, keep_requests=False) - outside
     documents = [row for row in documents if row["id"] not in outside]
     if not documents:
         return []
@@ -617,17 +640,34 @@ def read_task(db, task_id: int) -> list[Found]:
     roles = {row["doc_id"]: row["role"] for row in db.con.execute(
         f"SELECT doc_id, role FROM doc_roles WHERE doc_id IN ({marks})",
         [row["id"] for row in documents])}
+    cases = casedocs.collections(db, [row["id"] for row in documents])
     found: list[Found] = []
     for document in documents:
-        mine = []
-        for section in db.con.execute(
+        sections = db.con.execute(
             "SELECT locator, text FROM document_sections WHERE doc_id = ? ORDER BY ordinal",
-            (document["id"],),
-        ):
-            mine.extend(read_section(
+            (document["id"],)).fetchall()
+        requested = roles.get(document["id"]) in (docrole.DIRECTIVE, docrole.CRITERIA)
+        mine = []
+        for index, section in enumerate(sections):
+            read = read_section(
                 section["text"], document["id"], section["locator"], document["eff_year"],
-                official=document["id"] in official, title=document["filename"] or ""))
-        if roles.get(document["id"]) in (docrole.DIRECTIVE, docrole.CRITERIA):
+                official=document["id"] in official, title=document["filename"] or "")
+            # 사업의 규모는 그 사업의 계획서가 앞머리(개요)에 적는다. 뒤쪽의 '참고',
+            # '전년도 추진현황'에 나오는 사업비는 다른 사업의 것이다.
+            late = index >= max(1, len(sections) * _OVERVIEW_PART)
+            mine.extend(item for item in read
+                        if not (late and item.kind == AMOUNT and _PROJECT_AMOUNT.match(item.slot)))
+        mine = _own_values(mine, case_collection=document["id"] in cases,
+                           from_aside=document["id"] in kept_from_aside, requested=requested)
+        role = roles.get(document["id"])
+        if document["id"] not in cases:
+            if role == docrole.DIRECTIVE:
+                mine.extend(_sender(sections, document["id"], document["eff_year"],
+                                    document["id"] in official))
+            elif role == docrole.PLAN and document["id"] not in kept_from_aside:
+                mine.extend(_purpose(sections, document["id"], document["eff_year"],
+                                     document["id"] in official))
+        if requested:
             # 상급기관의 요청 공문·평가 기준에 적힌 담당자는 그 기관의 사람이다. 이 업무의
             # 담당자와 같은 칸에 섞이지 않게 어디서 온 것인지 밝힌다.
             for item in mine:
@@ -635,6 +675,85 @@ def read_task(db, task_id: int) -> list[Found]:
                     item.slot = f"{item.slot} · 공문을 보낸 쪽"
         found.extend(mine)
     return found
+
+
+# ── 요청 공문을 보낸 곳, 계획서가 밝힌 목적 ─────────────────────────
+# 실제 자료에서 제출처는 업무 13개 가운데 12개가 '자료에 없음'이었다. 공문은 '제출처:'라고
+# 적지 않는다 — 요청한 곳이 곧 낼 곳이고, 그것은 공문 아래의 시행 번호에 있다.
+#     시행 규제혁신추진단-4843 (2024. 6. 26.)  접수 기획실-10745 (2024. 6. 26.)
+# 접수 번호가 있는(우리가 받은) 공문에서만 읽는다. 우리가 낸 공문의 시행 부서는 우리다.
+SENDER_SLOT = "제출처 · 요청 공문을 보낸 곳"
+PURPOSE_SLOT = "목적"
+_ISSUED = re.compile(
+    r"시행\s+(?P<dept>[가-힣A-Za-z·]{2,20})-\d+\s*(?:\(\s*[\d.\s]+\))?\s*"
+    r"접수\s+(?P<mine>[가-힣A-Za-z·]{2,20})-\d+")
+_ASKS = re.compile(r"제출|회신|추천하여|신청하여|신청해|통보하여")
+_ORG_LINE = re.compile(r"^[가-힣]{2,12}(?:특별시|광역시|특별자치시|특별자치도|시|도|군|구|부|처|청|위원회)$")
+# 계획서 첫머리의 목적 문장: '…공직문화를 조성하고자 함.'
+_PURPOSE_END = re.compile(r"(?:하고자\s*(?:함|합니다|한다)|하기\s*위함|위한\s*것임|하려는\s*것임)\.?$")
+_PURPOSE_MIN, _PURPOSE_MAX = 25, 260
+
+
+def _sender(sections, doc_id: int, doc_year: int | None, official: bool) -> list[Found]:
+    lines = [" ".join(line.split()) for section in sections for line in (section["text"] or "").splitlines()]
+    lines = [line for line in lines if line]
+    whole = " ".join(lines)
+    issued = _ISSUED.search(whole)
+    if issued is None or issued.group("dept") == issued.group("mine"):
+        return []
+    # 무엇을 내라는 공문이어야 한다. 다른 부서가 계획을 알려 온 공문은 낼 곳을 말하지 않는다.
+    if _ASKS.search(whole) is None:
+        return []
+    org = next((line.replace(" ", "") for line in lines[:8] if _ORG_LINE.match(line.replace(" ", ""))), "")
+    value = f"{org} {issued.group('dept')}".strip()
+    quote = " ".join(part for part in (org, " ".join(issued.group(0).split())) if part)
+    return [Found(RECIPIENT, SENDER_SLOT, value, doc_id, sections[-1]["locator"] if sections else "",
+                  quote, doc_year, None, official)]
+
+
+def _purpose(sections, doc_id: int, doc_year: int | None, official: bool) -> list[Found]:
+    overview = sections[:max(3, int(len(sections) * _OVERVIEW_PART))]
+    for section in overview:
+        for line in (section["text"] or "").splitlines():
+            line = " ".join(line.split())
+            if _PURPOSE_MIN <= len(line) <= _PURPOSE_MAX and _PURPOSE_END.search(line):
+                return [Found(PURPOSE, PURPOSE_SLOT, line, doc_id, section["locator"], line,
+                              doc_year, None, official)]
+    return []
+
+
+# 사업 하나의 규모를 말하는 이름표. 업무를 하는 데 드는 돈(소요예산·지급액)과 다르다.
+_PROJECT_AMOUNT = re.compile(r"^(?:총사업비|사업비)(?:$|\s*·)")
+# 문서의 앞쪽 이만큼을 개요로 본다.
+_OVERVIEW_PART = 0.4
+
+
+def _amount_number(item: Found) -> str:
+    number = _NUMBER.search(item.value)
+    return number.group(0).replace(",", "") if number else item.key
+
+
+def _own_values(found: list[Found], case_collection: bool = False, from_aside: bool = False,
+                requested: bool = False) -> list[Found]:
+    """이 문서에서 읽은 값 가운데 이 업무의 것이 아닌 금액·담당을 뺀다.
+
+    못 가리면 내지 않는다. 실제 자료에서 금액 15건 가운데 14건이 부서 우수사례와
+    중점과제의 사업비였고, 그것들끼리 '자료가 엇갈림'이 됐다. 틀린 값 열넷이 맞는 값
+    하나를 가린다.
+      · 남의 사례를 옮겨 실은 문서(추천 현황, 심의자료, 발표 자료)의 금액은 사례의 것이다.
+        담당자도 그렇다 — 다만 요청 공문·평가 안내의 담당자는 문의할 곳이라 남긴다.
+      · 참고 폴더에서 건진 문서의 금액은 읽지 않는다.
+      · 한 문서가 같은 이름표로 서로 다른 금액을 여럿 적었으면 목록이다(사례마다의 사업비).
+    표에서 읽은 값은 행 이름으로 이미 갈려 있어 목록 규칙을 적용하지 않는다.
+    """
+    if case_collection or from_aside:
+        found = [item for item in found if item.kind != AMOUNT
+                 and (item.kind != CONTACT or requested or not case_collection)]
+    listed: dict[str, set[str]] = {}
+    for item in found:
+        if item.kind == AMOUNT:
+            listed.setdefault(item.slot, set()).add(_amount_number(item))
+    return [item for item in found if item.kind != AMOUNT or len(listed[item.slot]) == 1]
 
 
 # ── 현재까지의 기록 (C03) ───────────────────────────────────────────
@@ -738,6 +857,45 @@ def split_procedure(text: str) -> list[str]:
     return steps if len(steps) >= 2 else []
 
 
+# 이름 붙은 단계가 가장 많은 해의 이만큼은 돼야 끝까지 간 회차로 본다.
+_WHOLE_ROUND = 0.75
+
+
+def _named_steps(rows) -> int:
+    """무슨 일인지 이름이 붙은 단계의 수. '문서 처리'는 파일이 있었다는 것뿐이다."""
+    return sum(1 for row in rows if row["label"] and row["label"] != FALLBACK_LABEL)
+
+
+_STEP_WORD = re.compile(r"[가-힣]{2,}")
+# 어느 절차에나 나오는 말. 이것만 겹쳐서는 그 업무의 절차라고 할 수 없다.
+_COMMON_STEP_WORDS = frozenset({"계획", "보고", "결과", "제출", "요청", "알림", "통보", "수립", "실시", "추진"})
+
+
+def _belongs_elsewhere(db, task_id: int, stated: list[str]) -> bool:
+    """문서에 적힌 절차가 이 업무가 아니라 다른 업무의 것인가.
+
+    위원회 심의자료에는 심의할 안건의 절차가 인용돼 있다. 실제 자료에서 우수공무원
+    선발 절차(추천 → 1차 심사평가 → 최종심사 → 인센티브)가 위원회 운영 업무의 '적힌
+    절차'가 됐다. 지난 회차에 이 업무가 실제로 밟은 단계 이름과 견준다 — 이 업무의
+    단계와는 한 군데도 겹치지 않고 다른 업무의 단계와 절반 넘게 겹치면 남의 절차다.
+    지난 단계가 없는 업무(견줄 것이 없음)에서는 적힌 대로 둔다.
+    """
+    labels: dict[int, str] = {}
+    for row in db.con.execute("SELECT task_id, label FROM task_steps WHERE label IS NOT NULL"):
+        labels[row["task_id"]] = labels.get(row["task_id"], "") + " " + row["label"]
+    if task_id not in labels:
+        return False
+
+    def hits(text: str) -> int:
+        return sum(1 for step in stated
+                   if any(word in text for word in _STEP_WORD.findall(step)
+                          if word not in _COMMON_STEP_WORDS))
+
+    if hits(labels[task_id]):
+        return False
+    return any(hits(text) * 2 > len(stated) for other, text in labels.items() if other != task_id)
+
+
 def build_steps(db, task_id: int, items: list[dict], basis: date | None = None) -> list[dict]:
     """업무 항목 후보와 과거 처리 기록에서 수행 단계 후보를 만든다."""
     basis = basis or date.today()
@@ -749,8 +907,11 @@ def build_steps(db, task_id: int, items: list[dict], basis: date | None = None) 
     procedure = next((item for item in by_kind.get(PROCEDURE, [])
                       # 절차가 엇갈리면 어느 쪽도 '적힌 절차'로 세우지 않는다.
                       if item["basis_state"] == ws.STATED), None)
-    if procedure is not None:
-        for number, label in enumerate(split_procedure(procedure["content"]), start=1):
+    stated = split_procedure(procedure["content"]) if procedure is not None else []
+    if stated and _belongs_elsewhere(db, task_id, stated):
+        stated = []
+    if stated:
+        for number, label in enumerate(stated, start=1):
             steps.append({
                 "slot": f"stated-{number}", "label": label, "ordinal": number,
                 "procedure_kind": ws.PROCEDURE_STATED, "basis_state": ws.STATED,
@@ -766,11 +927,19 @@ def build_steps(db, task_id: int, items: list[dict], basis: date | None = None) 
     # 처리 기록이 남은 가장 최근 해. 올해는 아직 진행 중이라 앞부분만 있고,
     # 그것을 사례로 내밀면 '다음에 무엇을 했는가'가 빠진다. 지난 회차가 없을
     # 때에만 올해 것을 쓴다.
+    #
+    # 가장 최근 해가 곧 끝까지 간 회차는 아니다. 실제 자료에서 선발 업무는 2024년에
+    # 아홉 단계가 남아 있는데 2025년의 발표자료 넉 장이 사례로 올라왔다. 이름이 붙은
+    # 단계가 가장 많은 해에 견주어 크게 모자란 해는 조각 회차로 보고 건너뛴다.
     years = db.task_years(task_id)
-    ordered = ([y for y in reversed(years) if y < basis.year]
+    by_year = {year: db.task_steps(task_id, year) for year in years}
+    past = [y for y in reversed(years) if y < basis.year and by_year[y]]
+    fullest = max((_named_steps(by_year[y]) for y in past), default=0)
+    whole = [y for y in past if _named_steps(by_year[y]) >= fullest * _WHOLE_ROUND]
+    ordered = (whole + [y for y in past if y not in whole]
                + [y for y in reversed(years) if y >= basis.year])
     for year in ordered:
-        rows = db.task_steps(task_id, year)
+        rows = by_year[year]
         if not rows:
             continue
         for row in rows:

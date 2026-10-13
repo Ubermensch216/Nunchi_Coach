@@ -275,6 +275,7 @@ def test_the_stage_reads_within_its_budget_and_leaves_the_rest_for_next_time(db,
 
     monkeypatch.setattr(pipeline_module, "project_client", lambda *_: _Seeing())
     monkeypatch.setattr(vision, "read", fake_read)
+    monkeypatch.setattr(vision, "selfcheck", lambda client: (True, ""))
     reports = []
     worker = Pipeline(db.path)
     worker.stage_done.connect(reports.append)
@@ -296,3 +297,99 @@ def test_the_stage_reads_within_its_budget_and_leaves_the_rest_for_next_time(db,
     db.set_meta("vision_pages_per_run", "0")                                      # 꺼 둘 수 있다
     worker._pictures(db)
     assert reports[-1].note == "꺼 둠"
+
+
+# ── 그림을 못 읽는 모델 ─────────────────────────────────────────────
+# 실측: 그림을 읽을 수 있다고 밝힌 모델이 읽을 수 있는 쪽지 캡처에 숫자 격자를 내거나
+# '글자 없음'이라고 답했다. 예전에는 그것을 '글자 없음'으로 적고 다시 읽지 않았다.
+
+class _Answering(_Seeing):
+    def __init__(self, answer):
+        self.answer = answer
+
+    def generate_text(self, prompt, images=None, num_predict=800, **_):
+        return self.answer, None
+
+
+def test_the_check_picture_tells_a_model_that_reads_from_one_that_only_answers():
+    assert pymupdf.Pixmap(vision.canary_png()).width > 600
+    assert vision.selfcheck(_Answering("문서번호 2024-0731\n적극행정위원회 개최 계획")) == (True, "")
+    assert vision.selfcheck(_Answering("문 서 번 호 2024\n제 출 기 한 은 10월"))[0]      # 띄어 읽어도 된다
+    assert not vision.selfcheck(_Answering("| 1 | 2 | 3 |\n|---|---|---|"))[0]
+    assert not vision.selfcheck(_Answering(vision.NOTHING))[0]
+
+
+def test_an_answer_that_is_not_writing_is_not_recorded_as_a_blank_picture(tmp_path):
+    picture = tmp_path / "쪽지.png"
+    picture.write_bytes(vision.canary_png())
+    garbled = vision.read(_Answering("| 1 | 2 | 3 | 4 |\n| 5 | 6 | 7 | 8 |"), picture)
+    blank = vision.read(_Answering(vision.NOTHING), picture)
+    assert (garbled.ok, garbled.note) == (False, vision.GARBLED_NOTE)
+    assert (blank.ok, blank.note) == (False, vision.BLANK_NOTE)
+
+
+def _scans(db, root: Path, count: int) -> list[int]:
+    (root / "위원회").mkdir(parents=True)
+    source_id = db.add_source(str(root))
+    ids = []
+    for index in range(count):
+        path = root / "위원회" / f"심사의결서 {index}.pdf"
+        path.write_bytes(b"scan %d" % index)
+        ids.append(db.upsert_document(source_id, {
+            "path": str(path), "filename": path.name, "ext": ".pdf", "parse_status": "empty",
+            "parser": "pdf"}))
+    return ids
+
+
+def _run_pictures(db, monkeypatch, read, checks):
+    answers = iter(checks)
+    monkeypatch.setattr(pipeline_module, "project_client", lambda *_: _Seeing())
+    monkeypatch.setattr(vision, "read", read)
+    monkeypatch.setattr(vision, "selfcheck", lambda client: next(answers))
+    reports = []
+    worker = Pipeline(db.path)
+    worker.stage_done.connect(reports.append)
+    worker._pictures(db)
+    return reports[-1].note
+
+
+def test_a_model_that_cannot_read_pictures_marks_nothing(db, tmp_path, monkeypatch):
+    ids = _scans(db, tmp_path / "자료", 3)
+
+    def never(*_args, **_kwargs):
+        raise AssertionError("점검에서 떨어졌으면 문서를 읽히지 않는다")
+
+    note = _run_pictures(db, monkeypatch, never, [(False, "점검 그림의 글자를 읽지 못했습니다")])
+
+    assert note == "건너뜀 — 이 PC의 로컬 모델(fake)이 그림의 글자를 읽지 못합니다 (3건 남음)"
+    assert {db.document(i)["parser"] for i in ids} == {"pdf"}
+    assert '"ok": false' in db.get_meta("vision_selfcheck")
+    assert len(pictures.candidates(db, vision.reader_mark(_Seeing()))) == 3      # 다음에 다시 본다
+
+
+def test_a_run_of_unreadable_answers_is_checked_before_it_is_believed(db, tmp_path, monkeypatch):
+    ids = _scans(db, tmp_path / "자료", 8)
+
+    def garbled(*_args, **_kwargs):
+        return ParseResult(status=EMPTY, parser=vision.PARSER, note=vision.GARBLED_NOTE)
+
+    # 처음엔 읽었는데 도중에 못 읽게 됐다: 다섯 건째에 다시 점검하고, 떨어지면 멈춘다.
+    note = _run_pictures(db, monkeypatch, garbled, [(True, ""), (False, "읽지 못함")])
+    assert note == "읽음 0건 · 8건 남음 · 중단 — 로컬 모델이 그림의 글자를 읽지 못합니다"
+    assert {db.document(i)["parser"] for i in ids} == {"pdf"}
+
+    # 점검을 통과하면 정말 못 읽는 문서들이다(손글씨 명부). 표시하고 계속 읽는다.
+    note = _run_pictures(db, monkeypatch, garbled, [(True, ""), (True, "")])
+    assert note == "읽음 0건 · 읽지 못함 8건"
+    assert {db.document(i)["parser"] for i in ids} == {vision.PARSER}
+    assert pictures.candidates(db, vision.reader_mark(_Seeing())) == []
+
+
+def test_a_blank_mark_is_believed_only_from_the_same_model_and_rules(db):
+    old = _file(db, r"위원회\2024년 제3회\예전에 글자 없음.pdf", "empty",
+                parser=vision.PARSER, parser_version="3")
+    same = _file(db, r"위원회\2024년 제3회\이번 모델이 본 것.pdf", "empty",
+                 parser=vision.PARSER, parser_version=vision.reader_mark(_Seeing()))
+    assert [c.doc_id for c in pictures.candidates(db, vision.reader_mark(_Seeing()))] == [old]
+    assert pictures.candidates(db) == []                     # 누가 읽을지 모르면 표시를 그대로 둔다
+    assert same
