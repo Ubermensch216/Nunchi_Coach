@@ -1,0 +1,14 @@
+{
+  "sha256": "cf77d53f4e4ebfbaee222765a0f06c5349a0f13931b9e2cb076aaa01d693b50a",
+  "questions": 144,
+  "tuning": 0,
+  "holdout": 144,
+  "top_k": 10,
+  "graph_enabled": false,
+  "limitations": [
+    "합성 자료",
+    "추출 규칙을 만든 뒤 다른 문장 틀로 쓴 일반화 확인용",
+    "이 묶음을 보고 규칙을 고치지 않는다",
+    "모델 OFF FTS 기준선"
+  ]
+}

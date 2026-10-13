@@ -1,0 +1,5968 @@
+{
+  "version": 1,
+  "source": "synthetic-paraphrase",
+  "review": "independent_review_pending",
+  "basis_date": "2026-10-11",
+  "styles": {
+    "1": "이름표 줄",
+    "2": "다른 이름표의 서술문",
+    "3": "동사형 문장",
+    "4": "자유 서술"
+  },
+  "groups": [
+    {
+      "id": "pp01",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 1,
+      "task": "도로점용허가",
+      "documents": [
+        {
+          "key": "pp01-안내",
+          "path": "pp01/안내.txt",
+          "text": "31구청 도로점용허가 안내\n담당: 복지과\n제출처: 31구청 기획과\n제출기한: 2026-11-10\n서식: 별지 제1호 도로점용허가신청서 서식 작성 방법은 별첨 작성요령-1을 참고합니다.",
+          "sha256": "e28a2546258006991c0b82d9ea5e654222b637fa0966248badc89fc34fa2f934",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp01-작성요령",
+          "path": "pp01/작성요령.txt",
+          "text": "작성요령-1 안내. 작성요령-1에 따라 작성한 서류는 31구청 기획과에 제출합니다.",
+          "sha256": "25870fc7cb97d609195c5151c9c9343796884ef2a7712699ece0c31fc91fbb2b",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp01-별칭",
+          "path": "pp01/별칭.txt",
+          "text": "31구청에서는 도로점용허가을 '도로사업'이라고도 부릅니다. 도로사업의 담당은 복지과입니다.",
+          "sha256": "9d72b7cd06b3aa7070cd6dfd6e18a233f25bb9e431e437136aff4378ead318ca",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp01-참고",
+          "path": "pp01/참고.txt",
+          "text": "도로점용허가의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "e21572b1e5fcd468d6f4b1968265c7094179c4f16fca3b89a5be196178597176",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp02",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 2,
+      "task": "공공시설대관",
+      "documents": [
+        {
+          "key": "pp02-안내",
+          "path": "pp02/안내.txt",
+          "text": "32구청 공공시설대관 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 32구청 도로과입니다. 마감일은 2026-11-11입니다. 사용 서식은 별지 제2호 공공시설대관신청서입니다. 서식 작성 방법은 별첨 작성요령-2을 참고합니다.",
+          "sha256": "1fcff31c8ec3fcc264fb5103f94c878211316dbd3836d52e200d4be4b3b67fdb",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp02-작성요령",
+          "path": "pp02/작성요령.txt",
+          "text": "작성요령-2 안내. 작성요령-2에 따라 작성한 서류는 32구청 도로과에 제출합니다.",
+          "sha256": "3afcd75e15a37dd18bf6951d8ab07abafd8796eea38a97fdaa6b1a3c2a9933bd",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp02-별칭",
+          "path": "pp02/별칭.txt",
+          "text": "32구청에서는 공공시설대관을 '공공사업'이라고도 부릅니다. 공공사업의 담당은 총무과입니다.",
+          "sha256": "8cc563be00e07a26578afa04b7a6c0e1dfcaa8394b510d447662ad78c62e8347",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp02-참고",
+          "path": "pp02/참고.txt",
+          "text": "공공시설대관의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "4ff478e551d102485c14fd832872c11702a8dec5a75d720530bce589b6122b40",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp03",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 3,
+      "task": "체납액징수",
+      "documents": [
+        {
+          "key": "pp03-안내",
+          "path": "pp03/안내.txt",
+          "text": "33구청 체납액징수 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 33구청 환경과에 제출합니다. 2026. 11. 12.까지 제출하여 주시기 바랍니다. 별지 제3호 체납액징수신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-3을 참고합니다.",
+          "sha256": "0120da305eaae7171a73ae03c80da3940929babf1aed1dbb755c903e79a6fdda",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp03-작성요령",
+          "path": "pp03/작성요령.txt",
+          "text": "작성요령-3 안내. 작성요령-3에 따라 작성한 서류는 33구청 환경과에 제출합니다.",
+          "sha256": "3d035b1f3f08e43b0f2ddfb7df5d876c333021c19ee68e36951212a7dda5d4c0",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp03-별칭",
+          "path": "pp03/별칭.txt",
+          "text": "33구청에서는 체납액징수을 '체납사업'이라고도 부릅니다. 체납사업의 담당은 회계과입니다.",
+          "sha256": "b32e7d9e0d851d64b2f005882fa788e967ed3d75129508fca154fcc457e01b19",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp03-참고",
+          "path": "pp03/참고.txt",
+          "text": "체납액징수의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "5d5a0900ef2149a52c3fb40e5ab138eee4200046c972c3298505f59ed5cd68dc",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp04",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 4,
+      "task": "여권발급지원",
+      "documents": [
+        {
+          "key": "pp04-안내",
+          "path": "pp04/안내.txt",
+          "text": "34구청 여권발급지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 34구청 복지과 쪽으로 보내면 된다. 기한은 11월 13일 전이고 쓰는 양식은 별지 제4호 여권발급지원신청서. 서식 작성 방법은 별첨 작성요령-4을 참고합니다.",
+          "sha256": "265d5bb2e3a3c96c8ed5531fc145d2137bfee6a1e3e28abd765997910538bcfd",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp04-작성요령",
+          "path": "pp04/작성요령.txt",
+          "text": "작성요령-4 안내. 이 요령으로 만든 서류는 34구청 복지과 쪽에 내면 된다.",
+          "sha256": "5e65cc493a3b4e99691da67b146fd6a175a715c7b9981ec42f7d1779f8488138",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp04-별칭",
+          "path": "pp04/별칭.txt",
+          "text": "34구청에서는 여권발급지원을 '여권사업'이라고도 한다. 여권사업는 기획과가 한다.",
+          "sha256": "420d5e2033a724a07faaad6f8fdad160224783692d200b3c1748875b0eff3562",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp04-참고",
+          "path": "pp04/참고.txt",
+          "text": "여권발급지원의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "996abbd469f716b5c65544630f303a38468bca97d69fdcb52d867ea354f997dd",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp05",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 1,
+      "task": "하천정비",
+      "documents": [
+        {
+          "key": "pp05-안내",
+          "path": "pp05/안내.txt",
+          "text": "35구청 하천정비 안내\n담당: 도로과\n제출처: 35구청 총무과\n제출기한: 2026-11-14\n서식: 별지 제5호 하천정비신청서 서식 작성 방법은 별첨 작성요령-5을 참고합니다.",
+          "sha256": "b5b73e1bc09a8fa72bce72624061d402551972e81254384b5b91340c00e990cd",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp05-작성요령",
+          "path": "pp05/작성요령.txt",
+          "text": "작성요령-5 안내. 작성요령-5에 따라 작성한 서류는 35구청 총무과에 제출합니다.",
+          "sha256": "32b1833ae002b9dd896a076520845ec476702b3d5da378416c36065816e8e32d",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp05-별칭",
+          "path": "pp05/별칭.txt",
+          "text": "35구청에서는 하천정비을 '하천사업'이라고도 부릅니다. 하천사업의 담당은 도로과입니다.",
+          "sha256": "92a1d96270d7cf2af2611519e92442f946985504d058b83c385ec3bd92206f13",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp05-참고",
+          "path": "pp05/참고.txt",
+          "text": "하천정비의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "7d5e6bd52b101b9e9321c4dc1b2e5d1a7ec62ef75570b84eb48aed7e9501d87c",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp06",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 2,
+      "task": "어린이집평가",
+      "documents": [
+        {
+          "key": "pp06-안내",
+          "path": "pp06/안내.txt",
+          "text": "36구청 어린이집평가 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 36구청 회계과입니다. 마감일은 2026-11-15입니다. 사용 서식은 별지 제6호 어린이집평가신청서입니다. 서식 작성 방법은 별첨 작성요령-6을 참고합니다.",
+          "sha256": "fa5f8eb9410145fdcb44da0aa156a57cc56a0a6cd4513feebbfc4f241b5a3a9f",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp06-작성요령",
+          "path": "pp06/작성요령.txt",
+          "text": "작성요령-6 안내. 작성요령-6에 따라 작성한 서류는 36구청 회계과에 제출합니다.",
+          "sha256": "f821535211193eb43eed84bc5c567522de26cd1048b0008d6226795c261e9ed4",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp06-별칭",
+          "path": "pp06/별칭.txt",
+          "text": "36구청에서는 어린이집평가을 '어린사업'이라고도 부릅니다. 어린사업의 담당은 환경과입니다.",
+          "sha256": "30e15414745263c87fd54868100e75a23b6ae6dc8cd7e099939552937cb134cd",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp06-참고",
+          "path": "pp06/참고.txt",
+          "text": "어린이집평가의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "7e127a8bc05cc24437d42afd977b8bef34c81577e66229ffa001733253d50d4c",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp07",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 3,
+      "task": "소상공인지원",
+      "documents": [
+        {
+          "key": "pp07-안내",
+          "path": "pp07/안내.txt",
+          "text": "37구청 소상공인지원 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 37구청 기획과에 제출합니다. 2026. 11. 16.까지 제출하여 주시기 바랍니다. 별지 제7호 소상공인지원신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-7을 참고합니다.",
+          "sha256": "f16768d44c6d683c6149b17cdc28a212a9a9c9fa67e9635e03c4126645822a45",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp07-작성요령",
+          "path": "pp07/작성요령.txt",
+          "text": "작성요령-7 안내. 작성요령-7에 따라 작성한 서류는 37구청 기획과에 제출합니다.",
+          "sha256": "d79e1d93f7ebe951f78c0d17500cebca4ca18d3b01090d1fab18b3edb5357769",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp07-별칭",
+          "path": "pp07/별칭.txt",
+          "text": "37구청에서는 소상공인지원을 '소상사업'이라고도 부릅니다. 소상사업의 담당은 복지과입니다.",
+          "sha256": "e8d79df9da0c1f2feae00f97dec6f013a7c227bbc6ecfc5c485e62c52cb65c8f",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp07-참고",
+          "path": "pp07/참고.txt",
+          "text": "소상공인지원의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "080697440a58fa16f304c93a863aabe868c2adb571b76b9a4473f8d623a8bc68",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp08",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 4,
+      "task": "전통시장육성",
+      "documents": [
+        {
+          "key": "pp08-안내",
+          "path": "pp08/안내.txt",
+          "text": "38구청 전통시장육성 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 38구청 도로과 쪽으로 보내면 된다. 기한은 11월 17일 전이고 쓰는 양식은 별지 제8호 전통시장육성신청서. 서식 작성 방법은 별첨 작성요령-8을 참고합니다.",
+          "sha256": "30ffe69c485fb05dee7c1c5724731d8a522c1216ac501e85a4f93ff31127e56f",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp08-작성요령",
+          "path": "pp08/작성요령.txt",
+          "text": "작성요령-8 안내. 이 요령으로 만든 서류는 38구청 도로과 쪽에 내면 된다.",
+          "sha256": "182968810a333a0476f80969a82f47add7c82decadbaef0aad5e3b4f5dbad962",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp08-별칭",
+          "path": "pp08/별칭.txt",
+          "text": "38구청에서는 전통시장육성을 '전통사업'이라고도 한다. 전통사업는 총무과가 한다.",
+          "sha256": "78e5bf3225858631550f269bb460229febac8dfed113461fb1b102ae97cd5dc5",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp08-참고",
+          "path": "pp08/참고.txt",
+          "text": "전통시장육성의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "5996416334eb0de894893f198a03df3c582bd381569de5c1fa281f4e95b39de8",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp09",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 1,
+      "task": "폐기물처리",
+      "documents": [
+        {
+          "key": "pp09-안내",
+          "path": "pp09/안내.txt",
+          "text": "39구청 폐기물처리 안내\n담당: 회계과\n제출처: 39구청 환경과\n제출기한: 2026-11-18\n서식: 별지 제9호 폐기물처리신청서 서식 작성 방법은 별첨 작성요령-9을 참고합니다.",
+          "sha256": "d7582cf76dcf20de5de7e5c858edf7d8034d58fb9b4b89de050ca8f9feb108f0",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp09-작성요령",
+          "path": "pp09/작성요령.txt",
+          "text": "작성요령-9 안내. 작성요령-9에 따라 작성한 서류는 39구청 환경과에 제출합니다.",
+          "sha256": "7dad1572193c3082fc0275bfe0097c474ae793ad935da04c10d5b3125158225d",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp09-별칭",
+          "path": "pp09/별칭.txt",
+          "text": "39구청에서는 폐기물처리을 '폐기사업'이라고도 부릅니다. 폐기사업의 담당은 회계과입니다.",
+          "sha256": "e17cc6be5266edec469a6df1802259fdb4e39caf4d4bebdf85d6d1578f67c6be",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp09-참고",
+          "path": "pp09/참고.txt",
+          "text": "폐기물처리의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "400baabc0aed6ab72df3a0bbfd3e4d4bd4f4e5f2f34f09222e034f19e67bbc77",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp10",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 2,
+      "task": "가로등관리",
+      "documents": [
+        {
+          "key": "pp10-안내",
+          "path": "pp10/안내.txt",
+          "text": "40구청 가로등관리 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 40구청 복지과입니다. 마감일은 2026-11-19입니다. 사용 서식은 별지 제1호 가로등관리신청서입니다. 서식 작성 방법은 별첨 작성요령-10을 참고합니다.",
+          "sha256": "440027e88d0adcc465b09e046ffcd765d41bdca4a38834004f77b9f91a9a8e45",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp10-작성요령",
+          "path": "pp10/작성요령.txt",
+          "text": "작성요령-10 안내. 작성요령-10에 따라 작성한 서류는 40구청 복지과에 제출합니다.",
+          "sha256": "36668f37b07f041b7dbf1782976112706ae02784ee78867685d8c37b68956aa3",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp10-별칭",
+          "path": "pp10/별칭.txt",
+          "text": "40구청에서는 가로등관리을 '가로사업'이라고도 부릅니다. 가로사업의 담당은 기획과입니다.",
+          "sha256": "60d0963b684c27dd8d34b8c0b583c712a9d194e2d5b35582dfa212f406d43efe",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp10-참고",
+          "path": "pp10/참고.txt",
+          "text": "가로등관리의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "d3cf95fc112d9fb0f7410f1cf651400f06fcdf5478a2ca39dc31f3e6205bf149",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp11",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 3,
+      "task": "건축물대장정비",
+      "documents": [
+        {
+          "key": "pp11-안내",
+          "path": "pp11/안내.txt",
+          "text": "41구청 건축물대장정비 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 41구청 총무과에 제출합니다. 2026. 11. 20.까지 제출하여 주시기 바랍니다. 별지 제2호 건축물대장정비신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-11을 참고합니다.",
+          "sha256": "6ccdee69cd25b211701fec2926b4b3fac54fb64c37f5fb312704947d2e9a1a19",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp11-작성요령",
+          "path": "pp11/작성요령.txt",
+          "text": "작성요령-11 안내. 작성요령-11에 따라 작성한 서류는 41구청 총무과에 제출합니다.",
+          "sha256": "f51e8615ded6f6f40e98a4682a31f9108a65b2de35113418a33e6b235e8759f8",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp11-별칭",
+          "path": "pp11/별칭.txt",
+          "text": "41구청에서는 건축물대장정비을 '건축사업'이라고도 부릅니다. 건축사업의 담당은 도로과입니다.",
+          "sha256": "d4065c6e24dab7a1d5444e480b52a66d21b8de8c56a4894f9bbf00039e52c836",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp11-참고",
+          "path": "pp11/참고.txt",
+          "text": "건축물대장정비의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "5ddb3b83fdffdf2e0b06dabe30c1bf07ef38ff72c104da04d06e1a6e78b819ee",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp12",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 4,
+      "task": "산림보호",
+      "documents": [
+        {
+          "key": "pp12-안내",
+          "path": "pp12/안내.txt",
+          "text": "42구청 산림보호 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 42구청 회계과 쪽으로 보내면 된다. 기한은 11월 21일 전이고 쓰는 양식은 별지 제3호 산림보호신청서. 서식 작성 방법은 별첨 작성요령-12을 참고합니다.",
+          "sha256": "061c4fdfed0d6c89bd33ef4c83154c0d8f968383befeb4c2d83790cf1e805cdd",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp12-작성요령",
+          "path": "pp12/작성요령.txt",
+          "text": "작성요령-12 안내. 이 요령으로 만든 서류는 42구청 회계과 쪽에 내면 된다.",
+          "sha256": "f655aa7c190279874602fb0d07f1140c98a0fdf8fb5e74b0df71fed6b910373a",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp12-별칭",
+          "path": "pp12/별칭.txt",
+          "text": "42구청에서는 산림보호을 '산림사업'이라고도 한다. 산림사업는 환경과가 한다.",
+          "sha256": "6fecbde3df04dca941331d6d2174fc5acab906a5d0bf188a7fcb479ac79e2f7c",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp12-참고",
+          "path": "pp12/참고.txt",
+          "text": "산림보호의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "0791a9eb86501944515e794fc372373deb0a31aedcbba0228f1e8422229a15bf",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp13",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 1,
+      "task": "장애인복지",
+      "documents": [
+        {
+          "key": "pp13-안내",
+          "path": "pp13/안내.txt",
+          "text": "43구청 장애인복지 안내\n담당: 복지과\n제출처: 43구청 기획과\n제출기한: 2026-11-22\n서식: 별지 제4호 장애인복지신청서 서식 작성 방법은 별첨 작성요령-13을 참고합니다.",
+          "sha256": "e1482720fce6e8ec2a65ae7d7191e6e145d13812779f1a94a3451dc0da518dea",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp13-작성요령",
+          "path": "pp13/작성요령.txt",
+          "text": "작성요령-13 안내. 작성요령-13에 따라 작성한 서류는 43구청 기획과에 제출합니다.",
+          "sha256": "4ad08dbbe43b5bac2ed6bb20ecf02beeb213ee1084cf5cac0a10fefbc2e3b149",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp13-별칭",
+          "path": "pp13/별칭.txt",
+          "text": "43구청에서는 장애인복지을 '장애사업'이라고도 부릅니다. 장애사업의 담당은 복지과입니다.",
+          "sha256": "47a147317f5cb72af5df9c360e5e0adeb799d076110f4c4add949beea9f79db5",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp13-참고",
+          "path": "pp13/참고.txt",
+          "text": "장애인복지의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "4f4f2bdb2290db6f660769cc175465e551a76e76520877e8b63d8f393f166caf",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp14",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 2,
+      "task": "노인일자리",
+      "documents": [
+        {
+          "key": "pp14-안내",
+          "path": "pp14/안내.txt",
+          "text": "44구청 노인일자리 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 44구청 도로과입니다. 마감일은 2026-11-23입니다. 사용 서식은 별지 제5호 노인일자리신청서입니다. 서식 작성 방법은 별첨 작성요령-14을 참고합니다.",
+          "sha256": "239c3abf56f58216fed70985aa38fab9df849eab96f30850971477607feefec0",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp14-작성요령",
+          "path": "pp14/작성요령.txt",
+          "text": "작성요령-14 안내. 작성요령-14에 따라 작성한 서류는 44구청 도로과에 제출합니다.",
+          "sha256": "925ba4c17b98e318864b1ca4aeb580e0b22045bb32aa3a67266e1bbbee644300",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp14-별칭",
+          "path": "pp14/별칭.txt",
+          "text": "44구청에서는 노인일자리을 '노인사업'이라고도 부릅니다. 노인사업의 담당은 총무과입니다.",
+          "sha256": "f821c8fc96ee580c9e83842f3277dbb2bbef560990435e01279b9c6a42bb9a1a",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp14-참고",
+          "path": "pp14/참고.txt",
+          "text": "노인일자리의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "1eeb9a41905e2f5d2b6f608501a4bb1531edf3ad3147092d912660630a88e8c2",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp15",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 3,
+      "task": "청소년수련",
+      "documents": [
+        {
+          "key": "pp15-안내",
+          "path": "pp15/안내.txt",
+          "text": "45구청 청소년수련 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 45구청 환경과에 제출합니다. 2026. 11. 24.까지 제출하여 주시기 바랍니다. 별지 제6호 청소년수련신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-15을 참고합니다.",
+          "sha256": "270a139faa0cb78ed2c096bdcebba8b07e1a7fa0bee306426b2931ed29cb81a7",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp15-작성요령",
+          "path": "pp15/작성요령.txt",
+          "text": "작성요령-15 안내. 작성요령-15에 따라 작성한 서류는 45구청 환경과에 제출합니다.",
+          "sha256": "f16085789ef031650611dc18b7ec403edcbbb1b0c26d2ccb3d38bcc5b985dbd5",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp15-별칭",
+          "path": "pp15/별칭.txt",
+          "text": "45구청에서는 청소년수련을 '청소사업'이라고도 부릅니다. 청소사업의 담당은 회계과입니다.",
+          "sha256": "45ae7a8aa4a964d80916d433dd053b2b49727ecc03e86d539e9a0c493c16cfa6",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp15-참고",
+          "path": "pp15/참고.txt",
+          "text": "청소년수련의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "898f50b51b757db5dd34cdd8cf1e91c3431da6b13671d1d5169cd9c5e61a27ce",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp16",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 4,
+      "task": "문화행사지원",
+      "documents": [
+        {
+          "key": "pp16-안내",
+          "path": "pp16/안내.txt",
+          "text": "46구청 문화행사지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 46구청 복지과 쪽으로 보내면 된다. 기한은 11월 25일 전이고 쓰는 양식은 별지 제7호 문화행사지원신청서. 서식 작성 방법은 별첨 작성요령-16을 참고합니다.",
+          "sha256": "6fa93998f6676147dff30772108d66e70ffe4047e544e23d9f3bb698ee8ee143",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp16-작성요령",
+          "path": "pp16/작성요령.txt",
+          "text": "작성요령-16 안내. 이 요령으로 만든 서류는 46구청 복지과 쪽에 내면 된다.",
+          "sha256": "1bb04c637d8a626b8ad4b27342a17d2bd2c5489ad884a8b19ff2757eca53eb09",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp16-별칭",
+          "path": "pp16/별칭.txt",
+          "text": "46구청에서는 문화행사지원을 '문화사업'이라고도 한다. 문화사업는 기획과가 한다.",
+          "sha256": "02fa3e370c3b26d2181b37808e906e7202862542998828b27b31f7125e1186da",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp16-참고",
+          "path": "pp16/참고.txt",
+          "text": "문화행사지원의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "bb58493f1683c3fc18e112f2bd1f7c9e846b0e4b87e1a4b3179e76b7598d7a4e",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp17",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 1,
+      "task": "공원조성",
+      "documents": [
+        {
+          "key": "pp17-안내",
+          "path": "pp17/안내.txt",
+          "text": "47구청 공원조성 안내\n담당: 도로과\n제출처: 47구청 총무과\n제출기한: 2026-11-26\n서식: 별지 제8호 공원조성신청서 서식 작성 방법은 별첨 작성요령-17을 참고합니다.",
+          "sha256": "ab2c4677dc2d18d4fcbce8a736934bcf99cb5e29b134a648b54251d00b256bc3",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp17-작성요령",
+          "path": "pp17/작성요령.txt",
+          "text": "작성요령-17 안내. 작성요령-17에 따라 작성한 서류는 47구청 총무과에 제출합니다.",
+          "sha256": "6eb824bc0f550c4c25a2ae4db8c7c6218f79140632467eec6bec683b02dc86f8",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp17-별칭",
+          "path": "pp17/별칭.txt",
+          "text": "47구청에서는 공원조성을 '공원사업'이라고도 부릅니다. 공원사업의 담당은 도로과입니다.",
+          "sha256": "35e2b900db4bc0fe7f40d5d2a9fc280ffc7e7f59ab50281d863bb06f3cf0e311",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp17-참고",
+          "path": "pp17/참고.txt",
+          "text": "공원조성의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "8636b05b62867b4e023a584adda3911dcff45e0ef1a9535af2fcd20430e054cc",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp18",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 2,
+      "task": "상수도점검",
+      "documents": [
+        {
+          "key": "pp18-안내",
+          "path": "pp18/안내.txt",
+          "text": "48구청 상수도점검 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 48구청 회계과입니다. 마감일은 2026-11-27입니다. 사용 서식은 별지 제9호 상수도점검신청서입니다. 서식 작성 방법은 별첨 작성요령-18을 참고합니다.",
+          "sha256": "5eee101ec5b1e4986f4753cc6b25085cd536aa3d7e6da641f9a13851ceecd961",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp18-작성요령",
+          "path": "pp18/작성요령.txt",
+          "text": "작성요령-18 안내. 작성요령-18에 따라 작성한 서류는 48구청 회계과에 제출합니다.",
+          "sha256": "f249edb81c146d660d00a33aa79f7908954a10392ac13b770125fa162463fa44",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp18-별칭",
+          "path": "pp18/별칭.txt",
+          "text": "48구청에서는 상수도점검을 '상수사업'이라고도 부릅니다. 상수사업의 담당은 환경과입니다.",
+          "sha256": "5a514374fcf1a6919e1281a9369dc91e891c32e23e143ed2b0fb5d21f7d69a25",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp18-참고",
+          "path": "pp18/참고.txt",
+          "text": "상수도점검의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "e79d2ecd972b253eb42af71e7dd864b617577190bb18153a33557a23cd6ce1de",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp19",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 3,
+      "task": "환경영향평가",
+      "documents": [
+        {
+          "key": "pp19-안내",
+          "path": "pp19/안내.txt",
+          "text": "49구청 환경영향평가 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 49구청 기획과에 제출합니다. 2026. 11. 10.까지 제출하여 주시기 바랍니다. 별지 제1호 환경영향평가신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-19을 참고합니다.",
+          "sha256": "39262d84850c83b9d3bf7bfeae026811423e21c38956a677a54b124781ad889a",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp19-작성요령",
+          "path": "pp19/작성요령.txt",
+          "text": "작성요령-19 안내. 작성요령-19에 따라 작성한 서류는 49구청 기획과에 제출합니다.",
+          "sha256": "e5510a94b3392c831d8b1ab3f656f319c2f1fe95b29acf072e4460f9e0d70986",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp19-별칭",
+          "path": "pp19/별칭.txt",
+          "text": "49구청에서는 환경영향평가을 '환경사업'이라고도 부릅니다. 환경사업의 담당은 복지과입니다.",
+          "sha256": "52e44be4a88dcf72a270d7f0f86c730b59e998904d20be197fa03e9469da0fac",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp19-참고",
+          "path": "pp19/참고.txt",
+          "text": "환경영향평가의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "49fd890aba5945ca852059a1889eec0dd6fb330b9c856dc728000336c73f566d",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp20",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 4,
+      "task": "재난문자발송",
+      "documents": [
+        {
+          "key": "pp20-안내",
+          "path": "pp20/안내.txt",
+          "text": "50구청 재난문자발송 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 50구청 도로과 쪽으로 보내면 된다. 기한은 11월 11일 전이고 쓰는 양식은 별지 제2호 재난문자발송신청서. 서식 작성 방법은 별첨 작성요령-20을 참고합니다.",
+          "sha256": "2c70c49b9871e93dbb305ac79c6a146aa75e80370f2cacaea95cd4c5eeb0e166",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp20-작성요령",
+          "path": "pp20/작성요령.txt",
+          "text": "작성요령-20 안내. 이 요령으로 만든 서류는 50구청 도로과 쪽에 내면 된다.",
+          "sha256": "d2003ef693f5dad637babfa6d9035ecdfb3e7d2d7bb37ac9acc1af1cd909c599",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp20-별칭",
+          "path": "pp20/별칭.txt",
+          "text": "50구청에서는 재난문자발송을 '재난사업'이라고도 한다. 재난사업는 총무과가 한다.",
+          "sha256": "c06b92b3a3da1a7ed1e55ca6f5a827c47540431182ce53d23b52e6e35e14d1d1",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp20-참고",
+          "path": "pp20/참고.txt",
+          "text": "재난문자발송의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "8f86c3fbd691d384e8710fd3fb0506f473414873bbd993643bfa5d06ef55d6ee",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp21",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 1,
+      "task": "자원봉사관리",
+      "documents": [
+        {
+          "key": "pp21-안내",
+          "path": "pp21/안내.txt",
+          "text": "51구청 자원봉사관리 안내\n담당: 회계과\n제출처: 51구청 환경과\n제출기한: 2026-11-12\n서식: 별지 제3호 자원봉사관리신청서 서식 작성 방법은 별첨 작성요령-21을 참고합니다.",
+          "sha256": "dae867a49603ce612a8090d01e59e6803c074eaa8ee7c4d4e63cc2580409280a",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp21-작성요령",
+          "path": "pp21/작성요령.txt",
+          "text": "작성요령-21 안내. 작성요령-21에 따라 작성한 서류는 51구청 환경과에 제출합니다.",
+          "sha256": "7754cdfbfae2a2258aa3a25353dcbbd8831d5edf92b7eb14aea2520ff81cfa66",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp21-별칭",
+          "path": "pp21/별칭.txt",
+          "text": "51구청에서는 자원봉사관리을 '자원사업'이라고도 부릅니다. 자원사업의 담당은 회계과입니다.",
+          "sha256": "56573a092ab9ec546122698a8cff5bce1b9dfab991b08b76aa0172549341feb3",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp21-참고",
+          "path": "pp21/참고.txt",
+          "text": "자원봉사관리의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "67638f1a5da418891c61f5dd4d386967e727218fb4eecda331da4b2f2b750f69",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp22",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 2,
+      "task": "민방위훈련",
+      "documents": [
+        {
+          "key": "pp22-안내",
+          "path": "pp22/안내.txt",
+          "text": "52구청 민방위훈련 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 52구청 복지과입니다. 마감일은 2026-11-13입니다. 사용 서식은 별지 제4호 민방위훈련신청서입니다. 서식 작성 방법은 별첨 작성요령-22을 참고합니다.",
+          "sha256": "6896924256289380a637f166b84c265816a879a327ce1aac0e1d0ae8a3db6bc8",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp22-작성요령",
+          "path": "pp22/작성요령.txt",
+          "text": "작성요령-22 안내. 작성요령-22에 따라 작성한 서류는 52구청 복지과에 제출합니다.",
+          "sha256": "b1832c3cea5b5f3fc7dd0a6cd5821ac1b3d2bf7ae1233ac78dc992f0a9b68c7a",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp22-별칭",
+          "path": "pp22/별칭.txt",
+          "text": "52구청에서는 민방위훈련을 '민방사업'이라고도 부릅니다. 민방사업의 담당은 기획과입니다.",
+          "sha256": "5a4dd9c68bfa9103be2d995610775cd749c1c785c7e377a5a61f50a3d77999e6",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp22-참고",
+          "path": "pp22/참고.txt",
+          "text": "민방위훈련의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "9ab6e68ca518b4a79cbbd855339d6b25ea4e69bf7fc0676478a212464487b216",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp23",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 3,
+      "task": "지방세감면",
+      "documents": [
+        {
+          "key": "pp23-안내",
+          "path": "pp23/안내.txt",
+          "text": "53구청 지방세감면 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 53구청 총무과에 제출합니다. 2026. 11. 14.까지 제출하여 주시기 바랍니다. 별지 제5호 지방세감면신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-23을 참고합니다.",
+          "sha256": "0600a413e31429b36dcb54bb19ebb9722651f2be324826cc4af0413cd9587f71",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp23-작성요령",
+          "path": "pp23/작성요령.txt",
+          "text": "작성요령-23 안내. 작성요령-23에 따라 작성한 서류는 53구청 총무과에 제출합니다.",
+          "sha256": "42fe264dcbe7a5924567b470ebae0afe0b594fc853c769c2760483ef548a66e2",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp23-별칭",
+          "path": "pp23/별칭.txt",
+          "text": "53구청에서는 지방세감면을 '지방사업'이라고도 부릅니다. 지방사업의 담당은 도로과입니다.",
+          "sha256": "64bdb19c0365eb51996a76aa3bc52ad88fbf40c515225f76ca324cfeff64bc5b",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp23-참고",
+          "path": "pp23/참고.txt",
+          "text": "지방세감면의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "6969abc75c9bac8a4dfe6926765d986ef76aa347a108e96612a8af73560b2512",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    },
+    {
+      "id": "pp24",
+      "category": "mixed",
+      "split": "holdout",
+      "style": 4,
+      "task": "인허가통합",
+      "documents": [
+        {
+          "key": "pp24-안내",
+          "path": "pp24/안내.txt",
+          "text": "54구청 인허가통합 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 54구청 회계과 쪽으로 보내면 된다. 기한은 11월 15일 전이고 쓰는 양식은 별지 제6호 인허가통합신청서. 서식 작성 방법은 별첨 작성요령-24을 참고합니다.",
+          "sha256": "161ab513fd40cb827182f72207ed81231eba7a166fdf597b6b91db9e66500384",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp24-작성요령",
+          "path": "pp24/작성요령.txt",
+          "text": "작성요령-24 안내. 이 요령으로 만든 서류는 54구청 회계과 쪽에 내면 된다.",
+          "sha256": "8242c97f0009c84b6fcbe86af6c628cb6d1e89ab4b85073d8b6498686fcbdb25",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp24-별칭",
+          "path": "pp24/별칭.txt",
+          "text": "54구청에서는 인허가통합을 '인허사업'이라고도 한다. 인허사업는 환경과가 한다.",
+          "sha256": "4859fae00c1287d71f89dd2cbf21e137df22b16b09ace6551bead8ad74c3ecc7",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        },
+        {
+          "key": "pp24-참고",
+          "path": "pp24/참고.txt",
+          "text": "인허가통합의 담당·제출처 자료만 있습니다. 예산·수량·승인·완료 기록은 없습니다.",
+          "sha256": "6fc050a6edb9d68efe219238730038053442858c93e9a01d0981f6a94b917655",
+          "document_year": 2026,
+          "case_year": 2026,
+          "locator": "본문 1"
+        }
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "pp01-q1",
+      "group": "pp01",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "도로점용허가 담당은?",
+      "allowed_documents": [
+        "pp01-안내",
+        "pp01-작성요령",
+        "pp01-별칭",
+        "pp01-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp01-안내",
+          "sha256": "e28a2546258006991c0b82d9ea5e654222b637fa0966248badc89fc34fa2f934",
+          "locator": "본문 1",
+          "exact_quote": "31구청 도로점용허가 안내\n담당: 복지과\n제출처: 31구청 기획과\n제출기한: 2026-11-10\n서식: 별지 제1호 도로점용허가신청서 서식 작성 방법은 별첨 작성요령-1을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 102
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp01-q2",
+      "group": "pp01",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "도로점용허가 제출처는?",
+      "allowed_documents": [
+        "pp01-안내",
+        "pp01-작성요령",
+        "pp01-별칭",
+        "pp01-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp01-안내",
+          "sha256": "e28a2546258006991c0b82d9ea5e654222b637fa0966248badc89fc34fa2f934",
+          "locator": "본문 1",
+          "exact_quote": "31구청 도로점용허가 안내\n담당: 복지과\n제출처: 31구청 기획과\n제출기한: 2026-11-10\n서식: 별지 제1호 도로점용허가신청서 서식 작성 방법은 별첨 작성요령-1을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 102
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp01-q3",
+      "group": "pp01",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "도로점용허가 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp01-안내",
+        "pp01-작성요령",
+        "pp01-별칭",
+        "pp01-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp01-안내",
+          "sha256": "e28a2546258006991c0b82d9ea5e654222b637fa0966248badc89fc34fa2f934",
+          "locator": "본문 1",
+          "exact_quote": "31구청 도로점용허가 안내\n담당: 복지과\n제출처: 31구청 기획과\n제출기한: 2026-11-10\n서식: 별지 제1호 도로점용허가신청서 서식 작성 방법은 별첨 작성요령-1을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 102
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp01-작성요령",
+          "sha256": "25870fc7cb97d609195c5151c9c9343796884ef2a7712699ece0c31fc91fbb2b",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-1 안내. 작성요령-1에 따라 작성한 서류는 31구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp01-q4",
+      "group": "pp01",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "도로점용허가 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp01-안내",
+        "pp01-작성요령",
+        "pp01-별칭",
+        "pp01-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp01-안내",
+          "sha256": "e28a2546258006991c0b82d9ea5e654222b637fa0966248badc89fc34fa2f934",
+          "locator": "본문 1",
+          "exact_quote": "31구청 도로점용허가 안내\n담당: 복지과\n제출처: 31구청 기획과\n제출기한: 2026-11-10\n서식: 별지 제1호 도로점용허가신청서 서식 작성 방법은 별첨 작성요령-1을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 102
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp01-작성요령",
+          "sha256": "25870fc7cb97d609195c5151c9c9343796884ef2a7712699ece0c31fc91fbb2b",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-1 안내. 작성요령-1에 따라 작성한 서류는 31구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp01-q5",
+      "group": "pp01",
+      "category": "alias",
+      "split": "holdout",
+      "style": 1,
+      "question": "도로사업 담당은?",
+      "allowed_documents": [
+        "pp01-안내",
+        "pp01-작성요령",
+        "pp01-별칭",
+        "pp01-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp01-안내",
+          "sha256": "e28a2546258006991c0b82d9ea5e654222b637fa0966248badc89fc34fa2f934",
+          "locator": "본문 1",
+          "exact_quote": "31구청 도로점용허가 안내\n담당: 복지과\n제출처: 31구청 기획과\n제출기한: 2026-11-10\n서식: 별지 제1호 도로점용허가신청서 서식 작성 방법은 별첨 작성요령-1을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 102
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp01-별칭",
+          "sha256": "9d72b7cd06b3aa7070cd6dfd6e18a233f25bb9e431e437136aff4378ead318ca",
+          "locator": "본문 1",
+          "exact_quote": "31구청에서는 도로점용허가을 '도로사업'이라고도 부릅니다. 도로사업의 담당은 복지과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 50
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp01-q6",
+      "group": "pp01",
+      "category": "missing",
+      "split": "holdout",
+      "style": 1,
+      "question": "도로점용허가 예산 금액은?",
+      "allowed_documents": [
+        "pp01-안내",
+        "pp01-작성요령",
+        "pp01-별칭",
+        "pp01-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp02-q1",
+      "group": "pp02",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "공공시설대관 담당은?",
+      "allowed_documents": [
+        "pp02-안내",
+        "pp02-작성요령",
+        "pp02-별칭",
+        "pp02-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp02-안내",
+          "sha256": "1fcff31c8ec3fcc264fb5103f94c878211316dbd3836d52e200d4be4b3b67fdb",
+          "locator": "본문 1",
+          "exact_quote": "32구청 공공시설대관 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 32구청 도로과입니다. 마감일은 2026-11-11입니다. 사용 서식은 별지 제2호 공공시설대관신청서입니다. 서식 작성 방법은 별첨 작성요령-2을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp02-q2",
+      "group": "pp02",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "공공시설대관 제출처는?",
+      "allowed_documents": [
+        "pp02-안내",
+        "pp02-작성요령",
+        "pp02-별칭",
+        "pp02-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp02-안내",
+          "sha256": "1fcff31c8ec3fcc264fb5103f94c878211316dbd3836d52e200d4be4b3b67fdb",
+          "locator": "본문 1",
+          "exact_quote": "32구청 공공시설대관 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 32구청 도로과입니다. 마감일은 2026-11-11입니다. 사용 서식은 별지 제2호 공공시설대관신청서입니다. 서식 작성 방법은 별첨 작성요령-2을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp02-q3",
+      "group": "pp02",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "공공시설대관 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp02-안내",
+        "pp02-작성요령",
+        "pp02-별칭",
+        "pp02-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp02-안내",
+          "sha256": "1fcff31c8ec3fcc264fb5103f94c878211316dbd3836d52e200d4be4b3b67fdb",
+          "locator": "본문 1",
+          "exact_quote": "32구청 공공시설대관 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 32구청 도로과입니다. 마감일은 2026-11-11입니다. 사용 서식은 별지 제2호 공공시설대관신청서입니다. 서식 작성 방법은 별첨 작성요령-2을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp02-작성요령",
+          "sha256": "3afcd75e15a37dd18bf6951d8ab07abafd8796eea38a97fdaa6b1a3c2a9933bd",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-2 안내. 작성요령-2에 따라 작성한 서류는 32구청 도로과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp02-q4",
+      "group": "pp02",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "공공시설대관 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp02-안내",
+        "pp02-작성요령",
+        "pp02-별칭",
+        "pp02-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp02-안내",
+          "sha256": "1fcff31c8ec3fcc264fb5103f94c878211316dbd3836d52e200d4be4b3b67fdb",
+          "locator": "본문 1",
+          "exact_quote": "32구청 공공시설대관 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 32구청 도로과입니다. 마감일은 2026-11-11입니다. 사용 서식은 별지 제2호 공공시설대관신청서입니다. 서식 작성 방법은 별첨 작성요령-2을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp02-작성요령",
+          "sha256": "3afcd75e15a37dd18bf6951d8ab07abafd8796eea38a97fdaa6b1a3c2a9933bd",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-2 안내. 작성요령-2에 따라 작성한 서류는 32구청 도로과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp02-q5",
+      "group": "pp02",
+      "category": "alias",
+      "split": "holdout",
+      "style": 2,
+      "question": "공공사업 담당은?",
+      "allowed_documents": [
+        "pp02-안내",
+        "pp02-작성요령",
+        "pp02-별칭",
+        "pp02-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp02-안내",
+          "sha256": "1fcff31c8ec3fcc264fb5103f94c878211316dbd3836d52e200d4be4b3b67fdb",
+          "locator": "본문 1",
+          "exact_quote": "32구청 공공시설대관 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 32구청 도로과입니다. 마감일은 2026-11-11입니다. 사용 서식은 별지 제2호 공공시설대관신청서입니다. 서식 작성 방법은 별첨 작성요령-2을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp02-별칭",
+          "sha256": "8cc563be00e07a26578afa04b7a6c0e1dfcaa8394b510d447662ad78c62e8347",
+          "locator": "본문 1",
+          "exact_quote": "32구청에서는 공공시설대관을 '공공사업'이라고도 부릅니다. 공공사업의 담당은 총무과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 50
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp02-q6",
+      "group": "pp02",
+      "category": "missing",
+      "split": "holdout",
+      "style": 2,
+      "question": "공공시설대관 예산 금액은?",
+      "allowed_documents": [
+        "pp02-안내",
+        "pp02-작성요령",
+        "pp02-별칭",
+        "pp02-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp03-q1",
+      "group": "pp03",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "체납액징수 담당은?",
+      "allowed_documents": [
+        "pp03-안내",
+        "pp03-작성요령",
+        "pp03-별칭",
+        "pp03-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp03-안내",
+          "sha256": "0120da305eaae7171a73ae03c80da3940929babf1aed1dbb755c903e79a6fdda",
+          "locator": "본문 1",
+          "exact_quote": "33구청 체납액징수 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 33구청 환경과에 제출합니다. 2026. 11. 12.까지 제출하여 주시기 바랍니다. 별지 제3호 체납액징수신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-3을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 146
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp03-q2",
+      "group": "pp03",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "체납액징수 제출처는?",
+      "allowed_documents": [
+        "pp03-안내",
+        "pp03-작성요령",
+        "pp03-별칭",
+        "pp03-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp03-안내",
+          "sha256": "0120da305eaae7171a73ae03c80da3940929babf1aed1dbb755c903e79a6fdda",
+          "locator": "본문 1",
+          "exact_quote": "33구청 체납액징수 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 33구청 환경과에 제출합니다. 2026. 11. 12.까지 제출하여 주시기 바랍니다. 별지 제3호 체납액징수신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-3을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 146
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp03-q3",
+      "group": "pp03",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "체납액징수 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp03-안내",
+        "pp03-작성요령",
+        "pp03-별칭",
+        "pp03-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp03-안내",
+          "sha256": "0120da305eaae7171a73ae03c80da3940929babf1aed1dbb755c903e79a6fdda",
+          "locator": "본문 1",
+          "exact_quote": "33구청 체납액징수 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 33구청 환경과에 제출합니다. 2026. 11. 12.까지 제출하여 주시기 바랍니다. 별지 제3호 체납액징수신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-3을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 146
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp03-작성요령",
+          "sha256": "3d035b1f3f08e43b0f2ddfb7df5d876c333021c19ee68e36951212a7dda5d4c0",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-3 안내. 작성요령-3에 따라 작성한 서류는 33구청 환경과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp03-q4",
+      "group": "pp03",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "체납액징수 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp03-안내",
+        "pp03-작성요령",
+        "pp03-별칭",
+        "pp03-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp03-안내",
+          "sha256": "0120da305eaae7171a73ae03c80da3940929babf1aed1dbb755c903e79a6fdda",
+          "locator": "본문 1",
+          "exact_quote": "33구청 체납액징수 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 33구청 환경과에 제출합니다. 2026. 11. 12.까지 제출하여 주시기 바랍니다. 별지 제3호 체납액징수신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-3을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 146
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp03-작성요령",
+          "sha256": "3d035b1f3f08e43b0f2ddfb7df5d876c333021c19ee68e36951212a7dda5d4c0",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-3 안내. 작성요령-3에 따라 작성한 서류는 33구청 환경과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp03-q5",
+      "group": "pp03",
+      "category": "alias",
+      "split": "holdout",
+      "style": 3,
+      "question": "체납사업 담당은?",
+      "allowed_documents": [
+        "pp03-안내",
+        "pp03-작성요령",
+        "pp03-별칭",
+        "pp03-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp03-안내",
+          "sha256": "0120da305eaae7171a73ae03c80da3940929babf1aed1dbb755c903e79a6fdda",
+          "locator": "본문 1",
+          "exact_quote": "33구청 체납액징수 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 33구청 환경과에 제출합니다. 2026. 11. 12.까지 제출하여 주시기 바랍니다. 별지 제3호 체납액징수신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-3을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 146
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp03-별칭",
+          "sha256": "b32e7d9e0d851d64b2f005882fa788e967ed3d75129508fca154fcc457e01b19",
+          "locator": "본문 1",
+          "exact_quote": "33구청에서는 체납액징수을 '체납사업'이라고도 부릅니다. 체납사업의 담당은 회계과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 49
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp03-q6",
+      "group": "pp03",
+      "category": "missing",
+      "split": "holdout",
+      "style": 3,
+      "question": "체납액징수 예산 금액은?",
+      "allowed_documents": [
+        "pp03-안내",
+        "pp03-작성요령",
+        "pp03-별칭",
+        "pp03-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp04-q1",
+      "group": "pp04",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "여권발급지원 담당은?",
+      "allowed_documents": [
+        "pp04-안내",
+        "pp04-작성요령",
+        "pp04-별칭",
+        "pp04-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp04-안내",
+          "sha256": "265d5bb2e3a3c96c8ed5531fc145d2137bfee6a1e3e28abd765997910538bcfd",
+          "locator": "본문 1",
+          "exact_quote": "34구청 여권발급지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 34구청 복지과 쪽으로 보내면 된다. 기한은 11월 13일 전이고 쓰는 양식은 별지 제4호 여권발급지원신청서. 서식 작성 방법은 별첨 작성요령-4을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp04-q2",
+      "group": "pp04",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "여권발급지원 제출처는?",
+      "allowed_documents": [
+        "pp04-안내",
+        "pp04-작성요령",
+        "pp04-별칭",
+        "pp04-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp04-안내",
+          "sha256": "265d5bb2e3a3c96c8ed5531fc145d2137bfee6a1e3e28abd765997910538bcfd",
+          "locator": "본문 1",
+          "exact_quote": "34구청 여권발급지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 34구청 복지과 쪽으로 보내면 된다. 기한은 11월 13일 전이고 쓰는 양식은 별지 제4호 여권발급지원신청서. 서식 작성 방법은 별첨 작성요령-4을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp04-q3",
+      "group": "pp04",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "여권발급지원 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp04-안내",
+        "pp04-작성요령",
+        "pp04-별칭",
+        "pp04-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp04-안내",
+          "sha256": "265d5bb2e3a3c96c8ed5531fc145d2137bfee6a1e3e28abd765997910538bcfd",
+          "locator": "본문 1",
+          "exact_quote": "34구청 여권발급지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 34구청 복지과 쪽으로 보내면 된다. 기한은 11월 13일 전이고 쓰는 양식은 별지 제4호 여권발급지원신청서. 서식 작성 방법은 별첨 작성요령-4을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp04-작성요령",
+          "sha256": "5e65cc493a3b4e99691da67b146fd6a175a715c7b9981ec42f7d1779f8488138",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-4 안내. 이 요령으로 만든 서류는 34구청 복지과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 43
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp04-q4",
+      "group": "pp04",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "여권발급지원 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp04-안내",
+        "pp04-작성요령",
+        "pp04-별칭",
+        "pp04-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp04-안내",
+          "sha256": "265d5bb2e3a3c96c8ed5531fc145d2137bfee6a1e3e28abd765997910538bcfd",
+          "locator": "본문 1",
+          "exact_quote": "34구청 여권발급지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 34구청 복지과 쪽으로 보내면 된다. 기한은 11월 13일 전이고 쓰는 양식은 별지 제4호 여권발급지원신청서. 서식 작성 방법은 별첨 작성요령-4을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp04-작성요령",
+          "sha256": "5e65cc493a3b4e99691da67b146fd6a175a715c7b9981ec42f7d1779f8488138",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-4 안내. 이 요령으로 만든 서류는 34구청 복지과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 43
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp04-q5",
+      "group": "pp04",
+      "category": "alias",
+      "split": "holdout",
+      "style": 4,
+      "question": "여권사업 담당은?",
+      "allowed_documents": [
+        "pp04-안내",
+        "pp04-작성요령",
+        "pp04-별칭",
+        "pp04-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp04-안내",
+          "sha256": "265d5bb2e3a3c96c8ed5531fc145d2137bfee6a1e3e28abd765997910538bcfd",
+          "locator": "본문 1",
+          "exact_quote": "34구청 여권발급지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 34구청 복지과 쪽으로 보내면 된다. 기한은 11월 13일 전이고 쓰는 양식은 별지 제4호 여권발급지원신청서. 서식 작성 방법은 별첨 작성요령-4을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp04-별칭",
+          "sha256": "420d5e2033a724a07faaad6f8fdad160224783692d200b3c1748875b0eff3562",
+          "locator": "본문 1",
+          "exact_quote": "34구청에서는 여권발급지원을 '여권사업'이라고도 한다. 여권사업는 기획과가 한다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 45
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp04-q6",
+      "group": "pp04",
+      "category": "missing",
+      "split": "holdout",
+      "style": 4,
+      "question": "여권발급지원 예산 금액은?",
+      "allowed_documents": [
+        "pp04-안내",
+        "pp04-작성요령",
+        "pp04-별칭",
+        "pp04-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp05-q1",
+      "group": "pp05",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "하천정비 담당은?",
+      "allowed_documents": [
+        "pp05-안내",
+        "pp05-작성요령",
+        "pp05-별칭",
+        "pp05-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp05-안내",
+          "sha256": "b5b73e1bc09a8fa72bce72624061d402551972e81254384b5b91340c00e990cd",
+          "locator": "본문 1",
+          "exact_quote": "35구청 하천정비 안내\n담당: 도로과\n제출처: 35구청 총무과\n제출기한: 2026-11-14\n서식: 별지 제5호 하천정비신청서 서식 작성 방법은 별첨 작성요령-5을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 98
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp05-q2",
+      "group": "pp05",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "하천정비 제출처는?",
+      "allowed_documents": [
+        "pp05-안내",
+        "pp05-작성요령",
+        "pp05-별칭",
+        "pp05-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp05-안내",
+          "sha256": "b5b73e1bc09a8fa72bce72624061d402551972e81254384b5b91340c00e990cd",
+          "locator": "본문 1",
+          "exact_quote": "35구청 하천정비 안내\n담당: 도로과\n제출처: 35구청 총무과\n제출기한: 2026-11-14\n서식: 별지 제5호 하천정비신청서 서식 작성 방법은 별첨 작성요령-5을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 98
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp05-q3",
+      "group": "pp05",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "하천정비 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp05-안내",
+        "pp05-작성요령",
+        "pp05-별칭",
+        "pp05-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp05-안내",
+          "sha256": "b5b73e1bc09a8fa72bce72624061d402551972e81254384b5b91340c00e990cd",
+          "locator": "본문 1",
+          "exact_quote": "35구청 하천정비 안내\n담당: 도로과\n제출처: 35구청 총무과\n제출기한: 2026-11-14\n서식: 별지 제5호 하천정비신청서 서식 작성 방법은 별첨 작성요령-5을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 98
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp05-작성요령",
+          "sha256": "32b1833ae002b9dd896a076520845ec476702b3d5da378416c36065816e8e32d",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-5 안내. 작성요령-5에 따라 작성한 서류는 35구청 총무과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp05-q4",
+      "group": "pp05",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "하천정비 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp05-안내",
+        "pp05-작성요령",
+        "pp05-별칭",
+        "pp05-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp05-안내",
+          "sha256": "b5b73e1bc09a8fa72bce72624061d402551972e81254384b5b91340c00e990cd",
+          "locator": "본문 1",
+          "exact_quote": "35구청 하천정비 안내\n담당: 도로과\n제출처: 35구청 총무과\n제출기한: 2026-11-14\n서식: 별지 제5호 하천정비신청서 서식 작성 방법은 별첨 작성요령-5을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 98
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp05-작성요령",
+          "sha256": "32b1833ae002b9dd896a076520845ec476702b3d5da378416c36065816e8e32d",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-5 안내. 작성요령-5에 따라 작성한 서류는 35구청 총무과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp05-q5",
+      "group": "pp05",
+      "category": "alias",
+      "split": "holdout",
+      "style": 1,
+      "question": "하천사업 담당은?",
+      "allowed_documents": [
+        "pp05-안내",
+        "pp05-작성요령",
+        "pp05-별칭",
+        "pp05-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp05-안내",
+          "sha256": "b5b73e1bc09a8fa72bce72624061d402551972e81254384b5b91340c00e990cd",
+          "locator": "본문 1",
+          "exact_quote": "35구청 하천정비 안내\n담당: 도로과\n제출처: 35구청 총무과\n제출기한: 2026-11-14\n서식: 별지 제5호 하천정비신청서 서식 작성 방법은 별첨 작성요령-5을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 98
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp05-별칭",
+          "sha256": "92a1d96270d7cf2af2611519e92442f946985504d058b83c385ec3bd92206f13",
+          "locator": "본문 1",
+          "exact_quote": "35구청에서는 하천정비을 '하천사업'이라고도 부릅니다. 하천사업의 담당은 도로과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp05-q6",
+      "group": "pp05",
+      "category": "missing",
+      "split": "holdout",
+      "style": 1,
+      "question": "하천정비 예산 금액은?",
+      "allowed_documents": [
+        "pp05-안내",
+        "pp05-작성요령",
+        "pp05-별칭",
+        "pp05-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp06-q1",
+      "group": "pp06",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "어린이집평가 담당은?",
+      "allowed_documents": [
+        "pp06-안내",
+        "pp06-작성요령",
+        "pp06-별칭",
+        "pp06-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp06-안내",
+          "sha256": "fa5f8eb9410145fdcb44da0aa156a57cc56a0a6cd4513feebbfc4f241b5a3a9f",
+          "locator": "본문 1",
+          "exact_quote": "36구청 어린이집평가 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 36구청 회계과입니다. 마감일은 2026-11-15입니다. 사용 서식은 별지 제6호 어린이집평가신청서입니다. 서식 작성 방법은 별첨 작성요령-6을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp06-q2",
+      "group": "pp06",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "어린이집평가 제출처는?",
+      "allowed_documents": [
+        "pp06-안내",
+        "pp06-작성요령",
+        "pp06-별칭",
+        "pp06-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp06-안내",
+          "sha256": "fa5f8eb9410145fdcb44da0aa156a57cc56a0a6cd4513feebbfc4f241b5a3a9f",
+          "locator": "본문 1",
+          "exact_quote": "36구청 어린이집평가 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 36구청 회계과입니다. 마감일은 2026-11-15입니다. 사용 서식은 별지 제6호 어린이집평가신청서입니다. 서식 작성 방법은 별첨 작성요령-6을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp06-q3",
+      "group": "pp06",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "어린이집평가 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp06-안내",
+        "pp06-작성요령",
+        "pp06-별칭",
+        "pp06-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp06-안내",
+          "sha256": "fa5f8eb9410145fdcb44da0aa156a57cc56a0a6cd4513feebbfc4f241b5a3a9f",
+          "locator": "본문 1",
+          "exact_quote": "36구청 어린이집평가 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 36구청 회계과입니다. 마감일은 2026-11-15입니다. 사용 서식은 별지 제6호 어린이집평가신청서입니다. 서식 작성 방법은 별첨 작성요령-6을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp06-작성요령",
+          "sha256": "f821535211193eb43eed84bc5c567522de26cd1048b0008d6226795c261e9ed4",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-6 안내. 작성요령-6에 따라 작성한 서류는 36구청 회계과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp06-q4",
+      "group": "pp06",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "어린이집평가 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp06-안내",
+        "pp06-작성요령",
+        "pp06-별칭",
+        "pp06-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp06-안내",
+          "sha256": "fa5f8eb9410145fdcb44da0aa156a57cc56a0a6cd4513feebbfc4f241b5a3a9f",
+          "locator": "본문 1",
+          "exact_quote": "36구청 어린이집평가 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 36구청 회계과입니다. 마감일은 2026-11-15입니다. 사용 서식은 별지 제6호 어린이집평가신청서입니다. 서식 작성 방법은 별첨 작성요령-6을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp06-작성요령",
+          "sha256": "f821535211193eb43eed84bc5c567522de26cd1048b0008d6226795c261e9ed4",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-6 안내. 작성요령-6에 따라 작성한 서류는 36구청 회계과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp06-q5",
+      "group": "pp06",
+      "category": "alias",
+      "split": "holdout",
+      "style": 2,
+      "question": "어린사업 담당은?",
+      "allowed_documents": [
+        "pp06-안내",
+        "pp06-작성요령",
+        "pp06-별칭",
+        "pp06-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp06-안내",
+          "sha256": "fa5f8eb9410145fdcb44da0aa156a57cc56a0a6cd4513feebbfc4f241b5a3a9f",
+          "locator": "본문 1",
+          "exact_quote": "36구청 어린이집평가 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 36구청 회계과입니다. 마감일은 2026-11-15입니다. 사용 서식은 별지 제6호 어린이집평가신청서입니다. 서식 작성 방법은 별첨 작성요령-6을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp06-별칭",
+          "sha256": "30e15414745263c87fd54868100e75a23b6ae6dc8cd7e099939552937cb134cd",
+          "locator": "본문 1",
+          "exact_quote": "36구청에서는 어린이집평가을 '어린사업'이라고도 부릅니다. 어린사업의 담당은 환경과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 50
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp06-q6",
+      "group": "pp06",
+      "category": "missing",
+      "split": "holdout",
+      "style": 2,
+      "question": "어린이집평가 예산 금액은?",
+      "allowed_documents": [
+        "pp06-안내",
+        "pp06-작성요령",
+        "pp06-별칭",
+        "pp06-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp07-q1",
+      "group": "pp07",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "소상공인지원 담당은?",
+      "allowed_documents": [
+        "pp07-안내",
+        "pp07-작성요령",
+        "pp07-별칭",
+        "pp07-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp07-안내",
+          "sha256": "f16768d44c6d683c6149b17cdc28a212a9a9c9fa67e9635e03c4126645822a45",
+          "locator": "본문 1",
+          "exact_quote": "37구청 소상공인지원 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 37구청 기획과에 제출합니다. 2026. 11. 16.까지 제출하여 주시기 바랍니다. 별지 제7호 소상공인지원신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-7을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 148
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp07-q2",
+      "group": "pp07",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "소상공인지원 제출처는?",
+      "allowed_documents": [
+        "pp07-안내",
+        "pp07-작성요령",
+        "pp07-별칭",
+        "pp07-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp07-안내",
+          "sha256": "f16768d44c6d683c6149b17cdc28a212a9a9c9fa67e9635e03c4126645822a45",
+          "locator": "본문 1",
+          "exact_quote": "37구청 소상공인지원 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 37구청 기획과에 제출합니다. 2026. 11. 16.까지 제출하여 주시기 바랍니다. 별지 제7호 소상공인지원신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-7을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 148
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp07-q3",
+      "group": "pp07",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "소상공인지원 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp07-안내",
+        "pp07-작성요령",
+        "pp07-별칭",
+        "pp07-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp07-안내",
+          "sha256": "f16768d44c6d683c6149b17cdc28a212a9a9c9fa67e9635e03c4126645822a45",
+          "locator": "본문 1",
+          "exact_quote": "37구청 소상공인지원 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 37구청 기획과에 제출합니다. 2026. 11. 16.까지 제출하여 주시기 바랍니다. 별지 제7호 소상공인지원신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-7을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 148
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp07-작성요령",
+          "sha256": "d79e1d93f7ebe951f78c0d17500cebca4ca18d3b01090d1fab18b3edb5357769",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-7 안내. 작성요령-7에 따라 작성한 서류는 37구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp07-q4",
+      "group": "pp07",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "소상공인지원 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp07-안내",
+        "pp07-작성요령",
+        "pp07-별칭",
+        "pp07-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp07-안내",
+          "sha256": "f16768d44c6d683c6149b17cdc28a212a9a9c9fa67e9635e03c4126645822a45",
+          "locator": "본문 1",
+          "exact_quote": "37구청 소상공인지원 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 37구청 기획과에 제출합니다. 2026. 11. 16.까지 제출하여 주시기 바랍니다. 별지 제7호 소상공인지원신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-7을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 148
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp07-작성요령",
+          "sha256": "d79e1d93f7ebe951f78c0d17500cebca4ca18d3b01090d1fab18b3edb5357769",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-7 안내. 작성요령-7에 따라 작성한 서류는 37구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp07-q5",
+      "group": "pp07",
+      "category": "alias",
+      "split": "holdout",
+      "style": 3,
+      "question": "소상사업 담당은?",
+      "allowed_documents": [
+        "pp07-안내",
+        "pp07-작성요령",
+        "pp07-별칭",
+        "pp07-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp07-안내",
+          "sha256": "f16768d44c6d683c6149b17cdc28a212a9a9c9fa67e9635e03c4126645822a45",
+          "locator": "본문 1",
+          "exact_quote": "37구청 소상공인지원 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 37구청 기획과에 제출합니다. 2026. 11. 16.까지 제출하여 주시기 바랍니다. 별지 제7호 소상공인지원신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-7을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 148
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp07-별칭",
+          "sha256": "e8d79df9da0c1f2feae00f97dec6f013a7c227bbc6ecfc5c485e62c52cb65c8f",
+          "locator": "본문 1",
+          "exact_quote": "37구청에서는 소상공인지원을 '소상사업'이라고도 부릅니다. 소상사업의 담당은 복지과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 50
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp07-q6",
+      "group": "pp07",
+      "category": "missing",
+      "split": "holdout",
+      "style": 3,
+      "question": "소상공인지원 예산 금액은?",
+      "allowed_documents": [
+        "pp07-안내",
+        "pp07-작성요령",
+        "pp07-별칭",
+        "pp07-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp08-q1",
+      "group": "pp08",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "전통시장육성 담당은?",
+      "allowed_documents": [
+        "pp08-안내",
+        "pp08-작성요령",
+        "pp08-별칭",
+        "pp08-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp08-안내",
+          "sha256": "30ffe69c485fb05dee7c1c5724731d8a522c1216ac501e85a4f93ff31127e56f",
+          "locator": "본문 1",
+          "exact_quote": "38구청 전통시장육성 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 38구청 도로과 쪽으로 보내면 된다. 기한은 11월 17일 전이고 쓰는 양식은 별지 제8호 전통시장육성신청서. 서식 작성 방법은 별첨 작성요령-8을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp08-q2",
+      "group": "pp08",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "전통시장육성 제출처는?",
+      "allowed_documents": [
+        "pp08-안내",
+        "pp08-작성요령",
+        "pp08-별칭",
+        "pp08-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp08-안내",
+          "sha256": "30ffe69c485fb05dee7c1c5724731d8a522c1216ac501e85a4f93ff31127e56f",
+          "locator": "본문 1",
+          "exact_quote": "38구청 전통시장육성 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 38구청 도로과 쪽으로 보내면 된다. 기한은 11월 17일 전이고 쓰는 양식은 별지 제8호 전통시장육성신청서. 서식 작성 방법은 별첨 작성요령-8을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp08-q3",
+      "group": "pp08",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "전통시장육성 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp08-안내",
+        "pp08-작성요령",
+        "pp08-별칭",
+        "pp08-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp08-안내",
+          "sha256": "30ffe69c485fb05dee7c1c5724731d8a522c1216ac501e85a4f93ff31127e56f",
+          "locator": "본문 1",
+          "exact_quote": "38구청 전통시장육성 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 38구청 도로과 쪽으로 보내면 된다. 기한은 11월 17일 전이고 쓰는 양식은 별지 제8호 전통시장육성신청서. 서식 작성 방법은 별첨 작성요령-8을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp08-작성요령",
+          "sha256": "182968810a333a0476f80969a82f47add7c82decadbaef0aad5e3b4f5dbad962",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-8 안내. 이 요령으로 만든 서류는 38구청 도로과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 43
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp08-q4",
+      "group": "pp08",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "전통시장육성 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp08-안내",
+        "pp08-작성요령",
+        "pp08-별칭",
+        "pp08-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp08-안내",
+          "sha256": "30ffe69c485fb05dee7c1c5724731d8a522c1216ac501e85a4f93ff31127e56f",
+          "locator": "본문 1",
+          "exact_quote": "38구청 전통시장육성 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 38구청 도로과 쪽으로 보내면 된다. 기한은 11월 17일 전이고 쓰는 양식은 별지 제8호 전통시장육성신청서. 서식 작성 방법은 별첨 작성요령-8을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp08-작성요령",
+          "sha256": "182968810a333a0476f80969a82f47add7c82decadbaef0aad5e3b4f5dbad962",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-8 안내. 이 요령으로 만든 서류는 38구청 도로과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 43
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp08-q5",
+      "group": "pp08",
+      "category": "alias",
+      "split": "holdout",
+      "style": 4,
+      "question": "전통사업 담당은?",
+      "allowed_documents": [
+        "pp08-안내",
+        "pp08-작성요령",
+        "pp08-별칭",
+        "pp08-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp08-안내",
+          "sha256": "30ffe69c485fb05dee7c1c5724731d8a522c1216ac501e85a4f93ff31127e56f",
+          "locator": "본문 1",
+          "exact_quote": "38구청 전통시장육성 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 38구청 도로과 쪽으로 보내면 된다. 기한은 11월 17일 전이고 쓰는 양식은 별지 제8호 전통시장육성신청서. 서식 작성 방법은 별첨 작성요령-8을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp08-별칭",
+          "sha256": "78e5bf3225858631550f269bb460229febac8dfed113461fb1b102ae97cd5dc5",
+          "locator": "본문 1",
+          "exact_quote": "38구청에서는 전통시장육성을 '전통사업'이라고도 한다. 전통사업는 총무과가 한다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 45
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp08-q6",
+      "group": "pp08",
+      "category": "missing",
+      "split": "holdout",
+      "style": 4,
+      "question": "전통시장육성 예산 금액은?",
+      "allowed_documents": [
+        "pp08-안내",
+        "pp08-작성요령",
+        "pp08-별칭",
+        "pp08-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp09-q1",
+      "group": "pp09",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "폐기물처리 담당은?",
+      "allowed_documents": [
+        "pp09-안내",
+        "pp09-작성요령",
+        "pp09-별칭",
+        "pp09-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp09-안내",
+          "sha256": "d7582cf76dcf20de5de7e5c858edf7d8034d58fb9b4b89de050ca8f9feb108f0",
+          "locator": "본문 1",
+          "exact_quote": "39구청 폐기물처리 안내\n담당: 회계과\n제출처: 39구청 환경과\n제출기한: 2026-11-18\n서식: 별지 제9호 폐기물처리신청서 서식 작성 방법은 별첨 작성요령-9을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 100
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp09-q2",
+      "group": "pp09",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "폐기물처리 제출처는?",
+      "allowed_documents": [
+        "pp09-안내",
+        "pp09-작성요령",
+        "pp09-별칭",
+        "pp09-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp09-안내",
+          "sha256": "d7582cf76dcf20de5de7e5c858edf7d8034d58fb9b4b89de050ca8f9feb108f0",
+          "locator": "본문 1",
+          "exact_quote": "39구청 폐기물처리 안내\n담당: 회계과\n제출처: 39구청 환경과\n제출기한: 2026-11-18\n서식: 별지 제9호 폐기물처리신청서 서식 작성 방법은 별첨 작성요령-9을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 100
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp09-q3",
+      "group": "pp09",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "폐기물처리 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp09-안내",
+        "pp09-작성요령",
+        "pp09-별칭",
+        "pp09-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp09-안내",
+          "sha256": "d7582cf76dcf20de5de7e5c858edf7d8034d58fb9b4b89de050ca8f9feb108f0",
+          "locator": "본문 1",
+          "exact_quote": "39구청 폐기물처리 안내\n담당: 회계과\n제출처: 39구청 환경과\n제출기한: 2026-11-18\n서식: 별지 제9호 폐기물처리신청서 서식 작성 방법은 별첨 작성요령-9을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 100
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp09-작성요령",
+          "sha256": "7dad1572193c3082fc0275bfe0097c474ae793ad935da04c10d5b3125158225d",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-9 안내. 작성요령-9에 따라 작성한 서류는 39구청 환경과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp09-q4",
+      "group": "pp09",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "폐기물처리 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp09-안내",
+        "pp09-작성요령",
+        "pp09-별칭",
+        "pp09-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp09-안내",
+          "sha256": "d7582cf76dcf20de5de7e5c858edf7d8034d58fb9b4b89de050ca8f9feb108f0",
+          "locator": "본문 1",
+          "exact_quote": "39구청 폐기물처리 안내\n담당: 회계과\n제출처: 39구청 환경과\n제출기한: 2026-11-18\n서식: 별지 제9호 폐기물처리신청서 서식 작성 방법은 별첨 작성요령-9을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 100
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp09-작성요령",
+          "sha256": "7dad1572193c3082fc0275bfe0097c474ae793ad935da04c10d5b3125158225d",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-9 안내. 작성요령-9에 따라 작성한 서류는 39구청 환경과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 46
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp09-q5",
+      "group": "pp09",
+      "category": "alias",
+      "split": "holdout",
+      "style": 1,
+      "question": "폐기사업 담당은?",
+      "allowed_documents": [
+        "pp09-안내",
+        "pp09-작성요령",
+        "pp09-별칭",
+        "pp09-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp09-안내",
+          "sha256": "d7582cf76dcf20de5de7e5c858edf7d8034d58fb9b4b89de050ca8f9feb108f0",
+          "locator": "본문 1",
+          "exact_quote": "39구청 폐기물처리 안내\n담당: 회계과\n제출처: 39구청 환경과\n제출기한: 2026-11-18\n서식: 별지 제9호 폐기물처리신청서 서식 작성 방법은 별첨 작성요령-9을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 100
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp09-별칭",
+          "sha256": "e17cc6be5266edec469a6df1802259fdb4e39caf4d4bebdf85d6d1578f67c6be",
+          "locator": "본문 1",
+          "exact_quote": "39구청에서는 폐기물처리을 '폐기사업'이라고도 부릅니다. 폐기사업의 담당은 회계과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 49
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp09-q6",
+      "group": "pp09",
+      "category": "missing",
+      "split": "holdout",
+      "style": 1,
+      "question": "폐기물처리 예산 금액은?",
+      "allowed_documents": [
+        "pp09-안내",
+        "pp09-작성요령",
+        "pp09-별칭",
+        "pp09-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp10-q1",
+      "group": "pp10",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "가로등관리 담당은?",
+      "allowed_documents": [
+        "pp10-안내",
+        "pp10-작성요령",
+        "pp10-별칭",
+        "pp10-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp10-안내",
+          "sha256": "440027e88d0adcc465b09e046ffcd765d41bdca4a38834004f77b9f91a9a8e45",
+          "locator": "본문 1",
+          "exact_quote": "40구청 가로등관리 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 40구청 복지과입니다. 마감일은 2026-11-19입니다. 사용 서식은 별지 제1호 가로등관리신청서입니다. 서식 작성 방법은 별첨 작성요령-10을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp10-q2",
+      "group": "pp10",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "가로등관리 제출처는?",
+      "allowed_documents": [
+        "pp10-안내",
+        "pp10-작성요령",
+        "pp10-별칭",
+        "pp10-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp10-안내",
+          "sha256": "440027e88d0adcc465b09e046ffcd765d41bdca4a38834004f77b9f91a9a8e45",
+          "locator": "본문 1",
+          "exact_quote": "40구청 가로등관리 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 40구청 복지과입니다. 마감일은 2026-11-19입니다. 사용 서식은 별지 제1호 가로등관리신청서입니다. 서식 작성 방법은 별첨 작성요령-10을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp10-q3",
+      "group": "pp10",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "가로등관리 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp10-안내",
+        "pp10-작성요령",
+        "pp10-별칭",
+        "pp10-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp10-안내",
+          "sha256": "440027e88d0adcc465b09e046ffcd765d41bdca4a38834004f77b9f91a9a8e45",
+          "locator": "본문 1",
+          "exact_quote": "40구청 가로등관리 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 40구청 복지과입니다. 마감일은 2026-11-19입니다. 사용 서식은 별지 제1호 가로등관리신청서입니다. 서식 작성 방법은 별첨 작성요령-10을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp10-작성요령",
+          "sha256": "36668f37b07f041b7dbf1782976112706ae02784ee78867685d8c37b68956aa3",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-10 안내. 작성요령-10에 따라 작성한 서류는 40구청 복지과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp10-q4",
+      "group": "pp10",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "가로등관리 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp10-안내",
+        "pp10-작성요령",
+        "pp10-별칭",
+        "pp10-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp10-안내",
+          "sha256": "440027e88d0adcc465b09e046ffcd765d41bdca4a38834004f77b9f91a9a8e45",
+          "locator": "본문 1",
+          "exact_quote": "40구청 가로등관리 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 40구청 복지과입니다. 마감일은 2026-11-19입니다. 사용 서식은 별지 제1호 가로등관리신청서입니다. 서식 작성 방법은 별첨 작성요령-10을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp10-작성요령",
+          "sha256": "36668f37b07f041b7dbf1782976112706ae02784ee78867685d8c37b68956aa3",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-10 안내. 작성요령-10에 따라 작성한 서류는 40구청 복지과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp10-q5",
+      "group": "pp10",
+      "category": "alias",
+      "split": "holdout",
+      "style": 2,
+      "question": "가로사업 담당은?",
+      "allowed_documents": [
+        "pp10-안내",
+        "pp10-작성요령",
+        "pp10-별칭",
+        "pp10-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp10-안내",
+          "sha256": "440027e88d0adcc465b09e046ffcd765d41bdca4a38834004f77b9f91a9a8e45",
+          "locator": "본문 1",
+          "exact_quote": "40구청 가로등관리 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 40구청 복지과입니다. 마감일은 2026-11-19입니다. 사용 서식은 별지 제1호 가로등관리신청서입니다. 서식 작성 방법은 별첨 작성요령-10을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp10-별칭",
+          "sha256": "60d0963b684c27dd8d34b8c0b583c712a9d194e2d5b35582dfa212f406d43efe",
+          "locator": "본문 1",
+          "exact_quote": "40구청에서는 가로등관리을 '가로사업'이라고도 부릅니다. 가로사업의 담당은 기획과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 49
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp10-q6",
+      "group": "pp10",
+      "category": "missing",
+      "split": "holdout",
+      "style": 2,
+      "question": "가로등관리 예산 금액은?",
+      "allowed_documents": [
+        "pp10-안내",
+        "pp10-작성요령",
+        "pp10-별칭",
+        "pp10-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp11-q1",
+      "group": "pp11",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "건축물대장정비 담당은?",
+      "allowed_documents": [
+        "pp11-안내",
+        "pp11-작성요령",
+        "pp11-별칭",
+        "pp11-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp11-안내",
+          "sha256": "6ccdee69cd25b211701fec2926b4b3fac54fb64c37f5fb312704947d2e9a1a19",
+          "locator": "본문 1",
+          "exact_quote": "41구청 건축물대장정비 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 41구청 총무과에 제출합니다. 2026. 11. 20.까지 제출하여 주시기 바랍니다. 별지 제2호 건축물대장정비신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-11을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 151
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp11-q2",
+      "group": "pp11",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "건축물대장정비 제출처는?",
+      "allowed_documents": [
+        "pp11-안내",
+        "pp11-작성요령",
+        "pp11-별칭",
+        "pp11-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp11-안내",
+          "sha256": "6ccdee69cd25b211701fec2926b4b3fac54fb64c37f5fb312704947d2e9a1a19",
+          "locator": "본문 1",
+          "exact_quote": "41구청 건축물대장정비 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 41구청 총무과에 제출합니다. 2026. 11. 20.까지 제출하여 주시기 바랍니다. 별지 제2호 건축물대장정비신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-11을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 151
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp11-q3",
+      "group": "pp11",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "건축물대장정비 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp11-안내",
+        "pp11-작성요령",
+        "pp11-별칭",
+        "pp11-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp11-안내",
+          "sha256": "6ccdee69cd25b211701fec2926b4b3fac54fb64c37f5fb312704947d2e9a1a19",
+          "locator": "본문 1",
+          "exact_quote": "41구청 건축물대장정비 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 41구청 총무과에 제출합니다. 2026. 11. 20.까지 제출하여 주시기 바랍니다. 별지 제2호 건축물대장정비신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-11을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 151
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp11-작성요령",
+          "sha256": "f51e8615ded6f6f40e98a4682a31f9108a65b2de35113418a33e6b235e8759f8",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-11 안내. 작성요령-11에 따라 작성한 서류는 41구청 총무과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp11-q4",
+      "group": "pp11",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "건축물대장정비 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp11-안내",
+        "pp11-작성요령",
+        "pp11-별칭",
+        "pp11-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp11-안내",
+          "sha256": "6ccdee69cd25b211701fec2926b4b3fac54fb64c37f5fb312704947d2e9a1a19",
+          "locator": "본문 1",
+          "exact_quote": "41구청 건축물대장정비 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 41구청 총무과에 제출합니다. 2026. 11. 20.까지 제출하여 주시기 바랍니다. 별지 제2호 건축물대장정비신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-11을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 151
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp11-작성요령",
+          "sha256": "f51e8615ded6f6f40e98a4682a31f9108a65b2de35113418a33e6b235e8759f8",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-11 안내. 작성요령-11에 따라 작성한 서류는 41구청 총무과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp11-q5",
+      "group": "pp11",
+      "category": "alias",
+      "split": "holdout",
+      "style": 3,
+      "question": "건축사업 담당은?",
+      "allowed_documents": [
+        "pp11-안내",
+        "pp11-작성요령",
+        "pp11-별칭",
+        "pp11-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp11-안내",
+          "sha256": "6ccdee69cd25b211701fec2926b4b3fac54fb64c37f5fb312704947d2e9a1a19",
+          "locator": "본문 1",
+          "exact_quote": "41구청 건축물대장정비 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 41구청 총무과에 제출합니다. 2026. 11. 20.까지 제출하여 주시기 바랍니다. 별지 제2호 건축물대장정비신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-11을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 151
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp11-별칭",
+          "sha256": "d4065c6e24dab7a1d5444e480b52a66d21b8de8c56a4894f9bbf00039e52c836",
+          "locator": "본문 1",
+          "exact_quote": "41구청에서는 건축물대장정비을 '건축사업'이라고도 부릅니다. 건축사업의 담당은 도로과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 51
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp11-q6",
+      "group": "pp11",
+      "category": "missing",
+      "split": "holdout",
+      "style": 3,
+      "question": "건축물대장정비 예산 금액은?",
+      "allowed_documents": [
+        "pp11-안내",
+        "pp11-작성요령",
+        "pp11-별칭",
+        "pp11-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp12-q1",
+      "group": "pp12",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "산림보호 담당은?",
+      "allowed_documents": [
+        "pp12-안내",
+        "pp12-작성요령",
+        "pp12-별칭",
+        "pp12-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp12-안내",
+          "sha256": "061c4fdfed0d6c89bd33ef4c83154c0d8f968383befeb4c2d83790cf1e805cdd",
+          "locator": "본문 1",
+          "exact_quote": "42구청 산림보호 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 42구청 회계과 쪽으로 보내면 된다. 기한은 11월 21일 전이고 쓰는 양식은 별지 제3호 산림보호신청서. 서식 작성 방법은 별첨 작성요령-12을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 129
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp12-q2",
+      "group": "pp12",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "산림보호 제출처는?",
+      "allowed_documents": [
+        "pp12-안내",
+        "pp12-작성요령",
+        "pp12-별칭",
+        "pp12-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp12-안내",
+          "sha256": "061c4fdfed0d6c89bd33ef4c83154c0d8f968383befeb4c2d83790cf1e805cdd",
+          "locator": "본문 1",
+          "exact_quote": "42구청 산림보호 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 42구청 회계과 쪽으로 보내면 된다. 기한은 11월 21일 전이고 쓰는 양식은 별지 제3호 산림보호신청서. 서식 작성 방법은 별첨 작성요령-12을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 129
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp12-q3",
+      "group": "pp12",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "산림보호 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp12-안내",
+        "pp12-작성요령",
+        "pp12-별칭",
+        "pp12-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp12-안내",
+          "sha256": "061c4fdfed0d6c89bd33ef4c83154c0d8f968383befeb4c2d83790cf1e805cdd",
+          "locator": "본문 1",
+          "exact_quote": "42구청 산림보호 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 42구청 회계과 쪽으로 보내면 된다. 기한은 11월 21일 전이고 쓰는 양식은 별지 제3호 산림보호신청서. 서식 작성 방법은 별첨 작성요령-12을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 129
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp12-작성요령",
+          "sha256": "f655aa7c190279874602fb0d07f1140c98a0fdf8fb5e74b0df71fed6b910373a",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-12 안내. 이 요령으로 만든 서류는 42구청 회계과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 44
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp12-q4",
+      "group": "pp12",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "산림보호 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp12-안내",
+        "pp12-작성요령",
+        "pp12-별칭",
+        "pp12-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp12-안내",
+          "sha256": "061c4fdfed0d6c89bd33ef4c83154c0d8f968383befeb4c2d83790cf1e805cdd",
+          "locator": "본문 1",
+          "exact_quote": "42구청 산림보호 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 42구청 회계과 쪽으로 보내면 된다. 기한은 11월 21일 전이고 쓰는 양식은 별지 제3호 산림보호신청서. 서식 작성 방법은 별첨 작성요령-12을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 129
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp12-작성요령",
+          "sha256": "f655aa7c190279874602fb0d07f1140c98a0fdf8fb5e74b0df71fed6b910373a",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-12 안내. 이 요령으로 만든 서류는 42구청 회계과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 44
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp12-q5",
+      "group": "pp12",
+      "category": "alias",
+      "split": "holdout",
+      "style": 4,
+      "question": "산림사업 담당은?",
+      "allowed_documents": [
+        "pp12-안내",
+        "pp12-작성요령",
+        "pp12-별칭",
+        "pp12-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp12-안내",
+          "sha256": "061c4fdfed0d6c89bd33ef4c83154c0d8f968383befeb4c2d83790cf1e805cdd",
+          "locator": "본문 1",
+          "exact_quote": "42구청 산림보호 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 42구청 회계과 쪽으로 보내면 된다. 기한은 11월 21일 전이고 쓰는 양식은 별지 제3호 산림보호신청서. 서식 작성 방법은 별첨 작성요령-12을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 129
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp12-별칭",
+          "sha256": "6fecbde3df04dca941331d6d2174fc5acab906a5d0bf188a7fcb479ac79e2f7c",
+          "locator": "본문 1",
+          "exact_quote": "42구청에서는 산림보호을 '산림사업'이라고도 한다. 산림사업는 환경과가 한다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 43
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp12-q6",
+      "group": "pp12",
+      "category": "missing",
+      "split": "holdout",
+      "style": 4,
+      "question": "산림보호 예산 금액은?",
+      "allowed_documents": [
+        "pp12-안내",
+        "pp12-작성요령",
+        "pp12-별칭",
+        "pp12-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp13-q1",
+      "group": "pp13",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "장애인복지 담당은?",
+      "allowed_documents": [
+        "pp13-안내",
+        "pp13-작성요령",
+        "pp13-별칭",
+        "pp13-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp13-안내",
+          "sha256": "e1482720fce6e8ec2a65ae7d7191e6e145d13812779f1a94a3451dc0da518dea",
+          "locator": "본문 1",
+          "exact_quote": "43구청 장애인복지 안내\n담당: 복지과\n제출처: 43구청 기획과\n제출기한: 2026-11-22\n서식: 별지 제4호 장애인복지신청서 서식 작성 방법은 별첨 작성요령-13을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 101
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp13-q2",
+      "group": "pp13",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "장애인복지 제출처는?",
+      "allowed_documents": [
+        "pp13-안내",
+        "pp13-작성요령",
+        "pp13-별칭",
+        "pp13-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp13-안내",
+          "sha256": "e1482720fce6e8ec2a65ae7d7191e6e145d13812779f1a94a3451dc0da518dea",
+          "locator": "본문 1",
+          "exact_quote": "43구청 장애인복지 안내\n담당: 복지과\n제출처: 43구청 기획과\n제출기한: 2026-11-22\n서식: 별지 제4호 장애인복지신청서 서식 작성 방법은 별첨 작성요령-13을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 101
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp13-q3",
+      "group": "pp13",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "장애인복지 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp13-안내",
+        "pp13-작성요령",
+        "pp13-별칭",
+        "pp13-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp13-안내",
+          "sha256": "e1482720fce6e8ec2a65ae7d7191e6e145d13812779f1a94a3451dc0da518dea",
+          "locator": "본문 1",
+          "exact_quote": "43구청 장애인복지 안내\n담당: 복지과\n제출처: 43구청 기획과\n제출기한: 2026-11-22\n서식: 별지 제4호 장애인복지신청서 서식 작성 방법은 별첨 작성요령-13을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 101
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp13-작성요령",
+          "sha256": "4ad08dbbe43b5bac2ed6bb20ecf02beeb213ee1084cf5cac0a10fefbc2e3b149",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-13 안내. 작성요령-13에 따라 작성한 서류는 43구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp13-q4",
+      "group": "pp13",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "장애인복지 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp13-안내",
+        "pp13-작성요령",
+        "pp13-별칭",
+        "pp13-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp13-안내",
+          "sha256": "e1482720fce6e8ec2a65ae7d7191e6e145d13812779f1a94a3451dc0da518dea",
+          "locator": "본문 1",
+          "exact_quote": "43구청 장애인복지 안내\n담당: 복지과\n제출처: 43구청 기획과\n제출기한: 2026-11-22\n서식: 별지 제4호 장애인복지신청서 서식 작성 방법은 별첨 작성요령-13을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 101
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp13-작성요령",
+          "sha256": "4ad08dbbe43b5bac2ed6bb20ecf02beeb213ee1084cf5cac0a10fefbc2e3b149",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-13 안내. 작성요령-13에 따라 작성한 서류는 43구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp13-q5",
+      "group": "pp13",
+      "category": "alias",
+      "split": "holdout",
+      "style": 1,
+      "question": "장애사업 담당은?",
+      "allowed_documents": [
+        "pp13-안내",
+        "pp13-작성요령",
+        "pp13-별칭",
+        "pp13-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp13-안내",
+          "sha256": "e1482720fce6e8ec2a65ae7d7191e6e145d13812779f1a94a3451dc0da518dea",
+          "locator": "본문 1",
+          "exact_quote": "43구청 장애인복지 안내\n담당: 복지과\n제출처: 43구청 기획과\n제출기한: 2026-11-22\n서식: 별지 제4호 장애인복지신청서 서식 작성 방법은 별첨 작성요령-13을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 101
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp13-별칭",
+          "sha256": "47a147317f5cb72af5df9c360e5e0adeb799d076110f4c4add949beea9f79db5",
+          "locator": "본문 1",
+          "exact_quote": "43구청에서는 장애인복지을 '장애사업'이라고도 부릅니다. 장애사업의 담당은 복지과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 49
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp13-q6",
+      "group": "pp13",
+      "category": "missing",
+      "split": "holdout",
+      "style": 1,
+      "question": "장애인복지 예산 금액은?",
+      "allowed_documents": [
+        "pp13-안내",
+        "pp13-작성요령",
+        "pp13-별칭",
+        "pp13-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp14-q1",
+      "group": "pp14",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "노인일자리 담당은?",
+      "allowed_documents": [
+        "pp14-안내",
+        "pp14-작성요령",
+        "pp14-별칭",
+        "pp14-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp14-안내",
+          "sha256": "239c3abf56f58216fed70985aa38fab9df849eab96f30850971477607feefec0",
+          "locator": "본문 1",
+          "exact_quote": "44구청 노인일자리 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 44구청 도로과입니다. 마감일은 2026-11-23입니다. 사용 서식은 별지 제5호 노인일자리신청서입니다. 서식 작성 방법은 별첨 작성요령-14을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp14-q2",
+      "group": "pp14",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "노인일자리 제출처는?",
+      "allowed_documents": [
+        "pp14-안내",
+        "pp14-작성요령",
+        "pp14-별칭",
+        "pp14-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp14-안내",
+          "sha256": "239c3abf56f58216fed70985aa38fab9df849eab96f30850971477607feefec0",
+          "locator": "본문 1",
+          "exact_quote": "44구청 노인일자리 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 44구청 도로과입니다. 마감일은 2026-11-23입니다. 사용 서식은 별지 제5호 노인일자리신청서입니다. 서식 작성 방법은 별첨 작성요령-14을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp14-q3",
+      "group": "pp14",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "노인일자리 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp14-안내",
+        "pp14-작성요령",
+        "pp14-별칭",
+        "pp14-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp14-안내",
+          "sha256": "239c3abf56f58216fed70985aa38fab9df849eab96f30850971477607feefec0",
+          "locator": "본문 1",
+          "exact_quote": "44구청 노인일자리 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 44구청 도로과입니다. 마감일은 2026-11-23입니다. 사용 서식은 별지 제5호 노인일자리신청서입니다. 서식 작성 방법은 별첨 작성요령-14을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp14-작성요령",
+          "sha256": "925ba4c17b98e318864b1ca4aeb580e0b22045bb32aa3a67266e1bbbee644300",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-14 안내. 작성요령-14에 따라 작성한 서류는 44구청 도로과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp14-q4",
+      "group": "pp14",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "노인일자리 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp14-안내",
+        "pp14-작성요령",
+        "pp14-별칭",
+        "pp14-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp14-안내",
+          "sha256": "239c3abf56f58216fed70985aa38fab9df849eab96f30850971477607feefec0",
+          "locator": "본문 1",
+          "exact_quote": "44구청 노인일자리 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 44구청 도로과입니다. 마감일은 2026-11-23입니다. 사용 서식은 별지 제5호 노인일자리신청서입니다. 서식 작성 방법은 별첨 작성요령-14을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp14-작성요령",
+          "sha256": "925ba4c17b98e318864b1ca4aeb580e0b22045bb32aa3a67266e1bbbee644300",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-14 안내. 작성요령-14에 따라 작성한 서류는 44구청 도로과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp14-q5",
+      "group": "pp14",
+      "category": "alias",
+      "split": "holdout",
+      "style": 2,
+      "question": "노인사업 담당은?",
+      "allowed_documents": [
+        "pp14-안내",
+        "pp14-작성요령",
+        "pp14-별칭",
+        "pp14-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp14-안내",
+          "sha256": "239c3abf56f58216fed70985aa38fab9df849eab96f30850971477607feefec0",
+          "locator": "본문 1",
+          "exact_quote": "44구청 노인일자리 안내. 이 업무의 담당 부서는 총무과입니다. 결과 보고처는 44구청 도로과입니다. 마감일은 2026-11-23입니다. 사용 서식은 별지 제5호 노인일자리신청서입니다. 서식 작성 방법은 별첨 작성요령-14을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp14-별칭",
+          "sha256": "f821c8fc96ee580c9e83842f3277dbb2bbef560990435e01279b9c6a42bb9a1a",
+          "locator": "본문 1",
+          "exact_quote": "44구청에서는 노인일자리을 '노인사업'이라고도 부릅니다. 노인사업의 담당은 총무과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 49
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp14-q6",
+      "group": "pp14",
+      "category": "missing",
+      "split": "holdout",
+      "style": 2,
+      "question": "노인일자리 예산 금액은?",
+      "allowed_documents": [
+        "pp14-안내",
+        "pp14-작성요령",
+        "pp14-별칭",
+        "pp14-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp15-q1",
+      "group": "pp15",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "청소년수련 담당은?",
+      "allowed_documents": [
+        "pp15-안내",
+        "pp15-작성요령",
+        "pp15-별칭",
+        "pp15-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp15-안내",
+          "sha256": "270a139faa0cb78ed2c096bdcebba8b07e1a7fa0bee306426b2931ed29cb81a7",
+          "locator": "본문 1",
+          "exact_quote": "45구청 청소년수련 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 45구청 환경과에 제출합니다. 2026. 11. 24.까지 제출하여 주시기 바랍니다. 별지 제6호 청소년수련신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-15을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 147
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp15-q2",
+      "group": "pp15",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "청소년수련 제출처는?",
+      "allowed_documents": [
+        "pp15-안내",
+        "pp15-작성요령",
+        "pp15-별칭",
+        "pp15-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp15-안내",
+          "sha256": "270a139faa0cb78ed2c096bdcebba8b07e1a7fa0bee306426b2931ed29cb81a7",
+          "locator": "본문 1",
+          "exact_quote": "45구청 청소년수련 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 45구청 환경과에 제출합니다. 2026. 11. 24.까지 제출하여 주시기 바랍니다. 별지 제6호 청소년수련신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-15을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 147
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp15-q3",
+      "group": "pp15",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "청소년수련 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp15-안내",
+        "pp15-작성요령",
+        "pp15-별칭",
+        "pp15-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp15-안내",
+          "sha256": "270a139faa0cb78ed2c096bdcebba8b07e1a7fa0bee306426b2931ed29cb81a7",
+          "locator": "본문 1",
+          "exact_quote": "45구청 청소년수련 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 45구청 환경과에 제출합니다. 2026. 11. 24.까지 제출하여 주시기 바랍니다. 별지 제6호 청소년수련신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-15을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 147
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp15-작성요령",
+          "sha256": "f16085789ef031650611dc18b7ec403edcbbb1b0c26d2ccb3d38bcc5b985dbd5",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-15 안내. 작성요령-15에 따라 작성한 서류는 45구청 환경과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp15-q4",
+      "group": "pp15",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "청소년수련 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp15-안내",
+        "pp15-작성요령",
+        "pp15-별칭",
+        "pp15-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp15-안내",
+          "sha256": "270a139faa0cb78ed2c096bdcebba8b07e1a7fa0bee306426b2931ed29cb81a7",
+          "locator": "본문 1",
+          "exact_quote": "45구청 청소년수련 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 45구청 환경과에 제출합니다. 2026. 11. 24.까지 제출하여 주시기 바랍니다. 별지 제6호 청소년수련신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-15을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 147
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp15-작성요령",
+          "sha256": "f16085789ef031650611dc18b7ec403edcbbb1b0c26d2ccb3d38bcc5b985dbd5",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-15 안내. 작성요령-15에 따라 작성한 서류는 45구청 환경과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp15-q5",
+      "group": "pp15",
+      "category": "alias",
+      "split": "holdout",
+      "style": 3,
+      "question": "청소사업 담당은?",
+      "allowed_documents": [
+        "pp15-안내",
+        "pp15-작성요령",
+        "pp15-별칭",
+        "pp15-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp15-안내",
+          "sha256": "270a139faa0cb78ed2c096bdcebba8b07e1a7fa0bee306426b2931ed29cb81a7",
+          "locator": "본문 1",
+          "exact_quote": "45구청 청소년수련 안내. 이 업무는 회계과에서 맡고 있습니다. 작성한 결과는 45구청 환경과에 제출합니다. 2026. 11. 24.까지 제출하여 주시기 바랍니다. 별지 제6호 청소년수련신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-15을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 147
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp15-별칭",
+          "sha256": "45ae7a8aa4a964d80916d433dd053b2b49727ecc03e86d539e9a0c493c16cfa6",
+          "locator": "본문 1",
+          "exact_quote": "45구청에서는 청소년수련을 '청소사업'이라고도 부릅니다. 청소사업의 담당은 회계과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 49
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp15-q6",
+      "group": "pp15",
+      "category": "missing",
+      "split": "holdout",
+      "style": 3,
+      "question": "청소년수련 예산 금액은?",
+      "allowed_documents": [
+        "pp15-안내",
+        "pp15-작성요령",
+        "pp15-별칭",
+        "pp15-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp16-q1",
+      "group": "pp16",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "문화행사지원 담당은?",
+      "allowed_documents": [
+        "pp16-안내",
+        "pp16-작성요령",
+        "pp16-별칭",
+        "pp16-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp16-안내",
+          "sha256": "6fa93998f6676147dff30772108d66e70ffe4047e544e23d9f3bb698ee8ee143",
+          "locator": "본문 1",
+          "exact_quote": "46구청 문화행사지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 46구청 복지과 쪽으로 보내면 된다. 기한은 11월 25일 전이고 쓰는 양식은 별지 제7호 문화행사지원신청서. 서식 작성 방법은 별첨 작성요령-16을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp16-q2",
+      "group": "pp16",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "문화행사지원 제출처는?",
+      "allowed_documents": [
+        "pp16-안내",
+        "pp16-작성요령",
+        "pp16-별칭",
+        "pp16-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp16-안내",
+          "sha256": "6fa93998f6676147dff30772108d66e70ffe4047e544e23d9f3bb698ee8ee143",
+          "locator": "본문 1",
+          "exact_quote": "46구청 문화행사지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 46구청 복지과 쪽으로 보내면 된다. 기한은 11월 25일 전이고 쓰는 양식은 별지 제7호 문화행사지원신청서. 서식 작성 방법은 별첨 작성요령-16을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp16-q3",
+      "group": "pp16",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "문화행사지원 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp16-안내",
+        "pp16-작성요령",
+        "pp16-별칭",
+        "pp16-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp16-안내",
+          "sha256": "6fa93998f6676147dff30772108d66e70ffe4047e544e23d9f3bb698ee8ee143",
+          "locator": "본문 1",
+          "exact_quote": "46구청 문화행사지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 46구청 복지과 쪽으로 보내면 된다. 기한은 11월 25일 전이고 쓰는 양식은 별지 제7호 문화행사지원신청서. 서식 작성 방법은 별첨 작성요령-16을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp16-작성요령",
+          "sha256": "1bb04c637d8a626b8ad4b27342a17d2bd2c5489ad884a8b19ff2757eca53eb09",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-16 안내. 이 요령으로 만든 서류는 46구청 복지과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 44
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp16-q4",
+      "group": "pp16",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "문화행사지원 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp16-안내",
+        "pp16-작성요령",
+        "pp16-별칭",
+        "pp16-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp16-안내",
+          "sha256": "6fa93998f6676147dff30772108d66e70ffe4047e544e23d9f3bb698ee8ee143",
+          "locator": "본문 1",
+          "exact_quote": "46구청 문화행사지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 46구청 복지과 쪽으로 보내면 된다. 기한은 11월 25일 전이고 쓰는 양식은 별지 제7호 문화행사지원신청서. 서식 작성 방법은 별첨 작성요령-16을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp16-작성요령",
+          "sha256": "1bb04c637d8a626b8ad4b27342a17d2bd2c5489ad884a8b19ff2757eca53eb09",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-16 안내. 이 요령으로 만든 서류는 46구청 복지과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 44
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp16-q5",
+      "group": "pp16",
+      "category": "alias",
+      "split": "holdout",
+      "style": 4,
+      "question": "문화사업 담당은?",
+      "allowed_documents": [
+        "pp16-안내",
+        "pp16-작성요령",
+        "pp16-별칭",
+        "pp16-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp16-안내",
+          "sha256": "6fa93998f6676147dff30772108d66e70ffe4047e544e23d9f3bb698ee8ee143",
+          "locator": "본문 1",
+          "exact_quote": "46구청 문화행사지원 안내. 올해도 이 일은 기획과 소관으로 진행하고 서류는 46구청 복지과 쪽으로 보내면 된다. 기한은 11월 25일 전이고 쓰는 양식은 별지 제7호 문화행사지원신청서. 서식 작성 방법은 별첨 작성요령-16을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp16-별칭",
+          "sha256": "02fa3e370c3b26d2181b37808e906e7202862542998828b27b31f7125e1186da",
+          "locator": "본문 1",
+          "exact_quote": "46구청에서는 문화행사지원을 '문화사업'이라고도 한다. 문화사업는 기획과가 한다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 45
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp16-q6",
+      "group": "pp16",
+      "category": "missing",
+      "split": "holdout",
+      "style": 4,
+      "question": "문화행사지원 예산 금액은?",
+      "allowed_documents": [
+        "pp16-안내",
+        "pp16-작성요령",
+        "pp16-별칭",
+        "pp16-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp17-q1",
+      "group": "pp17",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "공원조성 담당은?",
+      "allowed_documents": [
+        "pp17-안내",
+        "pp17-작성요령",
+        "pp17-별칭",
+        "pp17-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp17-안내",
+          "sha256": "ab2c4677dc2d18d4fcbce8a736934bcf99cb5e29b134a648b54251d00b256bc3",
+          "locator": "본문 1",
+          "exact_quote": "47구청 공원조성 안내\n담당: 도로과\n제출처: 47구청 총무과\n제출기한: 2026-11-26\n서식: 별지 제8호 공원조성신청서 서식 작성 방법은 별첨 작성요령-17을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 99
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp17-q2",
+      "group": "pp17",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "공원조성 제출처는?",
+      "allowed_documents": [
+        "pp17-안내",
+        "pp17-작성요령",
+        "pp17-별칭",
+        "pp17-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp17-안내",
+          "sha256": "ab2c4677dc2d18d4fcbce8a736934bcf99cb5e29b134a648b54251d00b256bc3",
+          "locator": "본문 1",
+          "exact_quote": "47구청 공원조성 안내\n담당: 도로과\n제출처: 47구청 총무과\n제출기한: 2026-11-26\n서식: 별지 제8호 공원조성신청서 서식 작성 방법은 별첨 작성요령-17을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 99
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp17-q3",
+      "group": "pp17",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "공원조성 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp17-안내",
+        "pp17-작성요령",
+        "pp17-별칭",
+        "pp17-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp17-안내",
+          "sha256": "ab2c4677dc2d18d4fcbce8a736934bcf99cb5e29b134a648b54251d00b256bc3",
+          "locator": "본문 1",
+          "exact_quote": "47구청 공원조성 안내\n담당: 도로과\n제출처: 47구청 총무과\n제출기한: 2026-11-26\n서식: 별지 제8호 공원조성신청서 서식 작성 방법은 별첨 작성요령-17을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 99
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp17-작성요령",
+          "sha256": "6eb824bc0f550c4c25a2ae4db8c7c6218f79140632467eec6bec683b02dc86f8",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-17 안내. 작성요령-17에 따라 작성한 서류는 47구청 총무과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp17-q4",
+      "group": "pp17",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "공원조성 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp17-안내",
+        "pp17-작성요령",
+        "pp17-별칭",
+        "pp17-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp17-안내",
+          "sha256": "ab2c4677dc2d18d4fcbce8a736934bcf99cb5e29b134a648b54251d00b256bc3",
+          "locator": "본문 1",
+          "exact_quote": "47구청 공원조성 안내\n담당: 도로과\n제출처: 47구청 총무과\n제출기한: 2026-11-26\n서식: 별지 제8호 공원조성신청서 서식 작성 방법은 별첨 작성요령-17을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 99
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp17-작성요령",
+          "sha256": "6eb824bc0f550c4c25a2ae4db8c7c6218f79140632467eec6bec683b02dc86f8",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-17 안내. 작성요령-17에 따라 작성한 서류는 47구청 총무과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp17-q5",
+      "group": "pp17",
+      "category": "alias",
+      "split": "holdout",
+      "style": 1,
+      "question": "공원사업 담당은?",
+      "allowed_documents": [
+        "pp17-안내",
+        "pp17-작성요령",
+        "pp17-별칭",
+        "pp17-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp17-안내",
+          "sha256": "ab2c4677dc2d18d4fcbce8a736934bcf99cb5e29b134a648b54251d00b256bc3",
+          "locator": "본문 1",
+          "exact_quote": "47구청 공원조성 안내\n담당: 도로과\n제출처: 47구청 총무과\n제출기한: 2026-11-26\n서식: 별지 제8호 공원조성신청서 서식 작성 방법은 별첨 작성요령-17을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 99
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp17-별칭",
+          "sha256": "35e2b900db4bc0fe7f40d5d2a9fc280ffc7e7f59ab50281d863bb06f3cf0e311",
+          "locator": "본문 1",
+          "exact_quote": "47구청에서는 공원조성을 '공원사업'이라고도 부릅니다. 공원사업의 담당은 도로과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp17-q6",
+      "group": "pp17",
+      "category": "missing",
+      "split": "holdout",
+      "style": 1,
+      "question": "공원조성 예산 금액은?",
+      "allowed_documents": [
+        "pp17-안내",
+        "pp17-작성요령",
+        "pp17-별칭",
+        "pp17-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp18-q1",
+      "group": "pp18",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "상수도점검 담당은?",
+      "allowed_documents": [
+        "pp18-안내",
+        "pp18-작성요령",
+        "pp18-별칭",
+        "pp18-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp18-안내",
+          "sha256": "5eee101ec5b1e4986f4753cc6b25085cd536aa3d7e6da641f9a13851ceecd961",
+          "locator": "본문 1",
+          "exact_quote": "48구청 상수도점검 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 48구청 회계과입니다. 마감일은 2026-11-27입니다. 사용 서식은 별지 제9호 상수도점검신청서입니다. 서식 작성 방법은 별첨 작성요령-18을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp18-q2",
+      "group": "pp18",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "상수도점검 제출처는?",
+      "allowed_documents": [
+        "pp18-안내",
+        "pp18-작성요령",
+        "pp18-별칭",
+        "pp18-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp18-안내",
+          "sha256": "5eee101ec5b1e4986f4753cc6b25085cd536aa3d7e6da641f9a13851ceecd961",
+          "locator": "본문 1",
+          "exact_quote": "48구청 상수도점검 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 48구청 회계과입니다. 마감일은 2026-11-27입니다. 사용 서식은 별지 제9호 상수도점검신청서입니다. 서식 작성 방법은 별첨 작성요령-18을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp18-q3",
+      "group": "pp18",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "상수도점검 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp18-안내",
+        "pp18-작성요령",
+        "pp18-별칭",
+        "pp18-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp18-안내",
+          "sha256": "5eee101ec5b1e4986f4753cc6b25085cd536aa3d7e6da641f9a13851ceecd961",
+          "locator": "본문 1",
+          "exact_quote": "48구청 상수도점검 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 48구청 회계과입니다. 마감일은 2026-11-27입니다. 사용 서식은 별지 제9호 상수도점검신청서입니다. 서식 작성 방법은 별첨 작성요령-18을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp18-작성요령",
+          "sha256": "f249edb81c146d660d00a33aa79f7908954a10392ac13b770125fa162463fa44",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-18 안내. 작성요령-18에 따라 작성한 서류는 48구청 회계과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp18-q4",
+      "group": "pp18",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "상수도점검 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp18-안내",
+        "pp18-작성요령",
+        "pp18-별칭",
+        "pp18-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp18-안내",
+          "sha256": "5eee101ec5b1e4986f4753cc6b25085cd536aa3d7e6da641f9a13851ceecd961",
+          "locator": "본문 1",
+          "exact_quote": "48구청 상수도점검 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 48구청 회계과입니다. 마감일은 2026-11-27입니다. 사용 서식은 별지 제9호 상수도점검신청서입니다. 서식 작성 방법은 별첨 작성요령-18을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp18-작성요령",
+          "sha256": "f249edb81c146d660d00a33aa79f7908954a10392ac13b770125fa162463fa44",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-18 안내. 작성요령-18에 따라 작성한 서류는 48구청 회계과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp18-q5",
+      "group": "pp18",
+      "category": "alias",
+      "split": "holdout",
+      "style": 2,
+      "question": "상수사업 담당은?",
+      "allowed_documents": [
+        "pp18-안내",
+        "pp18-작성요령",
+        "pp18-별칭",
+        "pp18-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp18-안내",
+          "sha256": "5eee101ec5b1e4986f4753cc6b25085cd536aa3d7e6da641f9a13851ceecd961",
+          "locator": "본문 1",
+          "exact_quote": "48구청 상수도점검 안내. 이 업무의 담당 부서는 환경과입니다. 결과 보고처는 48구청 회계과입니다. 마감일은 2026-11-27입니다. 사용 서식은 별지 제9호 상수도점검신청서입니다. 서식 작성 방법은 별첨 작성요령-18을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp18-별칭",
+          "sha256": "5a514374fcf1a6919e1281a9369dc91e891c32e23e143ed2b0fb5d21f7d69a25",
+          "locator": "본문 1",
+          "exact_quote": "48구청에서는 상수도점검을 '상수사업'이라고도 부릅니다. 상수사업의 담당은 환경과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 49
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp18-q6",
+      "group": "pp18",
+      "category": "missing",
+      "split": "holdout",
+      "style": 2,
+      "question": "상수도점검 예산 금액은?",
+      "allowed_documents": [
+        "pp18-안내",
+        "pp18-작성요령",
+        "pp18-별칭",
+        "pp18-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp19-q1",
+      "group": "pp19",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "환경영향평가 담당은?",
+      "allowed_documents": [
+        "pp19-안내",
+        "pp19-작성요령",
+        "pp19-별칭",
+        "pp19-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp19-안내",
+          "sha256": "39262d84850c83b9d3bf7bfeae026811423e21c38956a677a54b124781ad889a",
+          "locator": "본문 1",
+          "exact_quote": "49구청 환경영향평가 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 49구청 기획과에 제출합니다. 2026. 11. 10.까지 제출하여 주시기 바랍니다. 별지 제1호 환경영향평가신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-19을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 149
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp19-q2",
+      "group": "pp19",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "환경영향평가 제출처는?",
+      "allowed_documents": [
+        "pp19-안내",
+        "pp19-작성요령",
+        "pp19-별칭",
+        "pp19-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp19-안내",
+          "sha256": "39262d84850c83b9d3bf7bfeae026811423e21c38956a677a54b124781ad889a",
+          "locator": "본문 1",
+          "exact_quote": "49구청 환경영향평가 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 49구청 기획과에 제출합니다. 2026. 11. 10.까지 제출하여 주시기 바랍니다. 별지 제1호 환경영향평가신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-19을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 149
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp19-q3",
+      "group": "pp19",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "환경영향평가 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp19-안내",
+        "pp19-작성요령",
+        "pp19-별칭",
+        "pp19-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp19-안내",
+          "sha256": "39262d84850c83b9d3bf7bfeae026811423e21c38956a677a54b124781ad889a",
+          "locator": "본문 1",
+          "exact_quote": "49구청 환경영향평가 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 49구청 기획과에 제출합니다. 2026. 11. 10.까지 제출하여 주시기 바랍니다. 별지 제1호 환경영향평가신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-19을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 149
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp19-작성요령",
+          "sha256": "e5510a94b3392c831d8b1ab3f656f319c2f1fe95b29acf072e4460f9e0d70986",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-19 안내. 작성요령-19에 따라 작성한 서류는 49구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp19-q4",
+      "group": "pp19",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "환경영향평가 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp19-안내",
+        "pp19-작성요령",
+        "pp19-별칭",
+        "pp19-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp19-안내",
+          "sha256": "39262d84850c83b9d3bf7bfeae026811423e21c38956a677a54b124781ad889a",
+          "locator": "본문 1",
+          "exact_quote": "49구청 환경영향평가 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 49구청 기획과에 제출합니다. 2026. 11. 10.까지 제출하여 주시기 바랍니다. 별지 제1호 환경영향평가신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-19을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 149
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp19-작성요령",
+          "sha256": "e5510a94b3392c831d8b1ab3f656f319c2f1fe95b29acf072e4460f9e0d70986",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-19 안내. 작성요령-19에 따라 작성한 서류는 49구청 기획과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp19-q5",
+      "group": "pp19",
+      "category": "alias",
+      "split": "holdout",
+      "style": 3,
+      "question": "환경사업 담당은?",
+      "allowed_documents": [
+        "pp19-안내",
+        "pp19-작성요령",
+        "pp19-별칭",
+        "pp19-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp19-안내",
+          "sha256": "39262d84850c83b9d3bf7bfeae026811423e21c38956a677a54b124781ad889a",
+          "locator": "본문 1",
+          "exact_quote": "49구청 환경영향평가 안내. 이 업무는 복지과에서 맡고 있습니다. 작성한 결과는 49구청 기획과에 제출합니다. 2026. 11. 10.까지 제출하여 주시기 바랍니다. 별지 제1호 환경영향평가신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-19을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 149
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp19-별칭",
+          "sha256": "52e44be4a88dcf72a270d7f0f86c730b59e998904d20be197fa03e9469da0fac",
+          "locator": "본문 1",
+          "exact_quote": "49구청에서는 환경영향평가을 '환경사업'이라고도 부릅니다. 환경사업의 담당은 복지과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 50
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp19-q6",
+      "group": "pp19",
+      "category": "missing",
+      "split": "holdout",
+      "style": 3,
+      "question": "환경영향평가 예산 금액은?",
+      "allowed_documents": [
+        "pp19-안내",
+        "pp19-작성요령",
+        "pp19-별칭",
+        "pp19-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp20-q1",
+      "group": "pp20",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "재난문자발송 담당은?",
+      "allowed_documents": [
+        "pp20-안내",
+        "pp20-작성요령",
+        "pp20-별칭",
+        "pp20-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp20-안내",
+          "sha256": "2c70c49b9871e93dbb305ac79c6a146aa75e80370f2cacaea95cd4c5eeb0e166",
+          "locator": "본문 1",
+          "exact_quote": "50구청 재난문자발송 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 50구청 도로과 쪽으로 보내면 된다. 기한은 11월 11일 전이고 쓰는 양식은 별지 제2호 재난문자발송신청서. 서식 작성 방법은 별첨 작성요령-20을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp20-q2",
+      "group": "pp20",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "재난문자발송 제출처는?",
+      "allowed_documents": [
+        "pp20-안내",
+        "pp20-작성요령",
+        "pp20-별칭",
+        "pp20-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp20-안내",
+          "sha256": "2c70c49b9871e93dbb305ac79c6a146aa75e80370f2cacaea95cd4c5eeb0e166",
+          "locator": "본문 1",
+          "exact_quote": "50구청 재난문자발송 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 50구청 도로과 쪽으로 보내면 된다. 기한은 11월 11일 전이고 쓰는 양식은 별지 제2호 재난문자발송신청서. 서식 작성 방법은 별첨 작성요령-20을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp20-q3",
+      "group": "pp20",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "재난문자발송 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp20-안내",
+        "pp20-작성요령",
+        "pp20-별칭",
+        "pp20-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp20-안내",
+          "sha256": "2c70c49b9871e93dbb305ac79c6a146aa75e80370f2cacaea95cd4c5eeb0e166",
+          "locator": "본문 1",
+          "exact_quote": "50구청 재난문자발송 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 50구청 도로과 쪽으로 보내면 된다. 기한은 11월 11일 전이고 쓰는 양식은 별지 제2호 재난문자발송신청서. 서식 작성 방법은 별첨 작성요령-20을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp20-작성요령",
+          "sha256": "d2003ef693f5dad637babfa6d9035ecdfb3e7d2d7bb37ac9acc1af1cd909c599",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-20 안내. 이 요령으로 만든 서류는 50구청 도로과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 44
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp20-q4",
+      "group": "pp20",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "재난문자발송 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp20-안내",
+        "pp20-작성요령",
+        "pp20-별칭",
+        "pp20-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp20-안내",
+          "sha256": "2c70c49b9871e93dbb305ac79c6a146aa75e80370f2cacaea95cd4c5eeb0e166",
+          "locator": "본문 1",
+          "exact_quote": "50구청 재난문자발송 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 50구청 도로과 쪽으로 보내면 된다. 기한은 11월 11일 전이고 쓰는 양식은 별지 제2호 재난문자발송신청서. 서식 작성 방법은 별첨 작성요령-20을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp20-작성요령",
+          "sha256": "d2003ef693f5dad637babfa6d9035ecdfb3e7d2d7bb37ac9acc1af1cd909c599",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-20 안내. 이 요령으로 만든 서류는 50구청 도로과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 44
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp20-q5",
+      "group": "pp20",
+      "category": "alias",
+      "split": "holdout",
+      "style": 4,
+      "question": "재난사업 담당은?",
+      "allowed_documents": [
+        "pp20-안내",
+        "pp20-작성요령",
+        "pp20-별칭",
+        "pp20-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp20-안내",
+          "sha256": "2c70c49b9871e93dbb305ac79c6a146aa75e80370f2cacaea95cd4c5eeb0e166",
+          "locator": "본문 1",
+          "exact_quote": "50구청 재난문자발송 안내. 올해도 이 일은 총무과 소관으로 진행하고 서류는 50구청 도로과 쪽으로 보내면 된다. 기한은 11월 11일 전이고 쓰는 양식은 별지 제2호 재난문자발송신청서. 서식 작성 방법은 별첨 작성요령-20을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 133
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp20-별칭",
+          "sha256": "c06b92b3a3da1a7ed1e55ca6f5a827c47540431182ce53d23b52e6e35e14d1d1",
+          "locator": "본문 1",
+          "exact_quote": "50구청에서는 재난문자발송을 '재난사업'이라고도 한다. 재난사업는 총무과가 한다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 45
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp20-q6",
+      "group": "pp20",
+      "category": "missing",
+      "split": "holdout",
+      "style": 4,
+      "question": "재난문자발송 예산 금액은?",
+      "allowed_documents": [
+        "pp20-안내",
+        "pp20-작성요령",
+        "pp20-별칭",
+        "pp20-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp21-q1",
+      "group": "pp21",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "자원봉사관리 담당은?",
+      "allowed_documents": [
+        "pp21-안내",
+        "pp21-작성요령",
+        "pp21-별칭",
+        "pp21-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp21-안내",
+          "sha256": "dae867a49603ce612a8090d01e59e6803c074eaa8ee7c4d4e63cc2580409280a",
+          "locator": "본문 1",
+          "exact_quote": "51구청 자원봉사관리 안내\n담당: 회계과\n제출처: 51구청 환경과\n제출기한: 2026-11-12\n서식: 별지 제3호 자원봉사관리신청서 서식 작성 방법은 별첨 작성요령-21을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 103
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp21-q2",
+      "group": "pp21",
+      "category": "simple",
+      "split": "holdout",
+      "style": 1,
+      "question": "자원봉사관리 제출처는?",
+      "allowed_documents": [
+        "pp21-안내",
+        "pp21-작성요령",
+        "pp21-별칭",
+        "pp21-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp21-안내",
+          "sha256": "dae867a49603ce612a8090d01e59e6803c074eaa8ee7c4d4e63cc2580409280a",
+          "locator": "본문 1",
+          "exact_quote": "51구청 자원봉사관리 안내\n담당: 회계과\n제출처: 51구청 환경과\n제출기한: 2026-11-12\n서식: 별지 제3호 자원봉사관리신청서 서식 작성 방법은 별첨 작성요령-21을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 103
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp21-q3",
+      "group": "pp21",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "자원봉사관리 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp21-안내",
+        "pp21-작성요령",
+        "pp21-별칭",
+        "pp21-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp21-안내",
+          "sha256": "dae867a49603ce612a8090d01e59e6803c074eaa8ee7c4d4e63cc2580409280a",
+          "locator": "본문 1",
+          "exact_quote": "51구청 자원봉사관리 안내\n담당: 회계과\n제출처: 51구청 환경과\n제출기한: 2026-11-12\n서식: 별지 제3호 자원봉사관리신청서 서식 작성 방법은 별첨 작성요령-21을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 103
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp21-작성요령",
+          "sha256": "7754cdfbfae2a2258aa3a25353dcbbd8831d5edf92b7eb14aea2520ff81cfa66",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-21 안내. 작성요령-21에 따라 작성한 서류는 51구청 환경과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp21-q4",
+      "group": "pp21",
+      "category": "linked",
+      "split": "holdout",
+      "style": 1,
+      "question": "자원봉사관리 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp21-안내",
+        "pp21-작성요령",
+        "pp21-별칭",
+        "pp21-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp21-안내",
+          "sha256": "dae867a49603ce612a8090d01e59e6803c074eaa8ee7c4d4e63cc2580409280a",
+          "locator": "본문 1",
+          "exact_quote": "51구청 자원봉사관리 안내\n담당: 회계과\n제출처: 51구청 환경과\n제출기한: 2026-11-12\n서식: 별지 제3호 자원봉사관리신청서 서식 작성 방법은 별첨 작성요령-21을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 103
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp21-작성요령",
+          "sha256": "7754cdfbfae2a2258aa3a25353dcbbd8831d5edf92b7eb14aea2520ff81cfa66",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-21 안내. 작성요령-21에 따라 작성한 서류는 51구청 환경과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp21-q5",
+      "group": "pp21",
+      "category": "alias",
+      "split": "holdout",
+      "style": 1,
+      "question": "자원사업 담당은?",
+      "allowed_documents": [
+        "pp21-안내",
+        "pp21-작성요령",
+        "pp21-별칭",
+        "pp21-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp21-안내",
+          "sha256": "dae867a49603ce612a8090d01e59e6803c074eaa8ee7c4d4e63cc2580409280a",
+          "locator": "본문 1",
+          "exact_quote": "51구청 자원봉사관리 안내\n담당: 회계과\n제출처: 51구청 환경과\n제출기한: 2026-11-12\n서식: 별지 제3호 자원봉사관리신청서 서식 작성 방법은 별첨 작성요령-21을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 103
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp21-별칭",
+          "sha256": "56573a092ab9ec546122698a8cff5bce1b9dfab991b08b76aa0172549341feb3",
+          "locator": "본문 1",
+          "exact_quote": "51구청에서는 자원봉사관리을 '자원사업'이라고도 부릅니다. 자원사업의 담당은 회계과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 50
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp21-q6",
+      "group": "pp21",
+      "category": "missing",
+      "split": "holdout",
+      "style": 1,
+      "question": "자원봉사관리 예산 금액은?",
+      "allowed_documents": [
+        "pp21-안내",
+        "pp21-작성요령",
+        "pp21-별칭",
+        "pp21-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp22-q1",
+      "group": "pp22",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "민방위훈련 담당은?",
+      "allowed_documents": [
+        "pp22-안내",
+        "pp22-작성요령",
+        "pp22-별칭",
+        "pp22-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp22-안내",
+          "sha256": "6896924256289380a637f166b84c265816a879a327ce1aac0e1d0ae8a3db6bc8",
+          "locator": "본문 1",
+          "exact_quote": "52구청 민방위훈련 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 52구청 복지과입니다. 마감일은 2026-11-13입니다. 사용 서식은 별지 제4호 민방위훈련신청서입니다. 서식 작성 방법은 별첨 작성요령-22을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp22-q2",
+      "group": "pp22",
+      "category": "simple",
+      "split": "holdout",
+      "style": 2,
+      "question": "민방위훈련 제출처는?",
+      "allowed_documents": [
+        "pp22-안내",
+        "pp22-작성요령",
+        "pp22-별칭",
+        "pp22-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp22-안내",
+          "sha256": "6896924256289380a637f166b84c265816a879a327ce1aac0e1d0ae8a3db6bc8",
+          "locator": "본문 1",
+          "exact_quote": "52구청 민방위훈련 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 52구청 복지과입니다. 마감일은 2026-11-13입니다. 사용 서식은 별지 제4호 민방위훈련신청서입니다. 서식 작성 방법은 별첨 작성요령-22을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp22-q3",
+      "group": "pp22",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "민방위훈련 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp22-안내",
+        "pp22-작성요령",
+        "pp22-별칭",
+        "pp22-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp22-안내",
+          "sha256": "6896924256289380a637f166b84c265816a879a327ce1aac0e1d0ae8a3db6bc8",
+          "locator": "본문 1",
+          "exact_quote": "52구청 민방위훈련 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 52구청 복지과입니다. 마감일은 2026-11-13입니다. 사용 서식은 별지 제4호 민방위훈련신청서입니다. 서식 작성 방법은 별첨 작성요령-22을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp22-작성요령",
+          "sha256": "b1832c3cea5b5f3fc7dd0a6cd5821ac1b3d2bf7ae1233ac78dc992f0a9b68c7a",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-22 안내. 작성요령-22에 따라 작성한 서류는 52구청 복지과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp22-q4",
+      "group": "pp22",
+      "category": "linked",
+      "split": "holdout",
+      "style": 2,
+      "question": "민방위훈련 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp22-안내",
+        "pp22-작성요령",
+        "pp22-별칭",
+        "pp22-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp22-안내",
+          "sha256": "6896924256289380a637f166b84c265816a879a327ce1aac0e1d0ae8a3db6bc8",
+          "locator": "본문 1",
+          "exact_quote": "52구청 민방위훈련 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 52구청 복지과입니다. 마감일은 2026-11-13입니다. 사용 서식은 별지 제4호 민방위훈련신청서입니다. 서식 작성 방법은 별첨 작성요령-22을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp22-작성요령",
+          "sha256": "b1832c3cea5b5f3fc7dd0a6cd5821ac1b3d2bf7ae1233ac78dc992f0a9b68c7a",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-22 안내. 작성요령-22에 따라 작성한 서류는 52구청 복지과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp22-q5",
+      "group": "pp22",
+      "category": "alias",
+      "split": "holdout",
+      "style": 2,
+      "question": "민방사업 담당은?",
+      "allowed_documents": [
+        "pp22-안내",
+        "pp22-작성요령",
+        "pp22-별칭",
+        "pp22-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp22-안내",
+          "sha256": "6896924256289380a637f166b84c265816a879a327ce1aac0e1d0ae8a3db6bc8",
+          "locator": "본문 1",
+          "exact_quote": "52구청 민방위훈련 안내. 이 업무의 담당 부서는 기획과입니다. 결과 보고처는 52구청 복지과입니다. 마감일은 2026-11-13입니다. 사용 서식은 별지 제4호 민방위훈련신청서입니다. 서식 작성 방법은 별첨 작성요령-22을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 132
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp22-별칭",
+          "sha256": "5a4dd9c68bfa9103be2d995610775cd749c1c785c7e377a5a61f50a3d77999e6",
+          "locator": "본문 1",
+          "exact_quote": "52구청에서는 민방위훈련을 '민방사업'이라고도 부릅니다. 민방사업의 담당은 기획과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 49
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp22-q6",
+      "group": "pp22",
+      "category": "missing",
+      "split": "holdout",
+      "style": 2,
+      "question": "민방위훈련 예산 금액은?",
+      "allowed_documents": [
+        "pp22-안내",
+        "pp22-작성요령",
+        "pp22-별칭",
+        "pp22-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp23-q1",
+      "group": "pp23",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "지방세감면 담당은?",
+      "allowed_documents": [
+        "pp23-안내",
+        "pp23-작성요령",
+        "pp23-별칭",
+        "pp23-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp23-안내",
+          "sha256": "0600a413e31429b36dcb54bb19ebb9722651f2be324826cc4af0413cd9587f71",
+          "locator": "본문 1",
+          "exact_quote": "53구청 지방세감면 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 53구청 총무과에 제출합니다. 2026. 11. 14.까지 제출하여 주시기 바랍니다. 별지 제5호 지방세감면신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-23을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 147
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp23-q2",
+      "group": "pp23",
+      "category": "simple",
+      "split": "holdout",
+      "style": 3,
+      "question": "지방세감면 제출처는?",
+      "allowed_documents": [
+        "pp23-안내",
+        "pp23-작성요령",
+        "pp23-별칭",
+        "pp23-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp23-안내",
+          "sha256": "0600a413e31429b36dcb54bb19ebb9722651f2be324826cc4af0413cd9587f71",
+          "locator": "본문 1",
+          "exact_quote": "53구청 지방세감면 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 53구청 총무과에 제출합니다. 2026. 11. 14.까지 제출하여 주시기 바랍니다. 별지 제5호 지방세감면신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-23을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 147
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp23-q3",
+      "group": "pp23",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "지방세감면 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp23-안내",
+        "pp23-작성요령",
+        "pp23-별칭",
+        "pp23-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp23-안내",
+          "sha256": "0600a413e31429b36dcb54bb19ebb9722651f2be324826cc4af0413cd9587f71",
+          "locator": "본문 1",
+          "exact_quote": "53구청 지방세감면 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 53구청 총무과에 제출합니다. 2026. 11. 14.까지 제출하여 주시기 바랍니다. 별지 제5호 지방세감면신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-23을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 147
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp23-작성요령",
+          "sha256": "42fe264dcbe7a5924567b470ebae0afe0b594fc853c769c2760483ef548a66e2",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-23 안내. 작성요령-23에 따라 작성한 서류는 53구청 총무과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp23-q4",
+      "group": "pp23",
+      "category": "linked",
+      "split": "holdout",
+      "style": 3,
+      "question": "지방세감면 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp23-안내",
+        "pp23-작성요령",
+        "pp23-별칭",
+        "pp23-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp23-안내",
+          "sha256": "0600a413e31429b36dcb54bb19ebb9722651f2be324826cc4af0413cd9587f71",
+          "locator": "본문 1",
+          "exact_quote": "53구청 지방세감면 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 53구청 총무과에 제출합니다. 2026. 11. 14.까지 제출하여 주시기 바랍니다. 별지 제5호 지방세감면신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-23을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 147
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp23-작성요령",
+          "sha256": "42fe264dcbe7a5924567b470ebae0afe0b594fc853c769c2760483ef548a66e2",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-23 안내. 작성요령-23에 따라 작성한 서류는 53구청 총무과에 제출합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 48
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp23-q5",
+      "group": "pp23",
+      "category": "alias",
+      "split": "holdout",
+      "style": 3,
+      "question": "지방사업 담당은?",
+      "allowed_documents": [
+        "pp23-안내",
+        "pp23-작성요령",
+        "pp23-별칭",
+        "pp23-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp23-안내",
+          "sha256": "0600a413e31429b36dcb54bb19ebb9722651f2be324826cc4af0413cd9587f71",
+          "locator": "본문 1",
+          "exact_quote": "53구청 지방세감면 안내. 이 업무는 도로과에서 맡고 있습니다. 작성한 결과는 53구청 총무과에 제출합니다. 2026. 11. 14.까지 제출하여 주시기 바랍니다. 별지 제5호 지방세감면신청서 양식을 사용합니다. 서식 작성 방법은 별첨 작성요령-23을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 147
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp23-별칭",
+          "sha256": "64bdb19c0365eb51996a76aa3bc52ad88fbf40c515225f76ca324cfeff64bc5b",
+          "locator": "본문 1",
+          "exact_quote": "53구청에서는 지방세감면을 '지방사업'이라고도 부릅니다. 지방사업의 담당은 도로과입니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 49
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp23-q6",
+      "group": "pp23",
+      "category": "missing",
+      "split": "holdout",
+      "style": 3,
+      "question": "지방세감면 예산 금액은?",
+      "allowed_documents": [
+        "pp23-안내",
+        "pp23-작성요령",
+        "pp23-별칭",
+        "pp23-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    },
+    {
+      "id": "pp24-q1",
+      "group": "pp24",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "인허가통합 담당은?",
+      "allowed_documents": [
+        "pp24-안내",
+        "pp24-작성요령",
+        "pp24-별칭",
+        "pp24-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp24-안내",
+          "sha256": "161ab513fd40cb827182f72207ed81231eba7a166fdf597b6b91db9e66500384",
+          "locator": "본문 1",
+          "exact_quote": "54구청 인허가통합 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 54구청 회계과 쪽으로 보내면 된다. 기한은 11월 15일 전이고 쓰는 양식은 별지 제6호 인허가통합신청서. 서식 작성 방법은 별첨 작성요령-24을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 131
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp24-q2",
+      "group": "pp24",
+      "category": "simple",
+      "split": "holdout",
+      "style": 4,
+      "question": "인허가통합 제출처는?",
+      "allowed_documents": [
+        "pp24-안내",
+        "pp24-작성요령",
+        "pp24-별칭",
+        "pp24-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp24-안내",
+          "sha256": "161ab513fd40cb827182f72207ed81231eba7a166fdf597b6b91db9e66500384",
+          "locator": "본문 1",
+          "exact_quote": "54구청 인허가통합 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 54구청 회계과 쪽으로 보내면 된다. 기한은 11월 15일 전이고 쓰는 양식은 별지 제6호 인허가통합신청서. 서식 작성 방법은 별첨 작성요령-24을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 131
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp24-q3",
+      "group": "pp24",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "인허가통합 양식은 어디에 내야 하나?",
+      "allowed_documents": [
+        "pp24-안내",
+        "pp24-작성요령",
+        "pp24-별칭",
+        "pp24-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp24-안내",
+          "sha256": "161ab513fd40cb827182f72207ed81231eba7a166fdf597b6b91db9e66500384",
+          "locator": "본문 1",
+          "exact_quote": "54구청 인허가통합 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 54구청 회계과 쪽으로 보내면 된다. 기한은 11월 15일 전이고 쓰는 양식은 별지 제6호 인허가통합신청서. 서식 작성 방법은 별첨 작성요령-24을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 131
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp24-작성요령",
+          "sha256": "8242c97f0009c84b6fcbe86af6c628cb6d1e89ab4b85073d8b6498686fcbdb25",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-24 안내. 이 요령으로 만든 서류는 54구청 회계과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 44
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp24-q4",
+      "group": "pp24",
+      "category": "linked",
+      "split": "holdout",
+      "style": 4,
+      "question": "인허가통합 신청서를 접수하는 부서와 쓰는 법은?",
+      "allowed_documents": [
+        "pp24-안내",
+        "pp24-작성요령",
+        "pp24-별칭",
+        "pp24-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp24-안내",
+          "sha256": "161ab513fd40cb827182f72207ed81231eba7a166fdf597b6b91db9e66500384",
+          "locator": "본문 1",
+          "exact_quote": "54구청 인허가통합 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 54구청 회계과 쪽으로 보내면 된다. 기한은 11월 15일 전이고 쓰는 양식은 별지 제6호 인허가통합신청서. 서식 작성 방법은 별첨 작성요령-24을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 131
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp24-작성요령",
+          "sha256": "8242c97f0009c84b6fcbe86af6c628cb6d1e89ab4b85073d8b6498686fcbdb25",
+          "locator": "본문 1",
+          "exact_quote": "작성요령-24 안내. 이 요령으로 만든 서류는 54구청 회계과 쪽에 내면 된다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 44
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp24-q5",
+      "group": "pp24",
+      "category": "alias",
+      "split": "holdout",
+      "style": 4,
+      "question": "인허사업 담당은?",
+      "allowed_documents": [
+        "pp24-안내",
+        "pp24-작성요령",
+        "pp24-별칭",
+        "pp24-참고"
+      ],
+      "expected_evidence": [
+        {
+          "document": "pp24-안내",
+          "sha256": "161ab513fd40cb827182f72207ed81231eba7a166fdf597b6b91db9e66500384",
+          "locator": "본문 1",
+          "exact_quote": "54구청 인허가통합 안내. 올해도 이 일은 환경과 소관으로 진행하고 서류는 54구청 회계과 쪽으로 보내면 된다. 기한은 11월 15일 전이고 쓰는 양식은 별지 제6호 인허가통합신청서. 서식 작성 방법은 별첨 작성요령-24을 참고합니다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 131
+          },
+          "case_year": 2026
+        },
+        {
+          "document": "pp24-별칭",
+          "sha256": "4859fae00c1287d71f89dd2cbf21e137df22b16b09ace6551bead8ad74c3ecc7",
+          "locator": "본문 1",
+          "exact_quote": "54구청에서는 인허가통합을 '인허사업'이라고도 한다. 인허사업는 환경과가 한다.",
+          "offsets": {
+            "basis": "document_text",
+            "start": 0,
+            "end": 44
+          },
+          "case_year": 2026
+        }
+      ],
+      "allowed_relations": [],
+      "answer_policy": "cite"
+    },
+    {
+      "id": "pp24-q6",
+      "group": "pp24",
+      "category": "missing",
+      "split": "holdout",
+      "style": 4,
+      "question": "인허가통합 예산 금액은?",
+      "allowed_documents": [
+        "pp24-안내",
+        "pp24-작성요령",
+        "pp24-별칭",
+        "pp24-참고"
+      ],
+      "expected_evidence": [],
+      "allowed_relations": [],
+      "answer_policy": "abstain"
+    }
+  ]
+}

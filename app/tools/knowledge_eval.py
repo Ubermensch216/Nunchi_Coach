@@ -31,10 +31,10 @@ def load_fixture(folder=FIXTURES):
     return corpus, manifest
 
 
-def run(split: str = "all", graph_mode: str = "off") -> dict:
+def run(split: str = "all", graph_mode: str = "off", folder: Path = FIXTURES) -> dict:
     if graph_mode not in ('off', 'shadow', 'on'):
         raise ValueError('올바르지 않은 그래프 모드입니다.')
-    corpus, manifest = load_fixture()
+    corpus, manifest = load_fixture(folder)
     rows, timings, graph_timings = [], [], []
     graph_claims = 0
     with tempfile.TemporaryDirectory(prefix="nunchi-knowledge-eval-") as temp:
@@ -125,8 +125,9 @@ def main(argv=None) -> int:
     parser.add_argument("--split", choices=("all", "tuning", "holdout"), default="all")
     parser.add_argument("--json", type=Path)
     parser.add_argument('--graph', choices=('off', 'shadow', 'on'), default='off')
+    parser.add_argument('--fixture', type=Path, default=FIXTURES, help='다른 평가 묶음 폴더(corpus.json·manifest.json)')
     args = parser.parse_args(argv)
-    result = run(args.split, args.graph)
+    result = run(args.split, args.graph, args.fixture)
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
         args.json.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

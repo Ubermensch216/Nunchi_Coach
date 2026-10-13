@@ -30,6 +30,49 @@ def one(text, **kwargs):
 
 # ── 한 조각에서 읽기 ────────────────────────────────────────────────
 
+# ── 서술문으로 적힌 값 ──────────────────────────────────────────────
+
+def test_statements_are_read_like_labelled_values():
+    found = read("담당은 회계과입니다. 제출처는 7구청 기획과입니다. 제출기한은 2026-11-16입니다. 금액은 1,200,000원입니다.")
+    assert [(f.kind, f.slot, f.value) for f in found] == [
+        (rc.CONTACT, "담당", "회계과"), (rc.RECIPIENT, "제출처", "7구청 기획과"),
+        (rc.DEADLINE, "제출기한", "2026-11-16"), (rc.AMOUNT, "금액", "1,200,000원")]
+    assert found[2].when == date(2026, 11, 16)
+    assert found[1].quote == "제출처는 7구청 기획과입니다"      # 인용문은 문장 하나, 값이 그 안에 있다
+
+
+def test_statement_does_not_cross_a_sentence_or_swallow_a_date_period():
+    found = read("담당은 추후 지정. 제출처는 기획과입니다.")
+    assert [(f.kind, f.value) for f in found] == [(rc.RECIPIENT, "기획과")]
+    assert one("제출기한은 2024. 6. 14.까지입니다.").when == date(2024, 6, 14)
+
+
+def test_statements_for_where_and_which_form():
+    found = read("작성한 결과는 11구청 기획과에 제출합니다. 신청서식을 사용합니다.")
+    assert [(f.kind, f.value) for f in found] == [(rc.RECIPIENT, "11구청 기획과"), (rc.FORM, "신청서식")]
+    assert read("서류를 담당자에게 제출합니다.") == []          # 기관이 아닌 상대는 제출처가 아니다
+
+
+@pytest.mark.parametrize("text", [
+    "담당은 별도 안내하겠습니다.",                    # 입니다/이다로 끝나지 않으면 값이 아니다
+    "제출기한은 추후 통보입니다.",                    # 날짜 없는 기한
+    "예산은 미정입니다.",                            # 숫자 없는 금액
+    "담당 업무는 환경관리입니다.",                    # 이름표가 아니다
+])
+def test_unstated_statements_are_not_extracted(text):
+    assert read(text) == []
+
+
+def test_labelled_lines_are_read_only_by_their_labels():
+    found = read("제출기한: 2025-09-30 제출처: 기획과")
+    assert [(f.slot, f.value) for f in found] == [("제출기한", "2025-09-30"), ("제출처", "기획과")]
+
+
+def test_schedule_phrase_next_to_a_statement_is_not_counted_twice():
+    found = read("제출기한은 2025-09-30입니다.")
+    assert [(f.kind, f.key) for f in found] == [(rc.DEADLINE, "2025-09-30")]
+
+
 def test_several_labelled_values_on_one_line_are_separated():
     found = read("절차: 집계 자료 준비 → 실적표 작성 → 검토 후 제출. 제출기한: 2025-09-30.")
     assert [(f.kind, f.slot, f.value) for f in found] == [

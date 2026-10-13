@@ -202,3 +202,42 @@ def test_budget_bounds_high_degree_traversal(db, monkeypatch):
     cid = db.con.execute('SELECT id FROM chunks WHERE doc_id=1').fetchone()[0]
     result = graph.search(db, '순위로 찾은 자료', QueryScope(doc_ids=[1]), seed_chunks=[cid], budget_ms=2000)
     assert result.visited == 100 and not result.hits and not result.fallback
+
+
+def _instr_seeds(db, question, scope):
+    """The pre-index implementation: scan every alias with instr(). Reference for equivalence."""
+    predicate, params = scope.predicate()
+    return [r[0] for r in db.con.execute(
+        "SELECT DISTINCT a.entity_id" + graph._FROM.replace(
+            "FROM kg_current_claims c", "FROM kg_current_claims c JOIN kg_aliases a ON a.entity_id IN (c.subject_id,c.object_id)")
+        + " AND " + predicate
+        + " AND EXISTS (SELECT 1 FROM kg_claim_evidence provenance WHERE provenance.claim_id=c.uuid "
+          "AND provenance.evidence_id=a.evidence_id AND provenance.generation_id=g.id AND provenance.active=1) "
+          "AND length(a.normalized_label)>=2 AND instr(?,a.normalized_label)>0 "
+          "ORDER BY a.entity_id LIMIT ?",
+        (*params, graph.normalize_label(question), graph.MAX_SEEDS))]
+
+
+@pytest.mark.parametrize('question', ['신청서', '신청서가 필요해?', '복지1과에 내나요', '복지', '알 수 없는 대상',
+                                      '  신청서   복지2과  ', '신', '', ' '])
+@pytest.mark.parametrize('scope', [QueryScope(), QueryScope(doc_ids=[1]), QueryScope(doc_ids=[2]),
+                                   QueryScope(doc_ids=[])])
+def test_alias_seeds_match_the_full_alias_scan(db, question, scope):
+    predicate, params = scope.predicate()
+    found = graph.alias_seeds(db, graph.normalize_label(question), predicate, params)
+    assert found == _instr_seeds(db, question, scope)
+
+
+def test_alias_seeds_are_found_for_a_matching_question(db):
+    predicate, params = QueryScope().predicate()
+    assert graph.alias_seeds(db, '신청서', predicate, params)
+    assert not graph.alias_seeds(db, '무관한 질문', predicate, params)
+
+
+def test_question_grams_are_the_substrings_an_alias_could_equal():
+    grams = graph.question_grams('가나 다라')
+    assert '가나' in grams and '나 다' in grams and '가나 다라' in grams
+    assert all(2 <= len(g) <= graph.MAX_LABEL and g == g.strip() for g in grams)
+    assert '가' not in grams and ' 다' not in grams
+    assert graph.question_grams('') == [] and graph.question_grams('가') == []
+    assert max(len(g) for g in graph.question_grams('가' * 200)) == graph.MAX_LABEL

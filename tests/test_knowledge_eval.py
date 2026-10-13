@@ -5,6 +5,8 @@ import pytest
 
 from app.tools.knowledge_eval import FIXTURES, load_fixture, run
 
+PARAPHRASE = FIXTURES.parent / 'knowledge_paraphrase'
+
 
 def test_frozen_questions_groups_and_exact_gold_anchors():
     corpus, manifest = load_fixture()
@@ -45,5 +47,37 @@ def test_shadow_preserves_frozen_baseline_and_reports_projection_limits():
     assert shadow['categories'] == baseline['categories']
     assert shadow['graph_current_claims'] > 0
     assert [r['retrieved'] for r in shadow['results']] == [r['retrieved'] for r in baseline['results']]
-    # Existing structural projection cannot invent semantic links from prose.
-    assert shadow['graph_fallbacks'] == shadow['questions']
+    # 서술문 항목을 읽은 뒤에도 시드를 못 얻는 질문(어휘 검색이 아무것도 못 찾은 것)은 기존 검색으로 물러난다.
+    assert 0 < shadow['graph_fallbacks'] < shadow['questions']
+
+
+def _recall(result, category, keep=lambda row: True):
+    rows = [r for r in result['results'] if r['category'] == category and r['recall_at_10'] is not None and keep(r)]
+    return sum(r['recall_at_10'] for r in rows) / len(rows)
+
+
+def test_graph_gate_on_frozen_holdout():
+    """상세구현계획 §12.3: 연결 +5%p 이상, 단순 조회 하락 2%p 이내, 범위 밖 노출 0."""
+    off, on = run('holdout'), run('holdout', 'on')
+    assert on['scope_leaks'] == 0
+    assert _recall(on, 'linked') - _recall(off, 'linked') >= 0.05
+    assert _recall(off, 'simple') - _recall(on, 'simple') <= 0.02
+    for category in ('alias', 'temporal'):
+        assert _recall(on, category) >= _recall(off, category)
+    assert on['graph_p95_ms'] <= 150
+
+
+def test_paraphrase_set_generalizes_to_other_sentence_shapes_and_states_its_limit():
+    corpus, manifest = load_fixture(PARAPHRASE)
+    style = {g['id']: g['style'] for g in corpus['groups']}
+    assert manifest['holdout'] == len(corpus['questions'])
+    off, on = run('all', 'off', PARAPHRASE), run('all', 'on', PARAPHRASE)
+    assert on['scope_leaks'] == 0
+    assert _recall(on, 'simple') == _recall(off, 'simple') == 1.0
+
+    def by_style(wanted):
+        return lambda row: style[row['id'].split('-')[0]] in wanted
+    # 이름표 줄·다른 이름표의 서술문·동사형 문장에서는 연결이 올라간다.
+    assert _recall(on, 'linked', by_style({1, 2, 3})) - _recall(off, 'linked', by_style({1, 2, 3})) >= 0.3
+    # 자유 서술(문체 4)은 규칙이 읽지 못한다 — 개선을 주장하지 않는다.
+    assert _recall(on, 'linked', by_style({4})) == _recall(off, 'linked', by_style({4}))

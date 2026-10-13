@@ -139,7 +139,11 @@ def read_section(text: str, doc_id: int, locator: str, doc_year: int | None = No
     for position, line in enumerate(lines):
         matches = list(_LABEL_RE.finditer(line))
         if not matches:
-            found.extend(_read_schedule(line, doc_id, locator, doc_year, official, title))
+            stated = _read_statements(line, doc_id, locator, doc_year, official)
+            found.extend(stated)
+            known = {item.key for item in stated if item.kind == DEADLINE}
+            found.extend(item for item in _read_schedule(line, doc_id, locator, doc_year, official, title)
+                         if item.key not in known)
         for index, match in enumerate(matches):
             last = index + 1 == len(matches)
             end = matches[index + 1].start() if not last else len(line)
@@ -151,6 +155,44 @@ def read_section(text: str, doc_id: int, locator: str, doc_year: int | None = No
             label = match.group("label").replace(" ", "")
             item = _build(_KIND_OF[match.group("label")], label, raw, match.group("unit"),
                           quote, doc_id, locator, doc_year, official)
+            if item is not None:
+                found.append(item)
+    return found
+
+
+# ── 서술문으로 적힌 값 ──────────────────────────────────────────────
+# '제출기한: 2026-11-10' 대신 '제출기한은 2026-11-10입니다.'처럼 문장으로 적은 공문도
+# 같은 항목이다. 이름표(콜론) 줄에서는 읽지 않아 기존 동작은 그대로다. 값은 인용문
+# 안에 그대로 있어야 하며(_verified) 문장 경계를 넘지 않는다.
+_STATEMENT = re.compile(
+    r"(?<![가-힣A-Za-z])(?P<label>"
+    + "|".join(re.escape(label) for label in sorted(_KIND_OF, key=len, reverse=True))
+    + r")\s*(?:은|는)\s*(?P<value>(?:(?![가-힣]\.(?:\s|$)).){1,120}?)\s*(?:입니다|이다)(?![가-힣])"
+)
+_ORG_TAIL = r"(?:과|팀|부|처|국|실|청|원|소|단|센터|위원회|사무국|기관|부서)"
+_SUBMIT_TO = re.compile(
+    r"(?<![가-힣A-Za-z0-9])(?P<value>(?:[가-힣A-Za-z0-9]+\s)?[가-힣A-Za-z0-9]*" + _ORG_TAIL + r")\s*(?:에|으로)\s*"
+    r"(?:제출|보고|회신|송부)\s*(?:합니다|한다|하여야 합니다|해야 합니다)"
+)
+_USES_FORM = re.compile(
+    r"(?<![가-힣A-Za-z0-9\-])(?P<value>(?:[가-힣A-Za-z0-9\-]+\s)?[가-힣A-Za-z0-9\-]*(?:서식|양식|신청서))\s*(?:을|를)\s*"
+    r"(?:사용|이용|작성)\s*(?:합니다|한다|하여야 합니다|해야 합니다)"
+)
+
+
+def _read_statements(line: str, doc_id: int, locator: str, doc_year: int | None,
+                     official: bool) -> list[Found]:
+    found: list[Found] = []
+    for match in _STATEMENT.finditer(line):
+        label = match.group("label").replace(" ", "")
+        item = _build(_KIND_OF[match.group("label")], label, match.group("value").strip(" .;,·-"), None,
+                      match.group(0).strip(), doc_id, locator, doc_year, official)
+        if item is not None:
+            found.append(item)
+    for pattern, kind, slot in ((_SUBMIT_TO, RECIPIENT, "제출처"), (_USES_FORM, FORM, "서식")):
+        for match in pattern.finditer(line):
+            item = _build(kind, slot, match.group("value").strip(), None, match.group(0).strip(),
+                          doc_id, locator, doc_year, official)
             if item is not None:
                 found.append(item)
     return found

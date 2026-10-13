@@ -6,6 +6,7 @@ without changing retrieval. Source records alone never qualify answer context.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+import json
 import sqlite3
 from time import perf_counter
 
@@ -18,6 +19,7 @@ MAX_SEEDS = 8
 MAX_EDGES = 100
 MAX_CANDIDATES = 5
 BUDGET_MS = 150
+MAX_LABEL = 64
 WEIGHT = 0.2
 
 
@@ -65,6 +67,48 @@ _FROM = """
 """
 
 
+def question_grams(question: str) -> list[str]:
+    """Substrings of the question that could equal an alias label (2..MAX_LABEL chars).
+
+    Looking labels up by equality uses the alias index; scanning every alias with
+    ``instr(question, label)`` grows with the number of documents. Labels longer
+    than MAX_LABEL cannot be found this way, which only matters for a question
+    that quotes a whole long filename or sentence verbatim.
+    """
+    grams = set()
+    for start, char in enumerate(question):
+        if char == " ":
+            continue
+        for end in range(start + 2, min(len(question), start + MAX_LABEL) + 1):
+            if question[end - 1] != " ":
+                grams.add(question[start:end])
+    return sorted(grams)
+
+
+def alias_seeds(db, question: str, predicate: str, params) -> list[str]:
+    # A projected alias must be attached to the same current claim source
+    # record or its scoped quote. Decision-only/global aliases are withheld
+    # until they have scoped provenance; namesakes stay separate UUIDs.
+    grams = json.dumps(question_grams(question), ensure_ascii=False)
+    # Matching aliases come first (index lookup, a handful of rows); CROSS JOIN
+    # keeps SQLite from starting at the document table and probing every alias.
+    # Subject and object sides run as separate statements: joined by UNION the
+    # planner abandons this order.
+    seeds: set[str] = set()
+    for column in ("subject_id", "object_id"):
+        seeds.update(r[0] for r in db.con.execute(
+            "WITH matched AS MATERIALIZED (SELECT entity_id,evidence_id FROM kg_aliases "
+            "WHERE normalized_label IN (SELECT value FROM json_each(?))) "
+            "SELECT DISTINCT a.entity_id" + _FROM.replace(
+                "FROM kg_current_claims c",
+                f"FROM matched a CROSS JOIN kg_current_claims c ON c.{column}=a.entity_id")
+            + " AND " + predicate
+            + " AND EXISTS (SELECT 1 FROM kg_claim_evidence provenance WHERE provenance.claim_id=c.uuid "
+              "AND provenance.evidence_id=a.evidence_id AND provenance.generation_id=g.id AND provenance.active=1) "
+              "ORDER BY 1 LIMIT ?", (grams, *params, MAX_SEEDS)))
+    return sorted(seeds)[:MAX_SEEDS]
+
+
 def search(db, question: str, scope: QueryScope | None = None, *, seed_chunks=(),
            budget_ms: float = BUDGET_MS) -> Result:
     """Return supporting quotes, never neighboring documents or global labels.
@@ -90,18 +134,7 @@ def search(db, question: str, scope: QueryScope | None = None, *, seed_chunks=()
     try:
         check()
         db.con.set_progress_handler(lambda: int(expired()), 500)
-        # A projected alias must be attached to the same current claim source
-        # record or its scoped quote. Decision-only/global aliases are withheld
-        # until they have scoped provenance; namesakes stay separate UUIDs.
-        seeds = [r[0] for r in db.con.execute(
-            "SELECT DISTINCT a.entity_id" + _FROM.replace(
-                "FROM kg_current_claims c", "FROM kg_current_claims c JOIN kg_aliases a ON a.entity_id IN (c.subject_id,c.object_id)")
-            + " AND " + predicate
-            + " AND EXISTS (SELECT 1 FROM kg_claim_evidence provenance WHERE provenance.claim_id=c.uuid "
-              "AND provenance.evidence_id=a.evidence_id AND provenance.generation_id=g.id AND provenance.active=1) "
-              "AND length(a.normalized_label)>=2 AND instr(?,a.normalized_label)>0 "
-              "ORDER BY a.entity_id LIMIT ?",
-            (*params, normalize_label(question), MAX_SEEDS))]
+        seeds = alias_seeds(db, normalize_label(question), predicate, params)
         check()
         if seed_chunks:
             ids = list(dict.fromkeys(seed_chunks))[:MAX_SEEDS]
@@ -116,12 +149,18 @@ def search(db, question: str, scope: QueryScope | None = None, *, seed_chunks=()
             result.fallback = "no_scoped_seeds"
             return result
         marks = ",".join("?" for _ in seeds)
+        # Claims touching a seed are collected through the subject/object indexes
+        # first; otherwise SQLite starts at the document table and the cost grows
+        # with the number of documents.
         rows = db.con.execute(
+            f"WITH touching AS MATERIALIZED (SELECT uuid FROM kg_claims WHERE subject_id IN ({marks}) "
+            f"UNION SELECT uuid FROM kg_claims WHERE object_id IN ({marks})) "
             "SELECT c.uuid,c.subject_id,c.object_id,c.predicate,e.uuid evidence_id,e.doc_id,e.doc_hash,"
             "e.parse_fingerprint,e.locator,e.exact_quote,e.chunk_id,g.id generation,s.validation_version"
-            + _FROM + " AND " + predicate
-            + f" AND (c.subject_id IN ({marks}) OR c.object_id IN ({marks})) "
-              "ORDER BY c.uuid,e.uuid,g.id LIMIT ?", (*params, *seeds, *seeds, MAX_EDGES)).fetchall()
+            + _FROM.replace("FROM kg_current_claims c",
+                            "FROM touching t CROSS JOIN kg_current_claims c ON c.uuid=t.uuid")
+            + " AND " + predicate + " ORDER BY c.uuid,e.uuid,g.id LIMIT ?",
+            (*seeds, *seeds, *params, MAX_EDGES)).fetchall()
         fingerprints, seen = {}, set()
         for row in rows:
             check()

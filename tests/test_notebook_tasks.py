@@ -364,3 +364,43 @@ def test_sources_panel_shows_the_brief_version(db, work, panel):
     notebook_tasks.add_brief(db, work.book, work.task, Offline())
     panel.refresh(force=True)
     assert "판본 2" in panel.source_list.item(0).toolTip()
+
+
+# ── 판본과 업무 합치기·나누기 ───────────────────────────────────────
+
+def _second_task(db, work, name="감사 보조 업무"):
+    task = db.con.execute("INSERT INTO tasks(name, description) VALUES (?, '보조 설명')", (name,)).lastrowid
+    return task
+
+
+def test_merge_leaves_source_versions_and_starts_target_series(db, work):
+    from app.core import manual_versions
+    target = _second_task(db, work)
+    opened = notebook_tasks.open_for_task(db, work.task, Offline())
+    old_doc = manual_versions.latest(db, work.task)["doc_id"]
+    assert db.merge_tasks(work.task, target)
+    # 합쳐진 업무의 판본 기록은 그 업무에 남고, 노트북은 대상 업무로 옮겨 간다.
+    assert manual_versions.latest(db, work.task)["version"] == 1
+    assert manual_versions.latest(db, target) is None
+    assert db.con.execute("SELECT task_id FROM notebooks WHERE id=?", (opened.notebook_id,)).fetchone()[0] == target
+    # 합쳐진 업무의 정리본은 넣은 때의 판으로 남아 '바뀜'으로 잡히지 않는다.
+    assert notebook_tasks.outdated(db, opened.notebook_id) == {}
+    again = notebook_tasks.open_for_task(db, target, Offline())
+    assert again.notebook_id == opened.notebook_id and again.refreshed and not again.warnings
+    assert manual_versions.latest(db, target)["version"] == 1
+    assert old_doc in {r["doc_id"] for r in notebook.sources(db, opened.notebook_id)}
+
+
+def test_split_keeps_versions_with_source_and_new_task_has_none(db, work):
+    from app.core import manual_versions
+    opened = notebook_tasks.open_for_task(db, work.task, Offline())
+    new = db.split_task(work.task, [work.docs[1]], "이전 연도 감사")
+    assert new is not None
+    assert manual_versions.current_state(db, new)["version"] == 0
+    # 나눈 뒤 원래 업무의 내용이 달라졌으면 새 판이 되고, 새 업무의 기록은 따로 시작한다.
+    assert manual_versions.latest(db, work.task)["version"] == 1
+    assert not manual_versions.current_state(db, work.task)["current"]
+    refreshed = notebook_tasks.open_for_task(db, work.task, Offline())
+    assert refreshed.notebook_id == opened.notebook_id and refreshed.refreshed
+    assert manual_versions.latest(db, work.task)["version"] == 2
+    assert manual_versions.history(db, new) == []
