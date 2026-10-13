@@ -640,6 +640,12 @@ class TasksView(WorkspaceMixin, QWidget):
         head.addStretch(1)
         head.addWidget(muted_label(progress.headline(), small=True, wrap=False))
         card.body.addLayout(head)
+        # 자료가 어느 해에서 끊겼는지가 가장 먼저다. 폴더가 말해 주지 않는 기간이 있다.
+        from ...core import span
+
+        covered = span.summary(self.db, today)
+        if covered:
+            card.body.addWidget(muted_label(covered, small=True))
 
         # 체크리스트의 줄과 그 줄을 누를 자리를 **한 줄로** 묶는다. 예전에는
         # '업무 9개 확인 필요'(체크리스트)와 '아직 확인하지 않은 업무 9개'(바로가기)가

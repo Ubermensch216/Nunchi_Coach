@@ -699,6 +699,7 @@ class Pipeline(QObject):
             (row["fs_mtime"], str(Path(row["path"]).parent)) for row in db.con.execute(
                 "SELECT fs_mtime, path FROM documents WHERE missing_since IS NULL"))
 
+        guessed = 0
         for index, task in enumerate(tasks, start=1):
             if self._stop:
                 break
@@ -728,6 +729,21 @@ class Pipeline(QObject):
             guess = timeline.detect_cycle(grid)
 
             cycles = []
+            if guess is None:
+                # 반복을 주장할 만큼 여러 해가 없다. 그래도 받은 요청 공문에 기한이 있고
+                # 이 업무의 자료(참고로 둔 전년도 판 포함)가 두 해 이상에 걸쳐 있으면 해마다
+                # 오는 요청으로 보인다. 확신은 낮음이다 — 알림은 내지 않고 일정에만 보인다.
+                asked = reconstruction.request_deadlines(db, task["id"])
+                years_seen = {row["year"] for row in db.task_grid_documents(task["id"])}
+                if asked and len(years_seen) >= 2:
+                    newest = max(when.year for _doc, when in asked)
+                    months = sorted({when.month for _doc, when in asked if when.year == newest})
+                    cycles.append({
+                        "kind": timeline.YEARLY, "months": ",".join(str(m) for m in months),
+                        "day_hint": None, "years_observed": 1, "confidence": "low",
+                        "evidence": ",".join(str(doc) for doc, _when in asked[:10]),
+                    })
+                    guessed += 1
             if guess:
                 found += 1
                 # 일(day) 힌트는 '매월 5~10일'처럼 매월 반복에만 붙인다. 연간
@@ -750,6 +766,8 @@ class Pipeline(QObject):
 
         report.done = report.total
         report.note = f"반복 업무 {found}개 발견" if tasks else "업무가 없습니다"
+        if guessed:
+            report.note += f" · 요청 공문의 기한으로 보아 해마다 오는 일 {guessed}개"
         # cycles_found==0(반복을 하나도 못 찾음)과 '아직 안 살펴봄'을 구분해야
         # 매 실행마다 파이프라인이 불필요하게 다시 도는 것을 막을 수 있다.
         # 중간에 멈췄으면 '살펴봤다'고 적지 않는다 — 적으면 남은 업무를 다음
@@ -809,7 +827,7 @@ class Pipeline(QObject):
                         day=int(row["eff_date"][8:10]) if same else None,
                         label=_step_label(row["filename"]),
                     ))
-                steps = timeline.reconstruct_steps(candidates, year)
+                steps = timeline.reconstruct_steps(timeline.condense(candidates, FALLBACK_LABEL), year)
                 with db.transaction():
                     db.replace_task_steps(task["id"], year, [
                         {

@@ -34,21 +34,25 @@ EVIDENCE, SUBMISSION, RESULT, FORM, OTHER = "evidence", "submission", "result", 
 # 연도별 비교가 기대는 판정(시행문·지표·서식·실적)은 바뀌지 않는다.
 MEMO, DECISION, MEETING, EXPENSE = "memo", "decision", "meeting", "expense"
 PUBLICITY, LEGAL, RECEIVED, REFERENCE = "publicity", "legal", "received", "reference"
+# 위원 명단, 담당자 명단, 연락망. 누구에게 연락하는지가 여기 있다. 개인정보가 들어 있어
+# 내용을 항목으로 옮기지 않고 문서만 가리킨다.
+ROSTER = "roster"
 ROLES = (DIRECTIVE, CRITERIA, PLAN, PERFORMANCE, EVIDENCE, SUBMISSION, RESULT, FORM,
-         MEMO, DECISION, MEETING, EXPENSE, PUBLICITY, LEGAL, RECEIVED, REFERENCE, OTHER)
+         MEMO, DECISION, MEETING, EXPENSE, PUBLICITY, LEGAL, RECEIVED, REFERENCE, ROSTER, OTHER)
 
 ROLE_LABEL = {
     DIRECTIVE: "시행문·요청", CRITERIA: "평가지표·기준", PLAN: "계획", PERFORMANCE: "실적 자료",
     EVIDENCE: "증빙", SUBMISSION: "제출본", RESULT: "결과", FORM: "서식",
     MEMO: "전임자 메모", DECISION: "심사·의결", MEETING: "회의·행사 준비", EXPENSE: "지출",
     PUBLICITY: "홍보물", LEGAL: "법령·규정", RECEIVED: "받은 자료", REFERENCE: "참고 자료",
+    ROSTER: "명단·연락망",
     OTHER: "정하지 못함",
 }
 # 업무의 기한·금액·담당자를 읽어 낼 문서가 아닌 갈래. 남이 만든 자료이거나
 # 결과물이라, 거기 적힌 금액과 날짜는 이 업무의 것이 아니다.
 OUTSIDE_ROLES = frozenset({RECEIVED, REFERENCE, PUBLICITY})
 # 규칙이 바뀌면 올린다. 파이프라인이 규칙으로 정한 갈래를 다시 정한다.
-VERSION = "3"
+VERSION = "4"
 
 # (역할, 이름에서 찾는 꼴). 앞의 것이 이긴다.
 _NAME_RULES: tuple[tuple[str, re.Pattern], ...] = (
@@ -66,6 +70,8 @@ _NAME_RULES: tuple[tuple[str, re.Pattern], ...] = (
     # 현수막 견적서는 행사 준비물이기 전에 지출이다.
     (EXPENSE, re.compile(r"견적|지출|수령부|지급|계산서|청구서|영수증|수당")),
     (MEETING, re.compile(r"시나리오|명패|좌석\s*배치|참석자|식순|현수막|대기\s*화면|발표\s*자료")),
+    # '참석자 명단'은 위에서 회의 준비물로 걸린다. 여기 오는 것은 위원·담당자 명단이다.
+    (ROSTER, re.compile(r"명단|명부|연락망|비상\s*연락|주소록")),
     (PUBLICITY, re.compile(r"보도\s*자료|카드\s*뉴스|웹툰|포스터|홍보")),
     (LEGAL, re.compile(r"조례|규칙|운영\s*규정|시행령|법률|지침")),
 )

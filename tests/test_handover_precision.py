@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core import casedocs, docrole, foldersteps, reconstruction as rc, statements
+from app.core import casedocs, docrole, foldersteps, handover_notes, reconstruction as rc, span, statements, task_manual, timeline
 from app.db import Database
 
 ROOT = r"D:\전임자\[환경정책]"
@@ -279,3 +279,262 @@ def test_submit_by_official_letter_names_the_recipient(db):
     _doc(db, task_id, r"종합평가\평가 안내.hwpx",
          ["○ (제출기한) '25. 1. 10. (금) 18시까지 행안부 공무원단체과로 공문 제출"], role=docrole.DIRECTIVE)
     assert _item(db, task_id, rc.RECIPIENT) == [("제출처", "행안부 공무원단체과", "stated")]
+
+
+# ── 돈의 과목, 엮이는 부서, 명단, 결과물 ────────────────────────────
+
+def test_the_budget_line_runs_on_to_the_next_line_when_it_ends_with_a_comma(db):
+    task_id = _task(db, "직원 교육")
+    _doc(db, task_id, r"교육\실시 계획.hwp",
+         ["소요예산 : 513,000원", " 예산과목 : 행정역량강화, 직원능력향상,", "일반운영비, 사무관리비", "행정사항"],
+         role=docrole.PLAN)
+    assert _item(db, task_id, rc.AMOUNT) == [
+        ("소요예산", "513,000원", "stated"),
+        (rc.BUDGET_SLOT, "행정역량강화, 직원능력향상, 일반운영비, 사무관리비", "stated")]
+
+
+def test_partner_offices_come_from_our_own_papers_with_what_they_do(db):
+    task_id = _task(db, "우수부서 선발")
+    _doc(db, task_id, r"우수부서\선발 계획.hwp",
+         ["등록번호 기획실-16857", "우수부서 인센티브 부여 요청(총무과) : 12월 초",
+          "견책 이상 징계자 등 제한 대상 여부 검토(소통감사실, 총무과)", "선발방식 변경 계획수립(기획실) : 6월 한",
+          "장소 : 본관 2층 (중회의실)", "1열: 구분 | 2열: 담당(재무과)"], role=docrole.PLAN)
+    _doc(db, task_id, r"우수부서\참석수당 지급 의뢰.hwp",
+         ["수신 재무과장", "제목 제2차 위원회 회의 참석수당 지급 의뢰", "1. 기획실-11712호와 관련입니다."],
+         role=docrole.EXPENSE)
+    # 받은 공문의 괄호 안 부서는 보낸 쪽의 사정이다
+    _doc(db, task_id, r"우수부서\추천 요청.hwp", ["후보자 추천(공무원단체과)"], role=docrole.DIRECTIVE)
+
+    assert _item(db, task_id, rc.AGENCY) == [
+        ("협조 부서 · 소통감사실", "견책 이상 징계자 등 제한 대상 여부 검토", "stated"),
+        ("협조 부서 · 재무과", "제2차 위원회 회의 참석수당 지급 의뢰", "stated"),
+        ("협조 부서 · 총무과", "우수부서 인센티브 부여 요청 / 견책 이상 징계자 등 제한 대상 여부 검토", "stated")]
+
+
+def test_a_roster_is_pointed_to_not_copied_out(db):
+    task_id = _task(db, "환경위원회")
+    _doc(db, task_id, r"위원회\위원회 명단(2024.1.).hwp", ["담당자 : 홍길동 010-0000-0000"], year=2024,
+         role=docrole.ROSTER)
+    _doc(db, task_id, r"위원회\위원회 명단(2025.1.).hwp", ["연락처 : 010-1111-2222"], year=2025,
+         role=docrole.ROSTER)
+
+    assert _item(db, task_id, rc.CONTACT) == [(rc.ROSTER_SLOT, "위원회 명단(2025.1.).hwp", "stated")]
+    assert docrole.classify("환경위원회 명단(2025.1.).hwp").role == docrole.ROSTER
+    assert docrole.classify("제3차 위원회 참석자 명단(예정).hwp").role == docrole.MEETING
+
+
+def test_what_sits_in_the_submitted_folder_is_the_output_unless_others_handed_it_in(db):
+    task_id = _task(db, "종합평가")
+    _doc(db, task_id, r"종합평가\제출\추진실적 보고서.hwpx", ["실적"], role=docrole.PERFORMANCE)
+    _doc(db, task_id, r"종합평가\의결서\제출\심의의결서(위원).hwp", ["의결"], role=docrole.DECISION)
+    _doc(db, task_id, r"종합평가\작업 중 보고서.hwpx", ["초안"], role=docrole.PERFORMANCE)
+
+    assert _item(db, task_id, rc.OUTPUT) == [(rc.OUTPUT_SLOT, "추진실적 보고서.hwpx", "stated")]
+
+
+def test_a_folder_step_carries_its_forms_received_papers_and_what_was_made(db):
+    task_id = _task(db, "우수부서 선발")
+    plan = _doc(db, task_id, r"우수부서\하반기\4. 대상자 검증요청\검증 요청.hwp", ["요청"], role=docrole.PLAN)
+    _doc(db, task_id, r"우수부서\하반기\4. 대상자 검증요청\검증서식.hwp", ["서식"], role=docrole.FORM)
+    _doc(db, task_id, r"우수부서\하반기\4. 대상자 검증요청\old\검증 요청(이전).hwp", ["이전"], role=docrole.PLAN)
+    got = _doc(db, task_id, r"우수부서\하반기\2. 부서제출\추천서(녹지과).hwp", ["추천"], role=docrole.RECEIVED)
+    _doc(db, task_id, r"우수부서\하반기\1. 선발계획\선발 계획.hwp", ["계획"], role=docrole.PLAN)
+    db.replace_task_steps(task_id, 2024, [
+        {"ordinal": 1, "label": "부서제출", "month": 10, "day_hint": "10월", "doc_id": got},
+        {"ordinal": 2, "label": "대상자 검증요청", "month": 10, "day_hint": "10월", "doc_id": plan}])
+
+    received, verify = rc.build_steps(db, task_id, [], BASIS)
+    assert (received.get("inputs"), received["output"]) == ("추천서(녹지과).hwp", "")
+    assert (verify.get("forms"), verify["output"]) == ("검증서식.hwp", "검증 요청.hwp")
+
+
+def test_files_do_not_each_become_a_step_when_the_folder_gives_no_order():
+    made = [timeline.StepCandidate(1, 8, None, "문서 처리"), timeline.StepCandidate(2, 8, 2, "계획 수립"),
+            timeline.StepCandidate(3, 10, None, "문서 처리"), timeline.StepCandidate(4, 10, None, "문서 처리"),
+            timeline.StepCandidate(5, 10, 15, "검토"), timeline.StepCandidate(6, 10, 20, "검토")]
+    assert [(c.doc_id, c.label) for c in timeline.condense(made, "문서 처리")] == [
+        (2, "계획 수립"), (5, "검토")]
+    # 이름 붙은 단계가 없으면 있는 것이라도 남긴다(달마다 하나)
+    bare = [timeline.StepCandidate(n, 7, None, "문서 처리") for n in (1, 2, 3)]
+    assert [c.doc_id for c in timeline.condense(bare, "문서 처리")] == [1]
+
+
+def test_the_manual_opens_with_what_the_work_is_for_then_the_folder_count(db):
+    task_id = _task(db, "우수부서 선발")
+    db.con.execute("UPDATE tasks SET description = ? WHERE id = ?", ("‘우수부서’ 폴더의 문서 1건입니다.", task_id))
+    purpose = "우수부서 선발 및 인센티브 제공으로 성과를 창출한 부서를 우대하여 공직문화를 조성하고자 함."
+    _doc(db, task_id, r"우수부서\선발 계획.hwp", ["선발 계획", purpose, "추진근거", "선발개요"], role=docrole.PLAN)
+    rc.restore(db)
+
+    overview = task_manual.build(db, task_id).sections[0]
+    assert overview.lines[0].startswith(purpose)
+    assert overview.lines[1] == "자료 현황: ‘우수부서’ 폴더의 문서 1건입니다."
+
+
+# ── 때 ──────────────────────────────────────────────────────────────
+
+def _grid(counts: dict[tuple[int, int], int]) -> timeline.Grid:
+    cells, next_id = {}, 1
+    for key, count in counts.items():
+        cells[key] = list(range(next_id, next_id + count))
+        next_id += count
+    return timeline.Grid(years=sorted({year for year, _month in counts}), cells=cells)
+
+
+def test_a_month_with_a_few_stray_papers_is_not_a_month_the_work_recurs_in():
+    # 6월과 10~11월에 몰려 있고, 9월에는 두 해 모두 늦어진 상장 문서가 몇 건 있다
+    grid = _grid({(2023, 6): 40, (2023, 9): 2, (2023, 11): 30,
+                  (2024, 6): 60, (2024, 9): 4, (2024, 10): 50, (2024, 11): 45})
+    assert timeline.detect_cycle(grid).months == [6, 11]
+    # 문서가 적은 업무는 있는 달이 그대로 반복 달이다
+    small = _grid({(2023, 1): 1, (2023, 7): 2, (2024, 1): 2, (2024, 7): 1})
+    assert timeline.detect_cycle(small).months == [1, 7]
+
+
+def test_an_event_day_inside_a_collected_case_is_not_this_works_schedule(db):
+    task_id = _task(db, "우수부서 선발")
+    _doc(db, task_id, r"우수부서\추천 현황(우수사례).hwp",
+         [*_CASES, "❑ 일 시 : 2024. 3. 13.(수) 14:00", "우수부서 추천(전부서) : 6. 17.(월) 한"],
+         role=docrole.PERFORMANCE)
+    assert [when.isoformat() for _doc_id, when in rc.schedule_dates(db, task_id)] == ["2024-06-17"]
+
+
+def test_a_term_that_runs_out_is_raised_as_a_date_but_is_not_a_month_of_work(db):
+    task_id = _task(db, "환경위원회")
+    _doc(db, task_id, r"위원회\[쪽지] 위원회 관련.txt",
+         ["1. 위원회는 위촉기간이 23년 4월~ 26년 4월까지(3년) 이므로 그대로이고, 당연직은 업데이트하시면 됩니다."],
+         role=docrole.MEMO)
+    _doc(db, task_id, r"위원회\선발 계획.hwp", ["공적기간 : 2024. 5. 1. ~ 2024. 10. 31."], role=docrole.PLAN)
+
+    assert _item(db, task_id, rc.DEADLINE) == [("만료 · 위촉기간", "2026년 4월", "stated")]
+    assert rc.schedule_dates(db, task_id) == []
+
+
+def test_a_request_with_a_deadline_suggests_a_yearly_task_even_from_one_round(db):
+    task_id = _task(db, "종합평가")
+    letter = _doc(db, task_id, r"종합평가\ref\평가 안내.hwpx",
+                  ["○ (제출기한) 실적보고서를 2025. 1. 10.(금) 18시까지 제출"], year=2025, role=docrole.DIRECTIVE)
+    _doc(db, task_id, r"종합평가\실적 보고서 초안.hwpx", ["작성기한 : 2024. 12. 20."], year=2024,
+         role=docrole.PERFORMANCE)
+
+    assert rc.request_deadlines(db, task_id) == [(letter, date(2025, 1, 10))]
+
+    # 우리가 위원·부서에 낸 요청의 기한은 '해마다 오는 요청'의 근거가 아니다
+    ours = _task(db, "소송 지원")
+    _doc(db, ours, r"소송 지원\서면심의 요청.hwp",
+         ["수신 위원", "심의의결서를 2024. 4. 11.(목)까지 회신하여 주시기 바랍니다.", "시행 기획실-6001", "접수"],
+         role=docrole.DIRECTIVE)
+    assert rc.request_deadlines(db, ours) == []
+
+
+def test_several_empty_years_are_named_as_missing_rounds(db):
+    task_id = _task(db, "우수부서 선발")
+    _doc(db, task_id, r"우수부서\선발 계획.hwp", ["계획"], year=2024, role=docrole.PLAN)
+    db.replace_task_cycles(task_id, [{"kind": "yearly", "months": "6,11", "day_hint": None,
+                                      "years_observed": 3, "confidence": "high", "evidence": ""}])
+    after = next(i for i in rc.record_items(db, task_id, BASIS) if i["slot"] == rc.SLOT_AFTERWARDS)
+    assert after["content"].startswith(
+        "마지막 기록은 2024년입니다. 반복하는 일인데 2025년부터 2026년까지 2개 연도의 자료가 없습니다.")
+
+    # 한 해만 비었으면 예전 문장 그대로다
+    after = next(i for i in rc.record_items(db, task_id, date(2025, 3, 1)) if i["slot"] == rc.SLOT_AFTERWARDS)
+    assert after["content"].startswith("2025년 자료가 없습니다.")
+
+
+def test_the_manual_tells_a_newcomer_to_reapply_for_access(db):
+    task_id = _task(db, "성과점검")
+    _doc(db, task_id, r"성과점검\참고\붙임2 적극행정 온(on) 접근권한 신청서(서식).xlsx", ["서식"], role=docrole.FORM)
+    _doc(db, task_id, r"성과점검\추진현황.hwp", ["현황"], role=docrole.PERFORMANCE)
+    rc.restore(db)
+
+    first = next(s for s in task_manual.build(db, task_id).sections if s.key == "first")
+    assert first.lines[-1] == ("담당자가 바뀌면 본인 이름으로 다시 내야 하는 신청서가 있습니다: "
+                               "붙임2 적극행정 온(on) 접근권한 신청서(서식).xlsx")
+
+
+def test_the_home_says_where_the_material_stops(db):
+    task_id = _task(db, "우수부서 선발")
+    for index in range(30):
+        _doc(db, task_id, rf"우수부서\2023\문서{index}.hwp", ["본문"], year=2023)
+        _doc(db, task_id, rf"우수부서\2024\문서{index}.hwp", ["본문"], year=2024)
+    _doc(db, task_id, r"우수부서\발표자료.hwp", ["본문"], year=2025)
+
+    assert span.summary(db, BASIS) == (
+        "이 자료는 2023~2024년이 중심이고 2025년 이후의 자료는 1건뿐입니다. 그 뒤에 한 일과 바뀐 것은 "
+        "온나라 문서와 현 담당자에게 확인하세요.")
+    assert span.summary(db, date(2024, 12, 1)) == ""        # 올해까지 이어지면 말하지 않는다
+
+
+# ── 전임자의 말, 바뀐 것, 조심할 자료 ───────────────────────────────
+
+def _notes(db, task_id: int) -> list[tuple[str, str]]:
+    return [(item["slot"], item["content"]) for item in handover_notes.items(db, task_id, BASIS)]
+
+
+def test_a_memo_is_carried_line_by_line_and_unfinished_work_is_set_apart(db):
+    task_id = _task(db, "우수부서 선발")
+    _doc(db, task_id, r"우수부서\선발－주의사항.txt",
+         ["1. 제출 서식 보완\n- 해당 업무 수행기간 기입 칸 마련\n2. 발표자 시간제한 타이머 운영 : 3분 초과하면 알람"
+          "\n(알람 울리면 감점됨을 공지)\n8. 신관 2층 중회의실이라고 하면 제2청사 갈 수 있으니 주의\n<행사>"],
+         role=docrole.MEMO)
+
+    assert _notes(db, task_id) == [
+        ("전임자가 남긴 과제 · 선발－주의사항 · 01", "1. 제출 서식 보완"),
+        ("전임자가 남긴 과제 · 선발－주의사항 · 02", "- 해당 업무 수행기간 기입 칸 마련"),
+        ("전임자 메모 · 선발－주의사항 · 03",
+         "2. 발표자 시간제한 타이머 운영 : 3분 초과하면 알람 (알람 울리면 감점됨을 공지)"),
+        ("전임자 메모 · 선발－주의사항 · 04", "8. 신관 2층 중회의실이라고 하면 제2청사 갈 수 있으니 주의")]
+    # 메모는 줄마다 올라가므로 모델이 다시 고르지 않는다
+    assert statements.sentences(db, task_id) == []
+
+
+def test_what_changed_is_read_from_our_own_plans(db):
+    task_id = _task(db, "우수부서 선발")
+    _doc(db, task_id, r"우수부서\하반기 선발 계획.hwp",
+         ["선발인원 : 1차 심사평가 통과자 전원 ※변경", "- 특별휴가 3일 (기존 2일)",
+          "○ (기존 구제제도 한계) 이의신청 등 기존 기능을 보완", "선발대상 : 전 직원"], role=docrole.PLAN)
+    _doc(db, task_id, r"우수부서\제4차 위원회 개최 계획.hwp",
+         ["첫 행: 구분 | 기존 | 변경\n1열: 선발방식 | 2열: 상위점수 7명 선발 | 3열: 75점 이상 전원 선발"],
+         role=docrole.PLAN)
+    # 받은 공문과 사례 모음에 적힌 '변경'은 우리 일의 변경이 아니다
+    _doc(db, task_id, r"우수부서\市 공문\운영지침 알림.hwp", ["평가방식 Pass/Fail로 ※변경"], role=docrole.PLAN)
+
+    assert sorted(content for _slot, content in _notes(db, task_id)) == [
+        "- 특별휴가 3일 (기존 2일)", "선발방식: 상위점수 7명 선발 → 75점 이상 전원 선발",
+        "선발인원 : 1차 심사평가 통과자 전원 ※변경"]
+    assert all(slot.startswith("바뀐 것 · 2024년 · ") for slot, _content in _notes(db, task_id))
+
+
+def test_a_sheet_the_predecessor_ticked_is_pointed_to(db):
+    task_id = _task(db, "종합평가")
+    ticks = "\n".join(f"1열: 지표 {n} | 2열: 정량 | 3열: {mark}" for n, mark in enumerate("●◐?○●(4)".split("(")[0] + "●", 1))
+    _doc(db, task_id, r"종합평가\[평가표]종합평가.hwpx", ["첫 행: 지표 | 방법 | 자체점검\n" + ticks], role=docrole.CRITERIA)
+    _doc(db, task_id, r"종합평가\평가 계획.hwpx", ["1열: 지표 | 2열: 정량 | 3열: 4"], role=docrole.CRITERIA)
+
+    assert _notes(db, task_id) == [("전임자의 점검 표시가 있는 문서", "[평가표]종합평가.hwpx")]
+
+
+def test_sensitive_material_is_counted_by_name_and_table_head_without_being_read(db):
+    task_id = _task(db, "직원 교육")
+    _doc(db, task_id, r"교육\강사 자료\신분증 통장\신분증(앞).pdf", [], status="empty")
+    _doc(db, task_id, r"교육\강사 자료\신분증 통장\통장.jpg", [], status="skipped")
+    _doc(db, task_id, r"교육\참고\참고인진술서(해양경찰서).hwp", ["진술"])
+    _doc(db, task_id, r"교육\위원 명단.hwp", ["성명 | 생년월일 | 소속 | 연락처"], role=docrole.ROSTER)
+    # 걸리면 안 되는 이름들
+    _doc(db, task_id, r"교육\추천서(민원여권과).hwp", ["추천"])
+    _doc(db, task_id, r"교육\2024년 적극행정 우수사례.hwp", ["사례"])
+    _doc(db, task_id, r"교육\소송 지원 절차.xlsx", ["절차"])
+
+    assert _notes(db, task_id) == [
+        ("취급주의 · 신분증·통장 사본", "2건 (신분증 통장 폴더). 보존이 필요한지 확인하고, 내보내거나 공유할 때 빼세요."),
+        ("취급주의 · 수사·소송·징계 자료", "1건 (참고 폴더). 보존이 필요한지 확인하고, 내보내거나 공유할 때 빼세요."),
+        ("취급주의 · 생년월일·연락처가 든 문서", "1건 (교육 폴더). 보존이 필요한지 확인하고, 내보내거나 공유할 때 빼세요.")]
+
+
+def test_the_notes_reach_the_manual(db):
+    task_id = _task(db, "우수부서 선발")
+    _doc(db, task_id, r"우수부서\주의사항.txt", ["7. 마우스 포인터(발표자용) + 여분 건전지"], role=docrole.MEMO)
+    rc.restore(db)
+
+    notes = next(s for s in task_manual.build(db, task_id).sections if s.key == "notes")
+    assert any("7. 마우스 포인터(발표자용) + 여분 건전지" in line for line in notes.lines)

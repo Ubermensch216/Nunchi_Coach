@@ -93,7 +93,8 @@ def test_until_sentences_are_told_apart_by_the_document_they_come_from():
             "4. 제도의 시행을 희망하는 구·군은 2024. 4. 29.(월)까지 신청(붙임5)해주시기 바랍니다.\n"
             "○ (제출기한) ‘25. 1. 10. (금) 18시까지 행안부로 공문 제출")
     found = _read(text, title="2024년도 운영지침 알림 및 실행계획 등 제출 요청.hwp")
-    assert [(f.slot, f.value) for f in found] == [
+    assert [(f.slot, f.value) for f in found if f.kind == rc.RECIPIENT] == [("제출처", "행안부")]
+    assert [(f.slot, f.value) for f in found if f.kind == rc.DEADLINE] == [
         ("일정 · 제출 · 운영지침 알림 및 실행계획 등 제출 요청", "2024-06-14"),
         ("일정 · 신청 · 운영지침 알림 및 실행계획 등 제출 요청", "2024-04-29"),
         ("일정 · 제출 · 운영지침 알림 및 실행계획 등 제출 요청", "2025-01-10")]

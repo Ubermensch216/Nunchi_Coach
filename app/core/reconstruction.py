@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
-from . import casedocs, docrole, korean, provenance, workstate as ws
+from . import casedocs, docrole, folders, korean, provenance, workstate as ws
 from .dating import _FULL
 from .labeling import FALLBACK_LABEL, label_document
 
@@ -137,6 +137,14 @@ def read_section(text: str, doc_id: int, locator: str, doc_year: int | None = No
         return table
 
     found: list[Found] = []
+    for line in lines:
+        expires = _EXPIRES.search(line)
+        if expires:
+            year = int(expires.group("ey"))
+            year, month = (year + 2000 if year < 100 else year), int(expires.group("em"))
+            what = re.sub(r"\s+", "", expires.group("what"))
+            found.append(Found(DEADLINE, EXPIRY_PREFIX + what, f"{year}년 {month}월", doc_id, locator,
+                               line[:_MAX_VALUE * 2], doc_year, date(year, month, 1), official))
     for position, line in enumerate(lines):
         matches = list(_LABEL_RE.finditer(line))
         if not matches:
@@ -180,8 +188,8 @@ _SUBMIT_TO = re.compile(
 )
 # 평가 안내문의 꼴: "'25. 1. 10.(금) 18시까지 행안부 공무원단체과로 공문 제출"
 _SUBMIT_BY_LETTER = re.compile(
-    r"(?<![가-힣A-Za-z0-9])(?P<value>(?:[가-힣A-Za-z0-9]+\s)?[가-힣A-Za-z0-9]*" + _ORG_TAIL + r")\s*(?:에|으로|로)\s*"
-    r"공문(?:으로)?\s*제출")
+    r"(?<![가-힣A-Za-z0-9])(?P<value>(?:(?![가-힣A-Za-z0-9]*까지\s)[가-힣A-Za-z0-9]+\s)?"
+    r"[가-힣A-Za-z0-9]*" + _ORG_TAIL + r")\s*(?:에|으로|로)\s*공문(?:으로)?\s*제출")
 _USES_FORM = re.compile(
     r"(?<![가-힣A-Za-z0-9\-])(?P<value>(?:[가-힣A-Za-z0-9\-]+\s)?[가-힣A-Za-z0-9\-]*(?:서식|양식|신청서))\s*(?:을|를)\s*"
     r"(?:사용|이용|작성)\s*(?:합니다|한다|하여야 합니다|해야 합니다)"
@@ -221,6 +229,14 @@ def _read_statements(line: str, doc_id: int, locator: str, doc_year: int | None,
 # 끝에 '한(限)·까지'가 붙은 날짜만 읽는다. '일시: 6. 28. 10:00'이나 '기간: 11. 1. ~
 # 4. 30.'까지 읽으면 행사일과 공적 기간이 기한으로 올라온다.
 SCHEDULE_PREFIX = "일정 · "
+EVENT_PREFIX = SCHEDULE_PREFIX + "일시"
+# 끝나는 날이 있는 사실: '위촉기간이 23년 4월 ~ 26년 4월까지(3년)', '임기 : 2023. 4. ~ 2026. 4.'
+# 전임자가 떠난 뒤에 끝나는 것은 아무도 알려 주지 않는다. 끝나는 달을 기한으로 올린다.
+EXPIRY_PREFIX = "만료 · "
+_YEAR_MONTH = r"(?:19|20)?\d{2}\s*[년.]\s*\d{1,2}\s*[월.]?"
+_EXPIRES = re.compile(
+    r"(?P<what>임기|위촉\s*기간|유효\s*기간|계약\s*기간|협약\s*기간)[^\d]{0,12}" + _YEAR_MONTH
+    + r"\s*[~∼\-–]\s*(?P<ey>(?:19|20)?\d{2})\s*[년.]\s*(?P<em>1[0-2]|0?[1-9])\s*[월.]?")
 _WEEKDAY = r"(?:\s*\(\s*[월화수목금토일]\s*\))?"
 _SHORT_YEAR = r"['’‘]\s*(?P<yy>\d{2})\s*[.년]\s*(?P<m2>1[0-2]|0?[1-9])\s*[.월]\s*(?P<d2>3[01]|[12]\d|0?[1-9])\s*[.일]?"
 _DAY_ANY = r"(?:" + _FULL + r"\.?|" + _SHORT_YEAR + r"|(?P<m3>1[0-2]|0?[1-9])\s*(?:월\s*|\.\s*)(?P<d3>3[01]|[12]\d|0?[1-9])\s*[.일]?)"
@@ -528,7 +544,9 @@ def choose(found: list[Found], basis: date) -> list[dict]:
         # 요청 공문을 보낸 곳이 여럿이면(중앙부처와 그것을 전달한 시) 엇갈림이 아니라 둘 다다.
         # 계획서마다 적힌 목적 문장도 엇갈림이 아니다 — 가장 최근 회차의 첫 계획서 것을 보인다.
         sender, purpose = slot == SENDER_SLOT, (kind, slot) == (PURPOSE, PURPOSE_SLOT)
-        conflict = len(values) > 1 and not (schedule or sender or purpose)
+        # 예산과목·협조 부서의 일·명단·결과물도 여럿이면 나란히 보일 것이지 엇갈림이 아니다.
+        listing = (slot in (BUDGET_SLOT, ROSTER_SLOT, OUTPUT_SLOT) or slot.startswith(PARTNER_PREFIX))
+        conflict = len(values) > 1 and not (schedule or sender or purpose or listing)
         shown = list(values.values())
         if schedule:
             shown.sort(key=lambda item: (item.when or date.max, item.value))
@@ -606,14 +624,55 @@ def schedule_dates(db, task_id: int) -> list[tuple[int, date]]:
     '언제 하는 일인가'의 가장 직접적인 근거다. 문서가 남은 달이 아니라 문서가
     스스로 말한 날짜이기 때문이다.
     """
+    # 임기처럼 '끝나는 달'은 일하는 달이 아니다.
     return [(item.doc_id, item.when) for item in read_task(db, task_id)
-            if item.kind == DEADLINE and item.when is not None]
+            if item.kind == DEADLINE and item.when is not None
+            and not item.slot.startswith(EXPIRY_PREFIX)]
+
+
+_ASKED_FOR = re.compile(r"^일정 · (?:제출|회신|보고|송부|추천|신청)")
+
+
+def request_deadlines(db, task_id: int) -> list[tuple[int, date]]:
+    """받은 요청 공문·안내문이 적은 기한 (문서, 날짜).
+
+    한 해 치 자료뿐이어도 "언제까지 내라"는 공문은 그 일이 언제 오는지를 말한다.
+    우리가 다른 부서·위원에게 낸 요청의 기한은 세지 않는다 — 그것은 우리가 정한 날이다.
+    받은 것인지는 접수 번호(보낸 부서가 우리와 다름)나, 참고·공문 폴더에 둔 것으로 안다.
+    """
+    from . import foldersteps
+
+    founds = [item for item in read_task(db, task_id)
+              if item.kind == DEADLINE and item.when is not None
+              and (_ASKED_FOR.match(item.slot) or not is_schedule(item.slot))
+              and not item.slot.startswith(EXPIRY_PREFIX)]
+    ids = sorted({item.doc_id for item in founds})
+    if not ids:
+        return []
+    marks = ", ".join("?" * len(ids))
+    asked = {row["doc_id"] for row in db.con.execute(
+        f"SELECT doc_id FROM doc_roles WHERE doc_id IN ({marks}) AND role IN (?, ?)",
+        (*ids, docrole.DIRECTIVE, docrole.CRITERIA))}
+    kept_aside = foldersteps.outside_the_work(db, ids, keep_requests=False)
+    received = set()
+    for doc_id in asked:
+        if doc_id in kept_aside:
+            received.add(doc_id)
+            continue
+        sections = db.con.execute(
+            "SELECT locator, text FROM document_sections WHERE doc_id = ? ORDER BY ordinal", (doc_id,)).fetchall()
+        issued = _ISSUED.search(" ".join(_flat(sections)))
+        if issued and issued.group("dept") != issued.group("mine"):
+            received.add(doc_id)
+    return [(item.doc_id, item.when) for item in founds if item.doc_id in received]
 
 
 def read_task(db, task_id: int) -> list[Found]:
     """업무 하나의 문서들에서 읽어 낸 값 전부(고르기 전)."""
     documents = db.con.execute(
-        "SELECT d.id, d.eff_year, d.filename FROM task_docs td JOIN documents d ON d.id = td.doc_id "
+        "SELECT d.id, d.eff_year, d.filename, d.path, s.path AS root "
+        "FROM task_docs td JOIN documents d ON d.id = td.doc_id "
+        "LEFT JOIN sources s ON s.id = d.source_id "
         "WHERE td.task_id = ? AND d.missing_since IS NULL "
         "  AND d.parse_status IN ('ok', 'partial') "
         # 같은 파일의 사본이 근거 자리를 여러 번 차지하지 않게 한다.
@@ -641,8 +700,15 @@ def read_task(db, task_id: int) -> list[Found]:
         f"SELECT doc_id, role FROM doc_roles WHERE doc_id IN ({marks})",
         [row["id"] for row in documents])}
     cases = casedocs.collections(db, [row["id"] for row in documents])
+    ours = _own_office(db, [row["id"] for row in documents])
     found: list[Found] = []
     for document in documents:
+        if roles.get(document["id"]) == docrole.ROSTER:
+            # 명단은 열어 볼 문서로만 가리킨다. 이름·전화·생년월일을 항목으로 옮겨 적지 않는다.
+            found.append(Found(CONTACT, ROSTER_SLOT, document["filename"], document["id"], "",
+                               document["filename"], document["eff_year"], None,
+                               document["id"] in official))
+            continue
         sections = db.con.execute(
             "SELECT locator, text FROM document_sections WHERE doc_id = ? ORDER BY ordinal",
             (document["id"],)).fetchall()
@@ -667,6 +733,24 @@ def read_task(db, task_id: int) -> list[Found]:
             elif role == docrole.PLAN and document["id"] not in kept_from_aside:
                 mine.extend(_purpose(sections, document["id"], document["eff_year"],
                                      document["id"] in official))
+            if document["id"] not in kept_from_aside:
+                mine.extend(_budget_lines(sections, document["id"], document["eff_year"],
+                                          document["id"] in official))
+            # 협조 부서는 우리가 쓴 계획·보고·지출 문서에서만 읽는다. 받은 공문·법령·증빙의
+            # 괄호 안 부서는 그 문서를 쓴 쪽의 사정이다.
+            if role in _OWN_PAPERS:
+                mine.extend(_partners(sections, document["id"], document["eff_year"],
+                                      document["id"] in official, ours))
+        # 위원이 낸 의결서, 부서가 낸 서식처럼 '제출' 폴더에 든 남의 문서는 결과물이 아니다.
+        if role in (docrole.DECISION, docrole.FORM, docrole.RECEIVED, docrole.ROSTER):
+            pass
+        elif role == docrole.SUBMISSION or folders.SUBMITTED in {
+                folders.parse_part(name).modifier
+                for name in folders.relative_parts(document["path"] or "", document["root"] or "")}:
+            # 제출 폴더에 든 것, 제출본이라고 이름 붙은 것이 이 일의 결과물이다.
+            mine.append(Found(OUTPUT, OUTPUT_SLOT, document["filename"], document["id"], "",
+                              document["filename"], document["eff_year"], None,
+                              document["id"] in official))
         if requested:
             # 상급기관의 요청 공문·평가 기준에 적힌 담당자는 그 기관의 사람이다. 이 업무의
             # 담당자와 같은 칸에 섞이지 않게 어디서 온 것인지 밝힌다.
@@ -682,7 +766,7 @@ def read_task(db, task_id: int) -> list[Found]:
 # 적지 않는다 — 요청한 곳이 곧 낼 곳이고, 그것은 공문 아래의 시행 번호에 있다.
 #     시행 규제혁신추진단-4843 (2024. 6. 26.)  접수 기획실-10745 (2024. 6. 26.)
 # 접수 번호가 있는(우리가 받은) 공문에서만 읽는다. 우리가 낸 공문의 시행 부서는 우리다.
-SENDER_SLOT = "제출처 · 요청 공문을 보낸 곳"
+SENDER_SLOT = "요청 공문을 보낸 곳"
 PURPOSE_SLOT = "목적"
 _ISSUED = re.compile(
     r"시행\s+(?P<dept>[가-힣A-Za-z·]{2,20})-\d+\s*(?:\(\s*[\d.\s]+\))?\s*"
@@ -722,6 +806,90 @@ def _purpose(sections, doc_id: int, doc_year: int | None, official: bool) -> lis
     return []
 
 
+# ── 예산과목, 협조 부서, 명단, 결과물 ───────────────────────────────
+# 사람이 인수인계하며 말해 주는 것들이다: 돈은 어느 과목에서 나가는가, 어느 부서와 무슨
+# 일로 엮이는가, 명단은 어디 있는가, 끝나면 무엇이 남는가.
+_OWN_PAPERS = (docrole.PLAN, docrole.RESULT, docrole.EXPENSE, docrole.MEETING, docrole.DECISION)
+BUDGET_SLOT = "예산과목"
+PARTNER_PREFIX = "협조 부서 · "
+ROSTER_SLOT = "명단·연락망"
+OUTPUT_SLOT = "결과물"
+_BUDGET_LINE = re.compile(r"(?:예산|지출)\s*과목\s*[:：]\s*(?P<value>.{4,120})$")
+_OFFICE = r"[가-힣]{2,8}(?:과|실|담당관|추진단)"
+# 부서가 아닌 '…실'
+_NOT_OFFICE = frozenset({"사무실", "회의실", "상황실", "민원실", "강의실", "대회의실", "중회의실", "소회의실"})
+# 추진일정·절차의 괄호 안 부서: '인센티브 부여 요청(총무과) : 12월 초', '(소통감사실, 총무과)'
+_IN_PARENS = re.compile(r"\((?P<offices>" + _OFFICE + r"(?:\s*[,·ㆍ]\s*" + _OFFICE + r")*)\)")
+# 우리가 다른 부서에 낸 공문: '수신 재무과장'
+_ADDRESSED = re.compile(r"수신\s+(?P<office>" + _OFFICE + r")장(?![가-힣])")
+_OWN_NUMBER = re.compile(r"(?:등록번호|문서관리카드)\s*(?P<office>[가-힣]{2,10})-\d{2,6}")
+_BULLET = re.compile(r"^[^\w가-힣(「『\[<]+")
+_MAX_PARTNER_TASK = 40
+
+
+def _flat(sections) -> list[str]:
+    lines = [" ".join(line.split()) for section in sections for line in (section["text"] or "").splitlines()]
+    return [line for line in lines if line]
+
+
+def _budget_lines(sections, doc_id: int, doc_year: int | None, official: bool) -> list[Found]:
+    """'예산과목 : 행정역량강화, 직원능력향상, …' — 쉼표로 끝나면 다음 줄까지가 과목이다."""
+    lines = _flat(sections)
+    for index, line in enumerate(lines):
+        match = _BUDGET_LINE.search(line)
+        if match is None:
+            continue
+        value, quote = match.group("value").strip(" .▷"), line
+        if value.endswith(",") and index + 1 < len(lines):
+            value, quote = f"{value} {lines[index + 1].strip(' .')}", f"{line} {lines[index + 1]}"
+        return [Found(AMOUNT, BUDGET_SLOT, value[:_MAX_VALUE], doc_id, "", quote, doc_year, None, official,
+                      key=_normalize(value))]
+    return []
+
+
+def _own_office(db, doc_ids) -> str:
+    """이 문서들을 만든 부서 — 등록번호 앞에 가장 자주 나오는 부서 이름('기획실-16857')."""
+    from collections import Counter
+
+    ids = [int(i) for i in doc_ids]
+    if not ids:
+        return ""
+    marks = ", ".join("?" * len(ids))
+    counted: Counter = Counter()
+    for row in db.con.execute(f"SELECT body FROM document_index WHERE doc_id IN ({marks})", ids):
+        counted.update(m.group("office") for m in _OWN_NUMBER.finditer(" ".join((row["body"] or "").split())))
+    return counted.most_common(1)[0][0] if counted else ""
+
+
+def _partners(sections, doc_id: int, doc_year: int | None, official: bool, ours: str) -> list[Found]:
+    """어느 부서와 무슨 일로 엮이는가. 값은 그 부서가 나온 줄의 일 이름이다."""
+    lines = _flat(sections)
+    found: list[Found] = []
+
+    def add(office: str, what: str, quote: str) -> None:
+        what = _BULLET.sub("", what).split(" : ")[0].split(":")[0].strip(" ·-")
+        if office == ours or office in _NOT_OFFICE or not (2 <= len(what) <= _MAX_PARTNER_TASK):
+            return
+        if what.startswith(("붙임", "별첨", "수신", "참고")):
+            return
+        found.append(Found(AGENCY, PARTNER_PREFIX + office, what, doc_id, "", quote, doc_year, None, official))
+
+    for line in lines:
+        if "열:" in line:
+            continue        # 표의 칸. 어느 일의 부서인지 줄만으로는 알 수 없다
+        for match in _IN_PARENS.finditer(line):
+            what = line[:match.start()]
+            for office in re.split(r"\s*[,·ㆍ]\s*", match.group("offices")):
+                add(office, what, line)
+    whole = " ".join(lines)
+    addressed = _ADDRESSED.search(whole)
+    if addressed:
+        title = re.search(r"제목\s+(?P<title>.{4,60}?)\s+\d\.\s", whole)
+        if title:
+            add(addressed.group("office"), title.group("title"), f"수신 {addressed.group('office')}장 제목 {title.group('title')}")
+    return found
+
+
 # 사업 하나의 규모를 말하는 이름표. 업무를 하는 데 드는 돈(소요예산·지급액)과 다르다.
 _PROJECT_AMOUNT = re.compile(r"^(?:총사업비|사업비)(?:$|\s*·)")
 # 문서의 앞쪽 이만큼을 개요로 본다.
@@ -749,11 +917,15 @@ def _own_values(found: list[Found], case_collection: bool = False, from_aside: b
     if case_collection or from_aside:
         found = [item for item in found if item.kind != AMOUNT
                  and (item.kind != CONTACT or requested or not case_collection)]
+    if case_collection:
+        # 사례 안의 '일시: 2024. 3. 13.'은 사례가 연 행사의 날이지 이 업무의 일정이 아니다.
+        found = [item for item in found if not item.slot.startswith(EVENT_PREFIX)]
     listed: dict[str, set[str]] = {}
     for item in found:
         if item.kind == AMOUNT:
             listed.setdefault(item.slot, set()).add(_amount_number(item))
-    return [item for item in found if item.kind != AMOUNT or len(listed[item.slot]) == 1]
+    return [item for item in found
+            if item.kind != AMOUNT or item.slot == BUDGET_SLOT or len(listed[item.slot]) == 1]
 
 
 # ── 현재까지의 기록 (C03) ───────────────────────────────────────────
@@ -791,7 +963,15 @@ def record_items(db, task_id: int, basis: date) -> list[dict]:
 
     when = _shown_date(last["eff_date"], last["eff_precision"])
     stage = label_document(last["filename"])
-    if last["eff_year"] < basis.year:
+    empty_years = basis.year - last["eff_year"]
+    cycle = db.task_cycle(task_id)
+    if empty_years >= 2 and cycle is not None:
+        # 해마다 하는 일인데 여러 해가 비었다. '올해 자료가 없다'보다 큰 일이다 — 그 사이의
+        # 회차가 이 폴더에 통째로 없다.
+        afterwards = (f"마지막 기록은 {last['eff_year']}년입니다. 반복하는 일인데 "
+                      f"{last['eff_year'] + 1}년부터 {basis.year}년까지 {empty_years}개 연도의 자료가 "
+                      f"없습니다. 그 사이의 회차를 했는지, 무엇이 바뀌었는지는 자료로 알 수 없습니다.")
+    elif last["eff_year"] < basis.year:
         afterwards = (f"{basis.year}년 자료가 없습니다. 이번 회차를 시작했는지, "
                       f"어디까지 했는지는 자료로 알 수 없습니다.")
     else:
@@ -856,6 +1036,68 @@ def split_procedure(text: str) -> list[str]:
     steps = [step for step in steps if step]
     return steps if len(steps) >= 2 else []
 
+
+_MAX_STEP_FILES = 4
+
+
+def _step_folder(db, task_id: int, row) -> dict:
+    """번호·날짜 폴더로 된 단계에 그 폴더의 문서를 갈라 붙인다 — 서식, 받은 자료, 만든 문서.
+
+    전임자가 단계 폴더에 모아 둔 것이 곧 그 단계의 준비물과 결과물이다. 폴더가 단계가
+    아닌(문서를 날짜순으로 늘어놓은) 단계에는 붙이지 않는다.
+    """
+    path = row["path"] if "path" in row.keys() else None
+    if not path:
+        return {}
+    source = db.con.execute(
+        "SELECT s.path FROM documents d JOIN sources s ON s.id = d.source_id WHERE d.id = ?",
+        (row["doc_id"],)).fetchone()
+    base = (source["path"] if source else "").rstrip(BACKSLASH)
+    names = folders.relative_parts(path, base)
+    parsed = [folders.parse_part(name) for name in names]
+    skip = {folders.OLD, folders.BACKUP, folders.REFERENCE}
+    at = next((i for i in range(len(parsed) - 1, -1, -1)
+               if parsed[i].is_step and parsed[i].modifier not in skip), None)
+    if at is None or not base:
+        return {}
+    prefix = BACKSLASH.join([base, *names[:at + 1]]) + BACKSLASH
+    members = db.con.execute(
+        "SELECT d.id, d.filename, d.path, r.role FROM task_docs td "
+        "JOIN documents d ON d.id = td.doc_id LEFT JOIN doc_roles r ON r.doc_id = d.id "
+        "WHERE td.task_id = ? AND d.missing_since IS NULL AND d.parse_status != 'skipped' "
+        "ORDER BY d.filename", (task_id,)).fetchall()
+    members = [m for m in members if (m["path"] or "").startswith(prefix)]
+    aside = {folders.OLD, folders.BACKUP}
+    forms, inputs, made = [], [], []
+    for member in members:
+        below = folders.relative_parts(member["path"], prefix.rstrip(BACKSLASH))
+        kinds = {folders.parse_part(name).modifier for name in below}
+        if kinds & aside:
+            continue        # 이전 판
+        if member["role"] == docrole.FORM:
+            forms.append(member["filename"])
+        elif (member["role"] in (docrole.RECEIVED, docrole.REFERENCE)
+              or kinds & {folders.RECEIVED, folders.REFERENCE}):
+            inputs.append(member["filename"])
+        else:
+            made.append(member["filename"])
+
+    def listed(files: list[str]) -> str:
+        files = list(dict.fromkeys(files))
+        more = f" 외 {len(files) - _MAX_STEP_FILES}건" if len(files) > _MAX_STEP_FILES else ""
+        return ", ".join(files[:_MAX_STEP_FILES]) + more
+
+    out = {}
+    if forms:
+        out["forms"] = listed(forms)
+    if inputs:
+        out["inputs"] = listed(inputs)
+    if made:
+        out["output"] = listed(made)
+    return out
+
+
+BACKSLASH = chr(92)
 
 # 이름 붙은 단계가 가장 많은 해의 이만큼은 돼야 끝까지 간 회차로 본다.
 _WHOLE_ROUND = 0.75
@@ -944,7 +1186,9 @@ def build_steps(db, task_id: int, items: list[dict], basis: date | None = None) 
             continue
         for row in rows:
             where = f"{year}년 {row['day_hint'] or (str(row['month']) + '월' if row['month'] else '')}"
+            around = _step_folder(db, task_id, row)
             steps.append({
+                **{key: value for key, value in around.items() if key != "output"},
                 "slot": f"precedent-{year}-{row['ordinal']}",
                 "label": f"{row['label']} ({where.strip()})",
                 "ordinal": PRECEDENT_BASE + row["ordinal"],
@@ -952,7 +1196,8 @@ def build_steps(db, task_id: int, items: list[dict], basis: date | None = None) 
                 # 사람이 확정한 과거 순서라도 '그때 그렇게 했다'는 기록이다.
                 "basis_state": ws.INFERRED, "applicability": ws.PAST,
                 "task_step_id": row["id"],
-                "output": row["filename"],
+                # 받은 자료만 든 단계(부서 제출)에는 우리가 만든 결과물이 없다.
+                "output": around.get("output") or ("" if around else row["filename"]),
                 "evidence": [(row["doc_id"], "", row["filename"])] if row["doc_id"] else [],
             })
         break
@@ -1026,7 +1271,7 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
               "recheck": 0, "conflicts": 0, "steps": 0, "stated_steps": 0, "gaps": 0,
               "statements": 0}
     # 공백 처리는 이 모듈의 읽기 규칙을 쓴다 — 서로 물리지 않게 여기서 들인다.
-    from . import continuity, statements as statement_finder
+    from . import continuity, handover_notes, statements as statement_finder
 
     tasks = db.tasks()
     if not tasks:
@@ -1047,7 +1292,8 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
         totals["statements"] += len(told)
         with db.transaction():
             result = db.sync_task_items(
-                task["id"], candidates + record_items(db, task["id"], basis) + told,
+                task["id"], candidates + record_items(db, task["id"], basis)
+                + handover_notes.items(db, task["id"], basis) + told,
                 context_id, extractor=EXTRACTOR)
             # '항목'은 문서에서 읽어 낸 것만 센다. 기록 요약은 항상 생기므로 세지 않는다.
             step_result = db.sync_work_steps(task["id"], steps, context_id)

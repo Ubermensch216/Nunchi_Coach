@@ -26,6 +26,10 @@ MONTHLY_COVERAGE_THRESHOLD = 0.7   # 연도당 12달 중 이 비율 이상 채�
 QUARTERLY_MONTH_COUNT = 4
 QUARTERLY_SPACING = 3               # 4개 달이 대략 3개월 간격이면 분기
 MAJORITY_RATIO = 0.6                # 관측 연도 중 이 비율 이상에 나온 달만 '공통'
+# 그 해 문서의 이만큼도 안 되는 달은 그 해에 일한 달로 세지 않는다. 실제 자료에서 선발
+# 업무(6월, 10~11월)의 반복 달이 3·6·9·10·11·12월로 나왔다 — 늦어진 상장 수여(9월)와
+# 제도 변경 회의처럼 문서 몇 건이 남은 달이 두 해에 걸치면 공통 달이 됐다.
+CORE_MONTH_SHARE = 0.08
 DAY_HINT_MAX_SPREAD = 10            # 관측된 날짜 범위가 이보다 넓으면 힌트를 만들지 않는다
 MAX_EVIDENCE = 20
 
@@ -134,7 +138,7 @@ class CycleGuess:
 
 def detect_cycle(grid: Grid, min_years: int = MIN_YEARS_FOR_CYCLE) -> CycleGuess | None:
     """격자의 세로축을 읽어 반복 주기를 찾는다."""
-    months_by_year = {y: grid.months_in(y) for y in grid.years}
+    months_by_year = {y: _core_months(grid, y) for y in grid.years}
     years_with_docs = sorted(y for y, months in months_by_year.items() if months)
     if len(years_with_docs) < min_years:
         return None
@@ -152,6 +156,13 @@ def detect_cycle(grid: Grid, min_years: int = MIN_YEARS_FOR_CYCLE) -> CycleGuess
         else YEARLY
     )
     return _build_guess(kind, sorted(common), months_by_year, years_with_docs, grid)
+
+
+def _core_months(grid: Grid, year: int) -> set[int]:
+    """그 해에 일이 몰린 달. 문서가 적은 해(달마다 한두 건)는 있는 달이 모두 해당한다."""
+    counts = {m: len(grid.doc_ids(year, m)) for m in grid.months_in(year)}
+    least = max(1, int(sum(counts.values()) * CORE_MONTH_SHARE))
+    return {m for m, n in counts.items() if n >= least}
 
 
 def _monthly_coverage(months_by_year: dict[int, set[int]], years: list[int]) -> float:
@@ -249,6 +260,22 @@ def day_bucket(day: int | None) -> str:
     if day <= 20:
         return "중"
     return "말"
+
+
+def condense(candidates: list[StepCandidate], fallback: str) -> list[StepCandidate]:
+    """파일 하나가 한 단계가 되지 않게 추린다(번호·날짜 폴더가 없는 해).
+
+    실제 자료에서 교육 업무 14단계 가운데 9단계가 '문서 처리'였고 근거는 출석표, 안내문
+    같은 파일 한 건씩이었다.
+      · 같은 달의 같은 이름 단계는 하나다. 가장 이른 문서를 근거로 둔다.
+      · 이름 붙은 단계가 둘 이상 있으면 이름 없는 단계(fallback)는 순서를 말해 주지 않는다.
+    """
+    first: dict[tuple[int, str], StepCandidate] = {}
+    for candidate in sorted(candidates, key=lambda c: (c.month, c.day if c.day is not None else 32, c.doc_id)):
+        first.setdefault((candidate.month, candidate.label), candidate)
+    kept = list(first.values())
+    named = [c for c in kept if c.label != fallback]
+    return named if len(named) >= 2 else kept
 
 
 def reconstruct_steps(

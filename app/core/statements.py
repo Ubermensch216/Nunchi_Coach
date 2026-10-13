@@ -155,7 +155,7 @@ def _gather(db, task_id: int) -> list[dict]:
     if ids:
         marks = ", ".join("?" * len(ids))
         apart = (docrole.PERFORMANCE, docrole.EVIDENCE, docrole.LEGAL, docrole.DECISION,
-                 docrole.MEETING, docrole.FORM, docrole.OTHER)
+                 docrole.MEETING, docrole.FORM, docrole.ROSTER, docrole.MEMO, docrole.OTHER)
         skip |= {row["doc_id"] for row in db.con.execute(
             f"SELECT doc_id FROM doc_roles WHERE doc_id IN ({marks}) "
             f"AND role IN ({', '.join('?' * len(apart))})", (*ids, *apart))}
