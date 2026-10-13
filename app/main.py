@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import sys
 from pathlib import Path
 
@@ -52,6 +53,10 @@ def _set_windows_app_id() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # 네이티브 라이브러리가 프로세스를 죽이면(Windows 종료 코드 -1073740791 = 0xC0000409) 파이썬은
+    # 아무 말도 못 하고 사라진다. 죽기 직전의 파이썬 호출 위치를 콘솔에 남긴다.
+    if sys.stderr is not None:                 # 콘솔 없는 묶음 실행물에서는 stderr가 없다
+        faulthandler.enable()
     args = _parse_args(argv)
 
     _set_windows_app_id()

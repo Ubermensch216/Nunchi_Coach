@@ -966,11 +966,11 @@ def test_settings_text_size_has_three_steps_and_rescales(make_window, db, qapp,
 
     dialog.size_choice.chosen.emit("large")
     assert db.get_meta("text_size") == "large"
-    assert "font-size: 17px" in qapp.styleSheet()     # 14 * 1.2
+    assert "font-size: 12.75pt" in qapp.styleSheet()  # 14 * 1.2 = 17px
 
     dialog.size_choice.chosen.emit("small")
     assert db.get_meta("text_size") == "small"
-    assert "font-size: 13px" in qapp.styleSheet()     # 14 * 0.9
+    assert "font-size: 9.75pt" in qapp.styleSheet()   # 14 * 0.9 = 13px
     dialog.close()
 
 
@@ -1732,3 +1732,21 @@ def test_task_documents_stay_scoped_and_home_opens_unclassified(make_window, db,
     assert window.stack.currentWidget() is window.views["documents"]
     assert window.views["documents"].unclassified_only.isChecked()
     assert window.topbar._buttons["tasks"].isChecked()
+
+
+def test_applied_fonts_are_point_sized(qapp, restore_theme):
+    """px 글꼴은 pointSize()가 -1이다. Windows 11 스타일이 그 값에 0.9를 곱해 setPointSize()에
+    넘기며 "Point size <= 0 (-1)" 경고를 내므로, 앱에 싣는 글자 크기는 pt여야 한다."""
+    from PySide6.QtWidgets import QPushButton, QLabel, QMenu
+
+    theme.apply(qapp, "medium", "light")
+    sheet = qapp.styleSheet()
+    import re
+
+    assert not re.search(r"font-size:\s*[\d.]+px", sheet)
+    for widget in (QLabel("x"), QPushButton("x"), QMenu()):
+        widget.ensurePolished()
+        assert widget.font().pointSize() > 0, type(widget).__name__
+    label = QLabel("x")
+    label.ensurePolished()
+    assert abs(label.font().pointSizeF() - theme.body_px("medium") * 0.75) < 0.01

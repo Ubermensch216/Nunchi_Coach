@@ -21,6 +21,7 @@ import 시점에 값을 복사해 두면 테마를 바꿔도 그 사본은 옛 �
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 # ── 색 두 벌 ────────────────────────────────────────────────────────
@@ -379,8 +380,22 @@ def apply(app, text_size: str = "medium", mode: str = "system") -> str:
         font = QFont(app.font())
         font.setFamily(name)
         app.setFont(font)
-    app.setStyleSheet(stylesheet(text_size))
+    app.setStyleSheet(_as_points(stylesheet(text_size)))
     return resolved
+
+
+_FONT_PX = re.compile(r"font-size:\s*(\d+(?:\.\d+)?)px")
+
+
+def _as_points(sheet: str) -> str:
+    """스타일시트의 글자 크기를 px에서 pt로 바꿔 앱에 싣는다. 눈에 보이는 크기는 같다(1px = 0.75pt).
+
+    px로 정한 글꼴은 pointSize()가 -1이다. Windows 11 스타일은 메뉴가 달린 단추의 화살표와
+    하위 메뉴 표시를 그릴 때 widget->font().pointSize()를 읽어 곱한 값을 setPointSize()에
+    넘기므로, px 글꼴이면 매번 "QFont::setPointSize: Point size <= 0 (-1)"을 내고 화살표
+    크기를 못 잡는다. 크기 값(FS_*)과 stylesheet()는 px 그대로 두고 칠할 때만 바꾼다.
+    """
+    return _FONT_PX.sub(lambda m: f"font-size: {float(m.group(1)) * 0.75:g}pt", sheet)
 
 
 def _combo_arrow() -> str:
