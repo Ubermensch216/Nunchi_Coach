@@ -158,3 +158,12 @@ def no_external_launch(monkeypatch):
     monkeypatch.setattr(subprocess, "Popen", guarded_popen)
 
     return launched
+
+
+@pytest.fixture(autouse=True)
+def no_windows_recognizer(monkeypatch):
+    """Windows 글자 인식을 끈다. 켜진 장비와 없는 장비에서 시험 결과가 같아야 한다.
+    인식기를 시험하는 시험은 winocr._available을 직접 정한다."""
+    from app.ingest import winocr
+
+    monkeypatch.setattr(winocr, "_available", False)

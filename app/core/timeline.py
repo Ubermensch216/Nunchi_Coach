@@ -268,14 +268,14 @@ def condense(candidates: list[StepCandidate], fallback: str) -> list[StepCandida
     실제 자료에서 교육 업무 14단계 가운데 9단계가 '문서 처리'였고 근거는 출석표, 안내문
     같은 파일 한 건씩이었다.
       · 같은 달의 같은 이름 단계는 하나다. 가장 이른 문서를 근거로 둔다.
-      · 이름 붙은 단계가 둘 이상 있으면 이름 없는 단계(fallback)는 순서를 말해 주지 않는다.
+      · 이름 붙은 단계가 하나라도 있으면 이름 없는 단계(fallback)는 순서를 말해 주지 않는다.
     """
     first: dict[tuple[int, str], StepCandidate] = {}
     for candidate in sorted(candidates, key=lambda c: (c.month, c.day if c.day is not None else 32, c.doc_id)):
         first.setdefault((candidate.month, candidate.label), candidate)
     kept = list(first.values())
     named = [c for c in kept if c.label != fallback]
-    return named if len(named) >= 2 else kept
+    return named or kept
 
 
 def reconstruct_steps(

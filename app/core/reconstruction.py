@@ -143,6 +143,7 @@ def read_section(text: str, doc_id: int, locator: str, doc_year: int | None = No
             year = int(expires.group("ey"))
             year, month = (year + 2000 if year < 100 else year), int(expires.group("em"))
             what = re.sub(r"\s+", "", expires.group("what"))
+            what = re.sub(r"^위[측족]", "위촉", what)      # 글자 인식의 오자
             found.append(Found(DEADLINE, EXPIRY_PREFIX + what, f"{year}년 {month}월", doc_id, locator,
                                line[:_MAX_VALUE * 2], doc_year, date(year, month, 1), official))
     for position, line in enumerate(lines):
@@ -235,7 +236,7 @@ EVENT_PREFIX = SCHEDULE_PREFIX + "일시"
 EXPIRY_PREFIX = "만료 · "
 _YEAR_MONTH = r"(?:19|20)?\d{2}\s*[년.]\s*\d{1,2}\s*[월.]?"
 _EXPIRES = re.compile(
-    r"(?P<what>임기|위촉\s*기간|유효\s*기간|계약\s*기간|협약\s*기간)[^\d]{0,12}" + _YEAR_MONTH
+    r"(?P<what>임기|위[촉측족]\s*기간|유효\s*기간|계약\s*기간|협약\s*기간)[^\d]{0,12}" + _YEAR_MONTH
     + r"\s*[~∼\-–]\s*(?P<ey>(?:19|20)?\d{2})\s*[년.]\s*(?P<em>1[0-2]|0?[1-9])\s*[월.]?")
 _WEEKDAY = r"(?:\s*\(\s*[월화수목금토일]\s*\))?"
 _SHORT_YEAR = r"['’‘]\s*(?P<yy>\d{2})\s*[.년]\s*(?P<m2>1[0-2]|0?[1-9])\s*[.월]\s*(?P<d2>3[01]|[12]\d|0?[1-9])\s*[.일]?"
@@ -262,8 +263,9 @@ _EVENT_LINE = re.compile(
 #     6423 | 2023.04.03 | 2023년 적극행정 중점과제 선정을 위한 자료 제출 요청 | …
 # 그 일을 실제로 한 날짜들이다 — 지난 회차의 순서가 여기 그대로 있다.
 _LEDGER_LINE = re.compile(
-    r"^\s*\|?\s*\d{3,6}\s*\|\s*(?P<y>(?:19|20)\d{2})\s*[.\-]\s*(?P<m>1[0-2]|0?[1-9])\s*[.\-]\s*"
-    r"(?P<d>3[01]|[12]\d|0?[1-9])\s*\|\s*(?P<title>[^|]{4,80}?)\s*(?:\||$)")
+    r"^\s*(?:[^\s|\d]{1,2}\s*)?\|?\s*\d{3,6}\s*\|\s*(?P<y>(?:19|20)\d{2})\s*[.\-]\s*(?P<m>1[0-2]|0?[1-9])\s*[.\-]\s*"
+    r"(?P<d>3[01]|[12]\d|0?[1-9])\s*(?:\||[\[('][^\s|]{0,3})\s*\|?\s*(?:\d\s+)?"
+    r"(?P<title>[^|]{4,80}?)\s*(?:\||$)")
 # 이름만 적힌 담당자 칸('김명진', '노정란 팀장'은 위에서 걸린다). 두세 글자 한글 한 낱말.
 _KOREAN_NAME = re.compile(r"[가-힣]{2,4}(?:\s*[가-힣]{2,4})?")
 _PERSON_OR_OFFICE = re.compile(
@@ -543,7 +545,7 @@ def choose(found: list[Found], basis: date) -> list[dict]:
         schedule = is_schedule(slot)
         # 요청 공문을 보낸 곳이 여럿이면(중앙부처와 그것을 전달한 시) 엇갈림이 아니라 둘 다다.
         # 계획서마다 적힌 목적 문장도 엇갈림이 아니다 — 가장 최근 회차의 첫 계획서 것을 보인다.
-        sender, purpose = slot == SENDER_SLOT, (kind, slot) == (PURPOSE, PURPOSE_SLOT)
+        sender, purpose = slot == SENDER_SLOT, kind == PURPOSE and slot in (PURPOSE_SLOT, ASKED_SLOT)
         # 예산과목·협조 부서의 일·명단·결과물도 여럿이면 나란히 보일 것이지 엇갈림이 아니다.
         listing = (slot in (BUDGET_SLOT, ROSTER_SLOT, OUTPUT_SLOT) or slot.startswith(PARTNER_PREFIX))
         conflict = len(values) > 1 and not (schedule or sender or purpose or listing)
@@ -612,10 +614,41 @@ def _evidence(current: list[Found], shown: list[Found]) -> list[tuple[int, str, 
 def extract_task(db, task_id: int, basis: date | None = None) -> list[dict]:
     """업무 하나의 문서들에서 항목 후보를 만든다. 저장하지 않는다."""
     candidates = choose(read_task(db, task_id), basis or date.today())
+    from . import bundles
+
+    if bundles.kind(db, task_id):
+        # 일이 아닌 묶음에는 '이 일의 결과물'이 없다. 이름에 '송부'가 든 받은 파일이 걸린다.
+        candidates = [item for item in candidates if item["kind"] != OUTPUT]
     # 다른 업무의 절차를 인용한 것은 이 업무의 절차 항목이 아니다(build_steps 참고).
     return [item for item in candidates
             if item["kind"] != PROCEDURE
             or not _belongs_elsewhere(db, task_id, split_procedure(item["content"]))]
+
+
+def borrowed_procedure(db, task_id: int, related: dict, basis: date) -> list[dict]:
+    """엮인 업무의 문서에 인용된 이 업무의 절차.
+
+    위원회 심의자료에 적힌 선발 절차는 위원회의 절차가 아니라 선발의 절차다. 그쪽에서는
+    떼어 냈으니 이쪽에 붙인다. 이 업무에 적힌 절차가 따로 없고, 엮인 업무의 문서에 적힌
+    절차가 그 업무의 것이 아니라고 판정됐으며, 이 업무의 지난 단계와 절반 넘게 겹칠 때만.
+    """
+    own = db.con.execute("SELECT label FROM task_steps WHERE task_id = ? AND label IS NOT NULL",
+                         (task_id,)).fetchall()
+    text = " ".join(row["label"] for row in own)
+    if not text:
+        return []
+    names = {row["id"]: row["name"] for row in db.con.execute("SELECT id, name FROM tasks")}
+    for other in related.get(task_id, {}):
+        for item in choose(read_task(db, other), basis):
+            stated = split_procedure(item["content"]) if item["kind"] == PROCEDURE else []
+            if not stated or item["basis_state"] != ws.STATED or not _belongs_elsewhere(db, other, stated):
+                continue
+            hits = sum(1 for step in stated
+                       if any(word in text for word in _STEP_WORD.findall(step)
+                              if word not in _COMMON_STEP_WORDS))
+            if hits * 2 > len(stated):
+                return [{**item, "slot": f"{item['slot']} · ‘{names.get(other, other)}’ 자료에서"}]
+    return []
 
 
 def schedule_dates(db, task_id: int) -> list[tuple[int, date]]:
@@ -702,6 +735,8 @@ def read_task(db, task_id: int) -> list[Found]:
     cases = casedocs.collections(db, [row["id"] for row in documents])
     ours = _own_office(db, [row["id"] for row in documents])
     found: list[Found] = []
+    second: list[Found] = []     # 목적을 계획서에서 못 찾았을 때 쓸 것
+    third: list[Found] = []
     for document in documents:
         if roles.get(document["id"]) == docrole.ROSTER:
             # 명단은 열어 볼 문서로만 가리킨다. 이름·전화·생년월일을 항목으로 옮겨 적지 않는다.
@@ -723,6 +758,11 @@ def read_task(db, task_id: int) -> list[Found]:
             late = index >= max(1, len(sections) * _OVERVIEW_PART)
             mine.extend(item for item in read
                         if not (late and item.kind == AMOUNT and _PROJECT_AMOUNT.match(item.slot)))
+        # '사 업 비'처럼 띄어 적은 것까지 세어, 사업비가 여럿 적힌 문서면 여러 사업을 늘어놓은
+        # 것이다(전년도 과제 현황). 그 가운데 하나를 이 업무의 사업비로 올리지 않는다.
+        if len(_PROJECT_COST.findall(" ".join(_flat(sections)))) > 1:
+            mine = [item for item in mine
+                    if not (item.kind == AMOUNT and _PROJECT_AMOUNT.match(item.slot))]
         mine = _own_values(mine, case_collection=document["id"] in cases,
                            from_aside=document["id"] in kept_from_aside, requested=requested)
         role = roles.get(document["id"])
@@ -733,6 +773,14 @@ def read_task(db, task_id: int) -> list[Found]:
             elif role == docrole.PLAN and document["id"] not in kept_from_aside:
                 mine.extend(_purpose(sections, document["id"], document["eff_year"],
                                      document["id"] in official))
+            elif role in (docrole.EXPENSE, docrole.RESULT) and document["id"] not in kept_from_aside:
+                # 계획서가 없는 일은 우리가 낸 지급·보고 공문의 본문이 무슨 일인지 말한다.
+                second.extend(_purpose(sections, document["id"], document["eff_year"],
+                                       document["id"] in official))
+            if role == docrole.DIRECTIVE and _ISSUED.search(" ".join(_flat(sections))):
+                # 그것도 없으면 받은 요청 공문이 시킨 일이 이 업무다.
+                third.extend(_purpose(sections, document["id"], document["eff_year"],
+                                      document["id"] in official, _REQUESTED, ASKED_SLOT))
             if document["id"] not in kept_from_aside:
                 mine.extend(_budget_lines(sections, document["id"], document["eff_year"],
                                           document["id"] in official))
@@ -758,6 +806,8 @@ def read_task(db, task_id: int) -> list[Found]:
                 if item.kind == CONTACT:
                     item.slot = f"{item.slot} · 공문을 보낸 쪽"
         found.extend(mine)
+    if not any(item.kind == PURPOSE for item in found):
+        found.extend(second or third)
     return found
 
 
@@ -774,7 +824,12 @@ _ISSUED = re.compile(
 _ASKS = re.compile(r"제출|회신|추천하여|신청하여|신청해|통보하여")
 _ORG_LINE = re.compile(r"^[가-힣]{2,12}(?:특별시|광역시|특별자치시|특별자치도|시|도|군|구|부|처|청|위원회)$")
 # 계획서 첫머리의 목적 문장: '…공직문화를 조성하고자 함.'
-_PURPOSE_END = re.compile(r"(?:하고자\s*(?:함|합니다|한다)|하기\s*위함|위한\s*것임|하려는\s*것임)\.?$")
+_PURPOSE_END = re.compile(r"(?:하고자\s*(?:함|합니다|한다)|하기\s*위함|하려는\s*것임"
+                          # "…실천을 유도하기 위한 ‘2024년 적극행정 교육 계획’임"
+                          r"|위한\s[^.]{0,60}(?:계획|방안|것)[’'”」』]?\s*임)\.?$")
+# 받은 요청 공문의 본문: "…안내하오니, 실적점검 자료를 '24. 7. 19.(금)까지 제출해 주시기 바랍니다."
+_REQUESTED = re.compile(r"(?:제출|회신|추천|신청|통보)[^.]{0,20}(?:주시기|하여\s*주시기)\s*바랍니다\.?$")
+ASKED_SLOT = "요청받은 일"
 _PURPOSE_MIN, _PURPOSE_MAX = 25, 260
 
 
@@ -795,13 +850,15 @@ def _sender(sections, doc_id: int, doc_year: int | None, official: bool) -> list
                   quote, doc_year, None, official)]
 
 
-def _purpose(sections, doc_id: int, doc_year: int | None, official: bool) -> list[Found]:
-    overview = sections[:max(3, int(len(sections) * _OVERVIEW_PART))]
+def _purpose(sections, doc_id: int, doc_year: int | None, official: bool,
+             ending: re.Pattern | None = None, slot: str = PURPOSE_SLOT) -> list[Found]:
+    ending = ending or _PURPOSE_END
+    overview = sections[:max(3, int(len(sections) * _OVERVIEW_PART))] if ending is _PURPOSE_END else sections
     for section in overview:
         for line in (section["text"] or "").splitlines():
             line = " ".join(line.split())
-            if _PURPOSE_MIN <= len(line) <= _PURPOSE_MAX and _PURPOSE_END.search(line):
-                return [Found(PURPOSE, PURPOSE_SLOT, line, doc_id, section["locator"], line,
+            if _PURPOSE_MIN <= len(line) <= _PURPOSE_MAX and ending.search(line):
+                return [Found(PURPOSE, slot, line, doc_id, section["locator"], line,
                               doc_year, None, official)]
     return []
 
@@ -892,6 +949,7 @@ def _partners(sections, doc_id: int, doc_year: int | None, official: bool, ours:
 
 # 사업 하나의 규모를 말하는 이름표. 업무를 하는 데 드는 돈(소요예산·지급액)과 다르다.
 _PROJECT_AMOUNT = re.compile(r"^(?:총사업비|사업비)(?:$|\s*·)")
+_PROJECT_COST = re.compile(r"사\s*업\s*비\s*[:：]")
 # 문서의 앞쪽 이만큼을 개요로 본다.
 _OVERVIEW_PART = 0.4
 
@@ -963,6 +1021,15 @@ def record_items(db, task_id: int, basis: date) -> list[dict]:
 
     when = _shown_date(last["eff_date"], last["eff_precision"])
     stage = label_document(last["filename"])
+    from . import bundles
+
+    bundled = bundles.kind(db, task_id)
+    if bundled:
+        # 일이 아닌 묶음이다. '이번 회차를 시작했는지'를 말하지 않고 무엇인지만 밝힌다.
+        return [{"kind": RECORD, "slot": SLOT_LAST_RECORD,
+                 "content": f"{bundles.NOTE[bundled]} 가장 최근 자료: {when} — {last['filename']}",
+                 "basis_state": ws.INFERRED, "applicability": ws.PAST,
+                 "evidence": [(last["id"], "", last["filename"])]}]
     empty_years = basis.year - last["eff_year"]
     cycle = db.task_cycle(task_id)
     if empty_years >= 2 and cycle is not None:
@@ -1271,7 +1338,7 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
               "recheck": 0, "conflicts": 0, "steps": 0, "stated_steps": 0, "gaps": 0,
               "statements": 0}
     # 공백 처리는 이 모듈의 읽기 규칙을 쓴다 — 서로 물리지 않게 여기서 들인다.
-    from . import continuity, handover_notes, statements as statement_finder
+    from . import continuity, handover_notes, relations, statements as statement_finder
 
     tasks = db.tasks()
     if not tasks:
@@ -1280,11 +1347,14 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
     context_id = context["id"] if context else db.start_work_context()
     common = (statement_finder.common_skeletons(db, [task["id"] for task in tasks])
               if statements else frozenset())
+    related = relations.find(db)
 
     for task in tasks:
         if should_stop():
             break
         candidates = extract_task(db, task["id"], basis)
+        if not any(item["kind"] == PROCEDURE for item in candidates):
+            candidates += borrowed_procedure(db, task["id"], related, basis)
         steps = build_steps(db, task["id"], candidates, basis)
         # 문장에서 찾은 내용은 항목으로만 보탠다. 절차·공백 계산에는 넣지 않는다.
         told = (statement_finder.find(db, task["id"], client, basis, common)
@@ -1293,7 +1363,8 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
         with db.transaction():
             result = db.sync_task_items(
                 task["id"], candidates + record_items(db, task["id"], basis)
-                + handover_notes.items(db, task["id"], basis) + told,
+                + handover_notes.items(db, task["id"], basis)
+                + relations.items(db, task["id"], related, basis) + told,
                 context_id, extractor=EXTRACTOR)
             # '항목'은 문서에서 읽어 낸 것만 센다. 기록 요약은 항상 생기므로 세지 않는다.
             step_result = db.sync_work_steps(task["id"], steps, context_id)

@@ -59,7 +59,9 @@ def candidates(db, today: date) -> list[Candidate]:
         if not is_now(entry):
             continue
         row = entry.row
-        if row["confidence"] not in MIN_CONFIDENCE and row["decided_by"] != "user":
+        # 확신이 낮아도 받은 공문에 날까지 적힌 기한이 있으면 알린다(종합평가 1월 10일).
+        dated = row["confidence"] == "low" and (row["day_hint"] or "").endswith("일까지")
+        if row["confidence"] not in MIN_CONFIDENCE and row["decided_by"] != "user" and not dated:
             continue
         last = last_active_year(db, entry.task_id)
         if last is None or last < today.year - RECENT_YEARS:

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from app.core import casedocs, docrole, foldersteps, handover_notes, reconstruction as rc, span, statements, task_manual, timeline
+from app.core import bundles, casedocs, continuity, docrole, foldersteps, handover_notes, relations, reconstruction as rc, span, statements, task_manual, timeline
 from app.db import Database
 
 ROOT = r"D:\전임자\[환경정책]"
@@ -408,6 +408,10 @@ def test_a_term_that_runs_out_is_raised_as_a_date_but_is_not_a_month_of_work(db)
 
     assert _item(db, task_id, rc.DEADLINE) == [("만료 · 위촉기간", "2026년 4월", "stated")]
     assert rc.schedule_dates(db, task_id) == []
+    rc.restore(db, BASIS)
+    gap = next(g for g in db.info_gaps(task_id) if g["kind"] == "stale")
+    assert gap["field"] == "만료 · 위촉기간" and "2026년 4월에 끝났습니다" in gap["detail"]
+    assert gap["next_action"].startswith("위촉기간을(를) 다시 정했는지(재위촉·연장·갱신) 확인하세요.")
 
 
 def test_a_request_with_a_deadline_suggests_a_yearly_task_even_from_one_round(db):
@@ -538,3 +542,84 @@ def test_the_notes_reach_the_manual(db):
 
     notes = next(s for s in task_manual.build(db, task_id).sections if s.key == "notes")
     assert any("7. 마우스 포인터(발표자용) + 여분 건전지" in line for line in notes.lines)
+
+
+# ── 엮인 업무, 일이 아닌 묶음 ───────────────────────────────────────
+
+def _related(db) -> dict[str, dict[str, list[str]]]:
+    names = {row["id"]: row["name"] for row in db.con.execute("SELECT id, name FROM tasks")}
+    return {names[a]: {names[b]: [why for why, _doc, _quote in reasons] for b, reasons in others.items()}
+            for a, others in relations.find(db).items()}
+
+
+def test_tasks_are_linked_by_folder_names_shared_papers_and_indicators_not_merged(db):
+    selection, committee = _task(db, "환경정책 우수부서"), _task(db, "환경정책위원회")
+    lawsuit, review, plan = _task(db, "소송 지원 관련"), _task(db, "환경정책 종합평가"), _task(db, "환경정책 실행계획")
+    shared = _doc(db, selection, r"우수부서\선발 계획.hwp", ["계획"], role=docrole.PLAN)
+    db.con.execute("UPDATE documents SET hash = 'same' WHERE id = ?", (shared,))
+    copy = _doc(db, committee, r"환경정책위원회\제3회 환경정책위원회(상반기 우수부서 선발)\(붙임5)선발 계획.hwp",
+                ["계획"], role=docrole.PLAN)
+    db.con.execute("UPDATE documents SET hash = 'same' WHERE id = ?", (copy,))
+    _doc(db, lawsuit, r"환경정책위원회\소송 지원 관련\1.신청\신청서.hwp", ["신청"], role=docrole.PLAN)
+    _doc(db, plan, r"환경정책 실행계획\실행계획.hwp", ["계획"], role=docrole.PLAN)
+    sheet = "\n".join(f"3열: {n:02d}. {name}" for n, name in enumerate(
+        ["환경정책 실행계획 수립", "제도개선 노력", "기관장 실행역량", "성과창출 노력", "공공기관 확산",
+         "환경정책위원회 현안처리 건수", "현안처리 사례", "사전컨설팅 건수", "우수부서 선발 실적 및 노력"], 1))
+    _doc(db, review, r"환경정책 종합평가\[평가표]환경정책 종합평가.hwpx", [sheet], role=docrole.DECISION)
+
+    found = _related(db)
+    assert found["환경정책 우수부서"]["환경정책위원회"] == [
+        "‘환경정책위원회’의 ‘제3회 환경정책위원회(상반기 우수부서 선발)’ 폴더에 이 업무의 자료가 있습니다",
+        "같은 문서가 두 업무에 있습니다: 선발 계획.hwp"]
+    assert found["소송 지원 관련"]["환경정책위원회"] == ["이 업무의 폴더가 ‘환경정책위원회’ 폴더 안에 있습니다"]
+    assert found["환경정책 실행계획"]["환경정책 종합평가"] == [
+        "평가지표 ‘01. 환경정책 실행계획 수립’의 실적입니다. 증빙을 모아 두세요"]
+    assert found["환경정책 우수부서"]["환경정책 종합평가"] == [
+        "평가지표 ‘09. 우수부서 선발 실적 및 노력’의 실적입니다. 증빙을 모아 두세요"]
+    assert "환경정책 실행계획" not in found["환경정책 우수부서"]
+    assert len(db.con.execute("SELECT id FROM tasks").fetchall()) == 5          # 합치지 않는다
+
+    rc.restore(db)
+    item = next(i for i in db.task_items(selection) if i["slot"] == "관련 업무 · 환경정책위원회")
+    assert (item["kind"], item["basis_state"]) == (rc.AGENCY, "inferred")
+
+
+def test_a_folder_of_statutes_is_reference_not_work(db):
+    laws = _task(db, "관련 법령 등")
+    _doc(db, laws, r"법령\운영 조례.hwp", ["제1조"], year=2023, role=docrole.LEGAL)
+    _doc(db, laws, r"법령\지방공무원법_제75조의2.hwp", ["제75조의2"], year=2023, role=docrole.LEGAL)
+    work = _task(db, "실행계획")
+    _doc(db, work, r"실행계획\계획.hwp", ["계획"], year=2023, role=docrole.PLAN)
+    _doc(db, work, r"실행계획\운영지침.hwp", ["지침"], year=2023, role=docrole.LEGAL)
+
+    assert (bundles.kind(db, laws), bundles.kind(db, work)) == (bundles.REFERENCE, None)
+    assert docrole.classify("지방공무원법_제75조의2(적극행정의 장려).hwp").role == docrole.LEGAL
+    assert docrole.classify("작성 방법 안내.hwp").role != docrole.LEGAL
+    rc.restore(db)
+    assert continuity.find_gaps(db, laws, BASIS) == []
+    records = [i["content"] for i in db.task_items(laws) if i["kind"] == rc.RECORD]
+    assert len(records) == 1 and records[0].startswith("참고 자료 묶음입니다.")
+    # 사람이 업무로 확정하면 보통 업무다
+    db.con.execute("UPDATE tasks SET status = 'confirmed' WHERE id = ?", (laws,))
+    assert bundles.kind(db, laws) is None
+
+
+def test_loose_papers_outside_every_task_folder_are_gathered_but_not_treated_as_work(db):
+    from app.ai.discover import discover
+
+    for folder in ("환경정책위원회", "환경정책 실행계획"):
+        for index in range(2):
+            _doc(db, 0, rf"{folder}\문서{index}.hwp", ["본문"], role=docrole.PLAN)
+    loose = [_doc(db, 0, name, ["본문"]) for name in
+             ("★구군 담당자 명단(24.08.기준).xlsx", "(24년 상) 규제애로 해소 사례 제출 건수.xlsx",
+              "상반기 책임관회의 자료.hwpx")]
+
+    discover(db, client=None)
+
+    tasks = {row["name"]: row["id"] for row in db.tasks()}
+    bundle = tasks[bundles.LOOSE_NAME]
+    assert {doc["id"] for doc in db.task_documents(bundle)} == set(loose)
+    assert bundles.kind(db, bundle) == bundles.LOOSE and bundles.kind(db, tasks["환경정책위원회"]) is None
+    rc.restore(db)
+    assert continuity.find_gaps(db, bundle, BASIS) == []
+    assert db.work_steps(bundle) == []

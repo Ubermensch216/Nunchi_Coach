@@ -28,12 +28,12 @@ from ..core import dating, handover_release, reconstruction, timeline, transfer
 from ..core import diagnostics, coverage
 from ..core import onnara_import
 from ..core import reindex
-from ..core import docrole, docyears, foldersteps, pictures, versions
+from ..core import bundles, docrole, docyears, foldersteps, pictures, versions
 from ..core.chunking import build_chunks_with_context
 from ..core.labeling import FALLBACK_LABEL, label_document
 from ..core.workcard import OUTPUT_DIR
 from ..db import Database
-from ..ingest import scanner, vision
+from ..ingest import scanner, vision, winocr
 from ..search import pack
 from ..ingest.hasher import sha256, too_large
 from ..ingest.parsers import parse
@@ -372,7 +372,10 @@ class Pipeline(QObject):
         모델이 읽은 글이라는 표시가 붙는다.
         """
         report = StageReport(STAGE_PICTURES)
-        budget = int(db.get_meta("vision_pages_per_run") or pictures.PAGES_PER_RUN)
+        recognizer = winocr.available()
+        budget = int(db.get_meta("vision_pages_per_run")
+                     or (pictures.PAGES_PER_RUN_FAST if recognizer else pictures.PAGES_PER_RUN))
+        per_document = pictures.PAGES_PER_DOCUMENT_FAST if recognizer else pictures.PAGES_PER_DOCUMENT
         if budget <= 0:
             report.note = "꺼 둠"
             self._report(db, report)
@@ -385,11 +388,12 @@ class Pipeline(QObject):
             report.note = "읽을 그림·스캔본이 없습니다"
             self._report(db, report)
             return
-        if not client._supports("vision"):   # noqa: SLF001
+        if not recognizer and not client._supports("vision"):   # noqa: SLF001
             report.note = f"건너뜀 — 그림을 읽을 수 있는 로컬 모델이 없습니다 ({len(todo):,}건)"
             self._report(db, report)
             return
         # 못 읽는 모델도 답은 한다. 문서를 맡기기 전에 정답을 아는 그림으로 확인한다.
+        # Windows 글자 인식으로 읽을 때는 모델에 묻지 않는다.
         if not self._vision_works(db, client):
             report.note = (f"건너뜀 — 이 PC의 로컬 모델({client.gen_model})이 그림의 글자를 "
                            f"읽지 못합니다 ({len(todo):,}건 남음)")
@@ -422,7 +426,7 @@ class Pipeline(QObject):
             if digest is None:
                 continue        # 잠겨 있거나 사라졌다. 다음 실행에서 다시 본다
             result = vision.read(client, item.path, self._stopped,
-                                 max_pages=min(pictures.PAGES_PER_DOCUMENT, budget - used))
+                                 max_pages=min(per_document, budget - used))
             if self._stop:
                 break           # 읽다 만 것은 남기지 않는다
             used += max(1, len(result.sections)) if result.ok else 1
@@ -472,9 +476,12 @@ class Pipeline(QObject):
 
     def _vision_works(self, db: Database, client) -> bool:
         """점검 그림을 읽혀 보고 결과를 남긴다(설정 화면이 보여 준다)."""
-        works, why = vision.selfcheck(client)
+        if winocr.available():
+            works, why, reader = True, "", "Windows 글자 인식"
+        else:
+            (works, why), reader = vision.selfcheck(client), client.gen_model
         db.set_meta("vision_selfcheck", json.dumps(
-            {"ok": works, "model": client.gen_model, "why": why,
+            {"ok": works, "model": reader, "why": why,
              "at": datetime.now().strftime("%Y-%m-%d %H:%M")}, ensure_ascii=False))
         return works
 
@@ -726,21 +733,31 @@ class Pipeline(QObject):
                                        day=when.day, trustworthy=True)
                      for doc_id, when in reconstruction.schedule_dates(db, task["id"])]
             grid = timeline.build_grid(docs)
-            guess = timeline.detect_cycle(grid)
+            # 참고 자료 묶음과 낱장 묶음은 되풀이하는 일이 아니다.
+            bundled = bundles.kind(db, task["id"])
+            guess = None if bundled else timeline.detect_cycle(grid)
 
             cycles = []
             if guess is None:
                 # 반복을 주장할 만큼 여러 해가 없다. 그래도 받은 요청 공문에 기한이 있고
                 # 이 업무의 자료(참고로 둔 전년도 판 포함)가 두 해 이상에 걸쳐 있으면 해마다
                 # 오는 요청으로 보인다. 확신은 낮음이다 — 알림은 내지 않고 일정에만 보인다.
-                asked = reconstruction.request_deadlines(db, task["id"])
+                asked = [] if bundled else reconstruction.request_deadlines(db, task["id"])
                 years_seen = {row["year"] for row in db.task_grid_documents(task["id"])}
-                if asked and len(years_seen) >= 2:
+                periodic = asked and db.con.execute(
+                    "SELECT 1 FROM documents WHERE id IN (%s) AND (filename LIKE '%%년도%%' "
+                    "OR filename LIKE '%%상반기%%' OR filename LIKE '%%하반기%%' OR filename LIKE '%%분기%%')"
+                    % ", ".join("?" * len(asked)), [doc for doc, _when in asked]).fetchone()
+                if asked and (len(years_seen) >= 2 or periodic):
                     newest = max(when.year for _doc, when in asked)
-                    months = sorted({when.month for _doc, when in asked if when.year == newest})
+                    latest = [when for _doc, when in asked if when.year == newest]
+                    months = sorted({when.month for when in latest})
+                    # 기한이 한 날로 모이면 그 날을 적는다. 날까지 아는 기한은 알림의 근거가 된다.
+                    days = {(when.month, when.day) for when in latest}
                     cycles.append({
                         "kind": timeline.YEARLY, "months": ",".join(str(m) for m in months),
-                        "day_hint": None, "years_observed": 1, "confidence": "low",
+                        "day_hint": f"{next(iter(days))[1]}일까지" if len(days) == 1 else None,
+                        "years_observed": 1, "confidence": "low",
                         "evidence": ",".join(str(doc) for doc, _when in asked[:10]),
                     })
                     guessed += 1
@@ -799,6 +816,13 @@ class Pipeline(QObject):
                 break
             # 전임자가 폴더에 번호·날짜로 적어 둔 순서가 있는 해는 그것을 그대로 쓴다.
             # 문서를 날짜순으로 늘어놓는 재구성은 그런 기록이 없는 해에만 한다.
+            if bundles.kind(db, task["id"]):
+                # 일이 아닌 묶음에 '문서 처리' 단계를 늘어놓지 않는다.
+                for year in db.task_years(task["id"]):
+                    with db.transaction():
+                        db.replace_task_steps(task["id"], year, [])
+                    done += 1
+                continue
             recorded = foldersteps.plan(db, task["id"])
             for year, steps in recorded.items():
                 with db.transaction():

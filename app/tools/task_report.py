@@ -38,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", required=True, help="project.db 경로")
     parser.add_argument("--json", help="같은 내용을 JSON으로 저장할 경로")
     parser.add_argument("--truth", help="정답 CSV(경로의 앞부분,업무)")
+    parser.add_argument("--handover-truth", help="인수인계 내용의 정답 JSON(업무별 주기·제출처·비용 등)")
     args = parser.parse_args(argv)
 
     path = Path(args.db)
@@ -48,6 +49,9 @@ def main(argv: list[str] | None = None) -> int:
     con.row_factory = sqlite3.Row
     try:
         report = build(con, _load_truth(Path(args.truth)) if args.truth else None)
+        if args.handover_truth:
+            expected = json.loads(Path(args.handover_truth).read_text(encoding="utf-8"))
+            report["against_handover_truth"] = score_handover(report["handover"], expected)
     finally:
         con.close()
     show(report)
@@ -148,10 +152,101 @@ def build(con: sqlite3.Connection, truth: list[tuple[str, str]] | None = None) -
         "roles": dict(Counter(row["role"] for row in con.execute("SELECT role FROM doc_roles")).most_common()),
         "gap_total": con.execute("SELECT COUNT(*) FROM info_gaps WHERE state = 'open'").fetchone()[0],
     }
+    report["handover"] = handover(con)
     if truth:
         report["against_truth"] = _compare(documents, assigned, truth, relative,
                                            {t["id"]: t["name"] for t in tasks})
     return report
+
+
+# ── 인수인계 내용 ───────────────────────────────────────────────────
+# 업무가 맞게 묶였는가(against_truth)와 별개로, 묶인 업무마다 사람이 인수인계하며 말해 줄
+# 것이 채워졌는가를 본다: 무슨 일인가, 언제, 어디에 내는가, 누구와, 얼마, 전임자의 말,
+# 바뀐 것, 조심할 자료, 엮인 업무. 본문은 싣지 않고 있는지와 짧은 값만 싣는다.
+
+def handover(con: sqlite3.Connection) -> dict:
+    out = {}
+    for task in con.execute(
+            "SELECT id, name FROM tasks WHERE not_a_task = 0 AND merged_into IS NULL ORDER BY id"):
+        items = con.execute(
+            "SELECT kind, slot, content FROM task_items WHERE task_id = ? AND excluded = 0",
+            (task["id"],)).fetchall()
+
+        def slots(prefix: str, kind: str | None = None) -> list:
+            return [row for row in items if row["slot"].startswith(prefix) and (kind is None or row["kind"] == kind)]
+
+        cycle = con.execute(
+            "SELECT months, confidence FROM task_cycles WHERE task_id = ? "
+            "ORDER BY (decided_by = 'user') DESC, years_observed DESC LIMIT 1", (task["id"],)).fetchone()
+        steps = con.execute(
+            "SELECT COUNT(*) AS n, SUM(label LIKE '문서 처리%') AS bare, SUM(COALESCE(forms, '') != '') AS forms "
+            "FROM work_steps WHERE task_id = ? AND excluded = 0", (task["id"],)).fetchone()
+        out[task["name"]] = {
+            "purpose": any(row["kind"] == "purpose" for row in items),
+            "cycle_months": [int(m) for m in (cycle["months"] or "").split(",") if m] if cycle else [],
+            "cycle_confidence": cycle["confidence"] if cycle else None,
+            "deadlines": sum(1 for row in items if row["kind"] == "deadline"),
+            "expiry": [row["content"] for row in slots("만료 · ")],
+            "recipients": [row["content"] for row in items if row["kind"] == "recipient"],
+            "amounts": {row["slot"]: row["content"] for row in items if row["kind"] == "amount"},
+            "partners": [row["slot"].removeprefix("협조 부서 · ") for row in slots("협조 부서 · ")],
+            "rosters": len(slots("명단·연락망")),
+            "outputs": sum(1 for row in items if row["kind"] == "output"),
+            "memo_lines": len(slots("전임자 메모 · ")),
+            "left_undone": len(slots("전임자가 남긴 과제 · ")),
+            "changes": len(slots("바뀐 것 · ")),
+            "marked_sheets": len(slots("전임자의 점검 표시가 있는 문서")),
+            "care": [row["slot"].removeprefix("취급주의 · ") for row in slots("취급주의 · ")],
+            "related": [row["slot"].removeprefix("관련 업무 · ") for row in slots("관련 업무 · ")],
+            "steps": steps["n"] or 0, "bare_steps": steps["bare"] or 0, "steps_with_forms": steps["forms"] or 0,
+            "statements": sum(1 for row in items if row["kind"] == "statement"),
+            "gaps": con.execute("SELECT COUNT(*) FROM info_gaps WHERE task_id = ? AND state = 'open'",
+                                (task["id"],)).fetchone()[0],
+        }
+    return out
+
+
+def score_handover(found: dict, expected: dict) -> dict:
+    """정답 JSON과 견준다. 정답은 업무 이름의 일부 → 기대하는 것들이다.
+
+        {"우수공무원": {"cycle_months": [6, 10, 11], "partners": ["총무과"], "purpose": true,
+                        "amount_contains": ["700,000"], "memo_lines_min": 10, "related": ["위원회"],
+                        "amount_absent": ["억"]}}
+
+    목록은 기대한 것이 모두 들어 있으면 맞음이다(더 있는 것은 따지지 않는다). cycle_months는
+    기대한 달이 모두 있고, 기대에 없는 달이 한 달을 넘지 않아야 맞음이다.
+    """
+    checks = []
+    for key, wants in expected.items():
+        name = next((task for task in found if key in task), None)
+        got = found.get(name) if name else None
+        for field, want in wants.items():
+            if got is None:
+                checks.append({"task": key, "field": field, "ok": False, "got": "업무 없음"})
+                continue
+            if field == "cycle_months":
+                have = set(got["cycle_months"])
+                ok, shown = set(want) <= have and len(have - set(want)) <= 1, sorted(have)
+            elif field == "amount_contains":
+                text = " ".join(got["amounts"].values())
+                ok, shown = all(part in text for part in want), sorted(got["amounts"])
+            elif field == "amount_absent":
+                text = " ".join(got["amounts"].values())
+                ok, shown = not any(part in text for part in want), sorted(got["amounts"])
+            elif field.endswith("_min"):
+                ok, shown = got[field[:-4]] >= want, got[field[:-4]]
+            elif field.endswith("_max"):
+                ok, shown = got[field[:-4]] <= want, got[field[:-4]]
+            elif isinstance(want, bool):
+                ok, shown = bool(got[field]) == want, bool(got[field])
+            elif isinstance(want, list):
+                have = " | ".join(str(value) for value in got[field])
+                ok, shown = all(part in have for part in want), got[field]
+            else:
+                ok, shown = got[field] == want, got[field]
+            checks.append({"task": name, "field": field, "ok": bool(ok), "want": want, "got": shown})
+    passed = sum(1 for check in checks if check["ok"])
+    return {"passed": passed, "total": len(checks), "failed": [c for c in checks if not c["ok"]]}
 
 
 def _month_of(value: str) -> int | None:
@@ -198,6 +293,25 @@ def _compare(documents, assigned, truth, relative, names) -> dict:
         "mixed": {names.get(task_id, str(task_id)): dict(counter.most_common())
                   for task_id, counter in mixed.items() if len(counter) > 1},
     }
+
+
+def show_handover(report: dict) -> None:
+    rows = report.get("handover") or {}
+    if not rows:
+        return
+    print("\n== 인수인계 내용 (업무별)")
+    for name, row in rows.items():
+        cycle = ("·".join(map(str, row["cycle_months"])) + "월" + ("(낮음)" if row["cycle_confidence"] == "low" else "")
+                 if row["cycle_months"] else "-")
+        print(f"  {name[:22]:<22} 목적 {'O' if row['purpose'] else '-'} · 주기 {cycle} · 제출처 {len(row['recipients'])}"
+              f" · 금액 {len(row['amounts'])} · 협조 {len(row['partners'])} · 메모 {row['memo_lines']}"
+              f" · 변경 {row['changes']} · 취급주의 {len(row['care'])} · 관련 {len(row['related'])}"
+              f" · 단계 {row['steps']}(이름 없음 {row['bare_steps']}) · 공백 {row['gaps']}")
+    scored = report.get("against_handover_truth")
+    if scored:
+        print(f"\n== 인수인계 정답 대비: {scored['passed']} / {scored['total']}")
+        for check in scored["failed"]:
+            print(f"  틀림  {check['task']} · {check['field']}: 기대 {check.get('want')} / 실제 {check['got']}")
 
 
 def show(report: dict) -> None:
@@ -254,6 +368,7 @@ def show(report: dict) -> None:
         print(f"  한 업무가 흩어진 최대 {truth['max_spread']}개 · 한 제안에 섞인 최대 {truth['max_mixed']}개")
         for name, labels in truth["mixed"].items():
             print(f"    섞임 — {name}: " + ", ".join(f"{k} {v}" for k, v in labels.items()))
+    show_handover(report)
 
 
 if __name__ == "__main__":

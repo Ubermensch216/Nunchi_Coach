@@ -52,7 +52,7 @@ ROLE_LABEL = {
 # 결과물이라, 거기 적힌 금액과 날짜는 이 업무의 것이 아니다.
 OUTSIDE_ROLES = frozenset({RECEIVED, REFERENCE, PUBLICITY})
 # 규칙이 바뀌면 올린다. 파이프라인이 규칙으로 정한 갈래를 다시 정한다.
-VERSION = "4"
+VERSION = "5"
 
 # (역할, 이름에서 찾는 꼴). 앞의 것이 이긴다.
 _NAME_RULES: tuple[tuple[str, re.Pattern], ...] = (
@@ -73,7 +73,8 @@ _NAME_RULES: tuple[tuple[str, re.Pattern], ...] = (
     # '참석자 명단'은 위에서 회의 준비물로 걸린다. 여기 오는 것은 위원·담당자 명단이다.
     (ROSTER, re.compile(r"명단|명부|연락망|비상\s*연락|주소록")),
     (PUBLICITY, re.compile(r"보도\s*자료|카드\s*뉴스|웹툰|포스터|홍보")),
-    (LEGAL, re.compile(r"조례|규칙|운영\s*규정|시행령|법률|지침")),
+    # '지방공무원법_제75조의2', '행정기본법_제4조' — 조문을 따로 떠 둔 파일
+    (LEGAL, re.compile(r"조례|규칙|운영\s*규정|시행령|법률|지침|제\s*\d+\s*조|(?:기본|공무원)법")),
 )
 # 폴더가 알려 주는 성격(core/folders.py). 이름에 단서가 없을 때만 쓴다.
 _FOLDER_ROLES = {"received": RECEIVED, "reference": REFERENCE}

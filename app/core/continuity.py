@@ -85,6 +85,10 @@ def find_gaps(db, task_id: int, basis: date | None = None,
     다른 값은 저장된 항목에 없고 후보에만 실려 있다.
     """
     basis = basis or date.today()
+    from . import bundles
+
+    if bundles.kind(db, task_id):
+        return []       # 일이 아닌 묶음에 기한·제출처·절차를 묻지 않는다
     if candidates is None:
         candidates = rc.extract_task(db, task_id, basis)
     earlier = {(c["kind"], c["slot"]): c.get("earlier") or [] for c in candidates}
@@ -284,6 +288,18 @@ def _changed(db, item: dict, earlier: list[dict]) -> dict:
 
 
 def _past_deadline(context: _Context, item: dict, step_id, basis: date) -> dict:
+    if item["slot"].startswith(rc.EXPIRY_PREFIX):
+        # 임기·유효기간이 끝났다. 지난 회차의 기한이 아니라 지금 확인할 일이다.
+        what = item["slot"].removeprefix(rc.EXPIRY_PREFIX)
+        return {
+            "gap_key": f"expired:{item['slot']}", "kind": "stale",
+            "field": f"만료 · {what}", "item_id": item["id"], "step_id": None,
+            "detail": (f"자료에 적힌 {what}이(가) {item['content']}에 끝났습니다(기준일 {basis.isoformat()}). "
+                       f"그 뒤에 다시 정했는지 자료로 알 수 없습니다."),
+            "research": None,
+            "next_action": f"{what}을(를) 다시 정했는지(재위촉·연장·갱신) 확인하세요." + context.onnara_hint(),
+            "evidence": [(e["doc_id"], e["locator"], e["quote"]) for e in item["evidence"]],
+        }
     action = "이번 회차의 요청 공문이 새로 왔는지 확인하세요."
     if context.recipient():
         action += f" 없으면 제출처({context.recipient()})에 이번 회차 일정을 확인하세요."

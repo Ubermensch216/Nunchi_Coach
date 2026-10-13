@@ -34,6 +34,9 @@ from ..ingest import vision
 # 앞에 오므로 전임자의 캡처는 첫 번에 읽힌다. meta 'vision_pages_per_run'으로 바꾼다.
 PAGES_PER_RUN = 30
 PAGES_PER_DOCUMENT = 3      # 스캔본은 앞쪽에 요지가 있다
+# Windows 글자 인식은 쪽당 1초가 안 걸린다. 사용자가 분량을 정하지 않았으면 넉넉히 읽는다.
+PAGES_PER_RUN_FAST = 2000
+PAGES_PER_DOCUMENT_FAST = 20
 PHOTO_FOLDER_IMAGES = 5     # 한 폴더에 그림이 이만큼 모여 있고 단서가 없으면 사진 묶음이다
 
 _PRIVATE = re.compile(r"신분증|주민등록|통장|여권|면허증|가족관계|인감|등본|초본")

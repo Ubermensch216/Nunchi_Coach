@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pymupdf
 
+from . import winocr
 from .parsers.base import EMPTY, FAILED, MAX_CHARS, PARTIAL, ParseResult, Section, clip, failed
 
 PARSER = "vision"
@@ -40,6 +41,7 @@ MAX_SIDE = 1600
 # 예전에는 그림을 원본보다 작게 보내고 있었다.
 MAX_UPSCALE = 2.5
 NOTE ="로컬 AI가 그림에서 읽은 글자입니다. 숫자·이름은 원본과 대조하세요."
+NOTE_RECOGNIZER = "Windows 글자 인식으로 그림에서 읽은 글자입니다. 숫자·이름은 원본과 대조하세요."
 NOTHING = "글자 없음"
 BLANK_NOTE = "그림에서 읽을 글자를 찾지 못했습니다."
 # 모델이 답은 했지만 글이 아니었다(빈 표, 숫자 격자). 글자 없는 그림과는 다른 일이다 —
@@ -84,6 +86,8 @@ def render_pages(path: Path, limit: int = MAX_PAGES) -> tuple[list[tuple[str, by
 
 def reader_mark(client) -> str:
     """누가 읽었는가. '글자 없음' 표시는 이 값이 같을 때만 믿는다 — 모델을 바꾸면 다시 읽는다."""
+    if winocr.available():
+        return f"{READER_RULES}:{winocr.ENGINE}"
     return f"{READER_RULES}:{getattr(client, 'gen_model', '')}"
 
 
@@ -127,10 +131,47 @@ def _has_words(text: str) -> bool:
     return letters >= 2 and letters >= len(solid) * 0.2
 
 
+def _read_with_recognizer(path: Path, should_stop, max_pages: int) -> ParseResult | None:
+    """Windows 글자 인식으로 읽는다. 인식기를 부르지 못했으면 None(로컬 모델로 넘어간다)."""
+    try:
+        pages, total = render_pages(path, max_pages)
+    except Exception as exc:
+        return failed(PARSER, f"그림 열기 실패: {exc}")
+    if should_stop():
+        return ParseResult(status=EMPTY, parser=PARSER, note=BLANK_NOTE)
+    texts = winocr.read_pngs([png for _locator, png in pages])
+    if texts is None:
+        return None
+    budget = [MAX_CHARS]
+    sections: list[Section] = []
+    for ordinal, ((locator, _png), text) in enumerate(zip(pages, texts), start=1):
+        text = (text or "").strip()
+        if not text or not _has_words(text):
+            continue
+        body = clip(text, budget)
+        if not body:
+            break
+        sections.append(Section("page", ordinal, locator, body, {"ocr": True, "engine": winocr.ENGINE}))
+    if not sections:
+        return ParseResult(status=EMPTY, parser=PARSER, note=BLANK_NOTE)
+    note = NOTE_RECOGNIZER
+    if total > len(pages):
+        note += f" 전체 {total}쪽 가운데 앞 {len(pages)}쪽만 읽었습니다."
+    return ParseResult(status=PARTIAL, parser=PARSER, sections=sections, note=note)
+
+
 def read(client, path: str | Path, should_stop: Callable[[], bool] = lambda: False,
          max_pages: int = MAX_PAGES) -> ParseResult:
-    """그림을 모델에 보여 주고 읽은 글자를 파서 결과로 돌려준다. 예외를 던지지 않는다."""
+    """그림에서 읽은 글자를 파서 결과로 돌려준다. 예외를 던지지 않는다.
+
+    Windows의 글자 인식을 쓸 수 있으면 그것으로 읽는다(쪽당 1초 안쪽, 모델이 필요 없다).
+    쓸 수 없을 때만 로컬 모델에 그림을 보여 준다.
+    """
     path = Path(path)
+    if winocr.available():
+        recognized = _read_with_recognizer(path, should_stop, max_pages)
+        if recognized is not None:
+            return recognized
     if not client._supports("vision"):   # noqa: SLF001 — 같은 꾸러미의 기능 조회
         return ParseResult(status=EMPTY, parser=PARSER,
                            note="그림의 글자를 읽으려면 그림을 읽을 수 있는 로컬 모델이 필요합니다.")

@@ -239,6 +239,8 @@ def _protected_documents(db: Database) -> set[int]:
 # 본문을 읽지 못한 문서(스캔 PDF 등)도 폴더가 알려 주는 업무에는 붙인다. 내용은
 # 몰라도 그 일의 자료라는 것은 전임자가 이미 정해 두었다.
 
+from ..core import bundles  # noqa: E402
+
 FOLDER_MIN_DOCS = 2        # 문서가 이만큼은 있어야 폴더를 업무로 올린다
 FOLDER_MODE_SHARE = 0.5    # 문서의 절반 이상이 업무 폴더 안에 있어야 폴더를 믿는다
 FOLDER_EVIDENCE = "폴더 위치"
@@ -256,6 +258,7 @@ class FolderTask:
     unread: set[int] = field(default_factory=set)
     round_of: dict[int, str] = field(default_factory=dict)  # 문서 → 회차('2024 하반기')
     not_documents: int = 0                 # 이 폴더의 그림·글꼴 등 문서로 다루지 않은 파일 수
+    loose: bool = False                    # 업무 폴더 밖의 낱장을 모은 묶음(core/bundles.py)
 
 
 def _folder_plan(db: Database, protected: set[int]) -> list[FolderTask] | None:
@@ -330,6 +333,7 @@ def _folder_plan(db: Database, protected: set[int]) -> list[FolderTask] | None:
     if len(tasks) < 2:
         return None
 
+    left = []
     for row in loose:
         owner = _owner_by_name(row["filename"], tasks, common)
         if owner is not None:
@@ -337,6 +341,16 @@ def _folder_plan(db: Database, protected: set[int]) -> list[FolderTask] | None:
             owner.round_of[row["id"]] = folders.parse_part(row["filename"].rsplit(".", 1)[0]).round_key
             if row["parse_status"] not in ("ok", "partial"):
                 owner.unread.add(row["id"])
+        else:
+            left.append(row)
+    # 어느 업무에도 붙지 않은 낱장은 한데 모아 보인다. 미분류로만 두면 구·군 담당자 명단,
+    # 분기 제출 건수 같은 자료가 어디에도 나타나지 않는다. 일은 아니다 — 순서·주기·공백을
+    # 만들지 않는다(core/bundles.py).
+    if len(left) >= bundles.LOOSE_MIN:
+        bundle = FolderTask(name=bundles.LOOSE_NAME, cores=[], loose=True)
+        bundle.doc_ids = [row["id"] for row in left]
+        bundle.unread = {row["id"] for row in left if row["parse_status"] not in ("ok", "partial")}
+        tasks.append(bundle)
     tasks.sort(key=lambda task: -(len(task.doc_ids) + len(task.named_ids)))
     return tasks
 
@@ -391,8 +405,11 @@ def _save_folder_discovery(db, result, plan, store, contributions, model) -> Dis
     for task in plan:
         every = task.doc_ids + task.named_ids
         places = len(task.folders)
-        where = f"‘{task.folders[0]}’ 폴더" + (f" 등 {places}곳" if places > 1 else "")
-        description = f"{where}의 문서 {len(every):,}건입니다."
+        if task.loose:
+            description = f"{bundles.NOTE[bundles.LOOSE]} 문서 {len(every):,}건입니다."
+        else:
+            where = f"‘{task.folders[0]}’ 폴더" + (f" 등 {places}곳" if places > 1 else "")
+            description = f"{where}의 문서 {len(every):,}건입니다."
         if task.rounds:
             description += " 회차: " + " · ".join(task.rounds[:8]) + "."
         if task.named_ids:
@@ -405,10 +422,11 @@ def _save_folder_discovery(db, result, plan, store, contributions, model) -> Dis
         group = Cluster(seed_id=min(every), doc_ids=every)
         task_id = _upsert_task(db, Named(task.name, description), group, confidence="medium")
         read = [doc_id for doc_id in task.doc_ids if doc_id not in task.unread]
-        result.assigned += _attach(db, task_id, read, evidence=FOLDER_EVIDENCE, rounds=task.round_of)
+        placed = bundles.LOOSE_EVIDENCE if task.loose else FOLDER_EVIDENCE
+        result.assigned += _attach(db, task_id, read, evidence=placed, rounds=task.round_of)
         _attach(db, task_id, [d for d in task.named_ids if d not in task.unread],
                 evidence=NAME_EVIDENCE, rounds=task.round_of)
-        _attach(db, task_id, sorted(task.unread), confidence="low", evidence=FOLDER_EVIDENCE,
+        _attach(db, task_id, sorted(task.unread), confidence="low", evidence=placed,
                 rounds=task.round_of)
         _store_reading(db, task_id, every)
         result.named_by_folder += 1

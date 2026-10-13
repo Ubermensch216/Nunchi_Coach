@@ -595,6 +595,9 @@ class SettingsDialog(QDialog):
         if not isinstance(last, dict):
             return ""
         model, when = last.get("model") or "로컬 모델", last.get("at") or ""
+        if last.get("ok") and model == "Windows 글자 인식":
+            return (f"이 PC에서는 Windows에 든 글자 인식으로 읽습니다({when} 확인). 한 쪽에 1초가 걸리지 "
+                    "않아, 분량을 정하지 않으면 남은 것을 모두 읽습니다.")
         if last.get("ok"):
             return f"지난 점검({when}): {model}이(가) 점검 그림의 글자를 읽었습니다."
         return (f"지난 점검({when}): {model}이(가) 점검 그림의 글자를 읽지 못했습니다. 이 상태에서는 "
