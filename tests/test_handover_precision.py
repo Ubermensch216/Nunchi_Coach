@@ -389,6 +389,11 @@ def test_a_month_with_a_few_stray_papers_is_not_a_month_the_work_recurs_in():
     # 문서가 적은 업무는 있는 달이 그대로 반복 달이다
     small = _grid({(2023, 1): 1, (2023, 7): 2, (2024, 1): 2, (2024, 7): 1})
     assert timeline.detect_cycle(small).months == [1, 7]
+    # 같은 달이 없어도 해마다 한 달 안쪽으로 붙어 있으면 같은 일이다(최근 해의 달로 말한다)
+    drifting = _grid({(2023, 2): 1, (2023, 4): 3, (2024, 5): 4})
+    assert timeline.detect_cycle(drifting).months == [5]
+    apart = _grid({(2023, 2): 2, (2024, 9): 2})
+    assert timeline.detect_cycle(apart) is None
 
 
 def test_an_event_day_inside_a_collected_case_is_not_this_works_schedule(db):

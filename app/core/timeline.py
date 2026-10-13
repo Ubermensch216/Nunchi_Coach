@@ -148,6 +148,10 @@ def detect_cycle(grid: Grid, min_years: int = MIN_YEARS_FOR_CYCLE) -> CycleGuess
 
     common = _common_months(months_by_year, years_with_docs)
     if not common:
+        # 같은 달은 없어도 해마다 한 달씩 어긋나 있으면 같은 일이다. 실제 자료에서 중점과제
+        # 선정이 2023년에는 4월, 2024년에는 5월이었다(상급기관 지침이 한 달 늦게 왔다).
+        common = _drifting_months(months_by_year, years_with_docs)
+    if not common:
         return None
 
     kind = (
@@ -183,6 +187,19 @@ def _common_months(months_by_year: dict[int, set[int]], years: list[int]) -> set
             counts[m] += 1
     threshold = max(2, round(len(years) * MAJORITY_RATIO))
     return {m for m, n in counts.items() if n >= threshold}
+
+
+def _drifting_months(months_by_year: dict[int, set[int]], years: list[int]) -> set[int]:
+    """모든 해에 한 달 안쪽으로 붙어 나타나는 달. 가장 최근 해의 달로 말한다.
+
+    같은 달이 하나도 겹치지 않을 때만 쓴다. 느슨한 기준이라 관측한 해 전부에서 맞아야
+    하고, 한 해에 일한 달이 많은 업무(매달 문서가 남는 일)에는 쓰지 않는다.
+    """
+    if any(len(months_by_year[y]) > 3 for y in years):
+        return set()
+    latest = years[-1]
+    return {m for m in months_by_year[latest]
+            if all(any(abs(m - other) <= 1 for other in months_by_year[y]) for y in years[:-1])}
 
 
 def _evenly_spaced(months: set[int], spacing: int) -> bool:
