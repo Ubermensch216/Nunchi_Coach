@@ -47,7 +47,6 @@ class KnowledgeRunner(QObject):
         self._worker.moveToThread(self._thread)
         self._worker.done.connect(self._finish)
         self._worker.done.connect(self._thread.quit, Qt.ConnectionType.DirectConnection)
-        self._worker.done.connect(self._worker.deleteLater)
         self._thread.started.connect(self._worker.run)
         self._thread.start()
         return True
@@ -60,9 +59,12 @@ class KnowledgeRunner(QObject):
             self._thread.wait(wait_ms)
 
     def _finish(self, report):
-        thread = self._thread
+        # 워커는 스레드가 완전히 멈춘 뒤에 이 스레드에서 놓는다. 워커 스레드의 deleteLater와
+        # 여기서 놓는 참조가 겹치면 같은 객체를 두 스레드가 동시에 지워 프로세스가 죽는다.
+        thread, worker = self._thread, self._worker
         self._thread, self._worker = None, None
         if thread:
             thread.quit()
             thread.wait(5000)
             thread.deleteLater()
+        del worker

@@ -83,7 +83,6 @@ class StudioRunner(QObject):
         self._worker.progress.connect(self.progress)
         self._worker.done.connect(self._finish)
         self._worker.done.connect(self._thread.quit, Qt.ConnectionType.DirectConnection)
-        self._worker.done.connect(self._worker.deleteLater)
         self._thread.started.connect(self._worker.run)
         self._thread.start()
         return True

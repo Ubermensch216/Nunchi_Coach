@@ -108,7 +108,6 @@ class AskRunner(QObject):
         self._worker.done.connect(self._finish)
         self._worker.progress.connect(self.progress)
         self._worker.done.connect(self._thread.quit, Qt.ConnectionType.DirectConnection)
-        self._worker.done.connect(self._worker.deleteLater)
         self._thread.started.connect(self._worker.run)
         self._thread.start()
         return True
@@ -175,7 +174,6 @@ class WarmupRunner(QObject):
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(thread.quit, Qt.ConnectionType.DirectConnection)
-        worker.finished.connect(worker.deleteLater)
         thread.finished.connect(self._complete)
         self._thread = thread
         self._worker = worker
@@ -192,10 +190,14 @@ class WarmupRunner(QObject):
     def _complete(self):
         if self.sender() is not None and self.sender() is not self._thread:
             return
-        if self._thread is not None:
-            self._thread.deleteLater()
-        self._thread = None
-        self._worker = None
+        # finished는 스레드가 아직 정리 중일 때 온다. 완전히 멈춘 뒤에 워커를 놓는다
+        # (KnowledgeRunner._finish와 같은 이유).
+        thread, worker = self._thread, self._worker
+        self._thread, self._worker = None, None
+        if thread is not None:
+            thread.wait(5000)
+            thread.deleteLater()
+        del worker
 
     @property
     def running(self):
