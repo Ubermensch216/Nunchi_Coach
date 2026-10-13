@@ -17,11 +17,11 @@ import sys
 from pathlib import Path
 
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from .bridge import service as bridge_service
 from .bridge.store import FILE_NAME as BRIDGE_FILE, BridgeStore
-from .db import default_project_dir, open_project_at, registry
+from .db import ForeignProjectError, default_project_dir, open_project_at, registry
 from .db.registry import ProjectEntry
 from .ui import motion, theme
 from .ui.shell import MainWindow
@@ -79,7 +79,11 @@ def main(argv: list[str] | None = None) -> int:
                 target = _choose(root)
                 if target is None:
                     return 0
-            target = _run(app, target, root)
+            try:
+                target = _run(app, target, root)
+            except ForeignProjectError as exc:
+                QMessageBox.warning(None, "프로젝트를 열 수 없습니다", str(exc))
+                target = None   # 시작 화면으로 돌아가 다른 프로젝트를 고르게 한다
             if target is None:
                 return 0
     finally:

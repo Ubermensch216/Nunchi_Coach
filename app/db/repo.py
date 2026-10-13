@@ -117,6 +117,13 @@ def _io_error(exc: sqlite3.OperationalError) -> bool:
     return (code & 0xFF) == _SQLITE_IOERR if isinstance(code, int) else "disk I/O error" in str(exc)
 
 
+class ForeignProjectError(RuntimeError):
+    """눈치코치 2.0이 만든 프로젝트다. 1.0 표를 하나도 쓰기 전에 거절한다."""
+
+
+FOREIGN_FAMILY = "nunchi2"
+
+
 class Database(WorkStore, ActionStore):
     def __init__(self, path: Path | str, *, readonly: bool = False) -> None:
         self.path = Path(path)
@@ -245,6 +252,13 @@ class Database(WorkStore, ActionStore):
         v2 열은 빠진 어중간한 상태가 된다. 버전을 먼저 읽고 승격한 뒤에
         신규 설치용 스키마를 붓는다(전부 IF NOT EXISTS라 안전하다).
         """
+        if self._family() == FOREIGN_FAMILY:
+            self.con.close()
+            raise ForeignProjectError(
+                "눈치코치 2.0으로 만든 프로젝트라 1.0에서 열 수 없습니다.\n\n"
+                "두 버전은 같은 프로젝트 폴더를 쓰지만 DB 구조가 달라서, 그대로 열면 "
+                "프로젝트가 망가질 수 있습니다. 이 프로젝트는 2.0에서 여시고, "
+                "1.0에서는 새 프로젝트를 만들어 쓰세요.")
         current = self._stored_version()
         if current is not None and current != SCHEMA_VERSION:
             new_version = upgrade(self.con, self.path, current)
@@ -304,6 +318,12 @@ class Database(WorkStore, ActionStore):
             self.audit("chunking.reindex", detail=f"? → {CHUNKING_VERSION}")
         self.set_meta("chunking_version", CHUNKING_VERSION)
         return had_chunks
+
+    def _family(self) -> str | None:
+        try:
+            return self.get_meta("family")
+        except sqlite3.OperationalError:
+            return None
 
     def _stored_version(self) -> str | None:
         """meta 표가 아직 없을 수 있다 — 그때는 새 프로젝트다."""

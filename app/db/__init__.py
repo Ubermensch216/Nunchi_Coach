@@ -2,6 +2,7 @@
 
 from .repo import (
     Database,
+    ForeignProjectError,
     default_project_dir,
     open_project,
     open_project_at,
@@ -9,6 +10,6 @@ from .repo import (
 )
 
 __all__ = [
-    "Database", "open_project", "open_project_at", "default_project_dir",
+    "Database", "ForeignProjectError", "open_project", "open_project_at", "default_project_dir",
     "representative_predicate",
 ]

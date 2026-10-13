@@ -243,3 +243,24 @@ def test_failed_step_rolls_back_and_keeps_the_old_version(tmp_path: Path, monkey
     assert version == "1"
     assert not any(r[1] == "review_state" for r in con.execute("PRAGMA table_info(tasks)"))
     con.close()
+
+
+def test_nunchi2_project_is_refused_before_anything_is_written(tmp_path: Path):
+    """2.0이 만든 프로젝트는 1.0이 열지 않는다 — 열면 표 모양이 달라 죽거나 망가진다."""
+    from app.db import ForeignProjectError
+
+    path = tmp_path / "project.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    con.execute("INSERT INTO meta VALUES ('family', 'nunchi2'), ('schema_version', '13')")
+    con.execute("CREATE TABLE jobs (id TEXT PRIMARY KEY, kind TEXT)")
+    con.commit()
+    con.close()
+
+    with pytest.raises(ForeignProjectError):
+        Database(path).init()
+
+    con = sqlite3.connect(path)
+    tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    con.close()
+    assert tables == {"meta", "jobs"}
