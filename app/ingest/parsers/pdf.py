@@ -25,6 +25,11 @@ from .base import (
 
 PARSER = "pdf"
 
+# 원본 PDF가 쪽 자원 목록에 없는 그림(XObject)을 가리키는 일이 흔하다. MuPDF는 그때마다
+# 콘솔에 "cannot find XObject resource"를 쏟지만 글자 추출에는 영향이 없다. 진짜 실패는
+# 예외로 올라오고 아래에서 결과에 담기므로 콘솔 출력만 끈다.
+pymupdf.TOOLS.mupdf_display_errors(False)
+
 # 쪽당 이 글자 수에 못 미치면 텍스트 레이어가 없다고 본다.
 TEXT_LAYER_MIN_CHARS_PER_PAGE = 20
 

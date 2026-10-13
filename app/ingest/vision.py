@@ -26,6 +26,9 @@ import pymupdf
 from .parsers.base import EMPTY, FAILED, MAX_CHARS, PARTIAL, ParseResult, Section, clip, failed
 
 PARSER = "vision"
+
+# 그림을 찍을 때도 빠진 XObject 자원마다 MuPDF가 콘솔에 오류를 쏟는다(pdf.py 참고).
+pymupdf.TOOLS.mupdf_display_errors(False)
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp")
 # 스캔본 한 권을 통째로 읽으면 몇십 분이 걸린다. 넘는 쪽은 읽지 않고 그 사실을 적는다.
 MAX_PAGES = 20

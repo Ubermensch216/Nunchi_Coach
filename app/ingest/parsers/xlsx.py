@@ -8,6 +8,7 @@ data_only=True로 열어 수식이 아니라 마지막으로 계산된 표시값
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import openpyxl
@@ -39,7 +40,11 @@ HEADER_CHARS = 200
 
 def parse(path: Path) -> ParseResult:
     try:
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        # 머리글·바닥글 서식이 openpyxl이 못 읽는 꼴이면 경고만 내고 그 부분을 버린다.
+        # 본문 추출과 무관하므로 파일마다 콘솔에 경고가 쌓이지 않게 한다.
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="Cannot parse header or footer")
+            wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
     except Exception as exc:
         message = str(exc)
         if "encrypted" in message.lower() or "password" in message.lower():
