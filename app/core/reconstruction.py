@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import PurePath
 
-from . import authority, casedocs, docrole, folders, korean, provenance, workstate as ws
+from . import authority, casedocs, docrole, folders, guidance, korean, provenance, workstate as ws
 from .dating import _FULL
 from .labeling import FALLBACK_LABEL, label_document
 
@@ -288,6 +288,10 @@ _SCHEDULE_LINE = re.compile(
 _UNTIL = re.compile(
     r"(?P<when>" + _DAY_ANY + r")" + _WEEKDAY + r"\s*(?:오전|오후)?\s*(?:\d{1,2}\s*시\s*)?까지"
     r"[^.。]{0,30}?(?P<verb>제출|회신|신청|추천|통보|보고|송부|등록|납부|접수|작성|입력)")
+_AGENCY = r"[가-힣]{1,12}?(?:부|처|청|시|도|군|구|원|실|단|과|위원회)"
+_TO_WHOM = re.compile(r"(?P<org>" + _AGENCY + r")\s*(?:으로|로|에게|에)\s*(?:공문(?:으로)?\s*)?$")
+_ORG_DUE = re.compile(r"(?<![가-힣])(?P<org>" + _AGENCY + r")\s*(?P<verb>제출|회신|보고)\s*기한\s*\(\s*(?P<when>"
+                      + _DAY_ANY + r")\s*\)")
 _TITLE_NOISE = re.compile(
     r"\([^()]*\)|\[[^\[\]]*\]|(?:19|20)\d{2}\s*(?:년도|년)?|\d{6,8}|제\s*\d+\s*(?:회|차)"
     r"|(?:진짜|최)*(?:최종|수정|결재전|결재)\d*|[_\-]+")
@@ -349,8 +353,20 @@ def _read_schedule(line: str, doc_id: int, locator: str, doc_year: int | None,
                               doc_year, official)
         return [item] if item and len(what) >= 2 else []
     found = []
+    # '※ 행안부 제출기한(11.7.) 지연 시 감점' — 같은 일의 상급 단계 기한. 우리 기한(시 취합)과
+    # 섞이지 않게 받는 곳을 이름에 넣는다(C28).
+    for match in _ORG_DUE.finditer(line):
+        slot = (f"{SCHEDULE_PREFIX}{match.group('verb')}기한({match.group('org')})"
+                + (f" · {_short_title(title)}" if title else ""))
+        item = _schedule_item(match, slot, line[:_MAX_VALUE * 2], doc_id, locator, doc_year, official)
+        if item:
+            found.append(item)
     for match in _UNTIL.finditer(line):
-        slot = SCHEDULE_PREFIX + match.group("verb") + (f" · {_short_title(title)}" if title else "")
+        # '…까지(기한엄수) 부산시로 제출' — 어디로 내는지가 문장에 있으면 이름에 넣는다.
+        between = line[match.end("when"):match.start("verb")]
+        to = _TO_WHOM.search(between)
+        verb = match.group("verb") + (f"({to.group('org')})" if to else "")
+        slot = SCHEDULE_PREFIX + verb + (f" · {_short_title(title)}" if title else "")
         item = _schedule_item(match, slot, line[:_MAX_VALUE * 2], doc_id, locator, doc_year, official)
         if item:
             found.append(item)
@@ -788,6 +804,9 @@ def read_task(db, task_id: int) -> list[Found]:
     cases = casedocs.collections(db, [row["id"] for row in documents])
     ours = _own_office(db, [row["id"] for row in documents])
     whose = _task_subjects(db, task_id)
+    from . import matters
+
+    own = matters.own_locality(db) if matters.ready(db) else ""
     found: list[Found] = []
     second: list[Found] = []     # 목적을 계획서에서 못 찾았을 때 쓸 것
     third: list[Found] = []
@@ -851,6 +870,8 @@ def read_task(db, task_id: int) -> list[Found]:
                 # 그것도 없으면 받은 요청 공문이 시킨 일이 이 업무다.
                 third.extend(_purpose(sections, document["id"], document["eff_year"],
                                       document["id"] in official, _REQUESTED, ASKED_SLOT))
+            if role in _GUIDE_ROLES:
+                mine.extend(_guided(sections, document, document["id"] in official, own))
             if document["id"] not in kept_from_aside:
                 mine.extend(_budget_lines(sections, document["id"], document["eff_year"],
                                           document["id"] in official))
@@ -931,6 +952,34 @@ def _purpose(sections, doc_id: int, doc_year: int | None, official: bool,
                 return [Found(PURPOSE, slot, line, doc_id, section["locator"], line,
                               doc_year, None, official)]
     return []
+
+
+# ── 안내문의 절차와 요청받은 일 (guidance.py) ──────────────────────
+GUIDE_PREFIX = "안내 절차 · "
+_GUIDE_ROLES = (docrole.DIRECTIVE, docrole.CRITERIA, docrole.LEGAL, docrole.PLAN)
+
+
+def _guided(sections, document, official: bool, own: str) -> list[Found]:
+    """'□ 추진방법'의 단계(하는 기관을 앞에 밝혀)와 '□ 지자체 협조'의 요청받은 일."""
+    # 남에게서 받은 공문인가 — 시행 부서와 접수 부서가 다르다.
+    issued = _ISSUED.search(" ".join(_flat(sections)))
+    read = guidance.read(sections, own, received=bool(issued and issued.group("dept") != issued.group("mine")))
+    out: list[Found] = []
+    doc_id, year = document["id"], document["eff_year"]
+    if len(read.steps) >= 2:
+        value = " → ".join(guidance.labelled(step) for step in read.steps)
+        # 인용문은 화살표 줄과, 하는 기관을 정한 추진일정·번호 항목 줄이다.
+        quote = " / ".join([read.chain_quote, *(f"({s.word}) {s.detail or s.label}" for s in read.steps if s.word)])
+        title = _short_title(document["filename"] or "") or "안내문"
+        out.append(Found(PROCEDURE, GUIDE_PREFIX + title, value, doc_id, read.chain_locator, quote[:_MAX_PROCEDURE * 2],
+                         year, None, official))
+    for duty, locator in read.duties[:3]:
+        out.append(Found(PURPOSE, ASKED_SLOT, duty, doc_id, locator, duty, year, None, official))
+    return out
+
+
+def is_guide(slot: str) -> bool:
+    return (slot or "").startswith(GUIDE_PREFIX)
 
 
 # ── 예산과목, 협조 부서, 명단, 결과물 ───────────────────────────────
@@ -1135,6 +1184,9 @@ KIND_LABEL[NOTE] = "보충 설명"
 # 이름표 없이 문장으로만 적힌 내용. 모델이 고르고 값은 원문 그대로다(core/statements.py).
 STATEMENT = "statement"
 KIND_LABEL[STATEMENT] = "문장에서 찾은 내용"
+# 평가 문서의 구조(평가·실적 연도, 초안 여부, 배점). core/evaluation.py가 만든다.
+EVALUATION = "evaluation"
+KIND_LABEL[EVALUATION] = "평가 기준"
 SLOT_LAST_RECORD = "마지막기록"
 SLOT_AFTERWARDS = "이후상태"
 
@@ -1349,20 +1401,33 @@ def build_steps(db, task_id: int, items: list[dict], basis: date | None = None) 
         by_kind.setdefault(item["kind"], []).append(item)
 
     steps: list[dict] = []
-    procedure = next((item for item in by_kind.get(PROCEDURE, [])
-                      # 절차가 엇갈리면 어느 쪽도 '적힌 절차'로 세우지 않는다.
+    # 절차가 엇갈리면 어느 쪽도 '적힌 절차'로 세우지 않는다. '절차:'로 적은 것이 안내문의
+    # 추진방법보다 먼저다 — 안내문은 상급기관 사업 전체의 흐름이다.
+    procedure = next((item for item in sorted(by_kind.get(PROCEDURE, []), key=lambda i: is_guide(i["slot"]))
                       if item["basis_state"] == ws.STATED), None)
     stated = split_procedure(procedure["content"]) if procedure is not None else []
     if stated and _belongs_elsewhere(db, task_id, stated):
         stated = []
     if stated:
+        from . import matters
+
+        own = matters.own_locality(db) if matters.ready(db) else ""
+        guided = is_guide(procedure["slot"])
         for number, label in enumerate(stated, start=1):
             steps.append({
                 "slot": f"stated-{number}", "label": label, "ordinal": number,
                 "procedure_kind": ws.PROCEDURE_STATED, "basis_state": ws.STATED,
                 "applicability": procedure["applicability"],
                 "evidence": procedure["evidence"],
+                "actor": guidance.step_actor(label, own) if guided else "",
             })
+        if guided:
+            # 안내문이 우리에게 요청한 일은 우리가 하는 첫 단계의 완료 기준이다.
+            asked = [item for item in by_kind.get(PURPOSE, []) if item["slot"] == ASKED_SLOT
+                     and _doc_ids(item["evidence"]) & _doc_ids(procedure["evidence"])]
+            ours = next((step for step in steps if step["actor"] == guidance.OURS), None)
+            if asked and ours is not None:
+                ours["done_criteria"] = f"{ASKED_SLOT}: {asked[0]['content']}"
     if steps:
         # 준비 자료·서식은 그 절차가 적힌 문서에서 읽은 것만 단계에 붙인다. 다른 문서의
         # 준비물은 다른 건의 것일 수 있다 — 토지분할 절차에 다른 행의 외국인등록증이
@@ -1450,7 +1515,7 @@ def _closing(step: dict, by_kind: dict[str, list[dict]]) -> None:
                 note += " (과거 기한)"
             parts.append(f"{item['slot']}: {item['content']}{note}")
     if parts:
-        step["done_criteria"] = " · ".join(parts)
+        step["done_criteria"] = " · ".join(p for p in (step.get("done_criteria"), *parts) if p)
 
 
 def _link_stated_order(db, task_id: int) -> None:
@@ -1485,7 +1550,7 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
               "recheck": 0, "conflicts": 0, "steps": 0, "stated_steps": 0, "gaps": 0,
               "statements": 0, "matters": 0}
     # 공백 처리는 이 모듈의 읽기 규칙을 쓴다 — 서로 물리지 않게 여기서 들인다.
-    from . import continuity, handover_notes, matters, relations, statements as statement_finder
+    from . import continuity, evaluation, handover_notes, matters, relations, statements as statement_finder
 
     tasks = db.tasks()
     if not tasks:
@@ -1501,7 +1566,7 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
     for task in tasks:
         if should_stop():
             break
-        candidates = extract_task(db, task["id"], basis)
+        candidates = extract_task(db, task["id"], basis) + evaluation.items(db, task["id"], basis)
         if not any(item["kind"] == PROCEDURE for item in candidates):
             candidates += borrowed_procedure(db, task["id"], related, basis)
         steps = build_steps(db, task["id"], candidates, basis)

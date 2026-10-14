@@ -35,6 +35,8 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # 구조 보존 조각(노트북 RAG 2단계). 본문과 따로 두는 구조 정보와 조각의 제목 문맥.
     ("document_sections", "meta", "meta TEXT NOT NULL DEFAULT '{}'"),
     ("chunks", "context", "context TEXT NOT NULL DEFAULT ''"),
+    # 안내문 절차의 단계를 하는 기관. '우리 기관', 기관 이름, 또는 모름('').
+    ("work_steps", "actor", "actor TEXT NOT NULL DEFAULT ''"),
     # 온나라 출처의 근거(sAIde 꾸러미). 빈 값은 연결부가 밝히지 않은 것이다.
     ("collection_runs", "author_identity", "author_identity TEXT NOT NULL DEFAULT ''"),
     ("source_records", "id_basis", "id_basis TEXT NOT NULL DEFAULT ''"),

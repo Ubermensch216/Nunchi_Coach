@@ -37,6 +37,9 @@ def build(db, task_id: int, card=None) -> Manual:
         ('procedure', '수행 절차'), ('cases', '건별 현황'), ('notes', '주의사항·담당자 메모'),
         ('past', '과거 수행 사례'), ('first', '처음 맡으면 할 일'),
         ('basis', '근거·빠진 정보'))]
+    if any(item['kind'] == rc.EVALUATION for item in card.prepare):
+        # 평가 업무에만 둔다. 다른 업무에 빈 구획을 늘어놓지 않는다.
+        sections.insert(4, Section('evaluation', '평가 기준·배점'))
     by_key = {section.key: section for section in sections}
     # 무슨 일인가가 먼저다. 계획서가 밝힌 목적이 있으면 그것을 개요의 첫 줄로 올리고,
     # 폴더·문서 수는 자료 현황으로 뒤에 둔다.
@@ -50,7 +53,8 @@ def build(db, task_id: int, card=None) -> Manual:
         by_key['overview'].lines.append(task['description'] or '업무 설명을 자료에서 찾지 못했습니다.')
     mapping = {rc.PURPOSE: 'output', rc.OUTPUT: 'output', rc.AMOUNT: 'output',
                rc.RECIPIENT: 'output', rc.DEADLINE: 'timing', rc.RISK: 'notes',
-               rc.NOTE: 'notes', rc.RECORD: 'past', rc.STATEMENT: 'overview'}
+               rc.NOTE: 'notes', rc.RECORD: 'past', rc.STATEMENT: 'overview',
+               rc.EVALUATION: 'evaluation'}
     for item in card.todo + card.prepare + card.notes + card.records + card.found:
         section = by_key[mapping.get(item['kind'], 'prepare')]
         section.lines.append(f"{workcard.item_label(item)}: {item['content']}\n{workcard.state_line(item)}")

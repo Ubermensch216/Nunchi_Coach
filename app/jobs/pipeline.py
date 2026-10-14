@@ -676,6 +676,7 @@ class Pipeline(QObject):
         업무에 묶인 문서가 달라지면 달라지므로 매번 다시 만든다.
         """
         docrole.reset_outdated(db)
+        docyears.refresh_outdated(db)
         pending = docrole.pending(db)
         report = StageReport(STAGE_ROLES, total=len(pending))
         for start in range(0, len(pending), COMMIT_EVERY):

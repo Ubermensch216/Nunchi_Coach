@@ -25,7 +25,7 @@ from ..core.paths import relative_to_source
 _ITEMS = ("task_items", "item", "content", "auto_content", ())
 _STEPS = ("work_steps", "step", "label", "auto_label",
           ("ordinal", "inputs", "forms", "output", "done_criteria",
-           "procedure_kind", "task_step_id"))
+           "procedure_kind", "task_step_id", "actor"))
 
 
 class WorkStore:
@@ -103,6 +103,8 @@ class WorkStore:
                         ws.PROCEDURE, "절차 유형")
                 if "ordinal" in values:
                     values["ordinal"] = int(values["ordinal"] or 0)
+                if "actor" in values:
+                    values["actor"] = values["actor"] or ""
                 old = existing.get(key)
 
                 if old is None:

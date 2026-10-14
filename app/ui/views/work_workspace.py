@@ -202,7 +202,7 @@ class WorkspaceMixin:
         column.addWidget(muted_label('현재 자료 기준 · 업무 안내와 매뉴얼은 같은 내용을 사용합니다.'))
         sections = manual.sections
         if compact:
-            priority = ['overview', 'output', 'first', 'timing', 'prepare', 'procedure', 'cases', 'notes', 'past', 'basis']
+            priority = ['overview', 'output', 'first', 'timing', 'prepare', 'evaluation', 'procedure', 'cases', 'notes', 'past', 'basis']
             sections = sorted(sections, key=lambda s: priority.index(s.key))
         for section in sections:
             card = Card()

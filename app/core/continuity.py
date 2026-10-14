@@ -121,8 +121,11 @@ def find_gaps(db, task_id: int, basis: date | None = None,
         if not by_kind.get(kind):
             gaps.append(_missing(context, kind, closing))
 
+    gaps.extend(_evaluation_gaps(db, items))
     for item in items:
         blocked = closing["id"] if closing and rc.closes_step(item) else None
+        if item["kind"] == rc.EVALUATION:
+            continue        # 평가 구조는 위에서 한 번에 묻는다
         if item["human_state"] in ws.CONFIRMED_BY:
             # 사람이 값을 정했다. 자료가 여전히 엇갈려도 더 묻지 않는다 —
             # 그 뒤에 자료가 또 달라지면 '재확인 필요'가 되어 다시 걸린다.
@@ -142,6 +145,32 @@ def find_gaps(db, task_id: int, basis: date | None = None,
                 continue    # 한 번 있었던 일에 '이번 회차를 시작했는지'를 묻지 않는다
             gaps.append(_afterwards(context, item))
     return gaps
+
+
+def _evaluation_gaps(db, items: list) -> list[dict]:
+    """평가 기준이 초안이거나 배점이 맞지 않으면, 확정본을 확인하기 전 자동 채점을 하지 않도록 묻는다."""
+    from . import evaluation
+
+    structures = [i for i in items if i["kind"] == rc.EVALUATION and not evaluation.is_check(i)
+                  and i["human_state"] not in ws.CONFIRMED_BY]
+    checks = [i for i in items if evaluation.is_check(i) and i["human_state"] not in ws.CONFIRMED_BY]
+    drafts = [i for i in structures if "초안" in i["content"]]
+    if not drafts and not checks:
+        return []
+    lines = [f"{i['slot'].removeprefix(evaluation.SLOT_PREFIX)}: {i['content']}" for i in drafts]
+    lines += [f"{i['slot'].removeprefix(evaluation.CHECK_PREFIX)} — {i['content']}" for i in checks]
+    evidence = [(e["doc_id"], e["locator"], e["quote"]) for i in drafts + checks for e in i["evidence"]][:8]
+    detail = ("평가 기준이 초안(안)입니다." if drafts else "평가 문서 안에서 배점이 서로 맞지 않습니다.")
+    if drafts and checks:
+        detail += f" 배점이 맞지 않는 지표도 {len(checks)}개 있습니다."
+    return [{
+        "gap_key": "evaluation:confirm", "kind": "conflict" if checks else "missing", "field": "평가 확정본",
+        "item_id": (checks or drafts)[0]["id"], "step_id": None, "detail": detail,
+        "research": " / ".join(lines),
+        "next_action": ("확정된 평가계획·지표를 받았는지 시 담당 공문으로 확인하세요. 확정본의 배점과 실적 인정 "
+                        "기간을 확인하기 전에는 이 기준으로 자체 점수를 매기지 마세요. 실적 증빙은 지금 모아도 됩니다."),
+        "evidence": evidence,
+    }]
 
 
 def _shape(db, task_id: int) -> dict:
@@ -413,9 +442,23 @@ def next_actions(db, task_id: int) -> list[dict]:
     stated = [s for s in steps if s["procedure_kind"] != ws.PROCEDURE_PRECEDENT]
     actions: list[dict] = []
 
+    from . import guidance
+
+    # 안내문 절차에서 우리 단계를 하나라도 가렸으면, 하는 기관이 다르거나 적혀 있지 않은 단계는
+    # 우리 행동이 아니다. 그 앞 단계의 결과가 왔는지만 묻는다.
+    has_ours = any(step["actor"] == guidance.OURS for step in stated)
+    waiting_on = None
     for step in stated:
         if step["run_state"] == ws.DONE or step["blocked"]:
             continue
+        if step["actor"] and step["actor"] != guidance.OURS or (has_ours and not step["actor"]):
+            waiting_on = waiting_on or step
+            continue
+        if waiting_on is not None and waiting_on["ordinal"] < step["ordinal"]:
+            who = waiting_on["actor"] if waiting_on["actor"] else "다른 기관(안내문에 하는 기관이 적혀 있지 않음)"
+            actions.append({"type": "check", "step_id": waiting_on["id"], "gap_id": None,
+                            "text": (f"[앞 단계 확인] '{waiting_on['label']}'은(는) {who}이(가) 하는 단계입니다. "
+                                     f"이번 회차에 그 결과(받은 공문·자료)가 왔는지 확인하세요.")})
         if not _runnable(step):
             # 지난 회차 문서에 적힌 절차다. 그때의 절차가 이번에도 맞는지 모르는 채로
             # '진행할 수 있습니다'라고 하지 않는다(R01). 무엇을 확인할지를 말한다.

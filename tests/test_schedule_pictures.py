@@ -97,7 +97,8 @@ def test_until_sentences_are_told_apart_by_the_document_they_come_from():
     assert [(f.slot, f.value) for f in found if f.kind == rc.DEADLINE] == [
         ("일정 · 제출 · 운영지침 알림 및 실행계획 등 제출 요청", "2024-06-14"),
         ("일정 · 신청 · 운영지침 알림 및 실행계획 등 제출 요청", "2024-04-29"),
-        ("일정 · 제출 · 운영지침 알림 및 실행계획 등 제출 요청", "2025-01-10")]
+        # 받는 곳이 문장에 있으면 이름에 넣는다 — 같은 일의 다른 단계 기한과 섞이지 않게.
+        ("일정 · 제출(행안부) · 운영지침 알림 및 실행계획 등 제출 요청", "2025-01-10")]
 
 
 @pytest.mark.parametrize("line", [

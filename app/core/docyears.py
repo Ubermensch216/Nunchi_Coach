@@ -30,17 +30,34 @@ KINDS = (AUTHORED, PERFORMANCE, EVALUATION, SUBMITTED)
 KIND_LABEL = {AUTHORED: "작성", PERFORMANCE: "실적", EVALUATION: "평가", SUBMITTED: "제출"}
 
 _Y = r"(?<!\d)(?P<y>(?:19|20)\d{2})(?!\d)"
+_YY = r"['’‘]?(?P<yy>\d{2})(?!\d)"
 # 해와 '평가' 사이에 낱말 둘까지 허용한다. 그 사이에 '실적·성과'가 끼면 그 해는
-# 실적의 해다 — "2025년도 실적 평가"의 2025는 평가가 시행된 해가 아니다.
-_BETWEEN = r"(?:(?!실적|성과)[가-힣A-Za-z·]{1,12}\s*){0,2}?"
+# 실적의 해다 — "2025년도 실적 평가"의 2025는 평가가 시행된 해가 아니다. 띄어쓰기가 사라진
+# PDF 글('2024년도구·군규제혁신실적을평가하여')에서도 그렇게 읽도록 글자마다 본다. 다만
+# '실적평가'처럼 붙은 말은 평가의 이름이다('2025년 구·군 규제혁신 실적평가 계획'은 2025년 평가).
+_BETWEEN = r"(?:(?:(?!(?:실적|성과)(?!평가))[가-힣A-Za-z·]){1,14}\s*){0,3}?"
+_NOT_EVAL = r"(?:(?:(?!평가)[가-힣A-Za-z·]){1,14}\s*){0,2}?"
 _PATTERNS: tuple[tuple[str, re.Pattern], ...] = (
-    (PERFORMANCE, re.compile(_Y + r"\s*년도?\s*(?:추진\s*)?(?:실적|성과)")),
+    # 표 머리의 '2025년 실적기간'은 그 칸의 해다. 실적 기간을 말하는 줄은 아래 이름표가 읽는다.
+    (PERFORMANCE, re.compile(_Y + r"\s*년도?\s*(?:추진\s*)?(?:실적|성과)(?!\s*기간)")),
     (PERFORMANCE, re.compile(r"실적\s*(?:기준\s*|귀속\s*)?(?:연도|년도)\s*[:：]?\s*" + _Y)),
+    # "2024년도 구·군 규제혁신 실적을 평가하여" — 평가하는 대상인 실적의 해
+    (PERFORMANCE, re.compile(_Y + r"\s*년도?\s*" + _NOT_EVAL + r"(?:실적|성과)\s*(?:을|를)\s*평가")),
     (EVALUATION, re.compile(_Y + r"\s*년도?\s*" + _BETWEEN + r"평가")),
     (EVALUATION, re.compile(r"평가\s*(?:시행\s*)?(?:연도|년도)\s*[:：]?\s*" + _Y)),
     (SUBMITTED, re.compile(r"제출\s*일자?\s*[:：]\s*" + _Y)),
 )
+# 이름표로 적은 실적 기간과 '(25실적)'은 실적의 해를 가장 분명히 말한다. 이것이 있으면 같은
+# 문서의 다른 '○○년 실적' 언급(비교표의 칸 머리 등)은 버린다.
+_STRONG: tuple[tuple[str, re.Pattern], ...] = (
+    (PERFORMANCE, re.compile(r"(?:\(\s*실적\s*기간\s*\)\s*[:：]?|실적\s*기간\s*[:：])\s*(?:" + _Y + "|" + _YY
+                             + r")\s*[.년]")),
+    (PERFORMANCE, re.compile(r"\(\s*" + _YY + r"\s*년?\s*실적\s*\)")),
+)
 
+# 규칙이 바뀌면 올린다. 모든 문서의 해를 한 번 다시 읽는다(사람이 정한 해는 그대로).
+# 2: '실적을 평가'의 해는 실적, 이름표의 실적 기간과 '(25실적)'이 흐린 언급을 이김, 폴더 이름도 읽음.
+VERSION = "2"
 HEAD_SECTIONS = 8
 HEAD_CHARS = 4000
 _RAW_SPAN = 30
@@ -52,20 +69,23 @@ class YearMark:
     year: int
     raw: str
     locator: str
+    strong: bool = False     # 이름표로 적은 실적 기간처럼 그 갈래를 분명히 말하는 것
 
 
 def read(text: str, locator: str = "") -> list[YearMark]:
     """글에서 실적·평가·제출의 해를 읽는다."""
     marks: list[YearMark] = []
-    seen: set[tuple[str, int]] = set()
-    for kind, pattern in _PATTERNS:
-        for match in pattern.finditer(text):
-            year = int(match.group("y"))
-            if year < MIN_YEAR or (kind, year) in seen:
-                continue
-            seen.add((kind, year))
-            raw = " ".join(text[max(0, match.start() - 4):match.end() + _RAW_SPAN].split())
-            marks.append(YearMark(kind, year, raw[:80], locator))
+    seen: set[tuple[str, int, bool]] = set()
+    for strong, patterns in ((True, _STRONG), (False, _PATTERNS)):
+        for kind, pattern in patterns:
+            for match in pattern.finditer(text):
+                groups = match.groupdict()
+                year = int(groups["y"]) if groups.get("y") else 2000 + int(groups["yy"])
+                if year < MIN_YEAR or (kind, year, strong) in seen:
+                    continue
+                seen.add((kind, year, strong))
+                raw = " ".join(text[max(0, match.start() - 4):match.end() + _RAW_SPAN].split())
+                marks.append(YearMark(kind, year, raw[:80], locator, strong))
     return marks
 
 
@@ -78,6 +98,10 @@ def collect(db, doc_id: int) -> list[YearMark]:
         marks.append(YearMark(AUTHORED, row["eff_year"], row["eff_date"] or "", ""))
     name = f"{Path(row['filename']).stem} {row['doc_title'] or ''}"
     marks.extend(read(name, "파일 이름"))
+    # 문서가 든 폴더의 이름: '2026년(25실적) 지방규제혁신 성과평가'
+    folder = Path(row["path"] or "").parent.name
+    if folder:
+        marks.extend(read(folder, "폴더 이름"))
     budget = HEAD_CHARS
     for section in db.con.execute(
             "SELECT locator, text FROM document_sections WHERE doc_id = ? ORDER BY ordinal LIMIT ?",
@@ -86,8 +110,11 @@ def collect(db, doc_id: int) -> list[YearMark]:
             break
         marks.extend(read(section["text"][:budget], section["locator"]))
         budget -= len(section["text"])
+    strong = {mark.kind for mark in marks if mark.strong}
     unique: dict[tuple[str, int], YearMark] = {}
     for mark in marks:
+        if mark.kind in strong and not mark.strong:
+            continue        # 분명한 것이 있으면 흐린 언급은 버린다
         unique.setdefault((mark.kind, mark.year), mark)
     return list(unique.values())
 
@@ -114,6 +141,15 @@ def mark_documents(db, doc_ids=None) -> int:
                     "VALUES (?, ?, ?, ?, ?)",
                     (doc_id, mark.kind, mark.year, mark.raw, mark.locator))
             marked += bool(found)
+    return marked
+
+
+def refresh_outdated(db) -> int:
+    """읽는 규칙이 바뀌었으면 모든 문서의 해를 다시 읽는다. 다시 읽은 문서 수."""
+    if db.get_meta("docyears_version") == VERSION:
+        return 0
+    marked = mark_documents(db)
+    db.set_meta("docyears_version", VERSION)
     return marked
 
 
