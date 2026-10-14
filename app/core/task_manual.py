@@ -112,6 +112,11 @@ def build(db, task_id: int, card=None) -> Manual:
             cases.evidence.extend(matter['evidence'][:2])
         if len(card.matters) > _MAX_CASE_LINES:
             cases.lines.append(f"외 {len(card.matters) - _MAX_CASE_LINES}건은 결과 초안의 건별 현황에 있습니다.")
+    elif matters.waiting_for_locality(db, task_id):
+        # 남의 건을 우리 건으로 만들지 않으려고 기관을 모르면 목록을 읽지 않는다. 그렇다고 말한다.
+        by_key['cases'].lines.append(
+            f"우리 기관을 정하지 못해 표 계산 문서 {matters.waiting_for_locality(db, task_id)}건의 건 목록을 "
+            f"읽지 않았습니다. '건 확인·고치기'에서 우리 기관(시·군·구)을 정하면 읽습니다.")
     if card.conflicting_procedure:
         item = card.conflicting_procedure
         by_key['procedure'].lines.append('자료가 서로 다릅니다. 절차를 확정할 수 없습니다.\n' + item['content'])

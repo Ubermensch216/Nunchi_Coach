@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QWidget,
                               QLineEdit, QPushButton, QScrollArea, QVBoxLayout)
 
-from ...core import manual_versions, work_schedule, workcard, workstate as ws
+from ...core import manual_versions, matters, work_schedule, workcard, workstate as ws
 from ...core.knowledge import review
 from ..widgets import Card, Evidence, WorkYearDashboard, clear_layout, muted_label, section_title
 
@@ -221,6 +221,13 @@ class WorkspaceMixin:
                     lambda s=section: self._show_evidence(self._workspace_evidence(s.evidence), s.title + '의 근거')))
             if not compact and section.more:
                 card.body.addWidget(self._fold(section))
+            if not compact and section.key == 'cases' and (
+                    matters.for_task(self.db, manual.task_id, include_excluded=True)
+                    or matters.waiting_for_locality(self.db, manual.task_id)):
+                button = QPushButton('건 확인·고치기')
+                button.setToolTip('건마다 제출·수용·시행을 확인해 적고, 건이 아닌 행을 뺍니다. 다시 분석해도 남습니다.')
+                button.clicked.connect(lambda _=False, tid=manual.task_id: self._open_matters(tid))
+                card.body.addWidget(button)
             if compact and len(section.lines) > 2:
                 button = QPushButton('매뉴얼에서 모두 보기')
                 button.clicked.connect(lambda: self._switch('manual'))
@@ -237,6 +244,15 @@ class WorkspaceMixin:
             button.clicked.connect(lambda _=False, k=key: self._switch(k))
             shortcuts.addWidget(button)
         column.addLayout(shortcuts)
+
+    def _open_matters(self, task_id):
+        from .matter_dialog import MatterDialog
+
+        dialog = MatterDialog(self, self.db, task_id, lambda found, title: self._show_evidence(
+            self._workspace_evidence(found), title))
+        dialog.exec()
+        if dialog.changed:
+            self.refresh(force=True)
 
     def _fold(self, section):
         """접어 둔 나머지 줄. 누르면 그 자리에서 편다."""

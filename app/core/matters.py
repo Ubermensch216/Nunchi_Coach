@@ -170,6 +170,14 @@ def own_locality(db) -> str:
     return place if times >= 3 else ""
 
 
+def own_locality_basis(db) -> tuple[str, str]:
+    """(기관, 출처) — 출처는 'chosen'(담당자가 정함) · 'inferred'(파일 이름에서 추정) · ''(정하지 못함)."""
+    if (db.get_meta(OWN_META) or "").strip():
+        return own_locality(db), "chosen"
+    place = own_locality(db)
+    return place, "inferred" if place else ""
+
+
 def set_own_locality(db, place: str) -> None:
     db.set_meta(OWN_META, " ".join((place or "").split()))
 
@@ -397,8 +405,11 @@ def _settle(db) -> None:
 
 def review(db, matter_id: int, stage: str | None = None, note: str | None = None,
            excluded: bool | None = None) -> None:
-    """사람이 진행을 정하거나 메모를 남기거나 '건이 아님'으로 뺀다. 다시 분석해도 남는다."""
-    if stage is not None and stage not in HUMAN_STAGES:
+    """사람이 진행을 정하거나 메모를 남기거나 '건이 아님'으로 뺀다. 다시 분석해도 남는다.
+
+    stage=''는 정한 진행을 지운다(자료대로 본다).
+    """
+    if stage is not None and stage and stage not in HUMAN_STAGES:
         raise ValueError(f"알 수 없는 진행: {stage}")
     sets, values = [], []
     if stage is not None:
@@ -419,14 +430,17 @@ def review(db, matter_id: int, stage: str | None = None, note: str | None = None
 
 # ── 업무에서 보기 ───────────────────────────────────────────────────
 
-def for_task(db, task_id: int) -> list[dict]:
-    """이 업무의 문서에 나온 우리 기관의 건 — 최근 회차부터. 등장마다의 근거를 함께."""
+def for_task(db, task_id: int, include_excluded: bool = False) -> list[dict]:
+    """이 업무의 문서에 나온 우리 기관의 건 — 최근 회차부터. 등장마다의 근거를 함께.
+
+    include_excluded는 건 확인 화면용이다 — 담당자가 뺀 건을 되돌릴 수 있어야 한다.
+    """
     if not ready(db):
         return []
     rows = db.con.execute(
         "SELECT DISTINCT m.* FROM matters m JOIN matter_sources s ON s.matter_id = m.id "
-        "JOIN task_docs td ON td.doc_id = s.doc_id WHERE td.task_id = ? AND m.excluded = 0 "
-        "AND m.missing_since IS NULL", (task_id,)).fetchall()
+        "JOIN task_docs td ON td.doc_id = s.doc_id WHERE td.task_id = ? AND (m.excluded = 0 OR ?) "
+        "AND m.missing_since IS NULL", (task_id, int(include_excluded))).fetchall()
     out = []
     for matter in rows:
         # 근거가 지금 원문과 같은가 — 그 판(해시)을 읽어 세운 등장인가.
@@ -444,6 +458,17 @@ def for_task(db, task_id: int) -> list[dict]:
                                  for s in sources]})
     out.sort(key=lambda m: (-m["year"], m["round"], m["title"]))
     return out
+
+
+def waiting_for_locality(db, task_id: int) -> int:
+    """우리 기관을 정하지 못해 건 목록을 읽지 않은 이 업무의 표 계산 문서 수."""
+    if not ready(db) or own_locality(db):
+        return 0
+    marks = ", ".join("?" * len(_SPREADSHEETS))
+    return db.con.execute(
+        f"SELECT COUNT(*) FROM task_docs td JOIN documents d ON d.id = td.doc_id WHERE td.task_id = ? "
+        f"AND d.missing_since IS NULL AND d.parse_status IN ('ok', 'partial') AND LOWER(d.ext) IN ({marks})",
+        (task_id, *_SPREADSHEETS)).fetchone()[0]
 
 
 def other_rows(db, task_id: int) -> int:
