@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 
 from . import stages, theme
 from .widgets import Card, UnknownBlock, clear_layout, muted_label, section_title
-from ..core import coverage
+from ..core import coverage, initial_analysis
 from ..jobs.pipeline import StageReport
 import json
 
@@ -71,6 +71,13 @@ class StatusDialog(QDialog):
                 reports.setdefault(row["stage"], StageReport(
                     row["stage"], row["done"], row["total"], row["note"],
                     json.loads(row["errors"]), row["state"]))
+            summary = Card()
+            summary.body.addWidget(section_title("분석 범위 요약"))
+            for layer in initial_analysis.layers(db):
+                line = initial_analysis.layer_line(layer)
+                summary.body.addWidget(UnknownBlock(line) if layer.state == "failed" else muted_label(line))
+            self.column.addWidget(summary)
+
             view = coverage.snapshot(db)
             card = Card()
             card.body.addWidget(section_title("파일 처리 범위"))

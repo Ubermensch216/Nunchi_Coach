@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from . import korean, provenance, reconstruction as rc, workstate as ws
@@ -233,6 +234,10 @@ def _where_to_look(context: _Context, kind: str) -> str:
         if submitted:
             text += f" 지난 회차 제출 기록: {submitted['output']}."
         return text + context.onnara_hint()
+    guides = manuals(context.db, context.task_id)
+    if guides:
+        return (f"이 업무에 묶인 안내 자료 {guide_names(guides)}에 처리 절차가 있는지 먼저 확인하세요."
+                + context.case_hint() + context.onnara_hint())
     return ("지침·계획·매뉴얼 문서에 처리 절차가 적혀 있는지 확인하세요."
             + context.case_hint() + context.onnara_hint())
 
@@ -349,6 +354,54 @@ def review_task(db, task_id: int, basis: date | None = None,
 
 # ── 다음 행동 ───────────────────────────────────────────────────────
 
+# 운영 매뉴얼·지침의 이름. 처리 절차가 화면·장 단위로 적혀 있어 '절차:' 이름표로는 읽히지
+# 않지만, 절차를 찾을 첫 자료다.
+_GUIDE = re.compile(r"매뉴얼|편람|길라잡이|핸드북|가이드|안내서|작성\s*요령|처리\s*요령|사용\s*설명|업무\s*지침")
+_SCORING = re.compile(r"지표|평가|배점|실적\s*산출")
+_MAX_GUIDES = 2
+
+
+def manuals(db, task_id: int) -> list:
+    """이 업무에 묶인 운영 매뉴얼·지침 (최근 것부터). AI 생성 참고자료·발간물은 뺀다."""
+    from . import authority
+
+    rows = db.con.execute(
+        "SELECT d.id, d.filename, d.path, d.eff_year FROM task_docs td JOIN documents d ON d.id = td.doc_id "
+        "LEFT JOIN doc_roles r ON r.doc_id = d.id "
+        "WHERE td.task_id = ? AND d.missing_since IS NULL AND d.parse_status != 'skipped' "
+        "  AND COALESCE(r.role, '') IN ('criteria', 'legal', 'directive', 'other', '') "
+        "ORDER BY COALESCE(d.eff_year, 0) DESC, d.id", (task_id,)).fetchall()
+    # 평가 지표 매뉴얼은 실적을 세는 법이지 일을 처리하는 법이 아니다. 운영 매뉴얼을 앞에 둔다.
+    rows = sorted(rows, key=lambda row: bool(_SCORING.search(row["filename"] or "")))
+    picked, seen = [], set()
+    for row in rows:
+        stem = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", row["filename"] or "")
+        if not _GUIDE.search(stem) or authority.marker(row["filename"] or "", row["path"] or ""):
+            continue
+        if stem in seen:
+            continue        # 같은 매뉴얼의 PDF·한글 판
+        seen.add(stem)
+        picked.append(row)
+    return picked[:_MAX_GUIDES]
+
+
+def guide_names(guides) -> str:
+    """'‘신문고 매뉴얼.pdf’(2025년 자료)' — 몇 년 자료인지 함께 밝힌다. 지난 판일 수 있다."""
+    return ", ".join(f"‘{row['filename']}’" + (f"({row['eff_year']}년 자료)" if row["eff_year"] else "")
+                     for row in guides)
+
+
+def _runnable(step) -> bool:
+    """이 단계를 지금 '진행할 수 있다'고 안내해도 되는가.
+
+    사람이 확인했거나 알려 준 단계는 된다. 문서에 적힌 단계는 그 문서가 지난 회차의 것이
+    아닐 때만 된다 — 확인되지 않은 과거 절차를 현재의 실행 안내로 바꾸지 않는다.
+    """
+    if step["human_state"] in ws.CONFIRMED_BY or step["procedure_kind"] == ws.PROCEDURE_TOLD:
+        return True
+    return step["applicability"] != ws.PAST
+
+
 def next_actions(db, task_id: int) -> list[dict]:
     """지금 할 수 있는 일과 확인할 일. 화면의 '다음 행동'에 그대로 쓴다.
 
@@ -363,6 +416,14 @@ def next_actions(db, task_id: int) -> list[dict]:
     for step in stated:
         if step["run_state"] == ws.DONE or step["blocked"]:
             continue
+        if not _runnable(step):
+            # 지난 회차 문서에 적힌 절차다. 그때의 절차가 이번에도 맞는지 모르는 채로
+            # '진행할 수 있습니다'라고 하지 않는다(R01). 무엇을 확인할지를 말한다.
+            text = (f"문서에 적힌 절차는 지난 회차 자료에서 읽은 것입니다. 이번 회차의 요청 공문이나 "
+                    f"현행 지침으로 같은 절차인지 확인한 뒤 '{step['label']}'부터 진행하세요.")
+            actions.append({"type": "check", "text": f"[현 회차 적용 확인] {text}",
+                            "step_id": step["id"], "gap_id": None})
+            break
         text = f"'{step['label']}' 단계를 진행할 수 있습니다."
         if step["inputs"]:
             text += f" 준비 자료: {step['inputs']}."
@@ -371,6 +432,14 @@ def next_actions(db, task_id: int) -> list[dict]:
         actions.append({"type": "do", "text": text, "step_id": step["id"], "gap_id": None})
         break
     if not stated:
+        # 적힌 절차가 없어도 이 업무에 묶인 공식 운영 매뉴얼이 있으면 그것이 첫 자료다.
+        # 지난 회차에 다룬 건(사례)의 참고자료보다 앞선다(R04: 신문고 매뉴얼을 두고
+        # 근로시간 정책 보고서를 먼저 읽으라고 안내했다).
+        guides = manuals(db, task_id)
+        if guides:
+            actions.append({"type": "do", "step_id": None, "gap_id": None,
+                            "text": (f"이 업무 자료에서 처리 절차를 이름표로 읽지 못했습니다. 먼저 업무 "
+                                     f"안내 자료 {guide_names(guides)}에서 처리 절차와 작성 방법을 확인하세요.")})
         cases = [s for s in steps if s["procedure_kind"] == ws.PROCEDURE_PRECEDENT]
         # 이미 했다고 기록한 사례는 다시 권하지 않는다.
         todo = next((case for case in cases if case["run_state"] != ws.DONE), None)

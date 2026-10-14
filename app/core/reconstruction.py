@@ -23,11 +23,13 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from datetime import date
+from pathlib import PurePath
 
-from . import casedocs, docrole, folders, korean, provenance, workstate as ws
+from . import authority, casedocs, docrole, folders, korean, provenance, workstate as ws
 from .dating import _FULL
 from .labeling import FALLBACK_LABEL, label_document
 
@@ -94,6 +96,29 @@ _MAX_VALUE = 160
 _MAX_EVIDENCE = 5
 _MAX_CONFLICT_VALUES = 4
 
+# ── 누구의 무엇인가 (규제개혁 비교연구 R01·R02) ──────────────────────
+# 규제 개선 건의서는 개선하려는 **규제의 현행 내용**을 '(현황)', '現)', '현행)' 뒤에 적는다.
+#     ㅇ (현황) … 現) 경계조정 절차 : ① 개발행위(토지분할)허가 → ② 지적측량 → …
+# 이 절차는 민원인이 밟는 허가 절차이지 규제개혁 담당자가 할 일이 아니다. 실제 자료에서
+# 전국 취합표 한 칸의 이 문장이 '규제혁신 과제 제출' 업무의 '문서에 적힌 절차'가 되어
+# "토지분할 허가 단계를 진행할 수 있습니다"라고 안내했다.
+_DESCRIBES_RULE = re.compile(
+    r"\(\s*(?:현\s*황|문\s*제\s*점|건의\s*내용|개선\s*(?:방안|내용|안)|기대\s*효과)[^()]{0,12}\)"
+    r"|(?:現|현행|당초|개선\s*전)\s*\)")
+# 괄호 안의 이름표는 문장 속 덧붙임이다 — '(제출서류: 외국인등록증 …)'는 다른 사람이 낼
+# 서류를 설명한 것이지 이 업무의 준비물 목록이 아니다. 기한은 괄호로 적는 일이 흔해 남긴다
+# ('실적 제출(기한: 9. 30.)').
+_PAREN_SKIP_KINDS = frozenset({INPUT, FORM, PROCEDURE, RECIPIENT, CONTACT, PURPOSE, OUTPUT})
+# 만료 기간의 주어. '적극행정위원회는 … 위촉기간이 23년 4월~26년 4월'
+_SUBJECT = re.compile(r"[가-힣]{2,12}(?:위원회|협의회|자문단|심의회|위원단|추진단)")
+
+
+def _about_the_rule(before: str, kind: str) -> bool:
+    """이 이름표가 업무가 아니라 개선 대상 규제나 남의 서류를 설명하는 자리에 있는가."""
+    if _DESCRIBES_RULE.search(before):
+        return True
+    return kind in _PAREN_SKIP_KINDS and before.count("(") > before.count(")")
+
 
 @dataclass(slots=True)
 class Found:
@@ -109,6 +134,7 @@ class Found:
     when: date | None = None   # 기한이면 그 날짜
     official: bool = False
     key: str = field(default="")   # 같은 값인지 견주는 정규형
+    subject: str = ""          # 같은 줄이 밝힌 주어('적극행정위원회는 … 위촉기간이 …')
 
     def __post_init__(self) -> None:
         if not self.key:
@@ -144,17 +170,24 @@ def read_section(text: str, doc_id: int, locator: str, doc_year: int | None = No
             year, month = (year + 2000 if year < 100 else year), int(expires.group("em"))
             what = re.sub(r"\s+", "", expires.group("what"))
             what = re.sub(r"^위[측족]", "위촉", what)      # 글자 인식의 오자
+            # 한 쪽지가 두 위원회를 나란히 설명한다. 기간은 그 줄이 밝힌 위원회의 것이다(R02).
+            subjects = _SUBJECT.findall(line[:expires.start()])
             found.append(Found(DEADLINE, EXPIRY_PREFIX + what, f"{year}년 {month}월", doc_id, locator,
-                               line[:_MAX_VALUE * 2], doc_year, date(year, month, 1), official))
+                               line[:_MAX_VALUE * 2], doc_year, date(year, month, 1), official,
+                               subject=subjects[-1] if subjects else ""))
     for position, line in enumerate(lines):
         matches = list(_LABEL_RE.finditer(line))
         if not matches:
+            if _DESCRIBES_RULE.search(line):
+                continue        # 개선하려는 규제의 현행 내용이다. 이 업무의 기한·제출처가 아니다
             stated = _read_statements(line, doc_id, locator, doc_year, official)
             found.extend(stated)
             known = {item.key for item in stated if item.kind == DEADLINE}
             found.extend(item for item in _read_schedule(line, doc_id, locator, doc_year, official, title)
                          if item.key not in known)
         for index, match in enumerate(matches):
+            if _about_the_rule(line[:match.start()], _KIND_OF[match.group("label")]):
+                continue
             last = index + 1 == len(matches)
             end = matches[index + 1].start() if not last else len(line)
             raw = line[match.end():end].strip(" .;,·-")
@@ -191,6 +224,7 @@ _SUBMIT_TO = re.compile(
 _SUBMIT_BY_LETTER = re.compile(
     r"(?<![가-힣A-Za-z0-9])(?P<value>(?:(?![가-힣A-Za-z0-9]*까지\s)[가-힣A-Za-z0-9]+\s)?"
     r"[가-힣A-Za-z0-9]*" + _ORG_TAIL + r")\s*(?:에|으로|로)\s*공문(?:으로)?\s*제출")
+_NOT_ORG_HEAD = re.compile(r"^\S*(?:에|에서|까지|부터|이내|내에|후에|전에|으로|을|를|은|는|및|통해|통하여|거쳐)\s+")
 _USES_FORM = re.compile(
     r"(?<![가-힣A-Za-z0-9\-])(?P<value>(?:[가-힣A-Za-z0-9\-]+\s)?[가-힣A-Za-z0-9\-]*(?:서식|양식|신청서))\s*(?:을|를)\s*"
     r"(?:사용|이용|작성)\s*(?:합니다|한다|하여야 합니다|해야 합니다)"
@@ -213,7 +247,12 @@ def _read_statements(line: str, doc_id: int, locator: str, doc_year: int | None,
     for pattern, kind, slot in ((_SUBMIT_TO, RECIPIENT, "제출처"), (_SUBMIT_BY_LETTER, RECIPIENT, "제출처"),
                                 (_USES_FORM, FORM, "서식")):
         for match in pattern.finditer(line):
-            item = _build(kind, slot, match.group("value").strip(), None, match.group(0).strip(),
+            value = match.group("value").strip()
+            if kind == RECIPIENT:
+                # 기관 이름 앞 낱말이 조사로 끝나면 앞 구절의 꼬리다: '30일 이내에 금융감독원에
+                # 보고한다' → '이내에 금융감독원', '시를 통해 행안부로' → '통해 행안부'(R04).
+                value = _NOT_ORG_HEAD.sub("", value)
+            item = _build(kind, slot, value, None, match.group(0).strip(),
                           doc_id, locator, doc_year, official)
             if item is not None:
                 found.append(item)
@@ -428,10 +467,15 @@ def _kind_of_header(header: str) -> str | None:
     return next((kind for label, kind in _KIND_OF.items() if label.replace(" ", "") == name), None)
 
 
+_LAW_NAME = re.compile(r"법|령|규칙|조례|규정|지침|고시|훈령|예규|협약|기준|「|제\s*\d+\s*조")
+
+
 def _build(kind, slot, raw, unit, quote, doc_id, locator, doc_year, official) -> Found | None:
     raw = raw[:_MAX_PROCEDURE if kind == PROCEDURE else _MAX_VALUE].strip()
     if not raw:
         return None
+    if kind != FORM and authority.is_placeholder(raw):
+        return None                # 서식의 빈칸('0000과', '☎000-000-0000')은 값이 아니다
     when = None
     value = raw
     if kind == DEADLINE:
@@ -444,6 +488,8 @@ def _build(kind, slot, raw, unit, quote, doc_id, locator, doc_year, official) ->
             return None            # 숫자 없는 '예산: 미정'은 금액이 아니다
         if unit and unit not in raw:
             value = f"{raw} {unit.strip()}"
+    elif kind == REGULATION and not _LAW_NAME.search(raw):
+        return None                # '관련 법령 : 개정안>'처럼 법령 이름이 없는 것은 규정이 아니다
     elif kind == CONTACT:
         # 담당자 칸에는 사람·부서·전화가 적힌다. 표에서 '담당자 · 추진분야 / ◇ 선제적 해결이
         # 필요한 현안 …'처럼 과제 유형 문구가 들어온 것은 담당자가 아니다(실측).
@@ -719,7 +765,9 @@ def read_task(db, task_id: int) -> list[Found]:
     from . import foldersteps
 
     every = [row["id"] for row in documents]
-    outside = foldersteps.outside_the_work(db, every)
+    # AI가 쓴 보고서·정기간행물은 아이디어의 출처일 뿐 업무의 목적·기한·제출처를 말할 자격이
+    # 없다. 파일 연도가 더 최근이라는 이유로 결재된 계획을 이기기까지 했다(R03·R04).
+    outside = foldersteps.outside_the_work(db, every) | set(authority.reference_only(db, every))
     # 참고 폴더에 넣어 둔 요청 공문·평가 기준은 기한과 담당을 읽으려고 남긴다. 금액은
     # 읽지 않는다 — 다른 위원회의 심사기준에 적힌 예산이 이 업무의 예산이 됐다(실측).
     kept_from_aside = foldersteps.outside_the_work(db, every, keep_requests=False) - outside
@@ -734,6 +782,7 @@ def read_task(db, task_id: int) -> list[Found]:
         [row["id"] for row in documents])}
     cases = casedocs.collections(db, [row["id"] for row in documents])
     ours = _own_office(db, [row["id"] for row in documents])
+    whose = _task_subjects(db, task_id)
     found: list[Found] = []
     second: list[Found] = []     # 목적을 계획서에서 못 찾았을 때 쓸 것
     third: list[Found] = []
@@ -745,11 +794,21 @@ def read_task(db, task_id: int) -> list[Found]:
                                document["id"] in official))
             continue
         sections = db.con.execute(
-            "SELECT locator, text FROM document_sections WHERE doc_id = ? ORDER BY ordinal",
+            "SELECT locator, text, meta FROM document_sections WHERE doc_id = ? ORDER BY ordinal",
             (document["id"],)).fetchall()
         requested = roles.get(document["id"]) in (docrole.DIRECTIVE, docrole.CRITERIA)
+        listed_sheets = _record_sheets(sections)
+        # 문서의 목적은 첫머리에 적는다. 긴 보고서 77쪽의 '목적은 …이다'는 그 쪽에서 다루는
+        # 남의 제도의 목적이다(R04). 문단 단위로 쪼갠 한글 문서는 조각 수가 많으므로 글자
+        # 위치로 잰다.
+        head_chars = max(_PURPOSE_HEAD_CHARS, sum(len(s["text"] or "") for s in sections) * _OVERVIEW_PART)
+        offset = 0
         mine = []
         for index, section in enumerate(sections):
+            far = offset > head_chars
+            offset += len(section["text"] or "")
+            if _sheet_of(section) in listed_sheets:
+                continue        # 건별 목록의 한 행 — 그 건의 내용이지 이 업무의 값이 아니다(R01)
             read = read_section(
                 section["text"], document["id"], section["locator"], document["eff_year"],
                 official=document["id"] in official, title=document["filename"] or "")
@@ -757,7 +816,9 @@ def read_task(db, task_id: int) -> list[Found]:
             # '전년도 추진현황'에 나오는 사업비는 다른 사업의 것이다.
             late = index >= max(1, len(sections) * _OVERVIEW_PART)
             mine.extend(item for item in read
-                        if not (late and item.kind == AMOUNT and _PROJECT_AMOUNT.match(item.slot)))
+                        if not (late and item.kind == AMOUNT and _PROJECT_AMOUNT.match(item.slot))
+                        and not (far and item.kind == PURPOSE)
+                        and not (item.subject and _foreign(item.subject, whose)))
         # '사 업 비'처럼 띄어 적은 것까지 세어, 사업비가 여럿 적힌 문서면 여러 사업을 늘어놓은
         # 것이다(전년도 과제 현황). 그 가운데 하나를 이 업무의 사업비로 올리지 않는다.
         if len(_PROJECT_COST.findall(" ".join(_flat(sections)))) > 1:
@@ -766,6 +827,10 @@ def read_task(db, task_id: int) -> list[Found]:
         mine = _own_values(mine, case_collection=document["id"] in cases,
                            from_aside=document["id"] in kept_from_aside, requested=requested)
         role = roles.get(document["id"])
+        if role == docrole.FORM:
+            # 서식의 칸('제출기관 :', '담당자 :', '관련법령 :')은 채울 자리이거나 작성 예시다.
+            # 이 업무의 제출처·담당자가 아니다(R07). 서식에 안내로 적어 둔 제출 기한은 남긴다.
+            mine = [item for item in mine if item.kind in (FORM, DEADLINE)]
         if document["id"] not in cases:
             if role == docrole.DIRECTIVE:
                 mine.extend(_sender(sections, document["id"], document["eff_year"],
@@ -982,8 +1047,74 @@ def _own_values(found: list[Found], case_collection: bool = False, from_aside: b
     for item in found:
         if item.kind == AMOUNT:
             listed.setdefault(item.slot, set()).add(_amount_number(item))
+    # 한 문서가 '목적:'·'절차:'·'제출처:'를 서로 다른 값으로 여러 번 적었으면 항목마다의
+    # 설명을 늘어놓은 것이다(지표별 '목적:' 다섯 가지가 계획 업무의 목적이 됐다, R03).
+    entries: dict[tuple[str, str], set[str]] = {}
+    for item in found:
+        if item.kind in _LISTED_KINDS:
+            entries.setdefault((item.kind, item.slot), set()).add(item.key)
     return [item for item in found
-            if item.kind != AMOUNT or item.slot == BUDGET_SLOT or len(listed[item.slot]) == 1]
+            if (item.kind != AMOUNT or item.slot == BUDGET_SLOT or len(listed[item.slot]) == 1)
+            and len(entries.get((item.kind, item.slot), ())) < _LISTED_ENTRIES]
+
+
+_PURPOSE_HEAD_CHARS = 4000
+_LISTED_KINDS = (PURPOSE, PROCEDURE, RECIPIENT)
+_LISTED_ENTRIES = 3
+# 건별 목록으로 보는 표의 행 수. 추진일정표·실적표는 이보다 짧다. 전국 건의과제 취합표는
+# 수백 행이고, 한 행이 한 건이다.
+_RECORD_ROWS = 30
+
+
+def _sheet_of(section) -> str | None:
+    """표 계산 문서의 조각이면 그 시트 이름."""
+    try:
+        meta = json.loads(section["meta"] or "{}") if "meta" in section.keys() else {}
+    except (TypeError, ValueError):
+        return None
+    return meta.get("sheet") if isinstance(meta, dict) and meta.get("rows") else None
+
+
+def _record_sheets(sections) -> set[str]:
+    """한 행이 한 건인 긴 목록 시트. 그 칸의 '절차:'·'제출서류:'는 그 건의 것이다(R01)."""
+    last: dict[str, int] = {}
+    for section in sections:
+        sheet = _sheet_of(section)
+        if sheet is None:
+            continue
+        rows = json.loads(section["meta"])["rows"]
+        last[sheet] = max(last.get(sheet, 0), int(rows[-1]))
+    return {sheet for sheet, end in last.items() if end >= _RECORD_ROWS}
+
+
+def _task_subjects(db, task_id: int) -> set[str]:
+    """이 업무가 다루는 위원회·협의회 — 업무 이름과 문서가 든 폴더 이름에서."""
+    task = db.task(task_id)
+    text = [task["name"] if task else ""]
+    text += [row["path"] or "" for row in db.con.execute(
+        "SELECT d.path FROM task_docs td JOIN documents d ON d.id = td.doc_id WHERE td.task_id = ?",
+        (task_id,))]
+    places = text[:1] + [str(PurePath(path).parent) for path in text[1:]]
+    return {re.sub(r"\s+", "", found) for place in places for found in _SUBJECT.findall(place)}
+
+
+def _foreign(subject: str, ours: set[str]) -> bool:
+    """줄이 밝힌 주어가 이 업무의 것과 다른 위원회인가.
+
+    이 업무가 다루는 같은 종류의 기관이 있는데 그 어느 것과도 닮지 않았을 때만 남의 것이다.
+    글자 인식의 오자('적극험정위원회' ↔ '적극행정위원회')는 같은 것으로 본다. 업무 쪽에 그런 기관이 없으면
+    가릴 수 없으므로 남긴다.
+    """
+    from difflib import SequenceMatcher
+
+    subject = re.sub(r"\s+", "", subject)
+    tail = next((t for t in ("위원회", "협의회", "자문단", "심의회", "위원단", "추진단") if subject.endswith(t)), "")
+    same_kind = [name for name in ours if name.endswith(tail)]
+    if not same_kind:
+        return False
+    return not any(subject in name or name in subject
+                   or SequenceMatcher(None, subject, name, autojunk=False).ratio() >= 0.7
+                   for name in same_kind)
 
 
 # ── 현재까지의 기록 (C03) ───────────────────────────────────────────
@@ -1228,8 +1359,14 @@ def build_steps(db, task_id: int, items: list[dict], basis: date | None = None) 
                 "evidence": procedure["evidence"],
             })
     if steps:
-        _attach(steps, by_kind.get(INPUT, []), "inputs", fallback=0)
-        _attach(steps, by_kind.get(FORM, []), "forms", fallback=None)
+        # 준비 자료·서식은 그 절차가 적힌 문서에서 읽은 것만 단계에 붙인다. 다른 문서의
+        # 준비물은 다른 건의 것일 수 있다 — 토지분할 절차에 다른 행의 외국인등록증이
+        # 붙었다(R01). 붙이지 않은 것은 업무 항목으로 그대로 남는다.
+        same = _doc_ids(procedure["evidence"])
+        _attach(steps, [item for item in by_kind.get(INPUT, []) if _doc_ids(item["evidence"]) & same],
+                "inputs", fallback=0)
+        _attach(steps, [item for item in by_kind.get(FORM, []) if _doc_ids(item["evidence"]) & same],
+                "forms", fallback=None)
         _closing(steps[-1], by_kind)
 
     # 과거 사례는 **끝까지 간 회차**에서 가져온다 — 기준 연도보다 앞선 해 가운데
@@ -1269,6 +1406,11 @@ def build_steps(db, task_id: int, items: list[dict], basis: date | None = None) 
             })
         break
     return steps
+
+
+def _doc_ids(evidence) -> set[int]:
+    """근거 목록의 문서들. 후보는 (문서, 위치, 인용) 묶음이고 저장된 근거는 행이다."""
+    return {proof[0] if isinstance(proof, (tuple, list)) else proof["doc_id"] for proof in evidence or []}
 
 
 def _attach(steps: list[dict], items: list[dict], field_name: str, fallback: int | None) -> None:

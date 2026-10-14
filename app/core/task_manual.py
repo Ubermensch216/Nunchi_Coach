@@ -68,7 +68,10 @@ def build(db, task_id: int, card=None) -> Manual:
         by_key['procedure'].lines.append('자료가 서로 다릅니다. 절차를 확정할 수 없습니다.\n' + item['content'])
         by_key['procedure'].evidence.extend(item['evidence'])
     by_key['past'].lines.insert(0, '과거 사례의 날짜·제출처·순서는 현재 회차에 적용되는지 별도로 확인하세요.')
-    by_key['first'].lines.extend(action['text'] for action in card.actions)
+    # 조건이 갖춰진 일과 먼저 확인할 일을 섞지 않는다. 과거 절차는 '과거 수행 사례'에 따로 있다.
+    by_key['first'].lines.extend(
+        f"{'지금 할 일' if action['type'] == 'do' else '먼저 확인할 일'}: {action['text']}"
+        for action in card.actions)
     # 접근권한·사용 신청서는 사람 앞으로 나는 것이다. 담당자가 바뀌면 다시 내야 한다.
     forms = [row for row in db.con.execute(
         "SELECT d.id, d.filename FROM task_docs td JOIN documents d ON d.id = td.doc_id "
