@@ -225,7 +225,10 @@ def _protected_documents(db: Database) -> set[int]:
         "OR t.not_a_task=1 OR t.merged_into IS NOT NULL "
         f"OR t.id IN ({db.HUMAN_WORK_SQL}) "
         "UNION SELECT doc_id FROM corrections WHERE target='task_docs' AND after_val IS NULL "
-        "AND doc_id IS NOT NULL")
+        "AND doc_id IS NOT NULL "
+        # 압축 안의 문서는 업무 찾기에 끼지 않는다 — 부모 압축의 업무를 따른다(ingest/members.py).
+        # 끼면 압축 이름이 업무 폴더로 잡힌다.
+        "UNION SELECT id FROM documents WHERE parent_id IS NOT NULL")
     return {r[0] for r in rows}
 
 

@@ -43,6 +43,9 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("source_assets", "fidelity", "fidelity TEXT NOT NULL DEFAULT ''"),
     # 업무 아래의 회차('2024 하반기', '2023 제2차'). 전임자의 폴더 이름에서 읽는다.
     ("task_docs", "round_key", "round_key TEXT NOT NULL DEFAULT ''"),
+    # 압축 안의 문서(ingest/members.py). 부모는 압축 문서, member는 압축 안 경로. 디스크에 따로 없다.
+    ("documents", "parent_id", "parent_id INTEGER REFERENCES documents(id) ON DELETE CASCADE"),
+    ("documents", "member", "member TEXT NOT NULL DEFAULT ''"),
 )
 
 APP_DIR_NAME = "NunchiCoach"
@@ -232,12 +235,18 @@ class Database(WorkStore, ActionStore):
         with self.transaction():
             for row in rows:
                 self.invalidate_document_analysis(row["id"])
+                # 압축 안의 문서는 따로 읽을 수 없다. 그것이 든 압축을 다시 읽게 한다.
                 self.con.execute(
-                    "UPDATE documents SET parse_status='pending' WHERE id=?", (row["id"],))
+                    "UPDATE documents SET parse_status='pending' "
+                    "WHERE id = COALESCE((SELECT parent_id FROM documents WHERE id=?), ?)", (row["id"], row["id"]))
         self.audit("integrity.repair", detail=f"documents={len(rows)}", result="reparse")
         return len(rows)
 
     def mark_seen(self, doc_id: int) -> None:
+        # 압축이 돌아오면 그와 함께 사라졌던 안의 문서도 돌아온다(그 전에 따로 빠진 것은 그대로).
+        self.con.execute(
+            "UPDATE documents SET missing_since=NULL WHERE parent_id=? AND missing_since >= "
+            "(SELECT missing_since FROM documents WHERE id=?)", (doc_id, doc_id))
         self.con.execute("UPDATE documents SET missing_since=NULL,last_seen=datetime('now') WHERE id=?", (doc_id,))
 
     def __enter__(self) -> "Database":
@@ -344,6 +353,7 @@ class Database(WorkStore, ActionStore):
         """
         for table, column, ddl in ADDED_COLUMNS:
             add_column(self.con, table, column, ddl)
+        self.con.execute("CREATE INDEX IF NOT EXISTS idx_documents_parent ON documents(parent_id)")
 
     def get_meta(self, key: str) -> str | None:
         row = self.con.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
@@ -465,8 +475,8 @@ class Database(WorkStore, ActionStore):
         marks = ", ".join("?" * len(ids))
         self.con.execute(
             f"UPDATE documents SET missing_since = datetime('now') "
-            f"WHERE id IN ({marks}) AND missing_since IS NULL",
-            ids,
+            f"WHERE (id IN ({marks}) OR parent_id IN ({marks})) AND missing_since IS NULL",
+            ids + ids,
         )
         return len(ids)
 
@@ -482,7 +492,7 @@ class Database(WorkStore, ActionStore):
     def paths_for_source(self, source_id: int) -> dict[str, sqlite3.Row]:
         rows = self.con.execute(
             "SELECT id, path, size, fs_mtime, hash, parse_status, parser_version "
-            "FROM documents WHERE source_id = ?",
+            "FROM documents WHERE source_id = ? AND parent_id IS NULL",
             (source_id,),
         ).fetchall()
         return {row["path"]: row for row in rows}

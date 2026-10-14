@@ -23,7 +23,7 @@ PARSER_VERSION = "4"
 # hwp/hwpx 5: 스트림·XML·셀·병합 범위를 계측하고 HWPX 속성의 생성/수정일을 구분한다.
 # xls 1: 구형 XLS(BIFF8)를 olefile로 읽는다.
 # archive 2: 압축 안 문서의 본문을 격리된 임시 폴더에서 읽어 구성원 경로와 함께 싣는다.
-PARSER_REVISIONS = {"xlsx": "6", "xls": "1", "archive": "2", "pdf": "5", "hwpx": "5", "hwp": "5", "docx": "5", "text": "2"}
+PARSER_REVISIONS = {"xlsx": "6", "xls": "1", "archive": "3", "pdf": "5", "hwpx": "5", "hwp": "5", "docx": "5", "text": "2"}
 # 읽지 못한 문서(실패·지원 안 함·보호)를 다루는 방식이 바뀌면 올린다. 위의 판 번호는 이미 읽은
 # 문서만 다시 읽게 하므로, 읽지 못한 문서는 이 번호가 바뀔 때 한 번 다시 시도한다.
 # 2: 구형 XLS를 읽고, 보호(DRM) 문서를 형식 오류가 아니라 보호 문서로 표시한다.
@@ -108,6 +108,8 @@ class ParseResult:
     parser_version: str = ""
     # Observed extraction scope, not a guarantee of semantic or visual completeness.
     coverage: dict = field(default_factory=dict)
+    # 안에 든 문서(압축 구성원). 분석 단계가 따로 문서로 싣는다 — ingest/members.py.
+    members: list = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.parser_version = self.parser_version or version_of(self.parser)

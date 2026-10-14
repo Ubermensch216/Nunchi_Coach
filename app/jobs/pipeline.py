@@ -33,7 +33,7 @@ from ..core.chunking import build_chunks_with_context
 from ..core.labeling import FALLBACK_LABEL, label_document
 from ..core.workcard import OUTPUT_DIR
 from ..db import Database
-from ..ingest import scanner, vision, winocr
+from ..ingest import members, scanner, vision, winocr
 from ..search import pack
 from ..ingest.hasher import sha256, too_large
 from ..ingest.parsers import parse
@@ -259,13 +259,14 @@ class Pipeline(QObject):
     # ── 3단계: 내용 읽기 ────────────────────────────────────────────
     def _parse(self, db: Database) -> None:
         retry_failures(db)
+        members.refresh_outdated(db)
         rows = db.con.execute(
             """
-            SELECT d.id, d.path, d.filename, d.hash
+            SELECT d.id, d.path, d.filename, d.hash, d.source_id, d.parser
             FROM documents d
             JOIN sources s ON s.id = d.source_id AND s.kind != 'upload'
             LEFT JOIN jobs j ON j.doc_id = d.id AND j.kind = 'parse'
-            WHERE d.missing_since IS NULL
+            WHERE d.missing_since IS NULL AND d.parent_id IS NULL
               AND (d.parse_status = 'pending'
                    OR (d.parse_status IN ('ok','partial') AND COALESCE(d.parser,'') != 'vision'
                        AND """ + outdated_clause("d") + """)
@@ -327,14 +328,20 @@ class Pipeline(QObject):
                 if result.ok:
                     coverage.clear_issue(db, row["id"], "parse")
                     coverage.clear_issue(db, row["id"], "hash")
+                    # 압축 안의 문서는 따로 문서로 싣는다. 압축 자신에게는 파일 목록만 남긴다.
+                    own = members.parent_sections(result) if result.members else result.sections
                     db.replace_sections(
                         row["id"],
-                        [(s.kind, s.ordinal, s.locator, s.text, s.meta) for s in result.sections],
+                        [(s.kind, s.ordinal, s.locator, s.text, s.meta) for s in own],
                     )
                     db.index_document(
                         row["id"], row["filename"], row["path"],
-                        result.meta.author or "", result.text,
+                        result.meta.author or "", "\n".join(s.text for s in own if s.text),
                     )
+                    if result.members or result.parser == "archive" or row["parser"] == "archive":
+                        members.explode(db, row, result)
+                        if result.members:
+                            db.update_document(row["id"], char_count=sum(len(s.text) for s in own))
                     _clear_job(db, row["id"], "parse")
                 elif result.status == LOCKED:
                     # 잠긴 파일은 실패로 굳히지 않는다. pending으로 되돌려
@@ -346,6 +353,7 @@ class Pipeline(QObject):
                     report.errors.append(f"{row['filename']}: 다른 프로그램이 열고 있어 건너뜀")
                 else:
                     coverage.issue(db, row["id"], "parse", result.status)
+                    members.explode(db, row, result)      # 못 읽은 압축의 구성원은 '원본 없음'으로
                     failures += 1
                     _record_failure(db, row["id"], "parse", result.error or result.status)
                     report.errors.append(f"{row['filename']}: {result.error or result.status}")
@@ -675,6 +683,9 @@ class Pipeline(QObject):
         문서만 본다(내용이 바뀐 문서는 역할이 지워져 다시 들어온다). 판 묶음은
         업무에 묶인 문서가 달라지면 달라지므로 매번 다시 만든다.
         """
+        # 압축 안의 문서는 부모 압축의 업무를 따른다. 업무 찾기가 끝난 뒤에 맞춘다.
+        with db.transaction():
+            members.inherit_tasks(db)
         docrole.reset_outdated(db)
         docyears.refresh_outdated(db)
         pending = docrole.pending(db)
@@ -914,6 +925,8 @@ class Pipeline(QObject):
             report.note += f" · 문장에서 찾은 내용 {totals['statements']:,}"
         if totals.get("matters"):
             report.note += f" · 우리 기관의 건 {totals['matters']:,}"
+            if totals.get("matter_answers"):
+                report.note += f"(공문·붙임에서 찾은 회신·심의 결과 {totals['matter_answers']:,})"
         if totals["gaps"]:
             report.note += f" · 확인할 공백 {totals['gaps']:,}"
         if not self._stop:
@@ -1185,8 +1198,10 @@ def retry_failures(db: Database) -> int:
         return 0
     marks = ", ".join("?" * len(RETRY_STATUSES))
     with db.transaction():
+        # 압축 안의 문서는 따로 읽지 않는다 — 그것이 든 압축을 다시 읽는다.
         ids = [row["id"] for row in db.con.execute(
-            f"SELECT id FROM documents WHERE missing_since IS NULL AND parse_status IN ({marks})",
+            f"SELECT DISTINCT COALESCE(parent_id, id) AS id FROM documents "
+            f"WHERE missing_since IS NULL AND parse_status IN ({marks})",
             RETRY_STATUSES)]
         for doc_id in ids:
             db.con.execute("UPDATE documents SET parse_status = 'pending' WHERE id = ?", (doc_id,))

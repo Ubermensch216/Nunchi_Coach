@@ -85,7 +85,7 @@ def resolve(db, asked, scope):
     escaped = label.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
     restrictions.append("(REPLACE(c.text,' ','') LIKE ? ESCAPE '\\' OR REPLACE(c.text,' ','') LIKE ? ESCAPE '\\')")
     params.extend(['%'+escaped+':%', '%'+escaped+'：%'])
-    docs = db.con.execute('SELECT DISTINCT d.id,d.filename,d.path,d.hash,d.eff_year '
+    docs = db.con.execute('SELECT DISTINCT d.id,d.filename,d.path,d.hash,d.eff_year,d.parent_id '
         'FROM documents d JOIN chunks c ON c.doc_id=d.id WHERE '+' AND '.join(restrictions)+
         ' ORDER BY d.id LIMIT ?', (*params,MAX_DOCUMENTS+1)).fetchall()
     if len(docs) > MAX_DOCUMENTS:
@@ -96,12 +96,18 @@ def resolve(db, asked, scope):
         # 분석된 판본이 실제 원문과 같아야 규칙으로 답한다.
         if not doc['hash']:
             continue
-        try:
-            with Path(doc['path']).open('rb') as handle:
-                if hashlib.file_digest(handle,'sha256').hexdigest() != doc['hash']:
-                    continue
-        except OSError:
-            continue
+        if doc['parent_id']:
+            # 압축 안의 문서는 그것이 든 압축이 분석한 판 그대로여야 한다.
+            from ..ingest import members
+            if not members.current(db, doc['id']):
+                continue
+        else:
+            try:
+                with Path(doc['path']).open('rb') as handle:
+                    if hashlib.file_digest(handle,'sha256').hexdigest() != doc['hash']:
+                        continue
+            except OSError:
+                continue
         rows = db.con.execute('SELECT * FROM chunks WHERE doc_id=? ORDER BY ordinal,id',(doc['id'],)).fetchall()
         labelled = []
         for row in rows:

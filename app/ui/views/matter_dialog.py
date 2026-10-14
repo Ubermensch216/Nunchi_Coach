@@ -16,7 +16,7 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QHBoxLayout, QInputDialog,
                                QLabel, QLineEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
-from ...core import matters
+from ...core import matter_trail, matters
 from .. import theme
 from ..widgets import Card, clear_layout, muted_label, section_title
 
@@ -86,6 +86,13 @@ class MatterDialog(QDialog):
         title.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         card.body.addWidget(title)
         card.body.addWidget(muted_label("자료: " + matters.progress_line({**matter, "human_stage": None}), small=True))
+        trail = matter.get("trail") or []
+        told = [t for t in trail if t["signal"] != matter_trail.MENTIONED]
+        for mention in told[:4]:
+            card.body.addWidget(muted_label("· " + matter_trail.describe(mention), small=True))
+        quiet = len(trail) - len(told)
+        if quiet:
+            card.body.addWidget(muted_label(f"· 진행을 말하지 않고 제목만 나온 문서 {quiet}곳(계획·실적·증빙 등)", small=True))
         line = QHBoxLayout()
         line.addWidget(QLabel("담당자 확인"))
         stage = QComboBox()
@@ -155,6 +162,7 @@ class MatterDialog(QDialog):
         QGuiApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             totals = matters.rebuild(self.db)
+            matter_trail.link(self.db)
         finally:
             QGuiApplication.restoreOverrideCursor()
         self.changed = True

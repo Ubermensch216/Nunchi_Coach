@@ -52,3 +52,26 @@ CREATE TABLE IF NOT EXISTS matter_scans (
     note        TEXT NOT NULL DEFAULT '',
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- 건의 자취 — 건 제목이 목록 밖의 문서(공문과 그 붙임)에 나온 곳 (core/matter_trail.py).
+-- signal: answered(회신 검토의견) | decided(위원회 심의·의결) | enacted(의회 의결 — 시행 근거 후보)
+--         | reported(추진 결과 보고 — 시행 근거 후보) | submitted(보낸 제출 공문) | mentioned(언급만)
+-- 덮개 공문(letter_*)은 그 문서 자신이거나 같은 폴더(같은 압축)의 공문이다.
+CREATE TABLE IF NOT EXISTS matter_mentions (
+    id             INTEGER PRIMARY KEY,
+    matter_id      INTEGER NOT NULL REFERENCES matters(id) ON DELETE CASCADE,
+    doc_id         INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    locator        TEXT NOT NULL DEFAULT '',
+    signal         TEXT NOT NULL,
+    result         TEXT NOT NULL DEFAULT '',          -- 제목 뒤에서 읽은 낱말: '수용곤란', '개정', '원안가결'
+    outcome        TEXT NOT NULL DEFAULT '',          -- 회신 갈래(accepted | partial | rejected | pending)
+    letter_id      INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+    letter         TEXT NOT NULL DEFAULT '',          -- 시행 번호 '지방규제혁신과-1234'
+    direction      TEXT NOT NULL DEFAULT '',          -- received | outgoing | internal
+    letter_date    TEXT NOT NULL DEFAULT '',
+    letter_subject TEXT NOT NULL DEFAULT '',
+    quote          TEXT NOT NULL DEFAULT '',
+    hash           TEXT,                              -- 읽은 문서의 판
+    UNIQUE (matter_id, doc_id, locator)
+);
+CREATE INDEX IF NOT EXISTS matter_mentions_matter ON matter_mentions(matter_id);

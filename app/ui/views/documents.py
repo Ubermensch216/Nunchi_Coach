@@ -48,6 +48,7 @@ from PySide6.QtWidgets import (
 
 from ...core import docrole, docyears, status
 from ...db import Database, representative_predicate
+from ...ingest import members
 from ...jobs import SummaryRunner
 from ...search.documents import find_documents
 from .. import theme
@@ -59,6 +60,7 @@ from ..widgets import (
     UnknownBlock,
     clear_layout,
     muted_label,
+    open_original,
     section_title,
     view_title,
 )
@@ -1093,16 +1095,16 @@ class DocumentsView(QWidget):
         path = self._selected_path()
         if path is None:
             return
-        if not path.exists():
+        if not path.exists() and members.on_disk(self.db, str(path)) == str(path):
             self.summary.setText(f"⚠ 원본을 찾을 수 없습니다: {path}")
             return
-        self.db.audit("document.open", str(path))
-        _launch(path)
+        open_original(self, self.db, str(path))
 
     def _reveal_selected(self) -> None:
         path = self._selected_path()
         if path is None:
             return
+        path = Path(members.on_disk(self.db, str(path)))    # 압축 안의 문서는 그 압축을 가리킨다
         target = path.parent
         if not target.exists():
             self.summary.setText(f"⚠ 폴더를 찾을 수 없습니다: {target}")

@@ -12,15 +12,20 @@
     전체의 풀린 크기, 압축률(압축 폭탄)을 본다. 넘은 것은 이름만 남기고 사유를 기록한다.
   · 같은 이름의 풀린 폴더가 옆에 있으면 거기 같은 경로·크기로 있는 파일은 이미 따로 읽혔으므로
     다시 싣지 않는다(중복). 압축에만 있는 파일은 읽는다.
-  · 압축 문서 하나의 조각으로 싣는다. 조각의 위치는 '구성원 경로 · 원래 위치'다. 구성원을 따로
-    문서로 만들지 않으므로 업무 값(기한·금액·절차)을 읽는 쪽은 압축 문서를 받은 자료로 다룬다.
+  · 압축 문서 하나의 조각으로도 싣는다(조각의 위치는 '구성원 경로 · 원래 위치'). 노트북에 올린
+    압축처럼 따로 문서를 만들 수 없는 곳은 이것을 쓴다.
+  · 구성원마다의 결과(해시·크기·시각·본문)를 members로 함께 돌려준다. 분석 단계는 이것으로
+    구성원을 따로 문서로 싣는다(ingest/members.py) — 구성원마다 갈래·시점·건 목록이 다르다.
 """
 
 from __future__ import annotations
 
+import hashlib
 import io
 import tempfile
 import zipfile
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from .base import EMPTY, MAX_CHARS, OK, PARTIAL, ParseResult, Section, failed
@@ -35,6 +40,16 @@ MAX_DEPTH = 2                 # 압축 속 압축까지
 NOTE = "압축파일입니다. 안에 든 파일의 이름만 읽었고 내용은 읽지 않았습니다."
 _EXECUTABLE = frozenset({".exe", ".dll", ".com", ".bat", ".cmd", ".ps1", ".vbs", ".vbe", ".js", ".jse",
                          ".wsf", ".msi", ".scr", ".jar", ".lnk", ".hta", ".cpl", ".sys", ".reg"})
+
+
+@dataclass
+class Member:
+    """압축 안의 문서 하나를 읽은 결과. name은 압축 안 경로('폴더/안쪽.zip/문서.hwp')."""
+    name: str
+    size: int
+    modified: str | None
+    digest: str
+    result: ParseResult
 
 
 class _Budget:
@@ -56,7 +71,7 @@ def parse(path: Path) -> ParseResult:
             # 건너뛴다 — 압축에만 남은 파일이 있을 수 있다(실측: 풀린 폴더 옆 압축의 평가 서식).
             unpacked = path.with_suffix("")
             budget = _Budget()
-            sections, skipped, read = [listing], [], 0
+            sections, skipped, read, members = [listing], [], 0, []
             todo = []
             for info, name in zip(infos, names):
                 twin = unpacked / Path(*PurePosixPath(name).parts) if unpacked.is_dir() else None
@@ -66,7 +81,7 @@ def parse(path: Path) -> ParseResult:
                     todo.append(info)
             if todo:
                 with tempfile.TemporaryDirectory(prefix="nunchi_zip_") as scratch:
-                    read = _read_members(archive, todo, "", 1, Path(scratch), budget, sections, skipped)
+                    read = _read_members(archive, todo, "", 1, Path(scratch), budget, sections, skipped, members)
     except zipfile.BadZipFile as exc:
         return failed(PARSER, f"ZIP 구조 손상: {exc}")
 
@@ -84,6 +99,7 @@ def parse(path: Path) -> ParseResult:
     return ParseResult(
         status=status, parser=PARSER, note=note,
         sections=[Section(s.kind, index, s.locator, s.text, s.meta) for index, s in enumerate(sections, start=1)],
+        members=members,
         coverage={"version": 2, "scope": "archive_members", "entries_total": len(names),
                   "entries_listed": min(len(names), MAX_ENTRIES), "entries_read": read,
                   "skipped": [{"member": member, "reason": reason} for member, reason in skipped[:MAX_ENTRIES]],
@@ -110,8 +126,8 @@ def _same_file(twin: Path, folder: Path, size: int) -> bool:
 
 
 def _read_members(archive: zipfile.ZipFile, infos, prefix: str, depth: int, scratch: Path,
-                  budget: _Budget, sections: list[Section], skipped: list) -> int:
-    from . import parse as dispatch     # 순환 가져오기를 피한다 — 디스패처가 이 모듈을 등록한다
+                  budget: _Budget, sections: list[Section], skipped: list, members: list) -> int:
+    from . import parse as dispatch, supported_extensions     # 순환 가져오기를 피한다
 
     read = 0
     for info in infos:
@@ -140,7 +156,7 @@ def _read_members(archive: zipfile.ZipFile, infos, prefix: str, depth: int, scra
                 with zipfile.ZipFile(io.BytesIO(data)) as inner:
                     inner_infos = [i for i in inner.infolist() if not i.is_dir()]
                     read += _read_members(inner, inner_infos, member + "/", depth + 1, scratch,
-                                          budget, sections, skipped)
+                                          budget, sections, skipped, members)
             except zipfile.BadZipFile:
                 skipped.append((member, "ZIP 구조 손상"))
             continue
@@ -151,6 +167,8 @@ def _read_members(archive: zipfile.ZipFile, infos, prefix: str, depth: int, scra
             result = dispatch(target)
         finally:
             target.unlink(missing_ok=True)
+        if suffix in supported_extensions():
+            members.append(Member(member, len(data), _modified(info), hashlib.sha256(data).hexdigest(), result))
         if result.status not in (OK, PARTIAL) or not result.sections:
             skipped.append((member, _status_word(result.status)))
             continue
@@ -182,6 +200,14 @@ def _refuse(info: zipfile.ZipInfo, suffix: str, budget: _Budget) -> str:
     if info.compress_size and info.file_size / info.compress_size > MAX_RATIO and info.file_size > 1_000_000:
         return "압축률 이상(압축 폭탄 의심)"
     return ""
+
+
+def _modified(info: zipfile.ZipInfo) -> str | None:
+    """구성원 파일의 수정 시각 — 원래 파일의 시각이다. 압축을 만든 때가 아니다."""
+    try:
+        return datetime(*info.date_time).isoformat(timespec="microseconds")
+    except (TypeError, ValueError):
+        return None
 
 
 def _status_word(status: str) -> str:

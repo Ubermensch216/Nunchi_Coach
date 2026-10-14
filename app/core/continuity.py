@@ -539,6 +539,18 @@ def next_actions(db, task_id: int) -> list[dict]:
             text += " 제목이 바뀌어 따로 잡혔을 수 있는 건: " + "; ".join(
                 f"‘{m['title']}’ ↔ ‘{twin['title']}’({matters.progress_line(twin)})" for m, twin in twins[:2]) + "."
         actions.append({"type": "check", "step_id": None, "gap_id": None, "text": text})
+    # 자료가 개정·의결을 말하는 건 — 시행됐는지는 사람이 확인한다.
+    enacted = matters.to_confirm(found)
+    if enacted:
+        from . import matter_trail
+
+        shown = "; ".join(
+            f"‘{m['title']}’({matter_trail.describe(next(t for t in m['trail'] if t['signal'] in matter_trail.CANDIDATES))})"
+            for m in enacted[:2])
+        more = f" 외 {len(enacted) - 2}건" if len(enacted) > 2 else ""
+        actions.append({"type": "check", "step_id": None, "gap_id": None, "text": (
+            f"[건별 진행 확인] 개정·의결 자료가 있는 건 {len(enacted)}건: {shown}{more}. 개선이 실제로 시행됐는지 "
+            f"(공포·시행일, 시스템 반영) 확인해 '건 확인·고치기'에서 '개선 시행 확인'으로 적으세요.")})
 
     for gap in gaps:
         if gap["next_action"]:

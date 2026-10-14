@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import json
+import sqlite3
 
 from ..db import Database
 
@@ -119,8 +120,14 @@ def layers(db: Database) -> list[Layer]:
     unread = total - read - part - protected
     extraction = "done" if total and not part and not unread and not protected else (
         "partial" if read or part else "pending")
+    try:
+        inside = db.con.execute("SELECT COUNT(*) FROM documents WHERE parent_id IS NOT NULL "
+                                "AND missing_since IS NULL").fetchone()[0]
+    except sqlite3.OperationalError:      # 읽기 전용으로 연 옛 프로젝트 — 압축 안의 문서 열이 아직 없다
+        inside = 0
     out.append(Layer("본문 추출", extraction,
-                     f"문서 {total:,}건 중 본문 읽음 {read:,} · 일부만 읽음 {part:,} · "
+                     f"문서 {total:,}건" + (f"(압축파일 안의 문서 {inside:,}건 포함)" if inside else "") +
+                     f" 중 본문 읽음 {read:,} · 일부만 읽음 {part:,} · "
                      f"암호·보호(DRM) {protected:,} · 읽지 못함·건너뜀 {unread:,}. "
                      f"읽지 못한 문서에 대해 '자료에 없음'이라고 말하지 않습니다.",
                      when("내용 읽기", "그림·스캔본 읽기")))

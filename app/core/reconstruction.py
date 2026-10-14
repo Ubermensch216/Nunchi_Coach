@@ -1548,11 +1548,12 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
     basis = basis or date.today()
     totals = {"tasks": 0, "items": 0, "added": 0, "updated": 0, "removed": 0,
               "recheck": 0, "conflicts": 0, "steps": 0, "stated_steps": 0, "gaps": 0,
-              "statements": 0, "matters": 0, "changes": 0}
+              "statements": 0, "matters": 0, "matter_answers": 0, "changes": 0}
     # 공백 처리는 이 모듈의 읽기 규칙을 쓴다 — 서로 물리지 않게 여기서 들인다.
     from datetime import datetime
 
-    from . import changes, continuity, evaluation, handover_notes, matters, relations, statements as statement_finder
+    from . import changes, continuity, evaluation, handover_notes, matter_trail, matters, relations
+    from . import statements as statement_finder
 
     run = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1561,6 +1562,9 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
         return totals
     # 건 목록을 먼저 세운다. 업무의 다음 행동이 '이번 회차 건 중 회신이 없는 것'을 묻는다.
     totals["matters"] = matters.rebuild(db, should_stop)["matters"]
+    # 건이 목록 밖의 공문·붙임에 나온 곳 — 회신의 체크 표시, 심의·의결 결과, 시행 근거 후보.
+    trail = matter_trail.link(db, should_stop)
+    totals["matter_answers"] = trail["answered"] + trail["decided"]
     context = db.work_context()
     context_id = context["id"] if context else db.start_work_context()
     common = (statement_finder.common_skeletons(db, [task["id"] for task in tasks])

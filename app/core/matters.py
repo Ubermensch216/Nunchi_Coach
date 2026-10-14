@@ -30,9 +30,12 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 
-LISTED, COMPILED, ANSWERED = "listed", "compiled", "answered"
-STAGE_LABEL = {LISTED: "우리 목록에 있음 — 제출 근거 미확인",
-               COMPILED: "상급기관 취합 목록에 있음", ANSWERED: "회신(검토의견) 있음"}
+LISTED, SUBMITTED, COMPILED, ANSWERED, DECIDED = "listed", "submitted", "compiled", "answered", "decided"
+STAGE_LABEL = {LISTED: "우리 목록에 있음 — 제출 근거 미확인", SUBMITTED: "제출 공문 있음",
+               COMPILED: "상급기관 취합 목록에 있음", ANSWERED: "회신(검토의견) 있음",
+               DECIDED: "심의·의결 결과 있음"}
+# 자료가 말한 데까지의 순서. 뒤의 것이 앞의 것을 덮는다.
+STAGE_ORDER = (LISTED, SUBMITTED, COMPILED, ANSWERED, DECIDED)
 ACCEPTED, PARTIAL, REJECTED, PENDING = "accepted", "partial", "rejected", "pending"
 OUTCOME_LABEL = {ACCEPTED: "수용", PARTIAL: "부분 수용", REJECTED: "불수용", PENDING: "검토 중"}
 HUMAN_STAGES = ("submitted", "accepted", "partial", "rejected", "implemented", "closed")
@@ -279,6 +282,7 @@ def _round_of(filename: str, cell: str, year: int | None) -> tuple[str, int | No
 
 def rebuild(db, should_stop=lambda: False) -> dict[str, int]:
     """표 계산 문서의 건 목록을 읽어 건을 맞춘다. 판이 그대로인 문서는 다시 열지 않는다."""
+    from ..ingest import members
     from ..ingest.hasher import sha256
 
     totals = {"lists": 0, "read": 0, "unreadable": 0, "matters": 0, "own_rows": 0, "other_rows": 0}
@@ -287,7 +291,7 @@ def rebuild(db, should_stop=lambda: False) -> dict[str, int]:
         return totals
     marks = ", ".join("?" * len(_SPREADSHEETS))
     documents = db.con.execute(
-        f"SELECT id, path, filename, hash, eff_year FROM documents "
+        f"SELECT id, path, filename, hash, eff_year, parent_id FROM documents "
         f"WHERE missing_since IS NULL AND parse_status IN ('ok', 'partial') AND LOWER(ext) IN ({marks}) "
         f"ORDER BY id", _SPREADSHEETS).fetchall()
     scans = {row["doc_id"]: row for row in db.con.execute("SELECT * FROM matter_scans")}
@@ -298,15 +302,28 @@ def rebuild(db, should_stop=lambda: False) -> dict[str, int]:
         if scan is not None and scan["hash"] == document["hash"] and scan["state"] in ("read", "not_a_list") \
                 and scan["note"] == own:
             continue        # 같은 판을 같은 기관 기준으로 이미 읽었다
-        digest, error = sha256(document["path"])
-        if digest is None or (document["hash"] and digest != document["hash"]):
-            # 원본이 바뀌었거나 열 수 없다. 전에 읽은 건은 그대로 두고 새로 읽지 않는다.
-            state = "unreadable" if digest is None else "changed"
-            _save_scan(db, document["id"], document["hash"], state, 0, 0, error or "원본이 분석 후 바뀜")
-            totals["unreadable"] += 1
-            continue
+        if document["parent_id"]:
+            # 압축 안의 표 — 압축 원본과 구성원의 해시를 확인하고 임시 폴더에 꺼내 읽는다.
+            data, reason = members.member_bytes(db, document["id"])
+            if data is None:
+                _save_scan(db, document["id"], document["hash"],
+                           "changed" if "바뀌었" in reason or "다릅니다" in reason else "unreadable", 0, 0, reason)
+                totals["unreadable"] += 1
+                continue
+        else:
+            digest, error = sha256(document["path"])
+            if digest is None or (document["hash"] and digest != document["hash"]):
+                # 원본이 바뀌었거나 열 수 없다. 전에 읽은 건은 그대로 두고 새로 읽지 않는다.
+                state = "unreadable" if digest is None else "changed"
+                _save_scan(db, document["id"], document["hash"], state, 0, 0, error or "원본이 분석 후 바뀜")
+                totals["unreadable"] += 1
+                continue
         try:
-            listing = read_listing(Path(document["path"]), own)
+            if document["parent_id"]:
+                with members.extracted(db, document["id"]) as copy:
+                    listing = read_listing(copy, own) if copy else None
+            else:
+                listing = read_listing(Path(document["path"]), own)
         except Exception as exc:  # noqa: BLE001 — 손상된 파일 하나가 전체를 멈추지 않게 한다
             _save_scan(db, document["id"], document["hash"], "unreadable", 0, 0, type(exc).__name__)
             totals["unreadable"] += 1
@@ -384,7 +401,22 @@ def _matter_for(db, row: Row) -> int:
 
 
 def _settle(db) -> None:
-    """등장 기록에서 진행 단계와 회신 갈래를 다시 매긴다. 근거가 사라진 건은 표시만 한다."""
+    settle(db)
+
+
+def settle(db) -> None:
+    """등장 기록과 자취(matter_trail)에서 진행 단계와 회신 갈래를 다시 매긴다. 근거가 사라진 건은 표시만 한다.
+
+    목록의 회신 칸이 있으면 그 글로 갈래를 정하고, 없으면 검토결과 붙임의 체크 표시로 정한다.
+    의회 의결·결과 보고의 '개정'은 진행으로 올리지 않는다 — 시행 근거 후보일 뿐이다.
+    """
+    trail = {}
+    if db.con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'matter_mentions'").fetchone():
+        for row in db.con.execute(
+                "SELECT matter_id, signal, outcome FROM matter_mentions m JOIN documents d ON d.id = m.doc_id "
+                "WHERE d.missing_since IS NULL AND signal IN ('answered', 'decided', 'submitted') "
+                "ORDER BY letter_date DESC"):
+            trail.setdefault(row["matter_id"], []).append(row)
     for matter in db.con.execute("SELECT id, outcome_text, human_stage, human_note FROM matters").fetchall():
         kinds = {row["list_kind"] for row in db.con.execute(
             "SELECT list_kind FROM matter_sources WHERE matter_id = ?", (matter["id"],))}
@@ -397,6 +429,13 @@ def _settle(db) -> None:
             continue
         outcome = classify_outcome(matter["outcome_text"]) if matter["outcome_text"] else ""
         stage = ANSWERED if matter["outcome_text"] else (COMPILED if COMPILED_LIST in kinds else LISTED)
+        signals = {row["signal"] for row in trail.get(matter["id"], [])}
+        found = {"submitted": SUBMITTED, "answered": ANSWERED, "decided": DECIDED}
+        for signal in signals:
+            if STAGE_ORDER.index(found[signal]) > STAGE_ORDER.index(stage):
+                stage = found[signal]
+        if not outcome:
+            outcome = next((row["outcome"] for row in trail.get(matter["id"], []) if row["outcome"]), "")
         db.con.execute("UPDATE matters SET stage = ?, outcome = ?, missing_since = NULL WHERE id = ?",
                        (stage, outcome, matter["id"]))
 
@@ -450,12 +489,17 @@ def for_task(db, task_id: int, include_excluded: bool = False) -> list[dict]:
             "LEFT JOIN matter_scans c ON c.doc_id = s.doc_id "
             "WHERE s.matter_id = ? ORDER BY COALESCE(s.period_year, 0) DESC, s.doc_id", (matter["id"],)).fetchall()
         latest = next((s["round"] for s in sources if s["round"]), "")
-        out.append({**dict(matter), "round": latest,
+        from . import matter_trail
+
+        trail = matter_trail.for_matter(db, matter["id"])
+        out.append({**dict(matter), "round": latest, "trail": trail,
                     "year": max((s["period_year"] or 0 for s in sources), default=0),
                     "evidence": [{"doc_id": s["doc_id"], "locator": f"'{s['sheet']}' {s['row']}행",
                                   "quote": s["quote"], "filename": s["filename"], "path": s["path"],
                                   "current": bool(s["current"]), "list_kind": s["list_kind"]}
-                                 for s in sources]})
+                                 for s in sources]
+                    # 진행을 말한 공문·붙임의 그 자리 — 언급만 한 문서는 근거로 늘어놓지 않는다.
+                    + [matter_trail.evidence(t) for t in trail if t["signal"] != matter_trail.MENTIONED]})
     out.sort(key=lambda m: (-m["year"], m["round"], m["title"]))
     return out
 
@@ -483,11 +527,23 @@ def other_rows(db, task_id: int) -> int:
 
 def progress_line(matter: dict) -> str:
     """'상급기관 취합 목록에 있음 · 회신: 수용' — 자료로 확인한 것과 사람이 정한 것을 나눠 적는다."""
+    from . import matter_trail
+
     parts = [STAGE_LABEL.get(matter["stage"], matter["stage"])]
+    trail = matter.get("trail") or []
     if matter["outcome_text"]:
         parts.append(f"회신 ‘{matter['outcome_text']}’")
     if matter["outcome"]:
-        parts.append(f"갈래: {OUTCOME_LABEL[matter['outcome']]}(회신 글로 판단)")
+        how = "회신 글로 판단" if matter["outcome_text"] else "검토결과 문서의 표시로 판단"
+        parts.append(f"갈래: {OUTCOME_LABEL[matter['outcome']]}({how})")
+    # 진행을 말한 공문 — 받은 회신, 심의 결과, 보낸 제출 공문. 가장 최근 것 하나.
+    said = next((m for m in trail if m["signal"] in (matter_trail.ANSWERED, matter_trail.DECIDED,
+                                                      matter_trail.SUBMITTED)), None)
+    if said:
+        parts.append(matter_trail.describe(said))
+    candidate = next((m for m in trail if m["signal"] in matter_trail.CANDIDATES), None)
+    if candidate and matter.get("human_stage") not in ("implemented", "closed"):
+        parts.append(f"시행 근거 후보: {matter_trail.describe(candidate)} — 시행됐는지 담당자가 확인")
     if matter.get("human_stage"):
         parts.append(f"담당자: {HUMAN_STAGE_LABEL.get(matter['human_stage'], matter['human_stage'])}")
     return " · ".join(parts)
@@ -529,4 +585,12 @@ def unanswered(matters: list[dict]) -> list[dict]:
         return []
     latest = matters[0]["round"] or matters[0]["year"]
     return [m for m in matters if (m["round"] or m["year"]) == latest
-            and m["stage"] != ANSWERED and not m.get("human_stage")]
+            and m["stage"] not in (ANSWERED, DECIDED) and not m.get("human_stage")]
+
+
+def to_confirm(matters: list[dict]) -> list[dict]:
+    """자료에 시행 근거 후보(의회 의결, 결과 보고의 '개정')가 있는데 담당자가 아직 시행을 정하지 않은 건."""
+    from . import matter_trail
+
+    return [m for m in matters if m.get("human_stage") not in ("implemented", "closed")
+            and any(t["signal"] in matter_trail.CANDIDATES for t in m.get("trail") or [])]

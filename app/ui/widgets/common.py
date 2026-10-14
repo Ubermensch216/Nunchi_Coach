@@ -39,6 +39,19 @@ def open_original(parent: QWidget, db, path: str) -> None:
     """
     from PySide6.QtWidgets import QMessageBox
 
+    if not Path(path).exists() and db is not None:
+        # 압축 안의 문서 — 압축 원본에서 꺼낸 읽기 전용 사본을 연다(원본 옆에 풀지 않는다).
+        from ...ingest import members
+
+        if members.on_disk(db, path) != path:
+            copy, reason = members.viewing_copy(db, path)
+            if copy is None:
+                QMessageBox.information(
+                    parent, "원본 열기",
+                    f"압축 안의 문서를 열 수 없습니다: {reason}\n{members.on_disk(db, path)}")
+                return
+            db.audit("document.open", path, detail="압축 안의 문서 · 읽기 전용 사본")
+            path = str(copy)
     if not Path(path).exists():
         QMessageBox.information(
             parent, "원본 열기",

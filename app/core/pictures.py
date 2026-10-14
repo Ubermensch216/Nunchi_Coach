@@ -70,7 +70,7 @@ def candidates(db, reader: str | None = None) -> list[Candidate]:
     rows = db.con.execute(
         "SELECT d.id, d.path, d.filename, d.ext, d.parse_status, s.path AS root "
         "FROM documents d JOIN sources s ON s.id = d.source_id AND s.kind != 'upload' "
-        "WHERE d.missing_since IS NULL "
+        "WHERE d.missing_since IS NULL AND d.parent_id IS NULL "
         "AND (COALESCE(d.parser, '') != ? OR (? IS NOT NULL AND COALESCE(d.parser_version, '') != ?)) "
         "ORDER BY d.path", (vision.PARSER, reader, reader)).fetchall()
     images_in: Counter = Counter()

@@ -101,7 +101,7 @@ def build(db, task_id: int, card=None) -> Manual:
             by_key[key].evidence.extend(step.get('evidence', []))
     if card.matters:
         cases = by_key['cases']
-        answered = sum(m['stage'] == matters.ANSWERED for m in card.matters)
+        answered = sum(m['stage'] in (matters.ANSWERED, matters.DECIDED) for m in card.matters)
         summary = (f"우리 기관의 건 {len(card.matters)}건 · 회신이 이어진 것 {answered}건. "
                    f"진행은 목록·취합표·회신 칸에서 확인한 데까지만 적습니다. 제출·수용·시행은 공문으로 확인하세요.")
         if card.matter_others:
