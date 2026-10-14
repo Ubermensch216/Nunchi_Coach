@@ -60,6 +60,7 @@ a = Analysis(
         ('app/db/coverage_schema.sql', 'app/db'),
         ('app/db/action_schema.sql', 'app/db'),
         ('app/db/matter_schema.sql', 'app/db'),
+        ('app/db/change_schema.sql', 'app/db'),
         ('app/db/knowledge_schema.sql', 'app/db'),
         ('app/core/knowledge/ontology.json', 'app/core/knowledge'),
         ('app/ui/assets', 'app/ui/assets'),

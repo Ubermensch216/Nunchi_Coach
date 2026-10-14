@@ -1548,9 +1548,13 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
     basis = basis or date.today()
     totals = {"tasks": 0, "items": 0, "added": 0, "updated": 0, "removed": 0,
               "recheck": 0, "conflicts": 0, "steps": 0, "stated_steps": 0, "gaps": 0,
-              "statements": 0, "matters": 0}
+              "statements": 0, "matters": 0, "changes": 0}
     # 공백 처리는 이 모듈의 읽기 규칙을 쓴다 — 서로 물리지 않게 여기서 들인다.
-    from . import continuity, evaluation, handover_notes, matters, relations, statements as statement_finder
+    from datetime import datetime
+
+    from . import changes, continuity, evaluation, handover_notes, matters, relations, statements as statement_finder
+
+    run = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     tasks = db.tasks()
     if not tasks:
@@ -1574,6 +1578,7 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
         told = (statement_finder.find(db, task["id"], client, basis, common)
                 if statements else [])
         totals["statements"] += len(told)
+        before = changes.values(db, task["id"])
         with db.transaction():
             result = db.sync_task_items(
                 task["id"], candidates + record_items(db, task["id"], basis)
@@ -1585,6 +1590,8 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
             _link_stated_order(db, task["id"])
             # 항목과 단계가 정해진 뒤에 공백을 본다(C04).
             continuity.review_task(db, task["id"], basis, candidates)
+            # 새 자료가 이 업무의 값을 어떻게 바꿨는지 남긴다(P2).
+            totals["changes"] += changes.record(db, task["id"], before, changes.values(db, task["id"]), run)
         totals["gaps"] += len(db.info_gaps(task["id"]))
         totals["tasks"] += 1
         totals["items"] += len(candidates)

@@ -271,6 +271,13 @@ def _where_to_look(context: _Context, kind: str) -> str:
             + context.case_hint() + context.onnara_hint())
 
 
+# 엇갈린 값을 누구에게 확인하는가
+_WHOM = {rc.DEADLINE: " 문서로 정해지지 않으면 요청 공문을 보낸 부서에 이번 회차 기한을 물으세요.",
+         rc.RECIPIENT: " 문서로 정해지지 않으면 요청 공문을 보낸 부서에 제출처를 물으세요.",
+         rc.AMOUNT: " 예산·지출 담당 부서의 확정 금액과 견주세요.",
+         rc.CONTACT: " 기관 대표 번호나 조직도로 현재 담당을 확인하세요."}
+
+
 def _conflict(db, item: dict, step_id) -> dict:
     name = rc.KIND_LABEL.get(item["kind"], item["kind"])
     lines = []
@@ -281,13 +288,22 @@ def _conflict(db, item: dict, step_id) -> dict:
             provenance.official_sources(db, [evidence["doc_id"]]).get(evidence["doc_id"]))
         source = official or "개인 폴더 자료"
         lines.append(f"{evidence['quote']} — {evidence['filename']} ({when} · {source})")
+    # 무엇이 다른가 · 어디에 영향을 주는가 · 누구에게 확인하는가 · 정해지면 무엇이 바뀌는가(개선계획서 7장)
+    detail = f"자료가 서로 다른 값을 적고 있습니다: {item['content']}"
+    after = "정해지면 항목을 고쳐 적으면 됩니다."
+    if step_id is not None:
+        step = db.con.execute("SELECT label FROM work_steps WHERE id = ?", (step_id,)).fetchone()
+        if step is not None:
+            detail += f" 이 값은 '{step['label']}' 단계를 끝내는 데 필요합니다."
+            after = f"정해지면 항목을 고쳐 적으세요 — 그때부터 '{step['label']}' 단계의 완료 기준으로 쓰입니다."
+    whom = _WHOM.get(item["kind"], "")
     return {
         "gap_key": f"conflict:{item['kind']}:{item['slot']}", "kind": "conflict",
         "field": f"{name} · {item['slot']}", "item_id": item["id"], "step_id": step_id,
-        "detail": f"자료가 서로 다른 값을 적고 있습니다: {item['content']}",
+        "detail": detail,
         "research": " / ".join(lines),
         "next_action": ("두 문서의 작성 시점과 성격(등록본·초안·메모)을 견주어 이번 회차에 "
-                        "적용되는 쪽을 확인하세요. 정해지면 항목을 고쳐 적으면 됩니다. "
+                        f"적용되는 쪽을 확인하세요.{whom} {after} "
                         "확정 전에도 이 값이 필요 없는 단계는 진행할 수 있습니다."),
         "evidence": [(e["doc_id"], e["locator"], e["quote"]) for e in item["evidence"]],
     }
@@ -492,6 +508,17 @@ def next_actions(db, task_id: int) -> list[dict]:
                     f"그때의 자료({todo['output'] or '근거 문서'})를 열어 "
                     f"준비할 수 있습니다.")
             actions.append({"type": "do", "text": text, "step_id": todo["id"], "gap_id": None})
+
+    # 새 자료로 일정·낼 곳·하는 법이 바뀌었으면 먼저 알린다(P2).
+    from . import changes
+
+    moved = [c for c in changes.latest(db, task_id) if c["kind"] in changes.WATCHED and c["change"] != "added"]
+    if moved:
+        listing = "; ".join(changes.describe(c) for c in moved[:3])
+        more = f" 외 {len(moved) - 3}건" if len(moved) > 3 else ""
+        actions.append({"type": "check", "step_id": None, "gap_id": None,
+                        "text": (f"[바뀐 자료] 지난 분석 이후 기한·제출처·절차가 바뀌었습니다: {listing}{more}. "
+                                 f"새로 들어온 문서를 열어 이번 회차에 맞는 값인지 확인하세요.")})
 
     # 이번 회차 건 가운데 회신이 이어지지 않은 것. 건마다 소관부서·접수·회신을 따로 챙긴다(W02).
     from . import matters

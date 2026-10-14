@@ -281,6 +281,7 @@ class Database(WorkStore, ActionStore):
         self.con.executescript(Path(__file__).with_name("coverage_schema.sql").read_text(encoding="utf-8"))
         self.con.executescript(Path(__file__).with_name("action_schema.sql").read_text(encoding="utf-8"))
         self.con.executescript(Path(__file__).with_name("matter_schema.sql").read_text(encoding="utf-8"))
+        self.con.executescript(Path(__file__).with_name("change_schema.sql").read_text(encoding="utf-8"))
         from .knowledge import install as install_knowledge
 
         with self.transaction():

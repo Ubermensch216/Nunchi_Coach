@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
-from . import continuity, matters, provenance, reconstruction as rc, workstate as ws
+from . import changes, continuity, matters, provenance, reconstruction as rc, workstate as ws
 
 # 카드의 '해야 할 일'과 '시작 준비'에 들어가는 항목 종류.
 _TODO_KINDS = (rc.PURPOSE, rc.DEADLINE, rc.RECIPIENT, rc.AMOUNT, rc.OUTPUT)
@@ -47,6 +47,7 @@ class Card:
     progress: dict = field(default_factory=dict)
     matters: list[dict] = field(default_factory=list)     # 이 업무의 문서에 나온 우리 기관의 건
     matter_others: int = 0                                 # 같은 목록의 다른 기관 행 수(참고)
+    changes: list[dict] = field(default_factory=list)     # 지난 분석 이후 바뀐 자동 값
 
     @property
     def empty(self) -> bool:
@@ -94,6 +95,7 @@ def build(db, task_id: int) -> Card:
             card.precedent_steps.append(step)
         else:
             card.stated_steps.append(step)
+    card.changes = changes.latest(db, task_id)
     card.matters = matters.for_task(db, task_id)
     card.matter_others = matters.other_rows(db, task_id)
     card.actions = continuity.next_actions(db, task_id)

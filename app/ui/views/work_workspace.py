@@ -5,7 +5,7 @@ import json
 from datetime import date
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QWidget,
                               QLineEdit, QPushButton, QScrollArea, QVBoxLayout)
 
 from ...core import manual_versions, work_schedule, workcard, workstate as ws
@@ -219,6 +219,8 @@ class WorkspaceMixin:
                 card.body.addWidget(self._evidence_button(
                     f'근거 {len(section.evidence)}건', '원문과 위치·확인 상태를 봅니다',
                     lambda s=section: self._show_evidence(self._workspace_evidence(s.evidence), s.title + '의 근거')))
+            if not compact and section.more:
+                card.body.addWidget(self._fold(section))
             if compact and len(section.lines) > 2:
                 button = QPushButton('매뉴얼에서 모두 보기')
                 button.clicked.connect(lambda: self._switch('manual'))
@@ -235,6 +237,26 @@ class WorkspaceMixin:
             button.clicked.connect(lambda _=False, k=key: self._switch(k))
             shortcuts.addWidget(button)
         column.addLayout(shortcuts)
+
+    def _fold(self, section):
+        """접어 둔 나머지 줄. 누르면 그 자리에서 편다."""
+        holder = QWidget()
+        layout = QVBoxLayout(holder)
+        layout.setContentsMargins(0, 0, 0, 0)
+        button = QPushButton(f'나머지 {len(section.more):,}건 펼치기')
+        button.setObjectName('Link')
+
+        def unfold():
+            button.setVisible(False)
+            for line in section.more:
+                label = QLabel(line)
+                label.setTextFormat(Qt.TextFormat.PlainText)
+                label.setWordWrap(True)
+                label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+                layout.addWidget(label)
+        button.clicked.connect(unfold)
+        layout.addWidget(button)
+        return holder
 
     def _version_card(self, task_id):
         """노트북에 넣은 매뉴얼 판본과 현재 내용의 차이. 열람만으로 새 판을 만들지 않는다."""

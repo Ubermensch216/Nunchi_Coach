@@ -5,7 +5,7 @@ import re
 
 from dataclasses import dataclass, field
 
-from . import matters, reconstruction as rc, workcard, workstate as ws
+from . import changes, matters, reconstruction as rc, workcard, workstate as ws
 
 
 @dataclass
@@ -14,6 +14,8 @@ class Section:
     title: str
     lines: list[str] = field(default_factory=list)
     evidence: list[dict] = field(default_factory=list)
+    # 기본으로는 접어 두는 나머지 줄. 화면은 '나머지 N건 펼치기'로 보인다(R05: 준비 항목 708건).
+    more: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -24,6 +26,26 @@ class Manual:
 
 
 _MAX_CASE_LINES = 15
+# 한 구획에 이보다 많으면 먼저 볼 _SHOWN건만 펴 둔다.
+_FOLD_OVER = 12
+_SHOWN = 10
+# 먼저 볼 것: 서식·준비 자료·규정·유의사항이 담당 연락처나 다른 업무와의 관계보다 앞선다.
+_FIRST_KINDS = (rc.FORM, rc.INPUT, rc.REGULATION, rc.RISK, rc.EVALUATION, rc.DEADLINE, rc.RECIPIENT,
+                rc.PURPOSE, rc.OUTPUT, rc.AMOUNT, rc.CONTACT, rc.AGENCY)
+
+
+def _ranked(items: list[dict]) -> list[dict]:
+    """사람이 확인한 것, 먼저 볼 종류, 지금도 적용될 수 있는 것, 문서에 적힌 것 순. 같으면 원래 순서.
+
+    종류가 먼저다 — 다른 업무와의 관계 표시는 '적용 여부 미상'이라 지난 회차의 서식보다 앞서면 안 된다.
+    """
+    def key(item):
+        kind = _FIRST_KINDS.index(item['kind']) if item['kind'] in _FIRST_KINDS else len(_FIRST_KINDS)
+        return (item.get('human_state') not in ws.CONFIRMED_BY, kind, item.get('applicability') == ws.PAST,
+                item.get('basis_state') != ws.STATED)
+    return sorted(items, key=key)
+
+
 _ACCESS_FORM = re.compile(r"(?:접근\s*권한|사용자?|계정|권한)\s*(?:부여\s*)?신청서")
 
 def build(db, task_id: int, card=None) -> Manual:
@@ -55,10 +77,19 @@ def build(db, task_id: int, card=None) -> Manual:
                rc.RECIPIENT: 'output', rc.DEADLINE: 'timing', rc.RISK: 'notes',
                rc.NOTE: 'notes', rc.RECORD: 'past', rc.STATEMENT: 'overview',
                rc.EVALUATION: 'evaluation'}
+    placed: dict[str, list[dict]] = {}
     for item in card.todo + card.prepare + card.notes + card.records + card.found:
-        section = by_key[mapping.get(item['kind'], 'prepare')]
-        section.lines.append(f"{workcard.item_label(item)}: {item['content']}\n{workcard.state_line(item)}")
-        section.evidence.extend(item['evidence'])
+        placed.setdefault(mapping.get(item['kind'], 'prepare'), []).append(item)
+    for key, items in placed.items():
+        section = by_key[key]
+        # 긴 구획은 먼저 볼 것을 앞에 두고 나머지를 접는다. 지우지 않는다.
+        if len(items) > _FOLD_OVER:
+            ranked = _ranked(items)
+            items, folded = ranked[:_SHOWN], ranked[_SHOWN:]
+            section.more.extend(f"{workcard.item_label(item)}: {item['content']}" for item in folded)
+        for item in items:
+            section.lines.append(f"{workcard.item_label(item)}: {item['content']}\n{workcard.state_line(item)}")
+            section.evidence.extend(item['evidence'])
     for key, steps in (('procedure', card.stated_steps), ('past', card.precedent_steps)):
         for index, step in enumerate(steps, 1):
             line = f"{index}. {step['label']} · {ws.procedure_label(step['procedure_kind'])}\n{workcard.state_line(step)}"
@@ -101,6 +132,11 @@ def build(db, task_id: int, card=None) -> Manual:
             '담당자가 바뀌면 본인 이름으로 다시 내야 하는 신청서가 있습니다: ' + ', '.join(names))
         by_key['first'].evidence.extend(
             {'doc_id': row['id'], 'locator': '', 'quote': row['filename']} for row in forms[:4])
+    if card.changes:
+        # 새 자료가 무엇을 바꿨는가. 지금 값만 보여 주면 바뀐 줄 모른다.
+        by_key['basis'].lines.append(changes.summary(card.changes))
+        by_key['basis'].lines.extend(changes.describe(change) for change in card.changes[:5])
+        by_key['basis'].more.extend(changes.describe(change) for change in card.changes[5:])
     by_key['basis'].lines.extend(f"{gap.get('field', '확인 필요')}: {gap.get('detail', '')}" for gap in card.gaps)
     for section in sections[:-1]:
         seen = set()
