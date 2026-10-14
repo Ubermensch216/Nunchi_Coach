@@ -37,7 +37,8 @@ from ..ingest import scanner, vision, winocr
 from ..search import pack
 from ..ingest.hasher import sha256, too_large
 from ..ingest.parsers import parse
-from ..ingest.parsers.base import LOCKED, PARSER_VERSION, TOO_LARGE, ParseResult, outdated_clause
+from ..ingest.parsers.base import (FAILURE_REVISION, LOCKED, PARSER_VERSION, RETRY_STATUSES, TOO_LARGE,
+                                   ParseResult, outdated_clause)
 
 MAX_ATTEMPTS = 3
 
@@ -257,6 +258,7 @@ class Pipeline(QObject):
 
     # ── 3단계: 내용 읽기 ────────────────────────────────────────────
     def _parse(self, db: Database) -> None:
+        retry_failures(db)
         rows = db.con.execute(
             """
             SELECT d.id, d.path, d.filename, d.hash
@@ -1169,6 +1171,27 @@ class PipelineRunner(QObject):
         self._thread = None
         self._pipeline = None
         self.finished.emit()
+
+
+def retry_failures(db: Database) -> int:
+    """읽지 못한 문서를 다루는 방식이 바뀌었으면(FAILURE_REVISION) 그 문서들을 한 번 다시 읽게 한다.
+
+    판 번호(PARSER_REVISIONS)는 이미 읽은 문서만 다시 읽게 한다. 구형 XLS처럼 전에 '지원하지
+    않음'이던 문서는 새 파서가 들어와도 그대로 남는다. 시도 횟수도 지운다 — 같은 실패를
+    세 번 했다는 기록이 새 방식의 시도를 막지 않게.
+    """
+    if db.get_meta("failure_revision") == FAILURE_REVISION:
+        return 0
+    marks = ", ".join("?" * len(RETRY_STATUSES))
+    with db.transaction():
+        ids = [row["id"] for row in db.con.execute(
+            f"SELECT id FROM documents WHERE missing_since IS NULL AND parse_status IN ({marks})",
+            RETRY_STATUSES)]
+        for doc_id in ids:
+            db.con.execute("UPDATE documents SET parse_status = 'pending' WHERE id = ?", (doc_id,))
+            db.con.execute("DELETE FROM jobs WHERE kind = 'parse' AND doc_id = ?", (doc_id,))
+        db.set_meta("failure_revision", FAILURE_REVISION)
+    return len(ids)
 
 
 def _parse_with_retry(path: str, attempts: int = LOCK_RETRIES) -> "ParseResult":

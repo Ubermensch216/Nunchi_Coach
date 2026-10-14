@@ -935,8 +935,10 @@ class Generator:
                   lambda path: _write_hwpx(path, base, sections=False), when=when, expect=["unsupported"])
         # 구형 형식 — 읽지 못한다고 분명히 알려야 한다.
         ole = bytes.fromhex("d0cf11e0a1b11ae1") + rng.randbytes(4096)
-        for name, ext in (("2011 급수조례 해설", "doc"), ("2012 요금표", "xls"), ("2010 업무보고", "ppt")):
+        for name, ext in (("2011 급수조례 해설", "doc"), ("2010 업무보고", "ppt")):
             raw(name, ext, ole, ["unsupported"], folder="옛날 자료(2013 이전)")
+        # 구형 XLS는 읽는다(parsers/xls.py). 머리만 OLE이고 몸이 깨진 파일은 '읽기 실패'다.
+        raw("2012 요금표", "xls", ole, ["failed"], folder="옛날 자료(2013 이전)")
         raw("한글97 문서", "hwp", b"HWP Document File V3.00 \x1a\x01\x02\x03\x04\x05" + rng.randbytes(2000),
             ["unsupported"], folder="옛날 자료(2013 이전)")
         raw("깨진 한글문서", "hwp", ole, ["failed", "unsupported"], folder="옛날 자료(2013 이전)")
@@ -1013,8 +1015,9 @@ class Generator:
 
         def archive(path: Path) -> None:
             with zipfile.ZipFile(path, "w") as zf:
-                zf.writestr("안에 든 문서.txt", "압축 파일 안의 문서는 읽지 않는다.")
-        # ZIP은 내부 파일 이름만 읽으므로 내용 전체를 읽은 문서로 기대하지 않는다.
+                zf.writestr("안에 든 문서.txt", "압축 파일 안의 문서도 격리된 임시 폴더에서 읽는다.")
+                zf.writestr("설치.exe", b"MZ")
+        # ZIP 안 문서는 읽지만 실행 파일은 꺼내지 않으므로 전체를 읽은 문서로 기대하지 않는다.
         self.emit("99_기타/2024 제출자료 묶음.zip", "archive", archive, when=when, expect=["partial"])
         for rel, head, size in (("99_기타/뷰어 설치.exe", b"MZ", 300_000),
                                 ("현장사진/누수 복구 영상.mp4", b"\x00\x00\x00\x18ftypmp42", 2_000_000),

@@ -79,7 +79,7 @@ PARSE_LABEL = {
     "empty": ("○ 빈 문서", "TEXT_MUTED"),
     "failed": ("✕ 읽기 실패", "DANGER"),
     "unsupported": ("— 미지원 형식", "TEXT_MUTED"),
-    "encrypted": ("△ 암호 걸림", "ATTENTION"),
+    "encrypted": ("△ 암호·보호 문서", "ATTENTION"),
     "too_large": ("△ 크기 초과", "ATTENTION"),
     "locked": ("△ 다른 곳에서 열려 있음", "ATTENTION"),
     "pending": ("… 대기", "TEXT_MUTED"),

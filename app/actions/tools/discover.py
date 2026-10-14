@@ -36,7 +36,7 @@ CANDIDATE_LIMIT = 40
 BODY_CHARS = 3000
 NOT_READABLE = ("failed", "encrypted", "unsupported", "empty", "pending")
 WHY_UNREADABLE = {
-    "failed": "읽지 못함", "encrypted": "암호가 걸려 있음", "unsupported": "지원하지 않는 형식",
+    "failed": "읽지 못함", "encrypted": "암호·보호(DRM)가 걸려 있음", "unsupported": "지원하지 않는 형식",
     "empty": "읽을 내용이 없음", "pending": "아직 읽지 않음",
 }
 

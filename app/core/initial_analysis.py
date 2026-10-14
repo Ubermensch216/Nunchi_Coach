@@ -115,11 +115,14 @@ def layers(db: Database) -> list[Layer]:
         "WHERE s.kind!='upload' AND d.missing_since IS NULL GROUP BY d.parse_status").fetchall())
     total = sum(states.values())
     read, part = states.get("ok", 0), states.get("partial", 0)
-    unread = total - read - part
-    extraction = "done" if total and not part and not unread else ("partial" if read or part else "pending")
+    protected = states.get("encrypted", 0)
+    unread = total - read - part - protected
+    extraction = "done" if total and not part and not unread and not protected else (
+        "partial" if read or part else "pending")
     out.append(Layer("본문 추출", extraction,
                      f"문서 {total:,}건 중 본문 읽음 {read:,} · 일부만 읽음 {part:,} · "
-                     f"읽지 못함·건너뜀 {unread:,}. 읽지 못한 문서에 대해 '자료에 없음'이라고 말하지 않습니다.",
+                     f"암호·보호(DRM) {protected:,} · 읽지 못함·건너뜀 {unread:,}. "
+                     f"읽지 못한 문서에 대해 '자료에 없음'이라고 말하지 않습니다.",
                      when("내용 읽기", "그림·스캔본 읽기")))
 
     structure = [stage(n) for n in ("업무 파악", "문서 갈래 확인", "일정 파악", "처리 순서 파악", "업무 복원")]

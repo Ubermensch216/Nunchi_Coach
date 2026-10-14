@@ -768,6 +768,11 @@ def read_task(db, task_id: int) -> list[Found]:
     # AI가 쓴 보고서·정기간행물은 아이디어의 출처일 뿐 업무의 목적·기한·제출처를 말할 자격이
     # 없다. 파일 연도가 더 최근이라는 이유로 결재된 계획을 이기기까지 했다(R03·R04).
     outside = foldersteps.outside_the_work(db, every) | set(authority.reference_only(db, every))
+    # 압축파일은 여러 문서를 한 문서의 조각으로 싣는다. 구성원마다 다른 건·다른 기관의 것일 수
+    # 있으므로 업무 값의 근거로 쓰지 않는다(검색·열람에는 쓴다).
+    marks = ", ".join("?" * len(every))
+    outside |= {row["id"] for row in db.con.execute(
+        f"SELECT id FROM documents WHERE id IN ({marks}) AND parser = 'archive'", every)} if every else set()
     # 참고 폴더에 넣어 둔 요청 공문·평가 기준은 기한과 담당을 읽으려고 남긴다. 금액은
     # 읽지 않는다 — 다른 위원회의 심사기준에 적힌 예산이 이 업무의 예산이 됐다(실측).
     kept_from_aside = foldersteps.outside_the_work(db, every, keep_requests=False) - outside

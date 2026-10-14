@@ -21,7 +21,14 @@ PARSER_VERSION = "4"
 # text 2: UTF-16(메모장 '유니코드') 저장본을 바르게 읽는다.
 # pdf 5 / xlsx 6: 방문 범위와 생략 이유를 계측하고 추출 상한 누락을 부분 추출로 표시한다.
 # hwp/hwpx 5: 스트림·XML·셀·병합 범위를 계측하고 HWPX 속성의 생성/수정일을 구분한다.
-PARSER_REVISIONS = {"xlsx": "6", "pdf": "5", "hwpx": "5", "hwp": "5", "docx": "5", "text": "2"}
+# xls 1: 구형 XLS(BIFF8)를 olefile로 읽는다.
+# archive 2: 압축 안 문서의 본문을 격리된 임시 폴더에서 읽어 구성원 경로와 함께 싣는다.
+PARSER_REVISIONS = {"xlsx": "6", "xls": "1", "archive": "2", "pdf": "5", "hwpx": "5", "hwp": "5", "docx": "5", "text": "2"}
+# 읽지 못한 문서(실패·지원 안 함·보호)를 다루는 방식이 바뀌면 올린다. 위의 판 번호는 이미 읽은
+# 문서만 다시 읽게 하므로, 읽지 못한 문서는 이 번호가 바뀔 때 한 번 다시 시도한다.
+# 2: 구형 XLS를 읽고, 보호(DRM) 문서를 형식 오류가 아니라 보호 문서로 표시한다.
+FAILURE_REVISION = "2"
+RETRY_STATUSES = ("failed", "unsupported", "encrypted")
 
 
 def version_of(parser: str | None) -> str:

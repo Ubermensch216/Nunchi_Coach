@@ -1,4 +1,4 @@
-"""XLSX / XLSM 파서 (openpyxl).
+"""XLSX / XLSM 파서 (openpyxl). 구형 XLS도 같은 길로 조각을 만든다(parsers/xls.py).
 
 시트명과 셀 범위를 locator에 남긴다. 검색 근거로 "'검사결과' B4:F28"처럼
 표시하려면 파싱 단계에서 좌표를 만들어야 한다(PAR-003).
@@ -21,7 +21,6 @@ from .base import (
     MAX_CHARS,
     OK,
     PARTIAL,
-    UNSUPPORTED,
     DocMeta,
     ParseResult,
     Section,
@@ -39,6 +38,8 @@ HEADER_CHARS = 200
 
 
 def parse(path: Path) -> ParseResult:
+    if path.suffix.lower() == ".xls":
+        return _parse_xls(path)
     try:
         # 머리글·바닥글 서식이 openpyxl이 못 읽는 꼴이면 경고만 내고 그 부분을 버린다.
         # 본문 추출과 무관하므로 파일마다 콘솔에 경고가 쌓이지 않게 한다.
@@ -49,14 +50,42 @@ def parse(path: Path) -> ParseResult:
         message = str(exc)
         if "encrypted" in message.lower() or "password" in message.lower():
             return failed(PARSER, "암호로 보호된 통합문서", ENCRYPTED)
-        if path.suffix.lower() == ".xls":
-            return failed(PARSER, "구형 XLS 형식 — 지원하지 않음", UNSUPPORTED)
         return failed(PARSER, f"통합문서 열기 실패: {exc}")
+    return _parse_book(wb, PARSER, _read_meta)
 
+
+def _parse_xls(path: Path) -> ParseResult:
+    """구형 XLS는 olefile로 레코드를 읽어 같은 꼴의 통합문서로 만든다(parsers/xls.py)."""
+    from . import xls
+
+    try:
+        book = xls.open_book(path)
+    except xls.Encrypted:
+        return failed(xls.PARSER, "암호로 보호된 통합문서", ENCRYPTED)
+    except Exception as exc:  # noqa: BLE001 — 손상된 구형 파일 하나가 조사를 멈추지 않게 한다
+        return failed(xls.PARSER, f"구형 XLS 열기 실패: {exc}")
+    return _parse_book(book, xls.PARSER, lambda b: DocMeta(
+        title=b.title, author=b.author,
+        created=b.created.isoformat() if b.created else None,
+        modified=b.modified.isoformat() if b.modified else None))
+
+
+def open_workbook(path: Path):
+    """읽기 전용 통합문서 — xlsx는 openpyxl, 구형 xls는 parsers/xls. 부른 쪽이 close()한다."""
+    if Path(path).suffix.lower() == ".xls":
+        from . import xls
+
+        return xls.open_book(path)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore")
+        return openpyxl.load_workbook(path, read_only=True, data_only=True)
+
+
+def _parse_book(wb, parser: str, read_meta) -> ParseResult:
     # openpyxl Workbook은 컨텍스트 매니저가 아니다. read_only 모드에서는
     # 파일 핸들을 잡고 있으므로 close()를 반드시 불러야 원본이 잠기지 않는다.
     try:
-        meta = _read_meta(wb)
+        meta = read_meta(wb)
         budget = [MAX_CHARS]
         out: list[Section] = []
         ordinal = 0
@@ -150,7 +179,7 @@ def parse(path: Path) -> ParseResult:
         wb.close()
 
     out = [s for s in out if s.text]
-    coverage = {"version": 1, "scope": "xlsx_cached_values", "completeness": "unverified",
+    coverage = {"version": 1, "scope": f"{parser}_cached_values", "completeness": "unverified",
                 "sheets_total": len(wb.worksheets), "sheets_visited": len(sheets), "sheets": sheets,
                 "cells_visited": sum(s["cells_visited"] for s in sheets),
                 "characters_emitted": sum(len(s.text) for s in out),
@@ -164,7 +193,7 @@ def parse(path: Path) -> ParseResult:
     if char_limited or any(o["unit"] == "unvisited_sheet" for o in omissions):
         notes.append("글자 상한으로 일부만 읽음")
     return ParseResult(status=(PARTIAL if omissions else OK) if out else EMPTY,
-                       parser=PARSER, sections=out, meta=meta, coverage=coverage,
+                       parser=parser, sections=out, meta=meta, coverage=coverage,
                        note="; ".join(notes) or None)
 
 

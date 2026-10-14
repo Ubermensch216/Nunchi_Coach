@@ -47,7 +47,7 @@ _HEADER_SEARCH_ROWS = 12
 _MAX_ROWS = 5000
 _MAX_TEXT = 200
 _SAME_TITLE = 0.92
-_SPREADSHEETS = (".xlsx", ".xlsm")
+_SPREADSHEETS = (".xlsx", ".xlsm", ".xls")
 
 
 def _norm(text) -> str:
@@ -204,9 +204,9 @@ class Listing:
 
 def read_listing(path: Path, own: str) -> Listing | None:
     """표 계산 문서의 건 목록 시트들을 읽는다. 건 목록이 없으면 None."""
-    from openpyxl import load_workbook
+    from ..ingest.parsers.xlsx import open_workbook
 
-    workbook = load_workbook(path, read_only=True, data_only=True)
+    workbook = open_workbook(path)
     try:
         own_rows: list[Row] = []
         others = 0
