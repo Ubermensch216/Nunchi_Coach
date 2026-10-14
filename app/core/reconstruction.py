@@ -1478,13 +1478,15 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
     basis = basis or date.today()
     totals = {"tasks": 0, "items": 0, "added": 0, "updated": 0, "removed": 0,
               "recheck": 0, "conflicts": 0, "steps": 0, "stated_steps": 0, "gaps": 0,
-              "statements": 0}
+              "statements": 0, "matters": 0}
     # 공백 처리는 이 모듈의 읽기 규칙을 쓴다 — 서로 물리지 않게 여기서 들인다.
-    from . import continuity, handover_notes, relations, statements as statement_finder
+    from . import continuity, handover_notes, matters, relations, statements as statement_finder
 
     tasks = db.tasks()
     if not tasks:
         return totals
+    # 건 목록을 먼저 세운다. 업무의 다음 행동이 '이번 회차 건 중 회신이 없는 것'을 묻는다.
+    totals["matters"] = matters.rebuild(db, should_stop)["matters"]
     context = db.work_context()
     context_id = context["id"] if context else db.start_work_context()
     common = (statement_finder.common_skeletons(db, [task["id"] for task in tasks])

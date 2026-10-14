@@ -5,7 +5,7 @@ import re
 
 from dataclasses import dataclass, field
 
-from . import reconstruction as rc, workcard, workstate as ws
+from . import matters, reconstruction as rc, workcard, workstate as ws
 
 
 @dataclass
@@ -23,6 +23,7 @@ class Manual:
     sections: list[Section]
 
 
+_MAX_CASE_LINES = 15
 _ACCESS_FORM = re.compile(r"(?:접근\s*권한|사용자?|계정|권한)\s*(?:부여\s*)?신청서")
 
 def build(db, task_id: int, card=None) -> Manual:
@@ -33,7 +34,7 @@ def build(db, task_id: int, card=None) -> Manual:
     sections = [Section(key, title) for key, title in (
         ('overview', '업무 개요'), ('output', '목적·결과물'),
         ('timing', '시작 조건·시기'), ('prepare', '준비물·관련 서식'),
-        ('procedure', '수행 절차'), ('notes', '주의사항·담당자 메모'),
+        ('procedure', '수행 절차'), ('cases', '건별 현황'), ('notes', '주의사항·담당자 메모'),
         ('past', '과거 수행 사례'), ('first', '처음 맡으면 할 일'),
         ('basis', '근거·빠진 정보'))]
     by_key = {section.key: section for section in sections}
@@ -63,6 +64,19 @@ def build(db, task_id: int, card=None) -> Manual:
                     line += f"\n{label}: {step[field_name]}"
             by_key[key].lines.append(line)
             by_key[key].evidence.extend(step.get('evidence', []))
+    if card.matters:
+        cases = by_key['cases']
+        answered = sum(m['stage'] == matters.ANSWERED for m in card.matters)
+        summary = (f"우리 기관의 건 {len(card.matters)}건 · 회신이 이어진 것 {answered}건. "
+                   f"진행은 목록·취합표·회신 칸에서 확인한 데까지만 적습니다. 제출·수용·시행은 공문으로 확인하세요.")
+        if card.matter_others:
+            summary += f" 같은 목록의 다른 기관 행 {card.matter_others:,}건은 참고 사례로만 셉니다."
+        cases.lines.append(summary)
+        for matter in card.matters[:_MAX_CASE_LINES]:
+            cases.lines.append(f"{matters.describe(matter)}\n{matters.progress_line(matter)}")
+            cases.evidence.extend(matter['evidence'][:2])
+        if len(card.matters) > _MAX_CASE_LINES:
+            cases.lines.append(f"외 {len(card.matters) - _MAX_CASE_LINES}건은 결과 초안의 건별 현황에 있습니다.")
     if card.conflicting_procedure:
         item = card.conflicting_procedure
         by_key['procedure'].lines.append('자료가 서로 다릅니다. 절차를 확정할 수 없습니다.\n' + item['content'])

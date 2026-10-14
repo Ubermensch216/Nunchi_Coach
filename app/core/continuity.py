@@ -450,6 +450,26 @@ def next_actions(db, task_id: int) -> list[dict]:
                     f"준비할 수 있습니다.")
             actions.append({"type": "do", "text": text, "step_id": todo["id"], "gap_id": None})
 
+    # 이번 회차 건 가운데 회신이 이어지지 않은 것. 건마다 소관부서·접수·회신을 따로 챙긴다(W02).
+    from . import matters
+
+    found = matters.for_task(db, task_id)
+    waiting = matters.unanswered(found)
+    if waiting:
+        names = ", ".join(f"‘{m['title']}’" for m in waiting[:3])
+        more = f" 외 {len(waiting) - 3}건" if len(waiting) > 3 else ""
+        when = waiting[0]["round"] or f"{waiting[0]['year']}년"
+        awaited = " 또는 ".join(dict.fromkeys(matters.AWAITED.get(m["kind"], "결과") for m in waiting))
+        text = (f"[건별 진행 확인] {when} 우리 기관 건 {len(waiting)}건은 다음 결과가 자료에 이어지지 "
+                f"않았습니다(기다리는 결과: {awaited}): {names}{more}. 제출·접수 문서와 결과 문서를 찾아 건마다 진행을 확인하세요. "
+                f"목록에 있다는 것만으로 제출·수용을 확정하지 않습니다.")
+        twins = [(m, matters.lookalike(m, found)) for m in waiting]
+        twins = [(m, twin) for m, twin in twins if twin]
+        if twins:
+            text += " 제목이 바뀌어 따로 잡혔을 수 있는 건: " + "; ".join(
+                f"‘{m['title']}’ ↔ ‘{twin['title']}’({matters.progress_line(twin)})" for m, twin in twins[:2]) + "."
+        actions.append({"type": "check", "step_id": None, "gap_id": None, "text": text})
+
     for gap in gaps:
         if gap["next_action"]:
             actions.append({"type": "check", "text": f"[{gap['field']}] {gap['next_action']}",

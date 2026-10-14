@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
-from . import continuity, provenance, reconstruction as rc, workstate as ws
+from . import continuity, matters, provenance, reconstruction as rc, workstate as ws
 
 # 카드의 '해야 할 일'과 '시작 준비'에 들어가는 항목 종류.
 _TODO_KINDS = (rc.PURPOSE, rc.DEADLINE, rc.RECIPIENT, rc.AMOUNT, rc.OUTPUT)
@@ -45,6 +45,8 @@ class Card:
     actions: list[dict] = field(default_factory=list)
     gaps: list[dict] = field(default_factory=list)
     progress: dict = field(default_factory=dict)
+    matters: list[dict] = field(default_factory=list)     # 이 업무의 문서에 나온 우리 기관의 건
+    matter_others: int = 0                                 # 같은 목록의 다른 기관 행 수(참고)
 
     @property
     def empty(self) -> bool:
@@ -92,6 +94,8 @@ def build(db, task_id: int) -> Card:
             card.precedent_steps.append(step)
         else:
             card.stated_steps.append(step)
+    card.matters = matters.for_task(db, task_id)
+    card.matter_others = matters.other_rows(db, task_id)
     card.actions = continuity.next_actions(db, task_id)
     card.gaps = [dict(gap) for gap in db.info_gaps(task_id)]
     card.progress = {
@@ -246,6 +250,19 @@ def draft_markdown(db, task_id: int, today: date | None = None) -> str:
                 "뜻이 아닙니다.", ""]
         out += [f"- {step['label']} — {step['output'] or ''} {cite(step)}".rstrip()
                 for step in card.precedent_steps]
+        out.append("")
+
+    if card.matters:
+        out += ["## 건별 현황", "",
+                "목록 문서의 행에서 세운 우리 기관의 건입니다. 진행은 자료에서 확인한 데까지만 적었습니다.", "",
+                "| 회차 | 건 | 주관 · 소관 | 자료로 확인한 진행 | 근거 |", "|---|---|---|---|---|"]
+        for matter in card.matters:
+            owners = " · ".join(p for p in (matter["dept"], matter["ministry"]) if p)
+            out.append(f"| {cell(matter['round'])} | {cell(matter['title'])} | {cell(owners)} "
+                       f"| {cell(matters.progress_line(matter))} | {cite(matter)} |")
+        if card.matter_others:
+            out.append("")
+            out.append(f"같은 목록의 다른 기관 행 {card.matter_others:,}건은 참고 사례로만 셌습니다.")
         out.append("")
 
     out += ["## 다음 행동", ""]

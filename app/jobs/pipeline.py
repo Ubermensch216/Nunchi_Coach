@@ -909,6 +909,8 @@ class Pipeline(QObject):
                 report.note += f" · 재확인 필요 {totals['recheck']:,}"
         if totals["statements"]:
             report.note += f" · 문장에서 찾은 내용 {totals['statements']:,}"
+        if totals.get("matters"):
+            report.note += f" · 우리 기관의 건 {totals['matters']:,}"
         if totals["gaps"]:
             report.note += f" · 확인할 공백 {totals['gaps']:,}"
         if not self._stop:
