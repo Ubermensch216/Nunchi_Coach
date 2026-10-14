@@ -24,7 +24,7 @@ from ..ai.settings import project_client
 from ..ai.prompts_loader import render
 from ..ai.schemas import ASK_SCHEMA
 from ..db import Database, representative_predicate
-from . import evidence, fts, intent, tablemath
+from . import evidence, fts, intent, standing, tablemath
 from ..core import diagnostics, korean, provenance
 from ..core.chunking import MAX_CHUNK_CHARS
 from .query import QueryScope, infer_scope
@@ -104,6 +104,8 @@ class Citation:
     # 긴 문단을 나눈 조각은 locator가 같을 수 있으므로 실제 조각도 고정한다.
     chunk_id: int | None = None
     graph_paths: list[dict] = field(default_factory=list)
+    # 무슨 자료인가: '2025년 자료 · 참고자료 · AI 생성 표시' (search/standing.py)
+    note: str = ""
 
 
 @dataclass(slots=True)
@@ -148,6 +150,7 @@ WITHHELD_REASONS = {
     "no_facts": "선택한 자료에서 요청과 관련된 내용을 찾지 못했습니다.",
 }
 GENERIC_WITHHELD = "확인 가능한 자료가 부족합니다."
+OUT_OF_SCOPE = "선택한 업무·연도에 해당하는 자료가 없습니다."
 
 
 def withheld_reason(answer: "Answer") -> str:
@@ -183,15 +186,26 @@ def search_only(db: Database, question: str, scope: QueryScope | None = None,
     answer = _search_only(db, question, scope, message)
     if revisions(db) != snapshot or (scope is not None and scope.fingerprint() != scope_snapshot):
         return Answer(question, "", True, error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
-    return answer
+    return _with_standing(db, answer, scope)
 
 
 def _search_only(db: Database, question: str, scope: QueryScope | None,
                  message: str) -> Answer:
+    inferred_basis = _basis_from_question(scope)
     scope = infer_scope(question).merged_with(scope)
+    chosen_docs = scope.doc_ids
     scope.doc_ids = scope.search_documents(db)
-    if scope.doc_ids == [] or db.con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] == 0:
+    if scope.doc_ids == [] and inferred_basis and scope.year_basis in ("performance", "evaluation"):
+        # 실적·평가의 해가 표시된 문서가 없으면 작성 연도로 찾는다(_ask와 같다).
+        scope = QueryScope(years=scope.years, task_id=scope.task_id, doc_ids=chosen_docs,
+                           notebook_id=scope.notebook_id)
+        scope.doc_ids = scope.search_documents(db)
+    if db.con.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] == 0:
         return Answer(question, "", True, error="검색할 자료가 아직 준비되지 않았습니다. 자료 선택과 분석 상태를 확인하세요.",
+                      generation={"mode": "search_only"})
+    if scope.doc_ids == []:
+        # 자료는 있는데 고른 업무·연도에 맞는 것이 없다. '준비되지 않았다'가 아니다.
+        return Answer(question, OUT_OF_SCOPE, True, inferred_years=scope.years,
                       generation={"mode": "search_only"})
     # 한국어 조사 때문에 원문과 다른 꼴의 질문도 핵심어로 검색한다.
     terms = " ".join(korean.stem(word) for word in korean.tokens(question))
@@ -239,11 +253,47 @@ def ask(db: Database, question: str, client: OllamaClient | None = None,
     answer = _ask(db, question, client, scope, expander, trace)
     if revisions(db) != snapshot or (scope is not None and scope.fingerprint() != scope_snapshot):
         answer = Answer(question, "", True, error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
+    else:
+        answer = _with_standing(db, answer, scope)
     if 'paths' in trace.counts.get('graph', {}):
         for citation in answer.citations:
             citation.graph_paths = [path for path in trace.counts['graph']['paths']
                                    if path['chunk_id'] == citation.chunk_id]
     return trace.finish(answer)
+
+
+def _basis_from_question(chosen: QueryScope | None) -> bool:
+    """연도 기준을 질문에서 읽었는가(화면에서 고르지 않았는가). 고른 기준은 넓히지 않는다."""
+    return chosen is None or (not chosen.years and chosen.year_basis == "document_date" and chosen.case_id is None)
+
+
+def _with_standing(db: Database, answer: Answer, scope: QueryScope | None) -> Answer:
+    """근거마다 무슨 자료인지 밝히고, 읽지 못한 관련 문서와 자료의 범위를 알린다 (P1-4).
+
+    답의 글은 바꾸지 않는다. 근거 표시와 안내만 더한다.
+    """
+    if answer.error:
+        return answer
+    refs = standing.references(db, [c.doc_id for c in answer.citations])
+    for citation in answer.citations:
+        citation.note = standing.note(db, citation.doc_id, refs)
+    full = infer_scope(answer.question).merged_with(scope)
+    caveats = []
+    unread = standing.unread_line(standing.unread_related(db, answer.question, full))
+    if unread:
+        caveats.append(unread)
+    if answer.withheld:
+        material = standing.material_line(db, full)
+        if material:
+            caveats.insert(0, material)
+    if any(c.doc_id in refs for c in answer.citations):
+        caveats.append("근거 가운데 참고자료(AI 생성·발간물·여러 기관 취합표·압축 묶음)가 있습니다. 업무의 기준·의무는 "
+                       "공문·지침·결재 문서로 확인하세요.")
+    if caveats:
+        answer.generation = {**answer.generation, "caveats": caveats}
+        if answer.withheld or answer.generation.get("mode") == "search_only":
+            answer.guidance = " ".join([*caveats, answer.guidance] if answer.guidance else caveats)
+    return answer
 
 
 def _ask(db: Database, question: str, client: OllamaClient | None,
@@ -261,12 +311,24 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
     if not question:
         return Answer(question=question, text="", withheld=True, error="빈 질문입니다")
     content_revision = db.get_meta("content_revision")
+    inferred_basis = _basis_from_question(scope)
     scope = infer_scope(question).merged_with(scope)
     with trace.stage("scope"):
+        search_docs = scope.search_documents(db)
+    if search_docs == [] and inferred_basis and scope.year_basis in ("performance", "evaluation"):
+        # 실적·평가의 해가 표시된 문서가 없으면 작성 연도로 찾는다. 해를 읽지 못한 문서를
+        # '그 해의 자료가 없다'로 만들지 않는다.
+        trace.record(year_basis_fallback=scope.year_basis)
+        scope = QueryScope(years=scope.years, task_id=scope.task_id, doc_ids=scope.doc_ids,
+                           notebook_id=scope.notebook_id, mode=scope.mode, law=scope.law)
         search_docs = scope.search_documents(db)
     trace.record(scope_documents=len(search_docs) if search_docs is not None else None,
                  years=list(scope.years), task_scoped=scope.has_task,
                  year_basis=scope.year_basis, case_id=scope.case_id)
+
+    if search_docs == []:
+        # 고른 업무·연도에 맞는 자료가 없다. 범위 밖 자료로 메우지 않는다.
+        return Answer(question, OUT_OF_SCOPE, True, inferred_years=scope.years)
 
     client = client or project_client(db, OllamaClient)
     health = client.health()
@@ -341,7 +403,6 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         trace.record(variant_added_candidates=len(widened - strong_ids))
         strong_ids |= widened
 
-    scope = infer_scope(question).merged_with(scope)
     from .graph import augment
     with trace.stage("graph"):
         combined, strong_ids, graph_trace = augment(db, question, scope, combined, strong_ids)
@@ -1077,6 +1138,11 @@ def _select_context(
 
     ranked = [(c.chunk_id, c.score) for c in candidates]
     doc_of = {cid: meta[cid]["doc_id"] for cid, _s in ranked if cid in meta}
+    # 참고 근거(AI 생성·발간물·여러 기관 취합표·압축 묶음)가 지침과 우리 문서를 밀어내지 않게 한다.
+    before_refs = len(ranked)
+    ranked = standing.limit(ranked, doc_of, standing.references(db, set(doc_of.values())))
+    if trace:
+        trace.record(reference_removed=before_refs - len(ranked))
     capped = _cap_per_document(ranked, doc_of)
     if trace:
         trace.record(diversity_removed=len(ranked)-len(capped), top_k_removed=max(0,len(capped)-TOP_K))

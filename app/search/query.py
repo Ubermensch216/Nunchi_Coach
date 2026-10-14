@@ -72,6 +72,9 @@ class QueryScope:
     def merged_with(self, chosen: "QueryScope | None") -> "QueryScope":
         if chosen is None:
             return self
+        # 화면에서 해를 고르지 않았으면 질문이 말한 해의 기준(실적·평가)을 따른다. 기본값
+        # 'document_date'가 질문에서 읽은 기준을 조용히 덮지 않게 한다.
+        chosen_basis = chosen.years or chosen.year_basis != "document_date" or chosen.case_id is not None
         return QueryScope(
             years=chosen.years or self.years,
             task_id=chosen.task_id if chosen.task_id is not None else self.task_id,
@@ -79,7 +82,7 @@ class QueryScope:
             notebook_id=chosen.notebook_id,
             mode=chosen.mode,
             law=chosen.law,
-            year_basis=chosen.year_basis,
+            year_basis=chosen.year_basis if chosen_basis else self.year_basis,
             case_id=chosen.case_id,
         )
 
@@ -133,4 +136,13 @@ def infer_scope(question: str, today: date | None = None) -> QueryScope:
     if _NEXT_YEAR.search(question):
         years.add(today.year + 1)
 
+    # '2025년 실적', '2026년 평가'는 문서의 작성 연도가 아니라 실적·평가의 해다(C10·C11).
+    # 문서의 해를 읽는 규칙(core/docyears)으로 질문을 읽는다 — 문서와 질문을 같은 말로 견준다.
+    from ..core import docyears
+
+    marks = docyears.read(question)
+    for kind in (docyears.EVALUATION, docyears.PERFORMANCE):
+        stated = sorted({mark.year for mark in marks if mark.kind == kind})
+        if stated:
+            return QueryScope(years=stated, year_basis=kind)
     return QueryScope(years=sorted(years))

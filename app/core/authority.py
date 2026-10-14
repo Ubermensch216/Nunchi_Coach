@@ -33,6 +33,7 @@ LABEL = {AI_GENERATED: "AI 생성 참고자료", PUBLICATION: "발간물·연구
 _AI = re.compile(
     r"chat\s*-?\s*gpt|deep\s*-?\s*research|(?<![a-z])gpt[-\s]?\d|gemini|perplexity|copilot"
     r"|claude|뤼튼|wrtn|클로바\s*x|AI\s*생성|생성형\s*AI\s*(?:작성|초안)", re.IGNORECASE)
+_AI_OUTPUT = re.compile(r"결과|답변|초안|작성|생성|보고서|정리|output|result|draft", re.IGNORECASE)
 # 정기간행물·학술·연구 자료. 업무 문서가 이런 이름을 갖는 일은 드물다.
 _PUBLICATION = re.compile(
     r"vol\.?\s*\d+|(?:봄|여름|가을|겨울)\s*호|통권\s*\d+|제\s*\d+\s*권\s*제?\s*\d+\s*호"
@@ -48,9 +49,12 @@ def marker(filename: str, path: str = "") -> str | None:
     """
     name = filename or ""
     folder = str(PurePath(path).parent) if path else ""
-    for text in (name, folder):
-        if _AI.search(text):
-            return AI_GENERATED
+    if _AI.search(name):
+        return AI_GENERATED
+    # 폴더 이름은 그 안이 AI가 낸 것이라고 말할 때만 본다. 'pdf for Deep research'는 AI에 넣을
+    # 원자료를 모은 폴더다 — 그 안의 행안부 계획은 공식 문서다(실측).
+    if any(_AI.search(part) and _AI_OUTPUT.search(part) for part in PurePath(folder).parts):
+        return AI_GENERATED
     if _PUBLICATION.search(name):
         return PUBLICATION
     return None

@@ -622,6 +622,9 @@ class AskView(QWidget):
         body.setOpenExternalLinks(False)
         body.linkActivated.connect(self._show_citation)
         self.answer_column.addWidget(body)
+        # 읽지 못한 관련 문서, 참고자료가 섞인 근거 — 답의 글은 그대로 두고 따로 알린다.
+        for caveat in answer.generation.get("caveats") or []:
+            self.answer_column.addWidget(muted_label(caveat, small=True))
 
         marks = {c.index for c in answer.citations}
         if self._selected not in marks:
@@ -1086,6 +1089,8 @@ def _meta_strip(db: Database, citation, info: dict, sections: int) -> QWidget:
     official = provenance.describe(info.get("official"))
     if official:
         parts.append(official)
+    if getattr(citation, "note", ""):
+        parts.append(citation.note)
     return muted_label("   ·   ".join(parts), small=True)
 
 

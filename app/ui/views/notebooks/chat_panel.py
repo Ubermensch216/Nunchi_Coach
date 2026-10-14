@@ -383,6 +383,8 @@ class ChatPanel(QWidget):
             body.addWidget(muted_label("선택한 자료 전체를 훑어 정리했습니다. 문장마다 근거 원문을 확인하세요.",
                                        small=True))
         body.addWidget(self._rich(answer.text, answer))
+        for caveat in answer.generation.get("caveats") or []:
+            body.addWidget(muted_label(caveat, small=True))
         self._add_citations(body, answer)
         if row is not None:
             body.addLayout(self._actions(answer, row))
@@ -446,7 +448,7 @@ class ChatPanel(QWidget):
             chip = QPushButton(f"{citation.index}  {citation.filename}" + (f" · {where}" if where else ""))
             chip.setObjectName("Chip")
             chip.setCursor(Qt.CursorShape.PointingHandCursor)
-            chip.setToolTip(citation.snippet or citation.filename)
+            chip.setToolTip("\n".join(p for p in (citation.note, citation.snippet or citation.filename) if p))
             chip.clicked.connect(lambda _=False, c=citation: self.citation_requested.emit(c))
             body.addWidget(chip, 0, Qt.AlignmentFlag.AlignLeft)
 

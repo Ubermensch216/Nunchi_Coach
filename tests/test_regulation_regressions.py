@@ -219,6 +219,9 @@ def test_one_document_listing_many_purposes_gives_none(db):
 def test_authority_markers_read_only_explicit_tool_and_publication_names():
     assert authority.marker("[ChatGPT-DeepResearch]2026년 전략.hwpx") == authority.AI_GENERATED
     assert authority.marker("report.hwpx", r"D:\자료\gemini 초안\report.hwpx") == authority.AI_GENERATED
+    # AI에 넣으려고 모은 원자료 폴더 안의 공식 문서는 AI가 쓴 것이 아니다(실측).
+    assert authority.marker("★2025년 성과평가 추진계획(통보용).pdf",
+                            r"E:\자료\pdf for Deep research\★2025년 성과평가 추진계획(통보용).pdf") is None
     assert authority.marker("0. KIPA 규제동향 25년 봄호 Vol.50.pdf") == authority.PUBLICATION
     assert authority.marker("[국내 이슈 분석] AI 규제정책 방향에 대한 소고.pdf") == authority.PUBLICATION
     # 주제어의 'AI'는 도구 이름이 아니다. 우리 계획서는 걸리지 않는다.
