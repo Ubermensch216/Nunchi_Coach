@@ -1,4 +1,4 @@
-"""노트북에 올린 파일을 뒤에서 읽는다.
+"""업무노트에 올린 파일을 뒤에서 읽는다.
 
 읽기·그림 판독·임베딩은 파일 하나에 몇 초에서 몇 분이 걸린다. 화면을 막지
 않도록 워커 스레드에서 돌고, 파일 하나가 끝날 때마다 알려 목록에 바로 나타나게
@@ -71,7 +71,7 @@ class IngestWorker(QObject):
                         briefs.add(outcome.doc_id)
                     else:
                         outcome = notebook_ingest.reprocess(db, target, client, phase, lambda: self.cancelled)
-                except ValueError as exc:  # 그사이 업무가 없어졌거나 노트북을 보관했다
+                except ValueError as exc:  # 그사이 업무가 없어졌거나 업무노트를 보관했다
                     outcome = notebook_ingest.Ingested(str(target), name, status="rejected", error=str(exc))
                 except Exception as exc:   # 파일 하나가 묶음 전체를 멈추면 안 된다
                     diagnostics.record("notebook.ingest.error", exc)

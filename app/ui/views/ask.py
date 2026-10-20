@@ -1,7 +1,7 @@
 """질문 화면 — 자유 탐색.
 
-**지금은 메뉴에 걸려 있지 않다.** 묻는 일은 노트북으로 들어갔다(ui/shell.py NAV,
-core/notebook_tasks.py). 이 파일은 노트북의 출처·대화 판이 가져다 쓰는 조각
+**지금은 메뉴에 걸려 있지 않다.** 묻는 일은 업무노트로 들어갔다(ui/shell.py NAV,
+core/notebook_tasks.py). 이 파일은 업무노트의 출처·대화 판이 가져다 쓰는 조각
 (_fill_passages · _meta_strip · _cited_ordinals · ASK_INPUT_H)의 자리로
 남아 있고, AskView 자체는 시험에서만 선다.
 

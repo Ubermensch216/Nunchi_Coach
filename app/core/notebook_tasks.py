@@ -1,4 +1,4 @@
-"""눈치코치가 파악한 업무를 노트북의 자료로 넣는다.
+"""눈치코치가 파악한 업무를 업무노트의 자료로 넣는다.
 
 업무 하나에서 넣을 수 있는 것은 두 가지다.
 
@@ -255,14 +255,14 @@ def brief_digest(db, task_id: int) -> str:
     return hashlib.sha256(brief_markdown(db, task_id).encode("utf-8")).hexdigest()
 
 
-# ── 노트북에 넣기 ───────────────────────────────────────────────────
+# ── 업무노트에 넣기 ───────────────────────────────────────────────────
 
 def add_brief(db, notebook_id: int, task_id: int, client=None,
               on_phase: Callable[[str], None] = lambda phase: None,
               should_stop: Callable[[], bool] = lambda: False) -> notebook_ingest.Ingested:
-    """업무 정리본을 지금 내용으로 만들어 노트북 자료로 넣는다.
+    """업무 정리본을 지금 내용으로 만들어 업무노트 자료로 넣는다.
 
-    이 노트북에 같은 업무의 옛 정리본이 있으면 새 판으로 바꾼다. 옛 글은
+    이 업무노트에 같은 업무의 옛 정리본이 있으면 새 판으로 바꾼다. 옛 글은
     보관소에 남는다 — 그 글을 근거로 받은 지난 답을 다시 확인할 수 있어야 한다.
     """
     from . import manual_versions
@@ -332,7 +332,7 @@ def outdated(db, notebook_id: int) -> dict[int, int]:
     return stale
 
 
-# ── 업무의 노트북 열기 ──────────────────────────────────────────────
+# ── 업무의 업무노트 열기 ──────────────────────────────────────────────
 
 @dataclass
 class Opened:
@@ -343,11 +343,11 @@ class Opened:
 
 
 def open_for_task(db, task_id: int, client=None) -> Opened:
-    """업무의 노트북을 찾거나 만들고, 매뉴얼 정리본과 업무 문서를 연결한다.
+    """업무의 업무노트를 찾거나 만들고, 매뉴얼 정리본과 업무 문서를 연결한다.
 
     만든 직후이거나 넣어 둔 정리본의 업무 내용이 달라졌으면 새 판으로 바꾼다.
-    일부가 실패해도 노트북은 연다 — 무엇이 빠졌는지는 warnings로 알려, 조용히
-    빈 노트북을 보여 주지 않는다.
+    일부가 실패해도 업무노트는 연다 — 무엇이 빠졌는지는 warnings로 알려, 조용히
+    빈 업무노트를 보여 주지 않는다.
     """
     task = _task(db, task_id)
     books = [nb for nb in notebook.overview(db) if not nb["archived"]]
@@ -370,7 +370,7 @@ def open_for_task(db, task_id: int, client=None) -> Opened:
             else:
                 opened.warnings.append("매뉴얼 정리본을 넣지 못했습니다: "
                                        + (outcome.error or outcome.note or outcome.status))
-        except Exception as exc:   # 정리본 실패가 노트북 열기를 막지 않는다
+        except Exception as exc:   # 정리본 실패가 업무노트 열기를 막지 않는다
             from . import diagnostics, manual_versions
             diagnostics.record("notebook.task.brief.error", exc)
             manual_versions.record_failure(db, task_id, notebook_id, f"{type(exc).__name__}: {exc}")

@@ -35,7 +35,7 @@ SUMMARIZE_SCHEMA: dict[str, Any] = {
     "required": ["summary"],
 }
 
-# 노트북 자료 안내(ai/analyze.py brief). 요약과 주제어를 한 번에 받는다.
+# 업무노트 자료 안내(ai/analyze.py brief). 요약과 주제어를 한 번에 받는다.
 BRIEF_TOPICS = 8
 BRIEF_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -85,7 +85,7 @@ ASK_SCHEMA: dict[str, Any] = {
     "required": ["answered", "sentences"],
 }
 
-# 노트북 대화 — 검색에 넣을 문장만 만든다(search/expand.py).
+# 업무노트 대화 — 검색에 넣을 문장만 만든다(search/expand.py).
 EXPAND_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {"variants": {"type": "array", "items": {"type": "string"}, "maxItems": 4}},

@@ -29,13 +29,14 @@ from ..widgets import (
     muted_label, open_original, section_title, view_title,
 )
 
-TILES = (("cases", "진행 중인 수행 건"), ("new", "새 제안"), ("due", "확인할 기한"), ("completed", "끝난 실행"))
+TILES = briefing.ATTENTION_KINDS
 
 
 class TodayView(QWidget):
     open_task = Signal(int)
     changed = Signal()
     go_tasks = Signal()
+    count_changed = Signal(int)
 
     def __init__(self, db: Database, parent: QWidget | None = None, today: date | None = None):
         super().__init__(parent)
@@ -55,11 +56,6 @@ class TodayView(QWidget):
         frame = QVBoxLayout(header)
         frame.setContentsMargins(*header_margins(theme.SP_XL))
         frame.addLayout(head_row)
-        back = QPushButton("← 전체 업무")
-        back.setObjectName("Quiet")
-        back.setCursor(Qt.CursorShape.PointingHandCursor)
-        back.clicked.connect(self.go_tasks.emit)
-        head_column.addWidget(back, 0, Qt.AlignmentFlag.AlignLeft)
         head_column.addWidget(view_title("챙길 일"))
         self.lead = muted_label("묻기 전에 먼저 챙깁니다. 제안은 과거 자료에서 읽은 것이며, 올해의 의무가 아닙니다.")
         head_column.addWidget(self.lead)
@@ -76,8 +72,15 @@ class TodayView(QWidget):
     def refresh(self) -> None:
         data = briefing.build(self.db, self.today())
         self.data = data
+        self.count_changed.emit(data.attention_count)
         column = self.page.reset()
         column.addLayout(self._tiles(data))
+        summary = muted_label('현재 챙길 일 · ' + data.attention_summary)
+        summary.setObjectName('AttentionSummary')
+        column.addWidget(summary)
+        column.addWidget(muted_label(
+            f"참고 지표 · 기한 임박 {data.tiles['due']}건(진행 중인 수행 건에 포함) · "
+            f"끝난 실행 {data.tiles['completed']}건(완료 이력, 합계 제외)", small=True))
         if data.empty:
             scanned = f"마지막으로 살핀 날: {data.scanned_on}. " if data.scanned_on else ""
             column.addWidget(EmptyState(
@@ -110,6 +113,7 @@ class TodayView(QWidget):
             tile.body.setSpacing(0)
             number = muted_label(str(data.tiles[key]), wrap=False)
             number.setObjectName("MetricValue")
+            number.setProperty('attention_kind', key)
             tile.body.addWidget(number)
             tile.body.addWidget(muted_label(label, small=True, wrap=False))
             row.addWidget(tile, 1)

@@ -150,6 +150,7 @@ def test_at_most_five_new_cards_and_the_rest_are_counted(db):
     recommend.scan(db, TODAY)
     data = briefing.build(db, TODAY)
     assert len(data.cards) == 5 and data.hidden == 2 and data.tiles["new"] == 7
+    assert data.attention_count == 7
 
 
 # ── 올해 공식 문서 (T12) ────────────────────────────────────────────
@@ -318,7 +319,7 @@ def test_today_view_shows_the_card_and_its_actions(db, monkeypatch):
     from PySide6.QtWidgets import QLabel
     text = " ".join(label.text() for label in view.findChildren(QLabel))
     assert "과거 반복업무 · 올해 일정 미확인" in text and "받아들이면 하는 일" in text
-    assert view.data.tiles == {"cases": 0, "new": 1, "due": 0, "completed": 0}
+    assert view.data.tiles == {"cases": 0, "new": 1, "gaps": 0, "due": 0, "completed": 0}
     buttons(view, "준비 작업 시작")[0].click()
     assert len(opened) == 1 and opened[0][1] == 2026 and opened[0][2] is not None
     assert recs(db)[0]["state"] == "accepted" and db.cases(state="open")
@@ -336,3 +337,41 @@ def test_today_view_snooze_and_decline_update_the_screen(db):
     first = view.data.cards[0].rec_id
     view.dismiss(first, "이미 했음")
     assert view.data.empty and len(changes) == 2
+
+
+def test_attention_total_counts_gap_candidates_and_excludes_due_subset_and_history(db):
+    task_id = seed(db, name='진행 중 업무')
+    seed(db, name='새 업무')
+    case_id = cases.open_case(db, task_id, 2026)
+    db.set_case_due(case_id, '2026-10-20', 'user')
+    for index, label in enumerate(('접수', '자료 요청'), 1):
+        db.con.execute('INSERT INTO task_steps(task_id,year,ordinal,label,month) VALUES (?,2025,?,?,9)',
+                       (task_id, index, label))
+    recommend.scan(db, TODAY)
+    data = briefing.build(db, TODAY)
+    assert [data.tiles[key] for key, _ in briefing.ATTENTION_KINDS] == [1, 1, 2]
+    assert data.tiles['due'] == 1
+    assert data.attention_count == 4
+    data.tiles['completed'] = 9  # 완료 이력은 현재 할 일이 아니다.
+    assert data.attention_count == 4
+    assert '빠진 단계 후보 2건' in data.attention_summary
+
+
+def test_dashboard_tiles_and_refreshed_count_share_one_total(db):
+    from PySide6.QtWidgets import QLabel
+    task_id = seed(db)
+    cases.open_case(db, task_id, 2026)
+    for index, label in enumerate(('접수', '자료 요청'), 1):
+        db.con.execute('INSERT INTO task_steps(task_id,year,ordinal,label,month) VALUES (?,2025,?,?,9)',
+                       (task_id, index, label))
+    view = TodayView(db, today=TODAY)
+    counts = []
+    view.count_changed.connect(counts.append)
+    view.refresh()
+    numbers = [int(label.text()) for label in view.findChildren(QLabel)
+               if label.property('attention_kind')]
+    assert sum(numbers) == counts[-1] == 3
+    check = db.add_check_item(db.cases(state='open')[0]['id'], '자료 요청 진행')
+    db.set_check_state(check, 'doing')
+    view.refresh()
+    assert counts[-1] == 2 and view.data.tiles['gaps'] == 1

@@ -1,10 +1,11 @@
-"""애플리케이션 셸 — 업무·노트북 상단 메뉴와 분석 상태.
+"""애플리케이션 셸 — 업무·챙길 일·업무노트·인수인계 메뉴와 분석 상태.
 
-주 메뉴는 업무와 노트북이다. 일정·자료는 선택 업무 안에서 보며,
+일정·자료는 선택 업무 안에서 보며, 챙길 일은 진행·제안 확인,
+인수인계는 매뉴얼 작성과 기록 보관·이동을 맡는다.
 미분류 자료 점검은 보조 문서 화면에서 연다.
 
-묻는 일은 노트북이 한다. 예전의 '질문' 메뉴는 자료 전체에 한 번 묻고 끝나는
-화면이었다 — 지금은 눈치코치가 파악한 업무와 그 문서를 노트북의 자료로 넣고
+묻는 일은 업무노트가 한다. 예전의 '질문' 메뉴는 자료 전체에 한 번 묻고 끝나는
+화면이었다 — 지금은 눈치코치가 파악한 업무와 그 문서를 업무노트의 자료로 넣고
 (core/notebook_tasks.py) 거기서 묻는다. 묻는 자리가 둘이면 어디서 물어야 할지부터
 물어야 한다.
 
@@ -41,14 +42,19 @@ from .views.initial_analysis import InitialAnalysisView
 from .views.tasks import TasksView
 from .views.today import TodayView
 from .views.notebooks import NotebooksView
+from .views.handover import HandoverView
+from .widgets.nav_button import NavButton
 
 # 메뉴마다 그 메뉴가 답하는 질문을 함께 적는다. 이름만 있는 메뉴는
 # 처음 쓰는 사람에게 "눌러 봐야 아는 것"이지만, 질문이 붙으면 누르기 전에
 # 안다 — 인수인계 도구에서 첫 5분이 그 차이로 갈린다.
 NAV = [
     ("tasks", "tasks", "업무", "내 업무는 무엇인가"),
-    ("notebooks", "ask", "노트북", "파악한 업무와 자료에 묻고, 정리해 남긴다"),
+    ("today", "tasks", "챙길 일", "새 제안·진행 중인 작업·확인할 단계를 살핀다"),
+    ("notebooks", "ask", "업무노트", "업무노트를 골라 업무와 자료를 분석하고, 정리해 남긴다"),
+    ("handover", "tasks", "인수인계", "후임자용 매뉴얼 작성과 업무 기록 보관·이동"),
 ]
+NAV_SHORTCUTS = {'tasks': 1, 'notebooks': 2, 'today': 3, 'handover': 4}
 
 # 가로 띠에서는 메뉴가 글자만으로 선다. 아이콘 체계(icons.py)는 설정 창처럼
 # 세로 목록이 있는 곳에서 쓴다.
@@ -123,8 +129,8 @@ class AnalysisStatus(QPushButton):
 class TopBar(QWidget):
     """흰 띠 하나에 길과 상태를 담는다.
 
-    왼쪽부터 제품·프로젝트 → 업무·노트북 메뉴 → 오른쪽에 지금 상태. 세로 사이드바 대신
-    가로 띠를 쓰는 이유는 본문이다 — 노트북이 '출처 | 대화 | 스튜디오' 세 판을
+    왼쪽부터 제품·프로젝트 → 업무·업무노트 메뉴 → 오른쪽에 지금 상태. 세로 사이드바 대신
+    가로 띠를 쓰는 이유는 본문이다 — 업무노트가 '출처 | 대화 | 스튜디오' 세 판을
     쓰는데 왼쪽에 메뉴 기둥까지 서면 원문을 대조하기 어려운 폭이 된다.
     메뉴는 하루에 몇 번 누르고 본문은 내내 읽는다.
 
@@ -172,14 +178,13 @@ class TopBar(QWidget):
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
         self._buttons: dict[str, QPushButton] = {}
-        for index, (key, _icon, label, question) in enumerate(NAV, start=1):
-            button = QPushButton(label)
-            button.setObjectName("NavTab")
+        for key, _icon, label, question in NAV:
+            button = NavButton(label)
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             # 메뉴가 답하는 질문은 툴팁에 둔다 — 처음 쓰는 사람에게 이 넷이
             # 각각 무엇에 답하는지가 이 제품의 뼈대다.
-            button.setToolTip(f"{label} — {question}  (Ctrl+{index})")
+            button.setToolTip(f"{label} — {question}  (Ctrl+{NAV_SHORTCUTS[key]})")
             button.clicked.connect(lambda _=False, k=key: self.navigated.emit(k))
             self.group.addButton(button)
             row.addWidget(button)
@@ -236,17 +241,19 @@ class TopBar(QWidget):
         if button:
             button.setChecked(True)
 
-    def set_count(self, key: str, count: int) -> None:
-        """메뉴 이름 뒤에 건수를 붙인다. 누르기 전에 규모를 알린다."""
+    def set_count(self, key: str, count: int, detail: str = '') -> None:
+        """메뉴 제목을 유지하고 건수는 독립 배지로 표시한다."""
         button = self._buttons.get(key)
         if button is not None:
-            label = next(label for k, _icon, label, _question in NAV if k == key)
-            button.setText(f"{label} {count}" if count else label)
+            button.set_count(count)
+            label, question = next((label, question) for k, _icon, label, question in NAV if k == key)
+            button.setToolTip(f'{label} — {question}  (Ctrl+{NAV_SHORTCUTS[key]})' + ('\n' + detail if detail else ''))
+            button.setAccessibleDescription(detail)
 
     def setEnabledNav(self, enabled: bool) -> None:
-        # 노트북은 자료 폴더 없이도 쓴다 — 파일을 직접 올려 시작할 수 있다.
+        # 업무노트는 직접 업로드, 인수인계는 저장본 가져오기로 자료 폴더 없이도 시작할 수 있다.
         for key, button in self._buttons.items():
-            button.setEnabled(enabled or key == "notebooks")
+            button.setEnabled(enabled or key in ("notebooks", "handover"))
 
     # ── 상태 ────────────────────────────────────────────────────────
     def show_progress(self, done: int, total: int, note: str = "") -> None:
@@ -261,7 +268,7 @@ class TopBar(QWidget):
             self.promise.setText("읽기 전용 · 법령 조회 켜짐")
             self.promise.setToolTip(
                 "원본을 수정·이동·삭제·이름 변경하지 않습니다.\n"
-                "현행 법령 조회가 켜져 있습니다 — 노트북 대화에서 ‘법령’을 고른 질문에 한해 "
+                "현행 법령 조회가 켜져 있습니다 — 업무노트 대화에서 ‘법령’을 고른 질문에 한해 "
                 "law.go.kr로 법령 이름·조문 번호·그 질문 문장을 보냅니다. 자료 본문은 보내지 않습니다.")
         else:
             self.promise.setText("읽기 전용")
@@ -316,7 +323,7 @@ class MainWindow(QMainWindow):
         self.topbar.navigated.connect(self.go)
         # 진행도를 누르면 확인할 것이 있는 자리로 데려간다. 숫자만 보여 주고
         # 어디로 가야 하는지 말하지 않으면 그 숫자는 채근일 뿐이다.
-        self.topbar.handover_clicked.connect(lambda: self.go("tasks"))
+        self.topbar.handover_clicked.connect(lambda: self.go("handover"))
         outer.addWidget(self.topbar)
         self.stage_reports: dict[str, object] = {}
         self._pipeline_error = False
@@ -328,6 +335,7 @@ class MainWindow(QMainWindow):
             "initial_analysis": InitialAnalysisView(self.db),
             "today": TodayView(self.db),
             "tasks": TasksView(self.db),
+            "handover": HandoverView(self.db, self.project_name),
             "notebooks": NotebooksView(self.db),
             "calendar": CalendarView(self.db),
             "documents": DocumentsView(self.db),
@@ -351,8 +359,10 @@ class MainWindow(QMainWindow):
         self.views["today"].workbox_opener = self.views["tasks"]._open_workbox
         self.views["today"].open_task.connect(self._open_task_from_calendar)
         self.views["today"].changed.connect(self._sync_today)
+        self.views['today'].count_changed.connect(self._update_attention_count)
         self.views["today"].go_tasks.connect(lambda: self.go("tasks"))
-        self.views["tasks"].go_attention.connect(lambda: self.go("today"))
+        self.views['handover'].changed.connect(self._sync_handover)
+        self.views['handover'].changed.connect(self._sync_today)
         # 업무 화면에서 확인·교정이 일어나면 상단 띠의 진행도가 그 자리에서 오른다.
         self.views["tasks"].state_changed.connect(self._sync_handover)
         self.views["calendar"].open_task.connect(self._open_task_from_calendar)
@@ -401,10 +411,10 @@ class MainWindow(QMainWindow):
             self._knowledge.start()
 
     def _go_home(self) -> None:
-        tasks_view = self.views.get("tasks")
-        if hasattr(tasks_view, "back"):
-            tasks_view.back()
         self.go("tasks")
+        tasks_view = self.views.get("tasks")
+        if self.stack.currentWidget() is tasks_view:
+            tasks_view.back()
 
     def _open_task_documents(self) -> None:
         tasks = self.views["tasks"]
@@ -424,14 +434,19 @@ class MainWindow(QMainWindow):
         if view is None:
             return
         self.stack.setCurrentWidget(view)
-        self.topbar.select("tasks" if key in ("today", "initial_analysis", "calendar", "documents") else key)
-        if hasattr(view, "refresh"):
+        self.topbar.select("tasks" if key in ("initial_analysis", "calendar", "documents") else key)
+        if key == "tasks":
+            view.open_workspace()
+        elif key == "notebooks":
+            view.show_home()
+            view.refresh()
+        elif hasattr(view, "refresh"):
             view.refresh()
         self._sync_handover()
 
     def _install_shortcuts(self) -> None:
-        for index, (key, _icon, _label, _question) in enumerate(NAV, start=1):
-            shortcut = QShortcut(QKeySequence(f"Ctrl+{index}"), self)
+        for key, _icon, _label, _question in NAV:
+            shortcut = QShortcut(QKeySequence(f"Ctrl+{NAV_SHORTCUTS[key]}"), self)
             shortcut.activated.connect(lambda k=key: self.go(k))
 
     # ── 상태 ────────────────────────────────────────────────────────
@@ -442,7 +457,7 @@ class MainWindow(QMainWindow):
         has_source = bool(self.db.work_sources())
         self.topbar.setEnabledNav(has_source)
         if not has_source:
-            if self.stack.currentWidget() is not self.views["notebooks"]:
+            if self.stack.currentWidget() not in (self.views['notebooks'], self.views['handover']):
                 self.stack.setCurrentWidget(self.views["onboarding"])
             self.topbar.show_idle("자료 폴더를 연결하세요")
             return
@@ -561,8 +576,9 @@ class MainWindow(QMainWindow):
     def _sync_today(self) -> None:
         view = self.views["today"]
         view.refresh()
-        self.views["tasks"].set_attention_count(
-            view.data.tiles["new"] + view.data.tiles["cases"] + len(view.data.gaps))
+
+    def _update_attention_count(self, count) -> None:
+        self.topbar.set_count('today', count, self.views['today'].data.attention_summary)
 
     def _on_pipeline_finished(self) -> None:
         self._tick.stop()
@@ -570,7 +586,7 @@ class MainWindow(QMainWindow):
         initial = self.views["initial_analysis"]
         initial.set_run(False, self._pipeline_error)
         if initial_analysis.pending(self.db):
-            # 완료를 기다리며 보고 있던 화면만 전환한다. 노트북의 선택·초점은 유지한다.
+            # 완료를 기다리며 보고 있던 화면만 전환한다. 업무노트의 선택·초점은 유지한다.
             if initial.result.state == "ready" and self.stack.currentWidget() is initial:
                 self._open_initial_results()
             self.topbar.show_idle(initial.result.title)
@@ -626,7 +642,7 @@ class MainWindow(QMainWindow):
         self.views["tasks"].open_task(task_id)
 
     def _open_notebook_for_task(self, task_id: int) -> None:
-        """업무 상세에서 '노트북에서 묻기'를 눌렀을 때 해당 업무의 노트북을 열거나 생성 (개편계획서 §7)."""
+        """업무 상세에서 '업무노트에서 묻기'를 눌렀을 때 해당 업무의 업무노트를 열거나 생성 (개편계획서 §7)."""
         from PySide6.QtWidgets import QMessageBox
 
         from ..core import notebook_tasks
@@ -635,7 +651,7 @@ class MainWindow(QMainWindow):
         except ValueError:   # 그사이 업무가 없어졌거나 합쳐졌다
             return
         if opened.warnings:
-            QMessageBox.warning(self, "노트북에 일부만 넣었습니다", chr(10).join(opened.warnings))
+            QMessageBox.warning(self, "업무노트에 일부만 넣었습니다", chr(10).join(opened.warnings))
         self.go("notebooks")
         self.views["notebooks"].open_notebook(opened.notebook_id)
 
@@ -646,7 +662,7 @@ class MainWindow(QMainWindow):
         dialog.sources_changed.connect(self._on_sources_changed)
         dialog.models_changed.connect(self._on_sources_changed)
         dialog.exec()
-        # 법령 조회를 켜고 껐을 수 있다. 상단 띠의 표시와 노트북 입력칸을 다시 맞춘다.
+        # 법령 조회를 켜고 껐을 수 있다. 상단 띠의 표시와 업무노트 입력칸을 다시 맞춘다.
         from ..law import service as law_service
         self.topbar.show_promise(law_service.available(self.db))
         self._refresh_current()

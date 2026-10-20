@@ -285,3 +285,68 @@ def build(db, project: str = "", today: date | None = None) -> str:
         "",
     ]
     return "\n".join(out)
+
+
+def build_manual(db, project: str = '', today: date | None = None) -> str:
+    """화면의 업무 안내·매뉴얼을 후임자에게 전달할 문서로 묶는다. 새 사실을 생성하지 않는다."""
+    import html
+    import re
+    from . import task_manual
+
+    def cell(value):
+        value = html.escape(str(value or ''))
+        value = re.sub(r'([\\`*_{}\[\]#+!|])', r'\\\1', value)
+        return value.replace('\n', '<br>')
+
+    today = today or date.today()
+    tasks = sorted(db.tasks(), key=lambda t: t['id'])
+    title = f'{project} 인수인계 매뉴얼' if project else '인수인계 매뉴얼'
+    out = [f'# {cell(title)}', '', f'작성 기준일: {today.isoformat()} · 전체 업무 {len(tasks)}개', '',
+           '> 현재 업무 안내를 묶은 문서입니다. 기관·기간·역할 등 자료의 값과 확인 상태를 함께 표시합니다. '
+           '준비 순서 제안은 기관에서 확정한 절차와 구분합니다. 원문 파일은 포함하지 않습니다.', '']
+    if not tasks:
+        return '\n'.join(out + ['아직 파악된 업무가 없습니다.', ''])
+    out += _progress(db)
+    order = ('overview', 'first', 'timing', 'prepare', 'evaluation', 'procedure', 'output', 'cases', 'notes', 'past', 'basis')
+    for task in tasks:
+        out += [f"## {cell(task['name'])}", '']
+        manual = task_manual.build(db, task['id'])
+        for section in sorted(manual.sections, key=lambda s: order.index(s.key)):
+            out += [f'### {cell(section.title)}', '']
+            brief = section.brief
+            if brief:
+                if brief.caption:
+                    out += ['> ' + cell(brief.caption), '']
+                if brief.facts:
+                    out += ['| 항목 | 핵심 내용 | 근거·확인 상태 |', '| --- | --- | --- |']
+                    out += [f'| {cell(f.label)} | {cell(f.value)} | {cell(f.state)} |' for f in brief.facts]
+                    out.append('')
+                out += ['- ' + cell(line) for line in brief.bullets]
+                if brief.stages:
+                    out += ['', '| 단계 | 시점 | 할 일 | 산출물·완료 기준 | 확인 상태 |', '| --- | --- | --- | --- | --- |']
+                    out += [f'| {n}. {cell(s.title)} | {cell(s.when)} | {cell(s.action)} | {cell(s.output)} | {cell(s.state or "준비 제안 · 기관 절차 확인 필요")} |'
+                            for n, s in enumerate(brief.stages, 1)]
+                if brief.details:
+                    out += ['', '**상세 안내**', ''] + ['- ' + cell(line) for line in brief.details]
+            else:
+                out += ['- ' + cell(line) for line in section.lines]
+            out += ['- ' + cell(line) for line in section.more]
+            if section.evidence:
+                out += ['', '**근거 문서·위치**', '']
+                for proof in section.evidence:
+                    source = ' · '.join(str(p) for p in (proof.get('filename') or proof.get('doc_name') or '원본 없음',
+                                                        proof.get('locator')) if p)
+                    if not proof.get('current', True):
+                        source += ' · 원문이 바뀌었거나 없음'
+                    if proof.get('quote'):
+                        source += ' — ' + proof['quote']
+                    out.append('- ' + cell(source))
+            out.append('')
+        reading = db.task_reading(task['id'])
+        if reading:
+            out += ['### 먼저 읽을 문서', '']
+            out += [f"- {cell(r['filename'])} — {cell(r['reason'])}" for r in reading]
+            out.append('')
+    out += _calendar(db)
+    out += _leftovers(db)
+    return '\n'.join(out)

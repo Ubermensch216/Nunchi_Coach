@@ -24,103 +24,33 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-# ── 색 두 벌 ────────────────────────────────────────────────────────
-# 이름은 역할이지 색이 아니다. 어두운 벌에서 BG가 검어지듯, 같은 이름이
-# 같은 역할을 계속 맡는다.
-LIGHT = {
-    "BG": "#FFFFFF",             # 카드·머리 띠 — 내용이 놓이는 흰 판
-    "SURFACE": "#F6F7F9",        # 카드 안에서 한 단계 물린 자리(인용·보조)
-    "SURFACE_ALT": "#ECEEF2",    # 조용한 단추·칩의 바탕
-    "BORDER": "#E4E7EC",         # 카드 윤곽과 줄 사이 가는 선
-    "BORDER_STRONG": "#CDD2DA",  # 입력칸처럼 '여기에 넣는다'가 보여야 하는 테두리
-
-    # 본문 바탕. 흰 카드가 카드로 보이려면 바탕이 한 단계 낮아야 한다.
-    "CANVAS": "#F3F4F6",
-    "BAND": "#FAFBFC",           # 표의 줄무늬
-
-    "NAV_BG": "#F3F4F6",         # 설정 창 왼쪽 갈래 목록
-    "NAV_HOVER": "#E8EBEF",
-
-    "TEXT": "#14171C",
-    # 보조 글자. 작은 회색 글자가 화면의 절반을 차지하므로 흐리면 통째로
-    # 안 읽힌다 — 본문보다 한 단계만 물린다.
-    "TEXT_MUTED": "#4A5361",
-    "TEXT_SUBTLE": "#737C89",    # 이름표·부기. 값 옆에서 물러서는 글자
-    "TEXT_DISABLED": "#A3AAB5",
-    "TEXT_ON_PRIMARY": "#FFFFFF",
-
-    "PRIMARY": "#1F5FBF",        # 강조색은 이것 하나
-    "PRIMARY_HOVER": "#184E9F",
-    "PRIMARY_SOFT": "#EAF1FB",
-
-    "ATTENTION": "#A8540A",      # 확인 필요
-    "ATTENTION_SOFT": "#FCF2E2",
-    "DANGER": "#B42318",         # 오류·되돌릴 수 없는 동작
-    "DANGER_SOFT": "#FCECEA",
-    "CONFIRMED": "#16763B",      # 사람이 확인함
-    "CONFIRMED_SOFT": "#E7F4EB",
-
-    # 연간 패턴 격자의 막대. 농도가 "얼마나 단단한 근거인가"를 말하고,
-    # 막대 안 기호가 같은 뜻을 한 번 더 말한다.
-    "CYCLE_STRONG": "#1F5FBF",   # 담당자가 확인함
-    "CYCLE_SOFT": "#A9C4E8",     # 자료에서 추정
-    "CYCLE_WEAK": "#DDE3EB",     # 자료가 부족
-
-    # 상단 띠. 흰 띠에 가는 밑줄 하나 — 길(메뉴)은 조용히 있고 내용이 앞에 선다.
-    "NAVBAR_BG": "#FFFFFF",
-    "NAVBAR_TEXT": "#14171C",
-    "NAVBAR_MUTED": "#5A6371",
-    "NAVBAR_DISABLED": "#B4BAC4",
-    "NAVBAR_HOVER": "#F1F3F6",
-    "NAVBAR_ACTIVE": "#EAF1FB",
-    "NAVBAR_LINE": "#E4E7EC",
+# 화면 전체는 테마마다 다섯 기본색만 사용한다. 의미 토큰은 역할에 따라
+# 같은 기본색을 공유하며, 상태 구분은 기호·문구·테두리로 함께 전달한다.
+PALETTES = {
+    'light': dict(paper='#FFFFFF', surface='#F1F4F8', line='#CAD4E0', ink='#344256', accent='#365F86'),
+    'dark': dict(paper='#202F40', surface='#17212D', line='#3C5067', ink='#D9E3EE', accent='#92B1D1'),
+}
+_COLOR_ROLES = {
+    'paper': ('BG', 'NAVBAR_BG', 'TEXT_ON_PRIMARY'),
+    'surface': ('SURFACE', 'SURFACE_ALT', 'CANVAS', 'BAND', 'NAV_BG', 'NAV_HOVER',
+                'PRIMARY_SOFT', 'ATTENTION_SOFT', 'DANGER_SOFT', 'CONFIRMED_SOFT',
+                'NAVBAR_HOVER', 'NAVBAR_ACTIVE', 'CYCLE_WEAK'),
+    'line': ('BORDER', 'BORDER_STRONG', 'TEXT_DISABLED', 'NAVBAR_DISABLED', 'NAVBAR_LINE', 'CYCLE_SOFT'),
+    'ink': ('TEXT', 'TEXT_MUTED', 'TEXT_SUBTLE', 'PRIMARY_HOVER', 'NAVBAR_TEXT', 'NAVBAR_MUTED', 'DANGER'),
+    'accent': ('PRIMARY', 'ATTENTION', 'CONFIRMED', 'CYCLE_STRONG'),
 }
 
-# 어두운 벌. 밝은 벌을 그대로 뒤집지 않는다 — 순수한 검정 바탕에 순백 글자는
-# 대비가 지나쳐 잔상이 남는다. 바탕은 짙은 회청색, 글자는 살짝 낮춘 흰색으로
-# 두고, 강조색은 어두운 바탕 위에서 대비가 서도록 한 단계 밝힌다.
-DARK = {
-    "BG": "#1D2026",
-    "SURFACE": "#252930",
-    "SURFACE_ALT": "#2E333B",
-    "BORDER": "#30353D",
-    "BORDER_STRONG": "#454C57",
 
-    "CANVAS": "#15181C",
-    "BAND": "#21252B",
+def _five_color_theme(mode):
+    palette = PALETTES[mode]
+    result = {token: palette[role] for role, tokens in _COLOR_ROLES.items() for token in tokens}
+    if mode == 'dark':
+        result['TEXT_ON_PRIMARY'] = palette['surface']
+    return result
 
-    "NAV_BG": "#181B20",
-    "NAV_HOVER": "#262B33",
 
-    "TEXT": "#E7EAEE",
-    "TEXT_MUTED": "#B3BBC6",
-    "TEXT_SUBTLE": "#8D97A4",
-    "TEXT_DISABLED": "#687180",
-    "TEXT_ON_PRIMARY": "#0F1216",
-
-    "PRIMARY": "#74ABE8",
-    "PRIMARY_HOVER": "#93C0F0",
-    "PRIMARY_SOFT": "#1F2E40",
-
-    "ATTENTION": "#E3A85F",
-    "ATTENTION_SOFT": "#352A1B",
-    "DANGER": "#EC8079",
-    "DANGER_SOFT": "#361F1D",
-    "CONFIRMED": "#6CC187",
-    "CONFIRMED_SOFT": "#1C2F23",
-
-    "CYCLE_STRONG": "#4585C6",
-    "CYCLE_SOFT": "#325273",
-    "CYCLE_WEAK": "#2E333B",
-
-    "NAVBAR_BG": "#1D2026",
-    "NAVBAR_TEXT": "#E7EAEE",
-    "NAVBAR_MUTED": "#A4ADB9",
-    "NAVBAR_DISABLED": "#5C6572",
-    "NAVBAR_HOVER": "#272B33",
-    "NAVBAR_ACTIVE": "#1F2E40",
-    "NAVBAR_LINE": "#30353D",
-}
+LIGHT = _five_color_theme('light')
+DARK = _five_color_theme('dark')
 
 # 정적 분석기와 예전 호출부를 위해 밝은 벌의 값을 모듈 전역으로 펼쳐 둔다.
 # apply_mode()가 여기를 덮어쓴다.
@@ -520,8 +450,19 @@ def stylesheet(text_size: str = "medium") -> str:
     section = text_px("section", text_size)
     lead = text_px("lead", text_size)
     title = text_px("title", text_size)
-    folder_action = "#2DD4BF" if _mode == "dark" else "#0F766E"
+    folder_action = PRIMARY
     return f"""
+    QWidget#BriefFactRow, QFrame#BriefFactRow {{ background: {SURFACE}; border-radius: 4px; }}
+    QWidget#BriefStepPanel, QFrame#BriefStepPanel {{ background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 6px; }}
+    QLabel#BriefFactKey {{ color: {PRIMARY}; font-weight: 600; }}
+    QLabel#BriefFactValue, QLabel#BriefText {{ color: {TEXT}; }}
+    QLabel#BriefState {{ color: {TEXT_MUTED}; font-size: {small}px; }}
+    QLabel#BriefBulletMark {{ color: {PRIMARY}; font-weight: 600; }}
+    QLabel#BriefStepNumber {{ background: {PRIMARY}; color: {TEXT_ON_PRIMARY}; border-radius: 18px; font-weight: 700; }}
+    QLabel#BriefStepTitle {{ color: {TEXT}; font-weight: 600; }}
+    QLabel#BriefStepWhen {{ color: {PRIMARY}; font-size: {small}px; }}
+    QLabel#BriefStepOutput {{ color: {PRIMARY}; font-weight: 600; }}
+    QLabel#BriefFlowArrow {{ color: {PRIMARY}; font-size: {lead}px; }}
     * {{
         font-family: {_qss_family()};
         font-size: {body}px;
@@ -566,6 +507,14 @@ def stylesheet(text_size: str = "medium") -> str:
         font-weight: 700;
     }}
     QPushButton#NavTab:disabled {{ color: {NAVBAR_DISABLED}; }}
+    QLabel#NavTitle {{ background: transparent; color: {NAVBAR_MUTED}; font-weight: 600; }}
+    QPushButton#NavTab:checked QLabel#NavTitle {{ color: {PRIMARY}; font-weight: 700; }}
+    QPushButton#NavTab:disabled QLabel#NavTitle {{ color: {NAVBAR_DISABLED}; }}
+    QLabel#NavCountBadge {{
+        background: {PRIMARY}; color: {TEXT_ON_PRIMARY};
+        border-radius: 9px; padding: 1px 6px;
+        font-size: {small}px; font-weight: 700;
+    }}
     /* 띠 오른쪽의 상태 문구들. 누를 수 있지만 평소엔 물러서 있다. */
     QPushButton#TopLink {{
         background: transparent;
@@ -773,7 +722,7 @@ def stylesheet(text_size: str = "medium") -> str:
         border-radius: {RADIUS_LG}px;
     }}
 
-    /* ── 노트북 ──
+    /* ── 업무노트 ──
        홈의 카드는 판 전체가 누르는 자리다. 읽는 카드(QFrame#Card)와 달리
        마우스가 올라오면 테두리로 답한다. */
     QFrame#NotebookCard {{

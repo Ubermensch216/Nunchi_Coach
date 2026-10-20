@@ -614,7 +614,7 @@ class SettingsDialog(QDialog):
         card = Card(tone="static")
         card.body.addWidget(section_title("현행 법령 조회"))
         card.body.addWidget(muted_label(
-            "노트북 대화에서 ‘법령’을 고른 질문에 한해 국가법령정보센터(law.go.kr)에서 현행 조문을 "
+            "업무노트 대화에서 ‘법령’을 고른 질문에 한해 국가법령정보센터(law.go.kr)에서 현행 조문을 "
             "조회합니다. <b>이 기능만 인터넷을 씁니다.</b> 보내는 것은 법령 이름·조문 번호와 그 질문 "
             "문장뿐이고, 자료의 본문·파일 이름은 보내지 않습니다."))
         self.law_enabled = QCheckBox("이 인수인계에서 현행 법령 조회 사용")
@@ -803,7 +803,7 @@ class SettingsDialog(QDialog):
         elif not law_service.api_key():
             self.law_state.setText("켜져 있지만 인증키가 없어 조회할 수 없습니다.")
         else:
-            self.law_state.setText("켜져 있습니다. 노트북 대화의 입력칸에 ‘법령’이 나타납니다.")
+            self.law_state.setText("켜져 있습니다. 업무노트 대화의 입력칸에 ‘법령’이 나타납니다.")
 
     def _toggle_law(self, on: bool) -> None:
         law_service.set_enabled(self.db, on)

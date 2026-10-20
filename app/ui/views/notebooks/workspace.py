@@ -1,6 +1,6 @@
-"""노트북 작업 화면 — 왼쪽부터 출처 | 대화 | 스튜디오.
+"""업무노트 작업 화면 — 왼쪽부터 출처 | 대화 | 스튜디오.
 
-    ← 내 노트북   ▣ 노트북 이름 ✎                           [◧] [◨]
+    ←   ▣ 업무노트 이름 ✎                                     [◧] [◨]
     ┌──────────┬──────────────────────────┬──────────┐
     │ 출처     │ 대화                     │ 스튜디오 │
     │ 자료 고르기│ 질문과 답이 쌓인다       │ 메모·산출물│
@@ -9,8 +9,8 @@
 
 좌우 판은 경계를 끌어 폭을 조절하고 접을 수 있다. 접힌 판은 제자리에 좁은
 띠를 남기고, 그 띠의 단추로 다시 편다 — 머리줄 오른쪽의 단추도 같은 일을 한다.
-폭과 접힘은 노트북마다 기억한다 — 자료를 오래 읽는 노트북과 정리 위주인
-노트북은 쓰는 모양이 다르다.
+폭과 접힘은 업무노트마다 기억한다 — 자료를 오래 읽는 업무노트와 정리 위주인
+업무노트는 쓰는 모양이 다르다.
 """
 
 from __future__ import annotations
@@ -62,11 +62,9 @@ class NotebookWorkspace(QWidget):
         bar = QHBoxLayout(header)
         bar.setContentsMargins(theme.SP_LG, theme.SP_SM, theme.SP_LG, theme.SP_SM)
         bar.setSpacing(theme.SP_SM)
-        home = QPushButton("← 내 노트북")
-        home.setObjectName("Quiet")
-        home.setCursor(Qt.CursorShape.PointingHandCursor)
-        home.clicked.connect(self.back.emit)
-        bar.addWidget(home)
+        self.home_button = icon_button("arrow-left", "업무노트 홈으로 이동", "업무노트 홈으로 이동")
+        self.home_button.clicked.connect(self.back.emit)
+        bar.addWidget(self.home_button)
         self.cover_slot = QHBoxLayout()
         bar.addLayout(self.cover_slot)
         self.title = QPushButton("")
@@ -75,7 +73,7 @@ class NotebookWorkspace(QWidget):
         self.title.setToolTip("눌러서 이름을 바꿉니다")
         self.title.clicked.connect(self._rename)
         bar.addWidget(self.title)
-        self.rename_button = icon_button("edit", "노트북 이름 바꾸기", "이름 변경")
+        self.rename_button = icon_button("edit", "업무노트 이름 바꾸기", "이름 변경")
         self.rename_button.clicked.connect(self._rename)
         bar.addWidget(self.rename_button)
         self.archived_badge = Badge("보관됨")
@@ -178,13 +176,13 @@ class NotebookWorkspace(QWidget):
         self._paint_icons()
         self.archived_badge.setVisible(bool(row["archived"]))
         if row["archived"]:
-            self.banner.setMessage("보관한 노트북입니다. 자료와 대화는 읽을 수 있지만 질문·수정은 "
+            self.banner.setMessage("보관한 업무노트입니다. 자료와 대화는 읽을 수 있지만 질문·수정은 "
                                    "보관을 해제한 뒤에 할 수 있습니다(홈의 ••• 메뉴).")
         self.banner.setVisible(bool(row["archived"]))
 
     def _rename(self) -> None:
         row = notebook.require(self.db, self.notebook_id, active=False)
-        title, ok = QInputDialog.getText(self, "이름 변경", "노트북 이름", text=row["title"])
+        title, ok = QInputDialog.getText(self, "이름 변경", "업무노트 이름", text=row["title"])
         if not ok:
             return
         try:
@@ -222,6 +220,7 @@ class NotebookWorkspace(QWidget):
         self._save_layout()
 
     def _paint_icons(self) -> None:
+        set_icon(self.home_button, "arrow-left")
         """그림은 색을 그릴 때 받는다. 접힘이 바뀌거나 테마가 갈리면 다시 칠한다."""
         set_icon(self.rename_button, "edit")
         for key, (label, side) in PANELS.items():

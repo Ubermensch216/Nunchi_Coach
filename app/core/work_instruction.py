@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from . import reconstruction as rc, task_description, workstate as ws
+from . import reconstruction as rc, task_description, workstate as ws, work_brief
 
 
 AUDIT_REFERENCE = 'https://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lspttninfSeq=173505'
@@ -144,28 +144,11 @@ def improve(task, card, sections, cycle=None):
                                and '수감' not in i['content'] for i in scopes)
             procedure.lines.append(('의회 측 감사 지원 담당일 때' if council_role else '수감기관 자료 취합 담당일 때')
                                    + '의 준비 순서 제안입니다. 기관에서 확정한 절차는 요청 공문·감사계획으로 확인하세요.')
-            steps = (
-                '계획 수립 시 — 감사 대상 기관·실적 기간·일정·요구자료를 확인해 감사계획과 요구목록 초안을 준비하세요.',
-                '자료 요구 시 — 내부 검토와 필요한 의결·결재 절차를 확인하고 대상 기관에 요구 항목·제출서식·기한을 안내하세요.',
-                '감사 준비 기간 — 제출자료를 접수해 누락·보완 사항을 확인하고 위원회 검토자료와 질의 준비자료를 정리하세요.',
-                '감사 실시 기간 — 진행 일정과 추가 자료 요구·답변을 관리하고 회의·감사 기록을 정리하세요.',
-                '감사 종료 후 — 결과보고서와 시정·처리 요구사항을 정리해 정해진 보고·의결·통보 절차를 지원하고 처리결과를 관리하세요.',
-            ) if council_role else (
-                '요청 접수 시 — 감사계획과 요구목록에서 대상 기관·실적 기간·기준일·서식·제출처를 확인하고 요청 항목 목록을 만드세요.',
-                '부서별 요청 시 — 항목별 작성 부서와 담당자를 정하고, 내부 회신기한과 증빙 기준을 안내해 자료 요청서를 보내세요.',
-                '내부 취합 마감까지 — 회신자료와 증빙을 모아 수치·집계기간·누락·답변 일치 여부를 점검하고, 보완자료를 받아 제출자료 초안을 만드세요.',
-                '최종 제출기한 전 — 소관 부서의 사실 확인과 내부 검토·결재를 거쳐 지정된 회신처에 제출본·붙임을 보내고 발송 기록을 남기세요.',
-                '감사 진행 중·종료 후 — 추가 요구와 질의를 담당 부서에 전달해 답변자료를 취합·회신하고, 지적사항이 통보되면 소관 부서와 조치계획·처리결과를 관리하세요.',
-            )
         else:
-            procedure.lines.append('자료에 명시된 수행 절차는 아직 없습니다. 다음은 업무를 준비하기 위한 '
-                                   '일반적인 순서 제안이며, 실제 절차는 요청 공문·운영 지침으로 확인하세요.')
-            steps = (
-                '착수 시 — 요청 목적·대상·작성 기준일·기한·제출처를 확인해 처리할 항목을 정하세요.',
-                '내부 마감까지 — 항목별 담당자에게 자료를 받아 취합하고, 누락·수치·증빙을 확인해 초안을 만드세요.',
-                '제출 전 — 검토·보완과 필요한 결재를 마친 뒤 지정된 제출처에 결과물과 붙임을 보내세요.',
-                '제출 후 — 접수 여부와 추가 보완 요청을 확인하고 최종본·발송 기록·후속 할 일을 남기세요.',
-            )
+            council_role = False
+            procedure.lines.append('준비 순서 제안 · 실제 절차는 요청 공문·운영 지침으로 확인')
+        stages = work_brief.suggested_stages(audit, council_role)
+        steps = [f'{s.when} — {s.action} / 결과물: {s.output}' for s in stages]
         procedure.lines.extend(f'{n}. {text}' for n, text in enumerate(steps, 1))
     if audit:
         by_key['basis'].lines.append('일반 개념 참고: 지방자치법 시행령의 행정사무 감사·조사 규정. '

@@ -53,7 +53,7 @@ class InitialAnalysisView(QWidget):
         controls.addWidget(self.sources)
         card.body.addLayout(controls)
         body.addWidget(card)
-        body.addWidget(muted_label("원본은 읽기만 합니다. 분석 중에도 노트북을 사용할 수 있습니다."))
+        body.addWidget(muted_label("원본은 읽기만 합니다. 분석 중에도 업무노트를 사용할 수 있습니다."))
         body.addStretch(1)
         self.refresh()
 

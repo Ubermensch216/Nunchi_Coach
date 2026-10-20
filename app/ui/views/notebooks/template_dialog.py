@@ -45,7 +45,7 @@ class TemplateDialog(QDialog):
         outer.setContentsMargins(24, 20, 24, 16)
         outer.setSpacing(16)
         outer.addWidget(view_title("서식 관리"))
-        outer.addWidget(muted_label("문서의 항목과 모양을 정해 두세요. 저장한 서식은 노트북에서 문서를 만들 때 사용할 수 있습니다."))
+        outer.addWidget(muted_label("문서의 항목과 모양을 정해 두세요. 저장한 서식은 업무노트에서 문서를 만들 때 사용할 수 있습니다."))
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setChildrenCollapsible(False)

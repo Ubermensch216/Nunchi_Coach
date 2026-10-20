@@ -1,4 +1,4 @@
-"""눈치코치가 파악한 업무에서 노트북 자료를 고르는 창.
+"""눈치코치가 파악한 업무에서 업무노트 자료를 고르는 창.
 
     ▾ ☑ 행정사무감사 자료 제출      ◐ 자료에서 추정 · 문서 12건
         ☑ 업무 정리본 — 눈치코치가 정리한 설명·주기·처리 순서·확인할 것
@@ -43,7 +43,7 @@ class TaskSourceDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(theme.SP_SM)
         layout.addWidget(muted_label(
-            "업무를 고르면 눈치코치가 정리한 내용(업무 정리본)과 그 업무의 문서가 노트북 자료로 "
+            "업무를 고르면 눈치코치가 정리한 내용(업무 정리본)과 그 업무의 문서가 업무노트 자료로 "
             "들어갑니다. 정리본은 원문이 아니라 자료에서 읽어 정리한 글입니다 — 펼쳐서 필요한 것만 "
             "고를 수 있습니다."))
 
@@ -166,5 +166,5 @@ class TaskSourceDialog(QDialog):
         parts = [text for text in (f"업무 정리본 {len(tasks)}건" if tasks else "",
                                    f"문서 {len(documents)}건" if documents else "") if text]
         self.summary.setText(" · ".join(parts) + "을 추가합니다." if parts
-                             else "노트북에 넣을 업무를 고르세요.")
+                             else "업무노트에 넣을 업무를 고르세요.")
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(bool(parts))

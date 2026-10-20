@@ -52,7 +52,7 @@ def test_open_and_reopen_never_launch_ingestion_or_change_saved_document(uploade
 
 def test_explicit_resume_only_enqueues_this_notebooks_pending_documents(uploaded,monkeypatch):
     u=uploaded
-    other=notebook.create(u.db,'다른 노트북')
+    other=notebook.create(u.db,'다른 업무노트')
     path=u.db.path.parent/'another.txt'
     path.write_text('다른 내용',encoding='utf-8')
     other_doc=notebook_ingest.ingest_file(u.db,other,path).doc_id

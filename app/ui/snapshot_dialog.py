@@ -12,7 +12,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -47,21 +47,19 @@ def _local(stamp: str) -> str:
     return moment.astimezone().strftime("%Y-%m-%d %H:%M")
 
 
-class SnapshotDialog(QDialog):
-    def __init__(self, db, parent: QWidget | None = None):
-        super().__init__(parent)
+class _SnapshotContents:
+    def _build(self, db, closable=False):
         self.db = db
-        self.setWindowTitle("저장·옮기기 — 업무 복원본")
-        self.setMinimumSize(640, 480)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(theme.SP_XL, theme.SP_XL, theme.SP_XL, theme.SP_LG)
         outer.setSpacing(theme.SP_MD)
-        outer.addWidget(section_title("저장한 업무 복원본"))
+        outer.addWidget(section_title("저장한 업무 기록"))
         outer.addWidget(muted_label(
             "자료에서 복원한 업무·절차·확인할 정보와 수행 기록을 그 시점 그대로 저장한 "
             "것입니다. 분석이 끝날 때 자동으로 저장되고, 여기서 지금 상태를 저장할 수도 "
             "있습니다. 저장한 판은 바뀌지 않습니다.", small=True))
+        outer.addWidget(muted_label('PC 이동용 묶음에는 업무 기록·인용문이 포함됩니다. 원문 파일을 포함한 프로젝트 전체 백업은 아닙니다.', small=True))
 
         self.list = QListWidget()
         # 한 줄이 길다(종류·시각·업무 수·확인 수·남은 것). 잘라 내거나 옆으로
@@ -78,17 +76,21 @@ class SnapshotDialog(QDialog):
 
         row = QHBoxLayout()
         row.setSpacing(theme.SP_SM)
-        self.save_button = QPushButton("지금 상태 저장")
+        self.save_button = QPushButton("현재 기록 저장")
         self.save_button.setObjectName("Primary")
         self.save_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_button.clicked.connect(lambda _=False: self.save_now())
         row.addWidget(self.save_button)
-        self.export_button = QPushButton("글 파일로 내보내기")
+        self.export_button = QPushButton("저장본 문서로 내보내기")
         self.export_button.setObjectName("Quiet")
         self.export_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.export_button.clicked.connect(lambda _=False: self._export_selected())
         row.addWidget(self.export_button)
-        self.package_button = QPushButton("묶음으로 내보내기")
+        row.addStretch(1)
+        outer.addLayout(row)
+        row = QHBoxLayout()
+        row.setSpacing(theme.SP_SM)
+        self.package_button = QPushButton("다른 PC로 내보내기")
         self.package_button.setObjectName("Quiet")
         self.package_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.package_button.setToolTip(
@@ -96,7 +98,7 @@ class SnapshotDialog(QDialog):
             "들어가지 않고, 인용문은 들어갑니다")
         self.package_button.clicked.connect(lambda _=False: self._export_package_selected())
         row.addWidget(self.package_button)
-        receive = QPushButton("묶음 가져오기")
+        receive = QPushButton("인계 묶음 가져오기")
         receive.setObjectName("Quiet")
         receive.setCursor(Qt.CursorShape.PointingHandCursor)
         receive.setToolTip("다른 곳에서 내보낸 복원본·인계본을 이 프로젝트로 가져옵니다. "
@@ -104,10 +106,11 @@ class SnapshotDialog(QDialog):
         receive.clicked.connect(lambda _=False: self._import_package())
         row.addWidget(receive)
         row.addStretch(1)
-        close = QPushButton("닫기")
-        close.setObjectName("Quiet")
-        close.clicked.connect(self.accept)
-        row.addWidget(close)
+        if closable:
+            close = QPushButton("닫기")
+            close.setObjectName("Quiet")
+            close.clicked.connect(self.accept)
+            row.addWidget(close)
         outer.addLayout(row)
 
         self.reload()
@@ -162,6 +165,8 @@ class SnapshotDialog(QDialog):
         if not created:
             self.detail.setText("마지막으로 저장한 판과 달라진 것이 없어 새로 저장하지 "
                                 "않았습니다.\n" + self.summary_text(snapshot_id))
+        if hasattr(self, 'changed'):
+            self.changed.emit()
         return snapshot_id, created
 
     def _export_selected(self) -> None:
@@ -216,6 +221,8 @@ class SnapshotDialog(QDialog):
     def import_package(self, path: str) -> dict:
         result = transfer.import_package(self.db, path)
         self.reload(select=result["snapshot_id"])
+        if hasattr(self, 'changed'):
+            self.changed.emit()
         return result
 
     @staticmethod
@@ -247,3 +254,20 @@ class SnapshotDialog(QDialog):
             handle.write(text)
         self.db.audit("work.snapshot.export", str(snapshot_id))
         return len(text)
+
+
+class SnapshotPanel(_SnapshotContents, QWidget):
+    """인수인계 메뉴에 포함하는 기록 보관·이동 화면."""
+    changed = Signal()
+    def __init__(self, db, parent=None):
+        super().__init__(parent)
+        self._build(db)
+
+
+class SnapshotDialog(_SnapshotContents, QDialog):
+    """기존 호출부를 위한 독립 창. 메뉴와 같은 저장·이동 기능을 사용한다."""
+    def __init__(self, db, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('기록 보관·이동')
+        self.setMinimumSize(640, 480)
+        self._build(db, closable=True)

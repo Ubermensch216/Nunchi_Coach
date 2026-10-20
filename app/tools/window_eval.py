@@ -1,4 +1,4 @@
-"""부모·자식 창 크기 비교 (노트북 RAG 2단계) — 검색과 문맥 구성까지만 잰다.
+"""부모·자식 창 크기 비교 (업무노트 RAG 2단계) — 검색과 문맥 구성까지만 잰다.
 
     python -m app.tools.window_eval --folder .test_runs/window-eval --json .test_runs/window-eval.json
 

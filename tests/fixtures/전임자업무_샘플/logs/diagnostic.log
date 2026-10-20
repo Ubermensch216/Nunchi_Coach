@@ -103,3 +103,44 @@
 2026-10-20 20:23:12,973 {"event": "app.stop"}
 2026-10-20 20:23:50,107 {"event": "app.start", "version": "0.1.0"}
 2026-10-20 20:31:04,951 {"event": "app.stop"}
+2026-10-20 20:37:11,936 {"event": "app.start", "version": "0.1.0"}
+2026-10-20 21:00:14,886 {"event": "app.stop"}
+2026-10-20 21:00:21,221 {"event": "app.start", "version": "0.1.0"}
+2026-10-20 21:04:49,968 {"event": "app.stop"}
+2026-10-20 21:04:56,562 {"event": "app.start", "version": "0.1.0"}
+2026-10-20 21:04:57,528 {"event": "pipeline.start"}
+2026-10-20 21:04:57,847 {"event": "pipeline.stage", "count": 77, "stage": "scan", "elapsed_ms": 318}
+2026-10-20 21:04:57,847 {"event": "pipeline.stage", "count": 0, "stage": "hash", "elapsed_ms": 0}
+2026-10-20 21:04:57,848 {"event": "pipeline.stage", "count": 0, "stage": "parse", "elapsed_ms": 0}
+2026-10-20 21:04:58,966 {"event": "pipeline.stage", "count": 0, "stage": "pictures", "elapsed_ms": 1117}
+2026-10-20 21:04:58,966 {"event": "pipeline.stage", "count": 0, "stage": "date", "elapsed_ms": 0}
+2026-10-20 21:04:59,336 {"event": "pipeline.stage", "count": 0, "stage": "embed", "elapsed_ms": 369}
+2026-10-20 21:05:10,668 {"event": "pipeline.stage", "count": 1, "stage": "chunks", "elapsed_ms": 11331}
+2026-10-20 21:05:11,036 {"event": "pipeline.stage", "count": 6, "stage": "discover", "elapsed_ms": 367}
+2026-10-20 21:05:11,059 {"event": "pipeline.stage", "count": 0, "stage": "roles", "elapsed_ms": 23}
+2026-10-20 21:05:11,195 {"event": "pipeline.stage", "count": 6, "stage": "cycles", "elapsed_ms": 136}
+2026-10-20 21:05:11,231 {"event": "pipeline.error", "error_type": "OperationalError", "frames": [{"file": "pipeline.py", "line": 153, "function": "run"}, {"file": "pipeline.py", "line": 870, "function": "_steps"}, {"file": "repo.py", "line": 937, "function": "replace_task_steps"}]}
+2026-10-20 21:05:44,482 {"event": "app.stop"}
+2026-10-20 21:05:54,389 {"event": "app.start", "version": "0.1.0"}
+2026-10-20 21:05:55,355 {"event": "pipeline.start"}
+2026-10-20 21:05:55,409 {"event": "pipeline.stage", "count": 77, "stage": "scan", "elapsed_ms": 53}
+2026-10-20 21:05:55,411 {"event": "pipeline.stage", "count": 0, "stage": "hash", "elapsed_ms": 1}
+2026-10-20 21:05:55,412 {"event": "pipeline.stage", "count": 0, "stage": "parse", "elapsed_ms": 1}
+2026-10-20 21:05:55,958 {"event": "pipeline.stage", "count": 0, "stage": "pictures", "elapsed_ms": 546}
+2026-10-20 21:05:55,958 {"event": "pipeline.stage", "count": 0, "stage": "date", "elapsed_ms": 0}
+2026-10-20 21:05:56,276 {"event": "pipeline.stage", "count": 0, "stage": "embed", "elapsed_ms": 318}
+2026-10-20 21:05:56,358 {"event": "pipeline.stage", "count": 0, "stage": "chunks", "elapsed_ms": 81}
+2026-10-20 21:05:56,421 {"event": "pipeline.stage", "count": 6, "stage": "discover", "elapsed_ms": 62}
+2026-10-20 21:05:56,428 {"event": "pipeline.stage", "count": 0, "stage": "roles", "elapsed_ms": 6}
+2026-10-20 21:05:56,469 {"event": "pipeline.stage", "count": 6, "stage": "cycles", "elapsed_ms": 41}
+2026-10-20 21:05:56,487 {"event": "pipeline.stage", "count": 21, "stage": "steps", "elapsed_ms": 17}
+2026-10-20 21:05:56,867 {"event": "pipeline.stage", "count": 6, "stage": "restore", "elapsed_ms": 380}
+2026-10-20 21:05:57,988 {"event": "pipeline.stop"}
+2026-10-20 21:07:27,186 {"event": "action.error", "error_type": "UnsafeOutputError", "frames": [{"file": "runner.py", "line": 172, "function": "_steps"}, {"file": "compare.py", "line": 236, "function": "run_compare"}, {"file": "compare.py", "line": 233, "function": "<lambda>"}, {"file": "artifacts.py", "line": 69, "function": "save"}, {"file": "artifacts.py", "line": 112, "function": "_write"}, {"file": "output_policy.py", "line": 27, "function": "validate_output"}]}
+2026-10-20 21:16:59,360 {"event": "app.stop"}
+2026-10-20 21:17:07,704 {"event": "app.start", "version": "0.1.0"}
+2026-10-20 21:31:49,423 {"event": "app.stop"}
+2026-10-20 21:31:59,948 {"event": "app.start", "version": "0.1.0"}
+2026-10-20 21:35:59,655 {"event": "app.stop"}
+2026-10-20 21:36:06,132 {"event": "app.start", "version": "0.1.0"}
+2026-10-20 21:39:55,228 {"event": "app.stop"}

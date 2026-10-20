@@ -1,7 +1,7 @@
 """좌측 업무 목록 사이드바 위젯 (개편계획서 §13.2 및 §13.4).
 
 업무 상세 작업 공간(2-패널)의 좌측 패널:
-- 상단: '← 업무 홈' 복귀 버튼
+- 상단: 업무 검색
 - 업무 목록 (선택된 업무: 옅은 배경 + 왼쪽 강조선 + 굵은 글자)
 - 독립 스크롤, 폭 조절 지원
 """
@@ -9,14 +9,13 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal, QSignalBlocker
-from PySide6.QtWidgets import QFrame, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout, QWidget
 
 
 class WorkSidebar(QFrame):
     """업무 상세 화면 좌측 네비게이션 패널."""
 
     task_selected = Signal(int)
-    back_to_home = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -29,12 +28,6 @@ class WorkSidebar(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 14, 10, 14)
         layout.setSpacing(10)
-
-        # 1. 홈 복귀 버튼
-        self.btn_home = QPushButton("←  업무 홈")
-        self.btn_home.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_home.clicked.connect(self.back_to_home.emit)
-        layout.addWidget(self.btn_home)
 
         self.search = QLineEdit()
         self.search.setPlaceholderText("업무 검색")

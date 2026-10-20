@@ -139,7 +139,7 @@ class StudioPanel(Panel):
         self.outputs.currentItemChanged.connect(self._show_output)
         column.addWidget(self.outputs)
         self.output_hint = muted_label(
-            "위에서 서식을 고르면 이 노트북의 대화가 인용한 원문 대목으로 문서 초안을 엮습니다. "
+            "위에서 서식을 고르면 이 업무노트의 대화가 인용한 원문 대목으로 문서 초안을 엮습니다. "
             "근거를 찾지 못한 항목은 ‘확인 필요’로 남습니다.", small=True)
         column.addWidget(self.output_hint)
         self.output_state = muted_label("", small=True)
@@ -357,7 +357,7 @@ class StudioPanel(Panel):
         dialog.setWindowTitle(f"{template.title} 만들기")
         layout = QVBoxLayout(dialog)
         layout.addWidget(muted_label(
-            "이 노트북의 대화가 인용한 원문 대목만으로 항목을 채웁니다. 근거를 찾지 못한 항목은 "
+            "이 업무노트의 대화가 인용한 원문 대목만으로 항목을 채웁니다. 근거를 찾지 못한 항목은 "
             "‘확인 필요’로 남깁니다. 항목마다 AI를 한 번씩 불러 1분쯤 걸립니다."))
         layout.addWidget(muted_label("문서 제목", small=True))
         title = QLineEdit(f"{book['title']} {template.title}")

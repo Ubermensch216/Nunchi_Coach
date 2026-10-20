@@ -1,4 +1,4 @@
-"""왼쪽 판 — 이 노트북의 자료를 더하고, 근거로 쓸 것을 고르고, 원문을 읽는다.
+"""왼쪽 판 — 이 업무노트의 자료를 더하고, 근거로 쓸 것을 고르고, 원문을 읽는다.
 
 목록과 원문은 같은 자리를 번갈아 쓴다. 대화에서 인용 번호를 누르면 이 판이
 그 문서의 원문으로 바뀌고 인용한 대목을 칠해 보여 준다 — 답 옆에 원문 칸을
@@ -205,7 +205,7 @@ class SourcesPanel(Panel):
         self._reprocessing = False
         self._expanded: set[int] = set()
         self._citation: Citation | None = None
-        self._stale_briefs: dict[int, int] = {}   # 문서 → 업무. 노트북을 열 때와 자료가 바뀔 때만 다시 잰다
+        self._stale_briefs: dict[int, int] = {}   # 문서 → 업무. 업무노트를 열 때와 자료가 바뀔 때만 다시 잰다
         self._ingest = NotebookIngestRunner(db.path, self)
         self._ingest.progress.connect(self._on_progress)
         self._ingest.file_done.connect(self._on_file_done)
@@ -304,7 +304,7 @@ class SourcesPanel(Panel):
         actions.addWidget(self.accept_button)
         self.detach_button = QPushButton("연결 해제")
         self.detach_button.setObjectName("Quiet")
-        self.detach_button.setToolTip("이 노트북에서만 뺍니다. 원문 파일과 분석 결과는 그대로입니다")
+        self.detach_button.setToolTip("이 업무노트에서만 뺍니다. 원문 파일과 분석 결과는 그대로입니다")
         self.detach_button.clicked.connect(lambda: self._safe(self._detach))
         self.detach_button.hide()
         actions.addStretch(1)
@@ -358,7 +358,7 @@ class SourcesPanel(Panel):
             item.setToolTip("\n".join(part for part in (
                 row["filename"], ORIGIN_LABELS.get(row["origin"], row["origin"]),
                 f"판본 {versions[row['doc_id']]}" if row["doc_id"] in versions else "", state, reason) if part))
-            # 보관한 노트북에서도 원문은 읽을 수 있어야 한다. 선택만 잠근다.
+            # 보관한 업무노트에서도 원문은 읽을 수 있어야 한다. 선택만 잠근다.
             # QListView가 체크 표시 영역을 예약해 위젯을 밀어내지 않도록 ItemIsUserCheckable 플래그는 주지 않는다.
             item.setCheckState(Qt.CheckState.Checked if row["selected"] else Qt.CheckState.Unchecked)
             item.setSizeHint(QSize(0, SOURCE_ROW_H))
@@ -476,7 +476,7 @@ class SourcesPanel(Panel):
     # ── 파일 올리기 ─────────────────────────────────────────────────
     def _pick_files(self) -> None:
         notebook.require(self.db, self.notebook_id)
-        paths, _ = QFileDialog.getOpenFileNames(self, "노트북에 올릴 파일", "", notebook_ingest.file_filter())
+        paths, _ = QFileDialog.getOpenFileNames(self, "업무노트에 올릴 파일", "", notebook_ingest.file_filter())
         self.upload(paths)
 
     def upload(self, paths: list[str]) -> None:
@@ -498,11 +498,11 @@ class SourcesPanel(Panel):
             return
         if onnara_import.is_package(folder):
             summary = onnara_import.describe_package(folder)
-            note = ("이 꾸러미의 파일을 프로젝트 안에 수집본으로 복사한 뒤 읽어 노트북 자료로 연결합니다. "
+            note = ("이 꾸러미의 파일을 프로젝트 안에 수집본으로 복사한 뒤 읽어 업무노트 자료로 연결합니다. "
                     "꾸러미 폴더의 파일은 읽기만 하고 바꾸지 않습니다.")
         else:
             summary = onnara_import.describe(onnara_import.read_manifest(folder)[1])
-            note = ("이 수집본의 문서를 읽어 노트북 자료로 연결합니다. "
+            note = ("이 수집본의 문서를 읽어 업무노트 자료로 연결합니다. "
                     "수집 폴더의 파일은 읽기만 하고 바꾸지 않습니다.")
         answer = QMessageBox.question(
             self, "온나라 수집본 가져오기",
@@ -531,7 +531,7 @@ class SourcesPanel(Panel):
             self.refresh()
 
     def _check_briefs(self) -> None:
-        """넣은 뒤 업무 내용이 달라진 정리본을 찾는다. 보관한 노트북은 고칠 수 없으니 재지 않는다."""
+        """넣은 뒤 업무 내용이 달라진 정리본을 찾는다. 보관한 업무노트는 고칠 수 없으니 재지 않는다."""
         self._stale_briefs = (notebook_tasks.outdated(self.db, self.notebook_id)
                               if self.notebook_id is not None and self.editable else {})
 

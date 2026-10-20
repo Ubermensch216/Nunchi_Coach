@@ -1,4 +1,4 @@
-"""노트북에 올린 파일 — 보관·읽기·중복·그림 판독·업무 분석과의 분리."""
+"""업무노트에 올린 파일 — 보관·읽기·중복·그림 판독·업무 분석과의 분리."""
 
 import hashlib
 from pathlib import Path
@@ -93,7 +93,7 @@ def test_upload_store_is_not_a_work_source_and_cannot_be_overwritten(db, book, t
 
 def test_same_content_is_stored_once_and_shared_between_notebooks(db, book, tmp_path):
     first = notebook_ingest.ingest_file(db, book, write(tmp_path, "요청.txt"), Offline())
-    other = notebook.create(db, "다른 노트북")
+    other = notebook.create(db, "다른 업무노트")
     again = notebook_ingest.ingest_file(db, other, write(tmp_path, "요청 사본.txt"), Offline())
     assert again.status == "reused" and again.doc_id == first.doc_id
     assert db.con.execute("SELECT COUNT(*) FROM documents").fetchone()[0] == 1

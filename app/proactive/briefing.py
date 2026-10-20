@@ -33,6 +33,7 @@ CERTAINTY_LABEL = {
     "suggested": "추천",
 }
 RISK_ORDER = ("read", "draft", "change")
+ATTENTION_KINDS = (("cases", "진행 중인 수행 건"), ("new", "새 제안"), ("gaps", "빠진 단계 후보"))
 
 
 @dataclass
@@ -73,6 +74,15 @@ class Briefing:
     hidden: int = 0
     cases: list[CaseRow] = field(default_factory=list)
     gaps: list[dict] = field(default_factory=list)
+
+    @property
+    def attention_count(self) -> int:
+        """메뉴와 대시보드가 공유하는 합계. 기한 중복 집계와 완료 이력은 제외한다."""
+        return sum(self.tiles[key] for key, _ in ATTENTION_KINDS)
+
+    @property
+    def attention_summary(self) -> str:
+        return ' + '.join(f'{label} {self.tiles[key]}건' for key, label in ATTENTION_KINDS) + f' = {self.attention_count}건'
 
     @property
     def empty(self) -> bool:
@@ -155,6 +165,6 @@ def build(db, today: date | None = None) -> Briefing:
     completed = db.con.execute("SELECT COUNT(*) FROM action_runs WHERE state = 'completed'").fetchone()[0]
     return Briefing(
         scanned_on=db.get_meta("proactive_scanned"),
-        tiles={"cases": len(rows), "new": len(cards), "due": sum(1 for r in rows if r.due_soon),
+        tiles={"cases": len(rows), "new": len(cards), "gaps": len(gaps), "due": sum(1 for r in rows if r.due_soon),
                "completed": completed},
         cards=cards[:MAX_NEW], hidden=max(0, len(cards) - MAX_NEW), cases=rows, gaps=gaps)

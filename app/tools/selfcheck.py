@@ -61,10 +61,10 @@ def run() -> list[str]:
 
         sender, doc = project("보내는쪽")
         from ..core import notebook
-        book_id = notebook.create(sender, "자체 점검 노트북")
+        book_id = notebook.create(sender, "자체 점검 업무노트")
         notebook.add_sources(sender, book_id, [doc])
         if str(doc) not in notebook.selected_snapshot(sender, book_id):
-            problems.append("노트북에 원문 판본을 연결하지 못했다")
+            problems.append("업무노트에 원문 판본을 연결하지 못했다")
         # 질문 화면의 재료 — 조각과 조각 글자 검색은 모델 없이 생겨야 한다.
         sections = sender.con.execute(
             "SELECT kind, locator, text FROM document_sections WHERE doc_id = ? "

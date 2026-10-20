@@ -347,7 +347,7 @@ def test_scanner_leaves_the_programs_own_files_alone(project, tmp_path: Path):
 
 
 def test_reading_an_upload_does_not_reopen_task_analysis(project, tmp_path: Path):
-    """노트북에 파일 하나 올렸다고 다음 실행이 자료 폴더를 전부 다시 훑으면 안 된다."""
+    """업무노트에 파일 하나 올렸다고 다음 실행이 자료 폴더를 전부 다시 훑으면 안 된다."""
     work = project.add_source(tmp_path / "자료")
     upload = project.add_source(tmp_path / "uploads", kind="upload")
     kept = project.upsert_document(upload, {"path": "u.pdf", "filename": "u.pdf", "ext": ".pdf"})

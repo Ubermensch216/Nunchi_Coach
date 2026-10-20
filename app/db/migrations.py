@@ -392,7 +392,7 @@ def _to_v6(con: sqlite3.Connection) -> None:
             con.execute(statement)
 
 
-# v7이 기존 노트북 표에 더하는 열. ALTER TABLE은 상수 기본값만 받으므로
+# v7이 기존 업무노트 표에 더하는 열. ALTER TABLE은 상수 기본값만 받으므로
 # 시각 열은 비워 두고 쓰는 쪽(core/notebook.py)이 채운다. 새 프로젝트도 같은
 # 목록을 지나므로(db/repo.py init) 승격 결과와 신규 설치가 같아진다.
 NOTEBOOK_COLUMNS = (
@@ -421,7 +421,7 @@ def add_notebook_columns(con: sqlite3.Connection) -> None:
 
 
 def _to_v7(con: sqlite3.Connection) -> None:
-    # 새 표(법령 캐시·서식·산출물)와 노트북 표의 새 열. 기존 행은 바꾸지 않는다.
+    # 새 표(법령 캐시·서식·산출물)와 업무노트 표의 새 열. 기존 행은 바꾸지 않는다.
     _to_v6(con)
     add_notebook_columns(con)
 

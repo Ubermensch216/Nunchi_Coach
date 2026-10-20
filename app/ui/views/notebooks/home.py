@@ -1,6 +1,6 @@
-"""노트북 홈 — 노트북을 카드로 늘어놓고 하나를 골라 들어간다.
+"""업무노트 홈 — 업무노트를 카드로 늘어놓고 하나를 골라 들어간다.
 
-    내 노트북                          [검색] [격자|목록] [+ 새 노트북]
+    내 업무노트                          [검색] [격자|목록] [+ 새 업무노트]
     ┌───────────┐ ┌───────────┐ ┌───────────┐
     │ ▣       •••│ │ ▣       •••│ │ ▣       •••│
     │ 이름       │ │ 이름       │ │ 이름       │
@@ -44,19 +44,6 @@ from ...widgets import (
     view_title,
 )
 
-# core/notebook.py ICONS의 이름 → 표지 색. 상태 색과 겹치지 않는 계열만 쓴다.
-COVER_COLORS = {
-    "blue": "#3F74B8",
-    "indigo": "#5A62C4",
-    "violet": "#8259B8",
-    "teal": "#2B8FA3",
-    "slate": "#5F7F96",
-    "plum": "#A0589A",
-}
-COVER_LABELS = {
-    "blue": "청", "indigo": "남보라", "violet": "보라",
-    "teal": "청록", "slate": "회청", "plum": "자주",
-}
 CARD_MIN_W = 240
 CARD_H = 148
 GRID, LIST = "grid", "list"
@@ -68,9 +55,8 @@ def cover(title: str, icon: str, size: int = 40) -> QLabel:
     mark.setObjectName("NotebookCover")
     mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
     mark.setFixedSize(size, size)
-    color = COVER_COLORS.get(icon) or COVER_COLORS["blue"]
     mark.setStyleSheet(
-        f"background: {color}; color: #FFFFFF; border-radius: {theme.RADIUS}px; "
+        f"background: {theme.PRIMARY}; color: {theme.TEXT_ON_PRIMARY}; border-radius: {theme.RADIUS}px; "
         f"font-weight: 700; font-size: {int(size * 0.45)}px;"
     )
     return mark
@@ -85,10 +71,10 @@ def card_meta(row) -> str:
 
 
 class NotebookCard(QFrame):
-    """노트북 한 권. 판 전체가 여는 자리이고 •••만 따로 메뉴를 연다."""
+    """업무노트 한 권. 판 전체가 여는 자리이고 •••만 따로 메뉴를 연다."""
 
     opened = Signal(int)
-    menu_requested = Signal(int, object)   # (노트북 id, 메뉴를 띄울 단추)
+    menu_requested = Signal(int, object)   # (업무노트 id, 메뉴를 띄울 단추)
 
     def __init__(self, row, parent: QWidget | None = None):
         super().__init__(parent)
@@ -97,7 +83,7 @@ class NotebookCard(QFrame):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setFixedHeight(CARD_H)
-        self.setAccessibleName(f"노트북 {row['title']}")
+        self.setAccessibleName(f"업무노트 {row['title']}")
 
         column = QVBoxLayout(self)
         column.setContentsMargins(theme.SP_LG, theme.SP_LG, theme.SP_MD, theme.SP_LG)
@@ -112,7 +98,7 @@ class NotebookCard(QFrame):
         self.more = QPushButton(MORE)
         self.more.setObjectName("IconButton")
         self.more.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.more.setToolTip("이름 변경 · 표지 색 · 복제 · 보관 · 삭제")
+        self.more.setToolTip("이름 변경 · 복제 · 보관 · 삭제")
         self.more.setAccessibleName(f"{row['title']} 메뉴")
         self.more.clicked.connect(lambda: self.menu_requested.emit(self.notebook_id, self.more))
         top.addWidget(self.more, 0, Qt.AlignmentFlag.AlignTop)
@@ -162,15 +148,15 @@ class NotebookHome(QWidget):
 
         bar = QHBoxLayout()
         bar.setSpacing(theme.SP_SM)
-        bar.addWidget(view_title("내 노트북"))
+        bar.addWidget(view_title("내 업무노트"))
         bar.addStretch(1)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("노트북 검색")
+        self.search.setPlaceholderText("업무노트 검색")
         self.search.setClearButtonEnabled(True)
         self.search.setFixedWidth(240)
         self.search.textChanged.connect(self.refresh)
         bar.addWidget(self.search)
-        self.archived = QCheckBox("보관한 노트북 포함")
+        self.archived = QCheckBox("보관한 업무노트 포함")
         self.archived.toggled.connect(self.refresh)
         bar.addWidget(self.archived)
         self.mode_button = QPushButton()
@@ -178,7 +164,7 @@ class NotebookHome(QWidget):
         self.mode_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.mode_button.clicked.connect(self._toggle_mode)
         bar.addWidget(self.mode_button)
-        self.create_button = QPushButton("+ 새 노트북")
+        self.create_button = QPushButton("+ 새 업무노트")
         self.create_button.setObjectName("Primary")
         self.create_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.create_button.clicked.connect(self._create)
@@ -210,13 +196,13 @@ class NotebookHome(QWidget):
         self.cards = []
         if not rows:
             if self.search.text().strip():
-                column.addWidget(EmptyState("찾는 노트북이 없습니다", "검색어를 바꾸거나 지워 보세요."))
+                column.addWidget(EmptyState("찾는 업무노트가 없습니다", "검색어를 바꾸거나 지워 보세요."))
             else:
                 column.addWidget(EmptyState(
-                    "아직 노트북이 없습니다",
-                    "노트북은 관련 자료만 모아 묻고 정리하는 작업 공간입니다. "
+                    "아직 업무노트가 없습니다",
+                    "업무노트는 관련 자료만 모아 묻고 정리하는 작업 공간입니다. "
                     "자료를 고르고, 그 자료만 근거로 대화하고, 정리한 내용을 문서로 남깁니다.",
-                    "+ 새 노트북", self._create))
+                    "+ 새 업무노트", self._create))
             return
         if self._mode == GRID:
             grid = FlowGrid(min_card_width=CARD_MIN_W)
@@ -263,7 +249,7 @@ class NotebookHome(QWidget):
         try:
             action()
         except (ValueError, OSError) as exc:
-            QMessageBox.information(self, "노트북", str(exc))
+            QMessageBox.information(self, "업무노트", str(exc))
         self.refresh()
 
     def _create(self):
@@ -272,7 +258,7 @@ class NotebookHome(QWidget):
         try:
             key = notebook.create(self.db, notebook.untitled(self.db))
         except ValueError as exc:
-            QMessageBox.information(self, "새 노트북", str(exc))
+            QMessageBox.information(self, "새 업무노트", str(exc))
             return
         self.refresh()
         self.opened.emit(key)
@@ -283,12 +269,6 @@ class NotebookHome(QWidget):
         menu.addAction("열기", lambda: self.opened.emit(notebook_id))
         if not row["archived"]:
             menu.addAction("이름 변경", lambda: self._rename(notebook_id))
-        colors = menu.addMenu("표지 색")
-        for key in notebook.ICONS:
-            action = colors.addAction(COVER_LABELS[key],
-                                      lambda k=key: self._safe(lambda: notebook.set_icon(self.db, notebook_id, k)))
-            action.setCheckable(True)
-            action.setChecked(row["icon"] == key)
         menu.addAction("복제", lambda: self._safe(lambda: notebook.duplicate(self.db, notebook_id)))
         menu.addSeparator()
         menu.addAction("보관 해제" if row["archived"] else "보관",
@@ -298,7 +278,7 @@ class NotebookHome(QWidget):
 
     def _rename(self, notebook_id: int):
         row = notebook.require(self.db, notebook_id)
-        title, ok = QInputDialog.getText(self, "이름 변경", "노트북 이름", text=row["title"])
+        title, ok = QInputDialog.getText(self, "이름 변경", "업무노트 이름", text=row["title"])
         if ok:
             self._safe(lambda: notebook.rename(self.db, notebook_id, title))
 
@@ -314,8 +294,8 @@ class NotebookHome(QWidget):
         if counts["published"]:
             detail += f" 업무 가이드에 게시한 지식 {counts['published']}건도 사라집니다."
         answer = QMessageBox.question(
-            self, "노트북 삭제",
-            f"‘{row['title']}’ 노트북을 지울까요?\n\n{detail}\n"
+            self, "업무노트 삭제",
+            f"‘{row['title']}’ 업무노트를 지울까요?\n\n{detail}\n"
             "연결한 원문 파일과 분석 결과는 지우지 않습니다. 되돌릴 수 없습니다.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No)

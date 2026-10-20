@@ -1,4 +1,4 @@
-"""눈치코치가 파악한 업무를 노트북의 자료로 — 정리본 만들기·넣기·바뀜 알리기·고르는 창."""
+"""눈치코치가 파악한 업무를 업무노트의 자료로 — 정리본 만들기·넣기·바뀜 알리기·고르는 창."""
 
 import hashlib
 import os
@@ -104,7 +104,7 @@ def test_only_tasks_in_use_can_become_sources(db, work):
     assert notebook_tasks.choices(db) == []
 
 
-# ── 노트북에 넣기 ───────────────────────────────────────────────────
+# ── 업무노트에 넣기 ───────────────────────────────────────────────────
 
 def test_brief_becomes_a_selected_source_that_answers_questions(db, work):
     outcome = notebook_tasks.add_brief(db, work.book, work.task, Offline())
@@ -130,7 +130,7 @@ def test_brief_stays_out_of_task_discovery_and_the_source_folder(db, work):
 
 def test_same_task_in_two_notebooks_shares_one_document(db, work):
     first = notebook_tasks.add_brief(db, work.book, work.task, Offline())
-    other = notebook.create(db, "다른 노트북")
+    other = notebook.create(db, "다른 업무노트")
     second = notebook_tasks.add_brief(db, other, work.task, Offline())
     assert (second.status, second.doc_id) == ("reused", first.doc_id)
     assert notebook.sources(db, other)[0]["origin"] == "task"
@@ -258,12 +258,12 @@ def test_sources_panel_flags_a_brief_whose_task_changed(db, work, panel):
     panel.source_list.setCurrentRow(0)
     assert panel.accept_button.isHidden()
     db.edit_task_description(work.task, "감사 자료를 9월 말까지 낸다.")
-    panel.set_notebook(work.book, True)                                   # 노트북을 다시 열 때 잰다
+    panel.set_notebook(work.book, True)                                   # 업무노트를 다시 열 때 잰다
     item = panel.source_list.item(0)
     assert item.data(Qt.ItemDataRole.UserRole) == brief.doc_id and item.text().endswith(STALE_BRIEF)
     panel.source_list.setCurrentRow(0)
     assert panel.accept_button.text() == "새 정리본 사용" and panel.accept_button.isEnabled()
-    panel.set_notebook(work.book, False)                                  # 보관한 노트북은 고칠 수 없으니 묻지 않는다
+    panel.set_notebook(work.book, False)                                  # 보관한 업무노트는 고칠 수 없으니 묻지 않는다
     assert not panel.source_list.item(0).text().endswith(STALE_BRIEF)
 
 
@@ -275,9 +275,9 @@ def test_version_rises_only_when_content_changes(db, work):
     first = notebook_tasks.add_brief(db, work.book, work.task, Offline())
     assert manual_versions.latest(db, work.task)["version"] == 1
     assert manual_versions.current_state(db, work.task)["current"]
-    # 같은 내용을 다시 넣거나 다른 노트북에 넣어도 판본이 늘지 않는다.
+    # 같은 내용을 다시 넣거나 다른 업무노트에 넣어도 판본이 늘지 않는다.
     notebook_tasks.add_brief(db, work.book, work.task, Offline())
-    other = notebook.create(db, "다른 노트북")
+    other = notebook.create(db, "다른 업무노트")
     notebook_tasks.add_brief(db, other, work.task, Offline())
     assert manual_versions.latest(db, work.task)["version"] == 1
     db.edit_task_description(work.task, "감사 자료를 9월 말까지 낸다.")
@@ -379,7 +379,7 @@ def test_merge_leaves_source_versions_and_starts_target_series(db, work):
     opened = notebook_tasks.open_for_task(db, work.task, Offline())
     old_doc = manual_versions.latest(db, work.task)["doc_id"]
     assert db.merge_tasks(work.task, target)
-    # 합쳐진 업무의 판본 기록은 그 업무에 남고, 노트북은 대상 업무로 옮겨 간다.
+    # 합쳐진 업무의 판본 기록은 그 업무에 남고, 업무노트는 대상 업무로 옮겨 간다.
     assert manual_versions.latest(db, work.task)["version"] == 1
     assert manual_versions.latest(db, target) is None
     assert db.con.execute("SELECT task_id FROM notebooks WHERE id=?", (opened.notebook_id,)).fetchone()[0] == target

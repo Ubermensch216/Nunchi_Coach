@@ -29,24 +29,6 @@ from PySide6.QtWidgets import (
 
 from .. import theme
 
-# 업무 구분용 팔레트. 채도를 낮춰 공직 문서 환경에 어울리게 한다.
-#
-# **상태 색(빨강·주황·초록)과 겹치는 색은 쓰지 않는다.** 예전 팔레트에는
-# 오류의 빨강, 확인 필요의 주황, 확인됨의 초록이 그대로 들어 있어서, 띠가
-# 빨간 카드는 '문제 있는 업무'로 읽혔다. 색이 인덱스로만 읽히려면 이 화면에서
-# 뜻을 가진 색과 떨어져 있어야 한다 — 청·남·보라·청록·회청 계열만 쓴다.
-# 밝은 벌과 어두운 벌 양쪽에서 띠로 보이는 중간 밝기로 골랐다.
-TASK_COLORS = [
-    "#3F74B8",  # 청
-    "#5A62C4",  # 남보라
-    "#8259B8",  # 보라
-    "#2B8FA3",  # 청록
-    "#5F7F96",  # 회청
-    "#A0589A",  # 자주
-    "#3D8C8C",  # 옥색
-    "#7482A0",  # 청회
-]
-
 STRIP_CELL_W = 14
 # 칸 안에 달 숫자를 적으므로 글자 한 줄이 들어갈 높이다.
 STRIP_H = 22
@@ -54,16 +36,8 @@ DESCRIPTION_CHARS = 44
 
 
 def color_for(name: str) -> str:
-    """업무 이름에서 고정 색을 뽑는다. 같은 이름은 항상 같은 색."""
-    base = TASK_COLORS[sum(ord(c) for c in name) % len(TASK_COLORS)]
-    if theme.current_mode() == "dark":
-        from PySide6.QtGui import QColor
-
-        c = QColor(base)
-        h, s, v, _ = c.getHsv()
-        c.setHsv(h, max(0, s - 20), min(255, int(v * 1.15)))
-        return c.name()
-    return base
+    """업무 ID·이름에 관계없이 현재 테마의 공통 강조색을 사용한다."""
+    return theme.PRIMARY
 
 
 class MonthStrip(QWidget):
@@ -125,7 +99,7 @@ class MonthStrip(QWidget):
                 left = radius if month - 1 not in active else 0
                 right = radius if month + 1 not in active else 0
                 fill = accent
-                text_color = "#FFFFFF"
+                text_color = theme.TEXT_ON_PRIMARY
             else:
                 cell.setText("")
                 left = radius if month == 1 else 0

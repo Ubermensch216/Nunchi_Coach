@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS knowledge_cards (
  reviewer TEXT NOT NULL, applicability TEXT NOT NULL, valid_until TEXT,
  reviewed_at TEXT NOT NULL DEFAULT (datetime('now')), published_at TEXT
 );
--- ── v7: 자료 분석 노트북 (법령 조회·서식 산출물) ─────────────────────
+-- ── v7: 자료 분석 업무노트 (법령 조회·서식 산출물) ─────────────────────
 -- 기존 표에 붙는 열은 db/migrations.py의 NOTEBOOK_COLUMNS가 더한다. 이 파일에는
 -- 방아쇠를 두지 않는다. 승격 단계가 이 파일을 쌍반점으로 끊어 실행하므로
 -- 주석에도 그 글자를 쓰지 않는다.

@@ -138,7 +138,7 @@ class WorkFolderCard(_WrapFrame):
 
         # 5. 월간 스트립 (언제 하는 일인가)
         outer.addSpacing(2)
-        self.month_strip = MonthStrip(months, accent=self.cover_color)
+        self.month_strip = MonthStrip(months)
         outer.addWidget(self.month_strip)
 
         outer.addStretch(1)

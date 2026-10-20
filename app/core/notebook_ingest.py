@@ -1,6 +1,6 @@
-"""노트북에 올린 파일을 받아 읽고 질문할 수 있게 준비한다.
+"""업무노트에 올린 파일을 받아 읽고 질문할 수 있게 준비한다.
 
-전임자 자료 폴더는 읽기만 한다. 올린 파일은 다르다 — 사용자가 이 노트북에서
+전임자 자료 폴더는 읽기만 한다. 올린 파일은 다르다 — 사용자가 이 업무노트에서
 쓰라고 건넨 것이므로 프로젝트 저장소 안 보관소에 **사본**을 둔다. 원래 자리의
 파일은 건드리지 않는다. 사본을 두는 이유는 근거의 재현성이다: 바탕 화면의
 파일은 내일 지워지거나 바뀌고, 그러면 어제의 인용을 다시 확인할 수 없다.
@@ -9,7 +9,7 @@
 
 내용이 같은 파일은 한 번만 보관하고, 이미 분석한 문서와 내용이 같으면 그
 문서를 연결한다. 같은 내용의 문서가 둘이면 검색은 대표본 하나만 근거로
-삼는다(db.representative_predicate) — 사본만 연결한 노트북에서는 아무것도
+삼는다(db.representative_predicate) — 사본만 연결한 업무노트에서는 아무것도
 찾지 못하게 된다.
 """
 
@@ -223,7 +223,7 @@ def summarize_source(db, notebook_id: int, doc_id: int, client) -> bool:
 def ingest_file(db, notebook_id: int, path: str | Path, client=None,
                 on_phase: Callable[[str], None] = lambda phase: None,
                 should_stop: Callable[[], bool] = lambda: False, origin: str = "upload") -> Ingested:
-    """파일 하나를 노트북의 자료로 만든다. 실패는 값으로 돌려준다.
+    """파일 하나를 업무노트의 자료로 만든다. 실패는 값으로 돌려준다.
 
     origin은 출처 목록에 적는 갈래다. 눈치코치가 만든 업무 정리본도 이 길로
     들어온다(core/notebook_tasks.py).

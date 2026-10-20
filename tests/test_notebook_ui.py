@@ -48,7 +48,10 @@ def test_home_lists_notebooks_as_cards_and_opens_the_workspace(workspace):
     view.home.cards[0].opened.emit(workspace.book)
     assert view.stack.currentWidget() is view.workspace and view.notebook_id==workspace.book
     assert db.con.execute("SELECT last_opened_at FROM notebooks WHERE id=?",(workspace.book,)).fetchone()[0]
-    view.workspace.back.emit()
+    assert view.workspace.home_button.text() == ""
+    assert not view.workspace.home_button.icon().isNull()
+    assert view.workspace.home_button.accessibleName() == "업무노트 홈으로 이동"
+    view.workspace.home_button.click()
     assert view.stack.currentWidget() is view.home and view.notebook_id is None
 
 
@@ -157,7 +160,7 @@ def test_uploading_a_file_from_the_sources_panel_makes_it_askable(workspace,tmp_
         def cancel(self):pass
     monkeypatch.setattr(notebook_ingest_task,"project_client",lambda db,factory=None:NoModel())
     view,db,app=workspace.view,workspace.db,workspace.app
-    empty=notebook.create(db,"빈 노트북")
+    empty=notebook.create(db,"빈 업무노트")
     view.open_notebook(empty)
     sources,chat=view.workspace.sources,view.workspace.chat
     assert not chat.send.isEnabled()
@@ -334,12 +337,12 @@ def test_source_item_row_icons_and_actions(workspace):
     sources.back_button.click()
     assert sources.stack.currentIndex() == 0
 
-    # 연결 해제 아이콘 클릭 -> 문서가 노트북에서 제거됨
+    # 연결 해제 아이콘 클릭 -> 문서가 업무노트에서 제거됨
     row.detach_btn.click()
     assert sources.source_list.count() == 0
     assert notebook.sources(db, book) == []
 
-    # 보관된 노트북(editable=False)에서는 연결 해제 버튼이 생성되지 않음
+    # 보관된 업무노트(editable=False)에서는 연결 해제 버튼이 생성되지 않음
     notebook.add_sources(db, book, workspace.docs[:1])
     notebook.archive(db, book, True)
     view.refresh()

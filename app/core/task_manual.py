@@ -5,7 +5,7 @@ import re
 
 from dataclasses import dataclass, field
 
-from . import changes, matters, reconstruction as rc, workcard, workstate as ws, work_instruction
+from . import changes, matters, reconstruction as rc, workcard, workstate as ws, work_instruction, work_brief
 
 
 @dataclass
@@ -16,6 +16,7 @@ class Section:
     evidence: list[dict] = field(default_factory=list)
     # 기본으로는 접어 두는 나머지 줄. 화면은 '나머지 N건 펼치기'로 보인다(R05: 준비 항목 708건).
     more: list[str] = field(default_factory=list)
+    brief: work_brief.Brief | None = None
 
 
 @dataclass
@@ -55,7 +56,7 @@ def build(db, task_id: int, card=None) -> Manual:
     card = card or workcard.build(db, task_id)
     sections = [Section(key, title) for key, title in (
         ('overview', '업무 개요'), ('output', '만들어야 할 결과물·제출처'),
-        ('timing', '언제 시작하고 언제까지 해야 하나요'), ('prepare', '준비물·관련 서식'),
+        ('timing', '일정·처리 시점'), ('prepare', '준비물·관련 서식'),
         ('procedure', '수행 절차'), ('cases', '건별 현황'), ('notes', '주의사항·담당자 메모'),
         ('past', '과거 수행 사례'), ('first', '처음 맡으면 할 일'),
         ('basis', '근거·빠진 정보'))]
@@ -153,4 +154,5 @@ def build(db, task_id: int, card=None) -> Manual:
             }.get(section.key, '요청 공문·운영 지침에서 이 항목을 확인해 업무 안내에 보완하세요.'))
     if not by_key['basis'].lines:
         by_key['basis'].lines.append('자료에 적힌 내용과 현재 적용 여부·사람 확인 상태를 구분해 표시합니다.')
+    work_brief.populate(task, card, sections, cycle)
     return Manual(task_id, task['name'], sections)

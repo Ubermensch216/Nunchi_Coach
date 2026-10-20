@@ -82,7 +82,7 @@ def test_home_connects_all_tasks_and_keyboard_card(project, qapp):
     settle(qapp)
     assert view._task_id == cards[0].task_id
     assert view._tab == 'guide'
-    assert list(dict(DETAIL_TABS).values()) == ['업무 안내', '일정·진행', '업무 자료', '매뉴얼']
+    assert list(dict(DETAIL_TABS).values()) == ['업무 안내', '일정·진행', '업무 자료', '매뉴얼', '근거']
 
 
 def test_home_search_filters_cards_and_schedule_without_reordering(project):
@@ -138,8 +138,9 @@ def test_manual_shares_real_content_and_keeps_conflict(project, qapp):
         assert text in guide and text in manual
     proof_button = next(b for b in view.pages['guide'].findChildren(QPushButton) if b.text().startswith('근거'))
     proof_button.click()
-    assert not view.drawer.isHidden()
-    assert '실제 결과물 원문' in words(view.drawer)
+    assert view._tab == 'evidence'
+    assert view.stack.currentWidget() is view.evidence_page
+    assert '실제 결과물 원문' in words(view.evidence_page)
     assert item_id in {i['id'] for i in db.task_items(1)}
     assert note in {i['id'] for i in db.task_items(1)}
 
@@ -227,7 +228,7 @@ def test_rapid_switch_discards_previous_restore_and_closes_evidence(project, qap
     settle(qapp)
     assert view._task_id == 1 and view._tab == 'work'
     assert view.stack.currentWidget() is view.pages['work']
-    assert view.drawer.isHidden()
+    assert view.stack.currentWidget() is not view.evidence_page
     assert '2_자료' not in words(view.pages['docs'])
 
 
@@ -428,7 +429,42 @@ def test_manual_preserves_changed_source_warning(project, qapp):
     settle(qapp)
     button = next(b for b in view.pages['manual'].findChildren(QPushButton) if b.text().startswith('근거'))
     button.click()
-    assert '원문이 바뀌었거나 사라졌습니다' in words(view.drawer)
+    assert '원문이 바뀌었거나 사라졌습니다' in words(view.evidence_page)
+
+
+def test_evidence_tab_uses_full_width_and_keeps_tasks_separate(project, qapp):
+    db, view = project
+    item_id = db.add_task_item(1, rc.OUTPUT, '결과물')
+    db.add_evidence('item', item_id, 1, 'h1-0', '2쪽', '첫 업무의 고유한 원문', '자료.txt', '자료.txt')
+    view.open_task(1, 'evidence')
+    settle(qapp)
+    assert view.stack.currentWidget() is view.evidence_page
+    assert view.evidence_page.width() == view.stack.width()
+    assert '첫 업무의 고유한 원문' in words(view.evidence_page)
+    assert not hasattr(view, 'drawer')
+    assert not any(button.text().startswith('근거 ') for button in view.head.parentWidget().findChildren(QPushButton))
+    view.open_task(2, 'evidence')
+    settle(qapp)
+    assert '첫 업무의 고유한 원문' not in words(view.evidence_page)
+    view.open_task(1)
+    settle(qapp)
+    assert view._tab == 'evidence'
+    assert '첫 업무의 고유한 원문' in words(view.evidence_page)
+
+
+def test_evidence_link_can_return_to_all_evidence_and_handle_empty_context(project, qapp):
+    _, view = project
+    view.open_task(1, 'guide')
+    settle(qapp)
+    assert view.evidence_page.isHidden()
+    view._show_evidence([], '누락된 항목의 근거')
+    settle(qapp)
+    assert view._tab == 'evidence'
+    assert '이 주장에 연결된 근거를 찾지 못했습니다.' in words(view.evidence_page)
+    assert view.evidence_page.all_button.isVisible()
+    view.evidence_page.all_button.click()
+    assert not view.evidence_page.all_button.isVisible()
+    assert '1_자료000.txt' in words(view.evidence_page)
 
 
 def test_year_case_and_month_restore_per_task(project, qapp):
@@ -535,15 +571,15 @@ def test_manual_tab_shows_notebook_version_state_without_creating_one(project, q
     db, view = project
     view.open_task(1, 'manual')
     settle(qapp)
-    assert '아직 노트북에 넣은 판이 없습니다' in words(view.pages['manual'])
+    assert '아직 업무노트에 넣은 판이 없습니다' in words(view.pages['manual'])
     assert manual_versions.latest(db, 1) is None          # 열람만으로 판본을 만들지 않는다
     db.con.execute("INSERT INTO manual_versions(task_id,version,digest,status) VALUES (1,3,'old','ok')")
     view.refresh(force=True)
     settle(qapp)
     text = words(view.pages['manual'])
     assert '판본 3' in text and '업무 내용이 바뀌었습니다' in text
-    assert '새 판을 노트북에 넣기' in [b.text() for b in view.pages['manual'].findChildren(QPushButton)]
-    assert '판본·노트북' not in words(view.pages['guide'])    # 안내에는 이력 카드를 싣지 않는다
+    assert '새 판을 업무노트에 넣기' in [b.text() for b in view.pages['manual'].findChildren(QPushButton)]
+    assert '판본·업무노트' not in words(view.pages['guide'])    # 안내에는 이력 카드를 싣지 않는다
 
 
 def _linked_project(project):

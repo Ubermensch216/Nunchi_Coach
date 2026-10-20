@@ -51,12 +51,15 @@ class EvidenceDrawer(QFrame):
 
     open_original = Signal(str)   # 원본 경로
     closed = Signal()
+    all_requested = Signal()
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None, *, embedded: bool = False):
         super().__init__(parent)
-        self.setObjectName("EvidenceDrawer")
-        self.setFixedWidth(theme.DRAWER_W)
-        self.hide()
+        self._embedded = embedded
+        self.setObjectName("EvidencePage" if embedded else "EvidenceDrawer")
+        if not embedded:
+            self.setFixedWidth(theme.DRAWER_W)
+            self.hide()
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(theme.SP_LG, theme.SP_MD, theme.SP_LG, theme.SP_LG)
@@ -67,15 +70,24 @@ class EvidenceDrawer(QFrame):
         self._title = section_title("근거")
         head.addWidget(self._title)
         head.addStretch(1)
-        close = QPushButton()
-        close.setObjectName("IconButton")
-        close.setIcon(icons.icon("close", theme.TEXT_MUTED, 16))
-        close.setFixedSize(28, 28)
-        close.setCursor(Qt.CursorShape.PointingHandCursor)
-        close.setToolTip("닫기")
-        close.setAccessibleName("근거 닫기")
-        close.clicked.connect(self.dismiss)
-        head.addWidget(close)
+        self.all_button = None
+        if embedded:
+            self.setAccessibleName("업무 근거")
+            self.all_button = QPushButton("전체 근거")
+            self.all_button.setObjectName("Quiet")
+            self.all_button.clicked.connect(self.all_requested.emit)
+            self.all_button.hide()
+            head.addWidget(self.all_button)
+        else:
+            close = QPushButton()
+            close.setObjectName("IconButton")
+            close.setIcon(icons.icon("close", theme.TEXT_MUTED, 16))
+            close.setFixedSize(28, 28)
+            close.setCursor(Qt.CursorShape.PointingHandCursor)
+            close.setToolTip("닫기")
+            close.setAccessibleName("근거 닫기")
+            close.clicked.connect(self.dismiss)
+            head.addWidget(close)
         outer.addLayout(head)
 
         scroll = QScrollArea()
@@ -93,15 +105,17 @@ class EvidenceDrawer(QFrame):
         self._entries: dict[int, QWidget] = {}
 
     # ── 조작 ────────────────────────────────────────────────────────
-    def show_evidence(self, items: list[Evidence], title: str = "근거") -> None:
+    def show_evidence(self, items: list[Evidence], title: str = "근거", *, contextual: bool = False) -> None:
         """근거를 채우고 연다. 빈 목록이면 그렇다고 말한다 — 조용히 닫지 않는다."""
         clear_layout(self.column)
         self._entries = {}
         self._title.setText(f"{title} {len(items)}건" if items else title)
+        if self.all_button is not None:
+            self.all_button.setVisible(contextual)
 
         if not items:
             self.column.addWidget(
-                muted_label("이 주장에 연결된 근거를 찾지 못했습니다.")
+                muted_label("이 업무에 연결된 근거를 찾지 못했습니다." if self._embedded and not contextual else "이 주장에 연결된 근거를 찾지 못했습니다.")
             )
         for index, item in enumerate(items):
             if index:
@@ -111,7 +125,8 @@ class EvidenceDrawer(QFrame):
             if item.mark:
                 self._entries[item.mark] = widget
 
-        self.show()
+        if not self._embedded:
+            self.show()
 
     def highlight(self, mark: int) -> bool:
         """그 번호의 근거를 강조하고 보이는 곳으로 스크롤한다.

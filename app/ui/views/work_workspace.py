@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QWidget,
 from ...core import manual_versions, matters, work_schedule, workcard, workstate as ws
 from ...core.knowledge import review
 from ..widgets import Card, Evidence, WorkYearDashboard, clear_layout, muted_label, section_title
+from ..widgets.work_brief import section_content
 
 STATE_KEY = 'ui.work_workspace.v1'
 
@@ -200,7 +201,6 @@ class WorkspaceMixin:
         return not any(d._job.running for d in self._workboxes.values())
 
     def _render_manual(self, column, manual, compact=False):
-        column.addWidget(muted_label('후임자를 위한 업무 안내 · 자료에서 확인한 내용과 준비를 위한 제안을 구분해 안내합니다.'))
         sections = manual.sections
         if compact:
             priority = ['overview', 'first', 'timing', 'procedure', 'output', 'prepare', 'evaluation', 'cases', 'notes', 'past', 'basis']
@@ -212,12 +212,7 @@ class WorkspaceMixin:
             # 업무를 이해하는 데 필요한 범위·기간·순서·결과물은 안내에서도 모두 보여 준다.
             summarize = compact and section.key not in {'overview', 'first', 'timing', 'procedure', 'output'}
             lines = section.lines[:2] if summarize else section.lines
-            for line in lines:
-                label = QLabel(line)
-                label.setTextFormat(Qt.TextFormat.PlainText)
-                label.setWordWrap(True)
-                label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-                card.body.addWidget(label)
+            card.body.addWidget(section_content(section, lines))
             if section.evidence:
                 card.body.addWidget(self._evidence_button(
                     f'근거 {len(section.evidence)}건', '원문과 위치·확인 상태를 봅니다',
@@ -278,24 +273,24 @@ class WorkspaceMixin:
         return holder
 
     def _version_card(self, task_id):
-        """노트북에 넣은 매뉴얼 판본과 현재 내용의 차이. 열람만으로 새 판을 만들지 않는다."""
+        """업무노트에 넣은 매뉴얼 판본과 현재 내용의 차이. 열람만으로 새 판을 만들지 않는다."""
         card = Card()
-        card.body.addWidget(section_title('판본·노트북'))
+        card.body.addWidget(section_title('판본·업무노트'))
         state = manual_versions.current_state(self.db, task_id)
         if state['version']:
             same = '현재 내용과 같습니다.' if state['current'] else '넣은 뒤 업무 내용이 바뀌었습니다. 새 판을 넣을 수 있습니다.'
-            card.body.addWidget(muted_label(f"노트북에 넣은 판: 판본 {state['version']} · {state['created_at']} · {same}"))
+            card.body.addWidget(muted_label(f"업무노트에 넣은 판: 판본 {state['version']} · {state['created_at']} · {same}"))
         else:
-            card.body.addWidget(muted_label('아직 노트북에 넣은 판이 없습니다. 노트북에서 묻기를 누르면 현재 내용으로 첫 판을 만듭니다.'))
+            card.body.addWidget(muted_label('아직 업무노트에 넣은 판이 없습니다. 업무노트에서 묻기를 누르면 현재 내용으로 첫 판을 만듭니다.'))
         if state['failure']:
             card.body.addWidget(muted_label(f"최근 시도가 실패했습니다: {state['failure']}"))
         rows = manual_versions.history(self.db, task_id, 5)
         for row in rows:
             mark = '실패' if row['status'] == 'failed' else f"판본 {row['version']}"
-            where = row['notebook_title'] or '삭제된 노트북'
+            where = row['notebook_title'] or '삭제된 업무노트'
             card.body.addWidget(muted_label(f"{row['created_at']} · {mark} · {where}", small=True))
         card.body.addWidget(muted_label('옛 판은 보관소에 남아 지난 답의 인용을 그대로 열 수 있습니다.', small=True))
-        button = QPushButton('새 판을 노트북에 넣기' if state['version'] and not state['current'] else '노트북에서 묻기')
+        button = QPushButton('새 판을 업무노트에 넣기' if state['version'] and not state['current'] else '업무노트에서 묻기')
         button.clicked.connect(lambda _=False, tid=task_id: self.open_notebook.emit(tid))
         card.body.addWidget(button)
         return card

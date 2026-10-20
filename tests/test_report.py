@@ -178,11 +178,16 @@ def test_writing_the_report_leaves_a_file_and_an_audit_line(db: Database, qapp, 
         view.setParent(None)
 
 
-def test_the_home_screen_offers_the_report(db: Database, qapp):
+def test_manual_export_lives_in_handover_instead_of_task_home(db: Database, qapp):
+    from app.ui.views.handover import HandoverView
     view = TasksView(db)
     try:
-        assert any(
-            b.text() == "보고서 만들기" for b in view.findChildren(QPushButton)
-        )
+        assert not any(b.text() in ('보고서 만들기', '저장·옮기기', '챙길 일')
+                       for b in view.findChildren(QPushButton))
+        handover_view = HandoverView(db)
+        handover_view.refresh()
+        assert handover_view.export_button.text() == '매뉴얼 파일로 저장'
+        assert '인수인계 매뉴얼' in handover_view.document_text
+        handover_view.deleteLater()
     finally:
         view.setParent(None)

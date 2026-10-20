@@ -1,4 +1,4 @@
-"""sAIde 꾸러미 — 읽기·수집·완전성 판정·경로 방어·노트북 가져오기."""
+"""sAIde 꾸러미 — 읽기·수집·완전성 판정·경로 방어·업무노트 가져오기."""
 
 import json
 from types import SimpleNamespace
@@ -225,7 +225,7 @@ def test_folder_picker_tells_a_package_from_a_collection_before_importing(tmp_pa
 
 
 def test_package_becomes_a_project_source_and_analysis_links_the_official_origin(tmp_path, monkeypatch):
-    """노트북 없이 자료 폴더로 등록 — 읽기는 분석이 하고, 읽은 뒤에 공식 출처가 이어진다."""
+    """업무노트 없이 자료 폴더로 등록 — 읽기는 분석이 하고, 읽은 뒤에 공식 출처가 이어진다."""
     import app.jobs.pipeline as pipeline_module
     from app.ai.client import OllamaClient
     monkeypatch.setattr(pipeline_module, "OllamaClient",

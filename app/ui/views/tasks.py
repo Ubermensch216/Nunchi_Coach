@@ -109,6 +109,7 @@ DETAIL_TABS = (
     (WORK, "일정·진행"),
     (DOCS, "업무 자료"),
     ("manual", "매뉴얼"),
+    ("evidence", "근거"),
 )
 # 건강도 판에 세워 둘 업무 수. 넘치면 판이 목록이 되어 '요약'이 아니게 된다.
 HEALTH_ROWS = 5
@@ -152,8 +153,7 @@ DETAIL_HINTS = {
 class TasksView(WorkspaceMixin, QWidget):
     go_documents = Signal()
     go_calendar = Signal()
-    go_attention = Signal()
-    open_notebook = Signal(int)   # task_id로 노트북 열기 (개편계획서 §7)
+    open_notebook = Signal(int)   # task_id로 업무노트 열기 (개편계획서 §7)
     state_changed = Signal()   # 확인·교정이 일어났다 (셸의 진행도가 듣는다)
 
     def __init__(self, db: Database, parent: QWidget | None = None):
@@ -172,8 +172,6 @@ class TasksView(WorkspaceMixin, QWidget):
         self.setObjectName("Canvas")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
-        # 근거 서랍은 머리 띠 옆에까지 선다. 본문 옆에만 세우면 서랍이 열릴 때
-        # 본문 기둥만 좁아져 제목과 카드의 왼쪽 끝이 어긋난다.
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -181,7 +179,6 @@ class TasksView(WorkspaceMixin, QWidget):
         # 좌측 업무 목록 사이드바 (개편계획서 §13.2)
         self.sidebar = WorkSidebar()
         self.sidebar.task_selected.connect(self.open_task)
-        self.sidebar.back_to_home.connect(self.back)
         self.sidebar.hide()
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setChildrenCollapsible(True)
@@ -217,12 +214,6 @@ class TasksView(WorkspaceMixin, QWidget):
         self.head = QVBoxLayout()
         self.head.setContentsMargins(0, 0, 0, 0)
         self.head.setSpacing(theme.SP_SM)
-        self.attention = QPushButton("챙길 일")
-        self.attention.setObjectName("Quiet")
-        self.attention.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.attention.setToolTip("새 제안·진행 중인 준비 작업·확인할 단계를 봅니다")
-        self.attention.clicked.connect(self.go_attention.emit)
-        head_wrap.addWidget(self.attention, 0, Qt.AlignmentFlag.AlignRight)
         head_wrap.addLayout(self.head)
 
         self.tabs = TabBar(DETAIL_TABS)
@@ -240,24 +231,17 @@ class TasksView(WorkspaceMixin, QWidget):
         self.stack = QStackedWidget()
         self.list_page = Page(max_width=theme.CONTENT_MAX_W)
         self.stack.addWidget(self.list_page)
-        self.pages: dict[str, Page] = {}
+        self.pages: dict[str, QWidget] = {}
         for key, _label in (*DETAIL_TABS, (READ, ""), (WHEN, ""), (HOW, "")):
-            page = Page()
+            page = EvidenceDrawer(embedded=True) if key == "evidence" else Page()
             self.pages[key] = page
             self.stack.addWidget(page)
         main.addWidget(self.stack, 1)
-
-        # 근거 서랍은 질문 화면과 같은 위젯이다(계획서 §29). 업무 화면에서는
-        # 상주가 아니라 부를 때만 연다 — 여기서는 근거가 늘 있는 것이 아니라
-        # 어떤 주장(설명·주기·단계)을 짚었을 때 생긴다.
-        #
-        # 서랍은 머리 띠 옆에 선다(아래가 아니라). 머리와 본문이 같은 폭을
-        # 나눠 가져야 서랍을 열어도 둘의 기둥이 어긋나지 않고, 서랍도 창의
-        # 높이를 다 써서 근거를 더 길게 보여 준다.
         main.insertWidget(0, header)
-        self.drawer = EvidenceDrawer()
-        self.drawer.open_original.connect(self._open)
-        outer.addWidget(self.drawer)
+        self.evidence_page = self.pages["evidence"]
+        self.evidence_page.open_original.connect(self._open)
+        self.evidence_page.all_requested.connect(self._show_all_evidence)
+        self._all_evidence = []
 
         for page in [self.list_page, *self.pages.values()]:
             page.findChild(QScrollArea).verticalScrollBar().valueChanged.connect(self._scroll_changed)
@@ -265,8 +249,18 @@ class TasksView(WorkspaceMixin, QWidget):
         self.refresh(capture=False)
 
     # ── 진입점 ──────────────────────────────────────────────────────
-    def set_attention_count(self, count: int) -> None:
-        self.attention.setText(f"챙길 일 {count}" if count else "챙길 일")
+    def open_workspace(self) -> None:
+        """상단 업무 메뉴: 최근 선택 업무의 안내, 처음이면 목록 첫 업무를 연다."""
+        tasks = self.db.tasks()
+        active = {row['id'] for row in tasks}
+        if not active:
+            self.refresh(force=True)
+            return
+        task_id = next((candidate for candidate in (self._task_id, self._ui_state.get('last_task'))
+                        if isinstance(candidate, int) and candidate in active), min(active))
+        self.open_task(task_id, 'guide')
+        if self.splitter.sizes()[0] == 0:
+            self.splitter.setSizes([240, max(320, self.splitter.width() - 240)])
 
     def closeEvent(self, event) -> None:
         if not self.stop():
@@ -296,7 +290,6 @@ class TasksView(WorkspaceMixin, QWidget):
         if self._task_id is not None and self._task_id not in active:
             self._capture_workspace()
             self._task_id = None
-            self.drawer.dismiss()
             force = True
         if not force and self._data_stamp == self._stamp():
             return
@@ -307,13 +300,11 @@ class TasksView(WorkspaceMixin, QWidget):
         clear_layout(self.head)
         self._ui_state["tasks"] = {key: value for key, value in self._ui_state["tasks"].items() if key in {str(t) for t in active}}
         if self._task_id is not None:
-            self.attention.hide()
             self.sidebar.show()
             self.sidebar.set_tasks(tasks, self._task_id)
             self._render_detail(self._task_id)
         else:
             self.sidebar.hide()
-            self.attention.show()
             self.tabs.setVisible(False)
             self._head_pad.setVisible(True)
             self.stack.setCurrentWidget(self.list_page)
@@ -330,7 +321,6 @@ class TasksView(WorkspaceMixin, QWidget):
         self._rendering = True
         self._render_generation += 1
         self._tab = key
-        self.drawer.dismiss()
         self.tabs.select(key if key in dict(DETAIL_TABS) else WORK if key in (WHEN, HOW) else "guide")
         self.stack.setCurrentWidget(self.pages[key])
         self._state()["tab"] = key
@@ -351,6 +341,7 @@ class TasksView(WorkspaceMixin, QWidget):
         self._capture_workspace()
         self._reveal_kind = "select" if self._task_id is not None else "enter"
         self._task_id = task_id
+        self._ui_state['last_task'] = task_id
         state = self._state()
         self._tab = tab or state.get("tab", "guide")
         if self._tab not in self.pages:
@@ -360,14 +351,12 @@ class TasksView(WorkspaceMixin, QWidget):
         for key, target in (("how_year", self._how_year), ("how_against", self._how_against)):
             if isinstance(state.get(key), int):
                 target[task_id] = state[key]
-        self.drawer.dismiss()
         self.refresh(force=True, capture=False)
 
     def back(self) -> None:
         self._capture_workspace()
         self._task_id = None
         self._reveal_kind = "select"
-        self.drawer.dismiss()
         self.refresh(force=True, capture=False)
 
     # ── 목록 ────────────────────────────────────────────────────────
@@ -398,7 +387,6 @@ class TasksView(WorkspaceMixin, QWidget):
             Qt.AlignmentFlag.AlignVCenter,
         )
         title_row.addStretch(1)
-        marks = title_row   # 내보내기 버튼은 제목 줄 오른쪽에 선다
         self.head.addLayout(title_row)
 
         # 인수인계에서 가장 먼저 궁금한 건 "얼마나 끝냈나"다. 카드를 세어
@@ -412,26 +400,6 @@ class TasksView(WorkspaceMixin, QWidget):
             f"확인한 업무 {done} / {len(tasks)}",
             wrap=False,
         ))
-        # 인수인계는 화면 안에서 끝나지 않는다 — 후임자가 이 프로그램을 쓰지
-        # 않을 수도 있고, 결재로 올려야 할 수도 있다.
-        export = QPushButton("보고서 만들기")
-        export.setObjectName("Quiet")
-        export.setCursor(Qt.CursorShape.PointingHandCursor)
-        export.setToolTip(
-            "확인한 업무지식을 글 하나로 내보냅니다. 원본 파일은 건드리지 않습니다."
-        )
-        export.clicked.connect(self._export_report)
-        title_row.addWidget(export)
-        snapshots = QPushButton("저장·옮기기")
-        snapshots.setObjectName("Quiet")
-        snapshots.setCursor(Qt.CursorShape.PointingHandCursor)
-        snapshots.setToolTip(
-            "지금까지 복원한 업무·절차·수행 기록을 그 시점 그대로 저장하고, "
-            "글 파일로 내보내거나 다른 PC로 옮깁니다(업무 복원본)."
-        )
-        snapshots.clicked.connect(lambda _=False: self._open_snapshots())
-        marks.addWidget(snapshots)
-
         today = date.today()
         cycles = self.db.all_cycles()
         soon = [entry for entry in upcoming(cycles, today) if is_now(entry)]
@@ -451,59 +419,6 @@ class TasksView(WorkspaceMixin, QWidget):
 
         self._render_health()
         self._render_leftovers(counts)
-
-    def _open_snapshots(self) -> None:
-        from ..snapshot_dialog import SnapshotDialog
-
-        SnapshotDialog(self.db, self).exec()
-
-    def _export_report(self) -> None:
-        """보고서 내보내기 (계획서 §33, PRD §10.9).
-
-        경로 묻기와 실제 쓰기를 나눈다 — 네이티브 파일 다이얼로그는 시험에서
-        가로채기 어렵고, 쓰기만 따로 두면 다이얼로그 없이 검증할 수 있다
-        (설정 화면의 감사 로그 내보내기와 같은 이유).
-
-        내보내기 전에 **아직 확인되지 않은 것을 먼저 말한다**(RPT-004). 이
-        문서는 다음 담당자에게 그대로 넘어간다. 무엇이 사람 손을 안 거쳤는지
-        모른 채 넘기면, 추정이 사실로 굳는 자리가 바로 여기다.
-        """
-        progress = handover.summarize(self.db.handover_counts())
-        if not progress.done:
-            pending = [
-                f"· {area.sentence()}" for area in progress.measured
-                if area.state != status.CONFIRMED
-            ]
-            answer = QMessageBox.question(
-                self,
-                "아직 확인하지 않은 것이 있습니다",
-                "확인하지 않은 대목은 보고서에 ◐·△로 표시되어 나갑니다.\n\n"
-                + "\n".join(pending)
-                + "\n\n그대로 만들까요?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Yes,
-            )
-            if answer != QMessageBox.StandardButton.Yes:
-                return
-
-        today = date.today()
-        suggested = (
-            f"{self.db.path.parent.name}_인수인계_보고서_{today:%Y%m%d}.md"
-        )
-        path, _filter = QFileDialog.getSaveFileName(
-            self, "인수인계 보고서 저장", suggested, "Markdown (*.md)"
-        )
-        if not path:
-            return
-        try:
-            self._write_report(path)
-        except (UnsafeOutputError, OSError) as exc:
-            QMessageBox.warning(self, "보고서를 저장하지 못했습니다", str(exc))
-            return
-        QMessageBox.information(
-            self, "보고서를 만들었습니다",
-            path + "\n\n글 파일이라 어디서나 열립니다. 고쳐서 쓰셔도 됩니다.",
-        )
 
     def _write_report(self, path: str) -> int:
         text = report.build(self.db, project=self.db.path.parent.name)
@@ -889,19 +804,12 @@ class TasksView(WorkspaceMixin, QWidget):
         title.setWordWrap(True)
         title_row.addWidget(title, 1)
         title_row.addStretch(1)
-        list_button = QPushButton("업무 목록")
-        list_button.setToolTip("좌측 목록을 접거나 다시 펼칩니다")
-        list_button.clicked.connect(self._toggle_sidebar)
         action_row = QHBoxLayout()
-        action_row.addWidget(list_button)
-        guide_button = QPushButton("처음부터 안내 보기")
-        guide_button.clicked.connect(self._reset_guide)
-        action_row.addWidget(guide_button)
 
-        ask_btn = QPushButton("노트북에서 묻기")
+        ask_btn = QPushButton("업무노트에서 묻기")
         ask_btn.setObjectName("Quiet")
         ask_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        ask_btn.setToolTip("이 업무의 설명과 근거 문서를 바탕으로 노트북에서 질문하고 정리합니다")
+        ask_btn.setToolTip("이 업무의 설명과 근거 문서를 바탕으로 업무노트에서 질문하고 정리합니다")
         ask_btn.clicked.connect(lambda _=False, tid=task_id: self.open_notebook.emit(tid))
         action_row.addWidget(ask_btn)
 
@@ -924,61 +832,12 @@ class TasksView(WorkspaceMixin, QWidget):
         action_row.addStretch(1)
         self.head.addLayout(action_row)
 
-        # 규모 한 조각과, **예외일 때만** 상태를 한 줄에 둔다.
-        #
-        # 예전에는 '자료에서 추정'·'묶음이 단단합니다'·'기억 확인 필요'가 늘
-        # 나란히 섰다. 처음 여는 업무는 모두 그 상태라서 셋 다 아무것도 말해
-        # 주지 않았고, 정작 느슨한 묶음 같은 진짜 경고가 그 사이에 묻혔다.
-        #   · 추정(기본)      — 적지 않는다. 오른쪽 위 확인 버튼이 이미 말한다.
-        #   · 담당자 확인      — 적는다. 사람이 손댄 것은 보여야 한다.
-        #   · 느슨한 묶음 등   — 적는다. 열어 보기 전에 알아야 하는 경고다.
         picks = self.db.task_reading(task_id)
         docs = self.db.task_documents(task_id)
-        marks = QHBoxLayout()
-        marks.setSpacing(theme.SP_SM)
-        # db.task()는 집계 열을 들고 오지 않는다. 규모는 문서 목록에서 센다.
-        meta = QLabel(_doc_span(docs))
-        meta.setObjectName("MetaChip")
-        meta.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-        marks.addWidget(meta)
+        # 문서 수는 '업무 자료' 탭에, 설명·부족한 정보·회차는 본문에 둔다.
+        # 머리에는 확인 상태만 남기고, 원문 근거는 별도 탭에서 확인한다.
         if state != status.INFERRED:
-            marks.addWidget(Badge.state(state))
-        if row["confidence"] != "high":
-            note, kind = status.cluster_note(row["confidence"])
-            marks.addWidget(Badge(note, kind))
-
-        report = self._health_of(task_id)
-        if report is not None and report.missing:
-            # 무엇이 빠졌는지 말하지 않는 등급은 채근일 뿐이다. 등급 뱃지 대신
-            # 빠진 것을 그대로 적는다.
-            lacks = " · ".join(check.label for check in report.missing)
-            marks.addWidget(muted_label(f"아직 없는 것 — {lacks}", small=True))
-        marks.addStretch(1)
-        self.head.addLayout(marks)
-
-        # 설명은 상태보다 아래다. 위에 두면 제목과 붙어 두 줄 제목처럼 읽힌다.
-        if row["description"]:
-            about = QHBoxLayout()
-            about.setSpacing(theme.SP_SM)
-            about.addWidget(muted_label(row["description"]), 1)
-            basis = evidence.for_task(self.db, row, docs)
-            if basis:
-                about.addWidget(
-                    self._evidence_button(
-                        f"근거 {len(basis)}건",
-                        "이 이름과 설명을 어느 문서에서 얻었는지 봅니다",
-                        lambda: self._show_evidence(basis, "업무 설명의 근거"),
-                    )
-                )
-            self.head.addLayout(about)
-
-        # 회차 — 이 업무를 언제 언제 했는지. 전임자의 폴더가 말한 것이 있을 때만 보인다
-        # (해만 아는 문서뿐이면 위의 기간 표시와 같은 말이 된다).
-        rounds = [r for r in self.db.task_rounds(task_id) if r["round"]]
-        if len(rounds) > 1 and any(" " in r["round"] for r in rounds):
-            shown = " · ".join(f"{r['round']} {r['documents']}건" for r in rounds[:8])
-            more = f" · 외 {len(rounds) - 8}회차" if len(rounds) > 8 else ""
-            self.head.addWidget(muted_label(f"회차  {shown}{more}", small=True))
+            action_row.addWidget(Badge.state(state))
 
         cycle = self.db.task_cycle(task_id)
         work = workcard.build(self.db, task_id)
@@ -986,6 +845,12 @@ class TasksView(WorkspaceMixin, QWidget):
         self.tabs.set_label(WORK, "일정·진행" + ("  ◐" if work.gaps else ""))
         self.tabs.set_count(DOCS, "업무 자료", len(docs))
         manual = task_manual.build(self.db, task_id, card=work)
+        found = evidence.for_task(self.db, row, docs) + evidence.for_cycle(self.db, cycle)
+        for section in manual.sections:
+            found.extend(self._workspace_evidence(section.evidence))
+        self._all_evidence = list({(item.label, item.path, item.locator, item.snippet, item.note): item for item in found}.values())
+        self.evidence_page.show_evidence(self._all_evidence, "업무 근거")
+        self.tabs.set_count("evidence", "근거", len(self._all_evidence))
         self._render_manual(self.pages["guide"].reset(), manual, compact=True)
         self._render_manual(self.pages["manual"].reset(), manual)
         column = self.pages[WORK].reset()
@@ -998,13 +863,6 @@ class TasksView(WorkspaceMixin, QWidget):
 
         self.tabs.select(self._tab if self._tab in dict(DETAIL_TABS) else WORK if self._tab in (WHEN, HOW) else "guide")
         self.stack.setCurrentWidget(self.pages[self._tab])
-
-    def _health_of(self, task_id: int):
-        """업무 하나의 건강도. 목록과 같은 규칙을 쓴다(core/health.py)."""
-        for row in self.db.task_health_inputs():
-            if row["task_id"] == task_id:
-                return health.evaluate(row)
-        return None
 
     def _render_reading(self, column: QVBoxLayout, picks) -> None:
         column.addWidget(hint_row("이 순서로 읽으세요", DETAIL_HINTS[READ]))
@@ -2332,8 +2190,8 @@ class TasksView(WorkspaceMixin, QWidget):
             return
         QMessageBox.information(
             self, "검토 인계본",
-            "인계본을 발행했습니다. 업무 목록의 ‘업무 복원본’에서 글 파일로 내보낼 수 "
-            "있습니다." if created else "마지막 인계본과 달라진 것이 없어 새로 만들지 않았습니다.")
+            "인계본을 발행했습니다. ‘인수인계 > 기록 보관·이동’에서 문서나 PC 이동용 묶음으로 "
+            "내보낼 수 있습니다." if created else "마지막 인계본과 달라진 것이 없어 새로 만들지 않았습니다.")
 
     def _publish_handover(self, note: str = "") -> tuple[int, bool]:
         return handover_release.publish(self.db, note)
@@ -2454,9 +2312,18 @@ class TasksView(WorkspaceMixin, QWidget):
         return button
 
     def _show_evidence(self, items, title: str) -> None:
-        """근거를 옆 서랍에 편다. 빈 목록도 연다 — 조용히 아무 일도 일어나지
-        않으면 사용자는 버튼이 고장 난 줄 안다. 서랍이 없다고 말해 준다."""
-        self.drawer.show_evidence(items, title)
+        """주장의 근거를 같은 업무의 근거 탭에서 확인한다."""
+        if self._task_id is None:
+            return
+        self._switch("evidence")
+        self.evidence_page.show_evidence(list(items), title, contextual=True)
+        self.evidence_page.findChild(QScrollArea).verticalScrollBar().setValue(0)
+        self._state().setdefault("scroll", {})["evidence"] = 0
+        self._persist()
+
+    def _show_all_evidence(self) -> None:
+        self.evidence_page.show_evidence(self._all_evidence, "업무 근거")
+        self.evidence_page.findChild(QScrollArea).verticalScrollBar().setValue(0)
 
     def _toggle_checks(self) -> None:
         self._checks_open = not self._checks_open
@@ -2582,16 +2449,6 @@ def _span(row) -> str:
     if first and last:
         return f"{count} · {first}~{last}" if first != last else f"{count} · {first}"
     return count
-
-
-def _doc_span(docs) -> str:
-    """상세 머리의 규모 한 조각. 몇 건인지와 몇 년치인지를 함께 말한다."""
-    years = sorted({d["eff_year"] for d in docs if d["eff_year"]})
-    text = f"문서 {len(docs):,}건"
-    if not years:
-        return text
-    period = str(years[0]) if years[0] == years[-1] else f"{years[0]}~{years[-1]}"
-    return f"{text} · {period}"
 
 
 def _when(row) -> str:

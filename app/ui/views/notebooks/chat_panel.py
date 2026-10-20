@@ -58,7 +58,7 @@ from .panel import ICON_PX, icon_button, set_icon
 
 # 대화를 시작하기 전에 보여 주는 자료 안내 수. 자료가 많으면 앞의 몇 건만 보인다.
 GUIDE_CARDS = 5
-# 한 번에 그리는 대화 수. 긴 노트북을 열 때마다 수백 장의 카드를 짓지 않는다.
+# 한 번에 그리는 대화 수. 긴 업무노트를 열 때마다 수백 장의 카드를 짓지 않는다.
 THREAD_PAGE = 20
 # 보내기·멈춤 단추 한 변. 입력칸(ASK_INPUT_H)보다 조금 작아 테두리 안에 여백이 남는다.
 SEND_PX = 36
@@ -199,7 +199,7 @@ class ChatPanel(QWidget):
         if self.notebook_id is None:
             self.notice.setText("")
         elif not self.editable:
-            self.notice.setText("보관한 노트북입니다. 보관을 해제하면 다시 질문할 수 있습니다.")
+            self.notice.setText("보관한 업무노트입니다. 보관을 해제하면 다시 질문할 수 있습니다.")
         elif not ready:
             self.notice.setText("왼쪽 출처에서 근거로 쓸 자료를 선택하세요.")
         else:

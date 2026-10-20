@@ -164,7 +164,7 @@ def test_v5_upgrade_keeps_existing_data_and_creates_backup(db):
     assert db.get_meta("schema_version") == SCHEMA_VERSION
     assert db.path.with_name("project.db.bak-v5").is_file()
     assert db.document(1)["filename"]=="예산1.txt"
-    assert notebook.create(db,"승격 후 노트북")
+    assert notebook.create(db,"승격 후 업무노트")
 
 
 def test_long_passage_with_same_locator_keeps_the_cited_chunk(db,monkeypatch):
@@ -182,15 +182,15 @@ def test_long_passage_with_same_locator_keeps_the_cited_chunk(db,monkeypatch):
 
 def test_database_notebooks_and_notebook(db):
     assert db.notebooks() == []
-    key1 = notebook.create(db, "노트북 1")
-    key2 = notebook.create(db, "노트북 2")
+    key1 = notebook.create(db, "업무노트 1")
+    key2 = notebook.create(db, "업무노트 2")
     rows = db.notebooks()
     assert len(rows) == 2
     assert {r["id"] for r in rows} == {key1, key2}
 
     nb = db.notebook(key1)
     assert nb is not None
-    assert nb["title"] == "노트북 1"
+    assert nb["title"] == "업무노트 1"
 
     notebook.archive(db, key1, archived=True)
     assert len(db.notebooks(include_archived=False)) == 1

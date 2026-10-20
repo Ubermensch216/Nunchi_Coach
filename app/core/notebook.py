@@ -1,4 +1,4 @@
-"""개인 로컬 노트북. 원문 링크·선택 범위·파생 근거를 별도로 보존한다."""
+"""개인 로컬 업무노트. 원문 링크·선택 범위·파생 근거를 별도로 보존한다."""
 
 import hashlib
 import json
@@ -20,14 +20,14 @@ def dumps(value):
 def require(db, notebook_id, active=True):
     row = db.con.execute("SELECT * FROM notebooks WHERE id=?", (notebook_id,)).fetchone()
     if row is None or (active and row["archived"]):
-        raise ValueError("열려 있는 노트북을 선택하세요.")
+        raise ValueError("열려 있는 업무노트를 선택하세요.")
     return row
 
 
 # 카드 표지의 색 이름. 화면(ui/views/notebooks/home.py)이 실제 색으로 옮긴다.
 # 상태 색(빨강·주황·초록)과 겹치는 이름은 두지 않는다(widgets/task_card.py와 같은 이유).
 ICONS = ("blue", "indigo", "violet", "teal", "slate", "plum")
-DEFAULT_TITLE = "제목 없는 노트북"
+DEFAULT_TITLE = "제목 없는 업무노트"
 
 
 def untitled(db):
@@ -42,7 +42,7 @@ def untitled(db):
 
 def create(db, title, purpose="", task_id=None, icon=""):
     if not title.strip():
-        raise ValueError("노트북 이름을 입력하세요.")
+        raise ValueError("업무노트 이름을 입력하세요.")
     if icon not in ICONS:
         icon = ICONS[sum(ord(c) for c in title.strip()) % len(ICONS)]
     with db.transaction():
@@ -91,7 +91,7 @@ def save_layout(db, notebook_id, value):
 
 
 def duplicate(db, notebook_id):
-    """자료 연결과 선택 상태만 옮긴다. 대화·메모·검토 기록은 원래 노트북의 것이다."""
+    """자료 연결과 선택 상태만 옮긴다. 대화·메모·검토 기록은 원래 업무노트의 것이다."""
     row = require(db, notebook_id, active=False)
     with db.transaction():
         key = db.con.execute("INSERT INTO notebooks(title,purpose,task_id,icon,updated_at) "
@@ -105,7 +105,7 @@ def duplicate(db, notebook_id):
 
 
 def delete(db, notebook_id):
-    """노트북과 그 대화·메모·검토 지식을 지운다. 연결한 원문과 분석 결과는 남는다."""
+    """업무노트와 그 대화·메모·검토 지식을 지운다. 연결한 원문과 분석 결과는 남는다."""
     require(db, notebook_id, active=False)
     with db.transaction():
         db.con.execute("DELETE FROM notebooks WHERE id=?", (notebook_id,))
@@ -121,7 +121,7 @@ def archive(db, notebook_id, archived=True):
 def rename(db, notebook_id, title):
     require(db, notebook_id)
     if not title.strip():
-        raise ValueError("노트북 이름을 입력하세요.")
+        raise ValueError("업무노트 이름을 입력하세요.")
     db.con.execute("UPDATE notebooks SET title=? WHERE id=?", (title.strip(), notebook_id))
     db.audit("notebook.rename", str(notebook_id))
 
@@ -215,7 +215,7 @@ def effective_mode(db, notebook_id, question, mode="", generating=True):
 
 
 def query(db, notebook_id, question, client=None, mode="", law=False, progress=None, chosen_scope=None):
-    """노트북의 한 차례 대화.
+    """업무노트의 한 차례 대화.
 
     mode="overview"면 선택한 자료 전체를 훑어 정리한다. law=True면 현행 법령을
     함께 조회해 따로 답한다(app/law) — 자료 답변과 섞지 않는다. progress는 전체
@@ -471,7 +471,7 @@ def export_note(db, note_id, path):
         raise ValueError("원문 근거가 달라져 내보내기 전에 재검토가 필요합니다.")
     origin = "사람이 직접 쓴 메모 · 원문 근거 없음" if memo else "AI 답변에서 작성한 연구 노트"
     with safe_text_writer(path, db) as stream:
-        stream.write(f"# {row['title']}\n\n노트북: {book['title']} · 개인 로컬 자료\n\n"
+        stream.write(f"# {row['title']}\n\n업무노트: {book['title']} · 개인 로컬 자료\n\n"
                      f"상태: {row['state']} · 수정판: {row['revision']} · {origin}\n\n"
                      f"{row['body']}\n\n## 원천 근거\n\n")
         for i, proof in enumerate(proofs, 1):

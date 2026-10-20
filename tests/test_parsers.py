@@ -241,7 +241,7 @@ def test_only_documents_of_a_revised_parser_are_read_again():
     assert ParseResult(OK, "pdf").parser_version == version_of("pdf")
 
 
-# ── DOCX 구조 보존 (노트북 RAG 2단계) ──────────────────────────────
+# ── DOCX 구조 보존 (업무노트 RAG 2단계) ──────────────────────────────
 
 def _structured_docx(path, rows):
     import docx

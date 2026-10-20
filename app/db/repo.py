@@ -32,7 +32,7 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # v5 안에서 나중에 붙은 열. 그 전에 v5로 올라간 프로젝트가 있다.
     ("evidence", "doc_name", "doc_name TEXT"),
     ("evidence", "doc_relpath", "doc_relpath TEXT"),
-    # 구조 보존 조각(노트북 RAG 2단계). 본문과 따로 두는 구조 정보와 조각의 제목 문맥.
+    # 구조 보존 조각(업무노트 RAG 2단계). 본문과 따로 두는 구조 정보와 조각의 제목 문맥.
     ("document_sections", "meta", "meta TEXT NOT NULL DEFAULT '{}'"),
     ("chunks", "context", "context TEXT NOT NULL DEFAULT ''"),
     # 안내문 절차의 단계를 하는 기관. '우리 기관', 기관 이름, 또는 모름('').
@@ -201,7 +201,7 @@ class Database(WorkStore, ActionStore):
                 self.con.execute("DELETE FROM task_steps WHERE task_id=? AND decided_by='ai'", (task_id,))
                 self.con.execute("DELETE FROM task_reading WHERE task_id=?", (task_id,))
                 self.con.execute("DELETE FROM task_health WHERE task_id=?", (task_id,))
-            # 노트북에 올린 파일은 업무에 속하지 않는다. 그 파일을 읽었다고 '다
+            # 업무노트에 올린 파일은 업무에 속하지 않는다. 그 파일을 읽었다고 '다
             # 살펴봤다'는 표시를 지우면, 파일 하나 올릴 때마다 다음 실행이 자료
             # 폴더 전체를 처음부터 다시 훑는다.
             uploaded = self.con.execute(
@@ -304,7 +304,7 @@ class Database(WorkStore, ActionStore):
     def sync_chunking_version(self) -> bool:
         """조각 규칙이 바뀐 것을 알아챈다. 버전을 남기지 않은 v1 조각만 여기서 지운다.
 
-        버전이 적힌 조각(v2 이후)은 지우지 않는다 — 노트북의 답변·메모·검토 지식이 그
+        버전이 적힌 조각(v2 이후)은 지우지 않는다 — 업무노트의 답변·메모·검토 지식이 그
         조각의 위치와 원문을 인용하고 있다. 옛 조각으로 계속 답하면서 새 조각을 따로
         준비해 검증한 뒤 바꾼다(core/reindex.py, 분석의 '질문 준비' 단계가 돌린다).
         여기서는 그 단계가 다시 돌도록 chunks_checked만 지운다.
@@ -424,7 +424,7 @@ class Database(WorkStore, ActionStore):
         return self.con.execute("SELECT * FROM sources ORDER BY id").fetchall()
 
     def work_sources(self) -> list[sqlite3.Row]:
-        """사용자가 연결한 자료 폴더. 노트북에 올린 파일의 보관소는 뺀다.
+        """사용자가 연결한 자료 폴더. 업무노트에 올린 파일의 보관소는 뺀다.
 
         보관소(kind='upload')는 이 프로그램이 만든 폴더다. 자료 폴더 목록에
         보이거나 폴더 훑기·업무 파악의 대상이 되면 안 된다. 다만 출력 보호
@@ -687,9 +687,9 @@ class Database(WorkStore, ActionStore):
     def task(self, task_id: int) -> sqlite3.Row | None:
         return self.con.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
 
-    # ── 노트북 ──────────────────────────────────────────────────────
+    # ── 업무노트 ──────────────────────────────────────────────────────
     def notebooks(self, include_archived: bool = False) -> list[sqlite3.Row]:
-        """노트북 목록. 최근 사용/수정 순으로 정렬한다."""
+        """업무노트 목록. 최근 사용/수정 순으로 정렬한다."""
         return self.con.execute(
             "SELECT b.*, COALESCE(b.updated_at, b.created_at) AS touched_at, "
             "(SELECT COUNT(*) FROM notebook_sources s WHERE s.notebook_id = b.id) AS source_count "
@@ -699,7 +699,7 @@ class Database(WorkStore, ActionStore):
         ).fetchall()
 
     def notebook(self, notebook_id: int) -> sqlite3.Row | None:
-        """노트북 단건."""
+        """업무노트 단건."""
         return self.con.execute(
             "SELECT b.*, COALESCE(b.updated_at, b.created_at) AS touched_at, "
             "(SELECT COUNT(*) FROM notebook_sources s WHERE s.notebook_id = b.id) AS source_count "

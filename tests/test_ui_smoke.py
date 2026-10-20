@@ -103,8 +103,8 @@ def _add_docs(db: Database, count: int = 4, parsed: int = 2) -> int:
 def _ask_view(window: MainWindow):
     """예전 질문 화면을 창 안에 세운다.
 
-    '질문'은 메뉴에서 빠지고 노트북으로 들어갔다. 다만 그 화면의 조각(원문 칸·
-    근거 목록·준비 상태 판정)은 노트북이 그대로 쓰므로 아래 시험들은 남긴다.
+    '질문'은 메뉴에서 빠지고 업무노트로 들어갔다. 다만 그 화면의 조각(원문 칸·
+    근거 목록·준비 상태 판정)은 업무노트가 그대로 쓰므로 아래 시험들은 남긴다.
     창에 얹는 이유는 폭 시험이 창 크기를 기준으로 재기 때문이다.
     """
     if "ask" not in window.views:
@@ -116,12 +116,12 @@ def _ask_view(window: MainWindow):
 
 
 def test_asking_lives_in_the_notebook_not_in_its_own_menu(make_window, db):
-    """묻는 자리는 노트북 하나다. 상위 메뉴는 네 개다."""
+    """묻는 자리는 업무노트 하나다. 상위 메뉴는 네 개다."""
     from app.ui.shell import NAV
 
     _add_docs(db)
     window = make_window(db)
-    assert [key for key, *_ in NAV] == ["tasks", "notebooks"]
+    assert [key for key, *_ in NAV] == ["tasks", "today", "notebooks", "handover"]
     assert "ask" not in window.views and "ask" not in window.topbar._buttons
     assert "Ctrl+2" in window.topbar._buttons["notebooks"].toolTip()
 
@@ -345,7 +345,7 @@ def test_tasks_view_announces_the_discovered_count(make_window, db):
     """첫 화면이 곧 정체성의 답이다 — 파일 개수가 아니라 업무 개수."""
     _seed_task(db)
     window = make_window(db)
-    window.go("tasks")
+    window._go_home()
     texts = _labels(window.views["tasks"])
     assert any("업무는 1개로 추정됩니다" in t for t in texts), texts
 
@@ -449,7 +449,7 @@ def test_unclassified_documents_are_shown_not_hidden(make_window, db):
         "parse_status": "ok", "hash": "zzz",
     })
     window = make_window(db)
-    window.go("tasks")
+    window._go_home()
     texts = _labels(window.views["tasks"])
     assert any("미분류 1건" in t for t in texts), texts
 
@@ -460,7 +460,7 @@ def test_long_guidance_is_folded_into_an_info_dot(make_window, db):
 
     _seed_task(db)
     window = make_window(db)
-    window.go("tasks")
+    window._go_home()
     view = window.views["tasks"]
 
     # 본문에는 더 이상 안내 문단이 깔리지 않는다.
@@ -847,12 +847,12 @@ def test_task_detail_how_step_shows_evidence_before_the_original(make_window, db
             button.click()
             break
 
-    assert not view.drawer.isHidden()      # 창을 띄우지 않는 시험이라 isVisible은 못 쓴다
-    assert any("2025년 제출 자료입니다" in text for text in _labels(view.drawer))
+    assert view.stack.currentWidget() is view.evidence_page
+    assert any("2025년 제출 자료입니다" in text for text in _labels(view.evidence_page))
 
     opened = []
-    view.drawer.open_original.connect(opened.append)
-    for button in _button_widgets(view.drawer):
+    view.evidence_page.open_original.connect(opened.append)
+    for button in _button_widgets(view.evidence_page):
         if button.text() == "원본 열기":
             button.click()
     assert opened == [str(real_file)]
@@ -1378,7 +1378,7 @@ def test_reader_still_fits_at_the_smallest_window(make_window, db, qapp):
 def test_navigation_lives_in_the_top_bar(make_window, db, qapp):
     """세로 사이드바를 걷어 내고 메뉴를 상단 띠로 옮겼다 (디자인 개선안 1c).
 
-    본문이 폭을 다 받는 것이 이 변경의 목적이다 — 노트북이 '출처 | 대화 |
+    본문이 폭을 다 받는 것이 이 변경의 목적이다 — 업무노트가 '출처 | 대화 |
     스튜디오' 세 판을 쓰는데 왼쪽에 216px 메뉴까지 서면 원문을 대조하기 어려워진다.
     """
     _add_docs(db)
@@ -1388,7 +1388,7 @@ def test_navigation_lives_in_the_top_bar(make_window, db, qapp):
     qapp.processEvents()
 
     assert [b.text() for b in window.topbar._buttons.values()] == [
-        "업무", "노트북"
+        "업무", "챙길 일", "업무노트", "인수인계"
     ]
     assert not hasattr(window, "sidebar")
     # 메뉴가 답하는 질문은 버리지 않고 툴팁으로 옮겼다.
@@ -1397,6 +1397,19 @@ def test_navigation_lives_in_the_top_bar(make_window, db, qapp):
     window.topbar._buttons["notebooks"].click()
     assert window.stack.currentWidget() is window.views["notebooks"]
     assert window.topbar._buttons["notebooks"].isChecked()
+
+    from app.core import notebook
+    books = window.views["notebooks"]
+    book = notebook.create(db, "업무 분석")
+    books.open_notebook(book)
+    assert books.stack.currentWidget() is books.workspace
+    window.topbar._buttons["notebooks"].click()
+    assert books.stack.currentWidget() is books.home
+    assert books.notebook_id is None
+    books.open_notebook(book)
+    window.go("tasks")
+    window.topbar._buttons["notebooks"].click()
+    assert books.stack.currentWidget() is books.home
 
     # 본문은 창 폭을 그대로 받는다.
     assert window.stack.width() == window.width()
@@ -1627,18 +1640,19 @@ def _recurring_this_month(db: Database) -> None:
         "docs": [[today.year - 2, today.month], [today.year - 1, today.month]]})
 
 
-def test_attention_lives_under_tasks_and_keeps_its_actions(make_window, db):
-    """첫 화면은 업무, 챙길 일은 업무 안에서 열고 돌아온다."""
+def test_attention_has_a_navigation_menu_and_keeps_its_actions(make_window, db):
+    """첫 화면은 업무, 챙길 일은 별도 메뉴에서 열며 수행 동작은 유지한다."""
     _add_docs(db)
     _recurring_this_month(db)
     window = make_window(db)
     assert window.stack.currentWidget() is window.views["tasks"]
-    assert "today" not in window.topbar._buttons
-    assert window.views["tasks"].attention.text() == "챙길 일 1"
+    assert window.topbar._buttons['today'].text() == '챙길 일'
+    assert window.topbar._buttons['today'].count_badge.text() == '1'
+    assert not window.topbar._buttons['today'].count_badge.isHidden()
     assert not window.views["today"].data.empty
-    window.views["tasks"].attention.click()
+    window.topbar._buttons['today'].click()
     assert window.stack.currentWidget() is window.views["today"]
-    assert window.topbar._buttons["tasks"].isChecked()
+    assert window.topbar._buttons['today'].isChecked()
     window.views["today"].go_tasks.emit()
     assert window.stack.currentWidget() is window.views["tasks"]
 
@@ -1647,7 +1661,37 @@ def test_window_still_opens_on_tasks_when_nothing_needs_attention(make_window, d
     _add_docs(db)
     window = make_window(db)
     assert window.stack.currentWidget() is window.views["tasks"]
-    assert window.views["tasks"].attention.text() == "챙길 일"
+    assert window.topbar._buttons['today'].text() == '챙길 일'
+
+
+def test_dashboard_refresh_updates_menu_badge_without_a_separate_shell_refresh(make_window, db):
+    from app.proactive import recommend
+    _add_docs(db)
+    _recurring_this_month(db)
+    window = make_window(db)
+    view = window.views['today']
+    menu = window.topbar._buttons['today']
+    assert menu.count == view.data.attention_count == 1
+    recommend.dismiss(db, view.data.cards[0].rec_id, '이미 했음')
+    view.refresh()
+    assert menu.count == view.data.attention_count == 0
+    assert menu.count_badge.isHidden() and menu.text() == '챙길 일'
+
+
+def test_handover_menu_contains_manual_and_archive_without_opening_dialogs(make_window, db):
+    _seed_task(db)
+    window = make_window(db)
+    window.topbar._buttons['handover'].click()
+    view = window.views['handover']
+    assert window.stack.currentWidget() is view
+    assert window.topbar._buttons['handover'].isChecked()
+    assert '인수인계 매뉴얼' in view.document_text
+    view.tabs._buttons['archive'].click()
+    assert view.stack.currentWidget() is view.archive
+    assert view.archive.save_button.isVisible() or not view.isVisible()
+    assert 'Ctrl+2' in window.topbar._buttons['notebooks'].toolTip()
+    assert 'Ctrl+3' in window.topbar._buttons['today'].toolTip()
+    assert 'Ctrl+4' in window.topbar._buttons['handover'].toolTip()
 
 
 def test_a_failing_scan_does_not_break_the_window(make_window, db, monkeypatch):
@@ -1668,6 +1712,7 @@ def test_work_folder_cards_and_sidebar_in_tasks_home(make_window, db):
     _add_docs(db)
     _recurring_this_month(db)
     window = make_window(db)
+    window._go_home()
     tasks_view = window.views["tasks"]
 
     # 홈에서는 사이드바가 숨겨져 있고, 폴더형 카드 그리드가 렌더링됨
@@ -1681,14 +1726,53 @@ def test_work_folder_cards_and_sidebar_in_tasks_home(make_window, db):
     assert not tasks_view.sidebar.isHidden()
     assert tasks_view._task_id == first_card.task_id
 
-    # 사이드바에서 홈 복귀 버튼 클릭 시 다시 홈으로 복귀
-    tasks_view.sidebar.back_to_home.emit()
+    # 제품 홈 진입점에서 카드 목록으로 복귀 (사이드바의 업무 홈 버튼은 제거됨)
+    window._go_home()
     assert tasks_view._task_id is None
     assert tasks_view.sidebar.isHidden()
 
 
+def test_top_work_menu_opens_last_task_guide_without_sidebar_home_button(make_window, db, qapp):
+    from PySide6.QtWidgets import QPushButton
+    from app.ui.views.work_workspace import STATE_KEY
+    import json
+
+    task_id = _seed_task(db)
+    another = db.con.execute("INSERT INTO tasks(name) VALUES ('다른 업무')").lastrowid
+    db.set_meta(STATE_KEY, json.dumps({'last_task': another}))
+    window = make_window(db)
+    view = window.views['tasks']
+    assert view._task_id == another
+    assert view._tab == 'guide'
+    assert not view.sidebar.isHidden()
+    assert not view.sidebar.findChildren(QPushButton)
+
+    view.open_task(task_id, 'manual')
+    window.go('notebooks')
+    window.topbar._buttons['tasks'].click()
+    qapp.processEvents()
+    assert window.stack.currentWidget() is view
+    assert view._task_id == task_id
+    assert view.stack.currentWidget() is view.pages['guide']
+    assert view._tab == 'guide'
+    assert json.loads(db.get_meta(STATE_KEY))['last_task'] == task_id
+
+
+def test_top_work_menu_ignores_removed_last_task_and_uses_first_sidebar_item(make_window, db):
+    from PySide6.QtCore import Qt
+    from app.ui.views.work_workspace import STATE_KEY
+    import json
+
+    first = _seed_task(db)
+    db.set_meta(STATE_KEY, json.dumps({'last_task': 999999}))
+    window = make_window(db)
+    view = window.views['tasks']
+    assert view._task_id == first
+    assert view.sidebar.list_widget.item(0).data(Qt.ItemDataRole.UserRole) == first
+
+
 def test_open_notebook_for_task(make_window, db):
-    """업무 화면에서 '노트북에서 묻기'를 호출하면 노트북 화면으로 전환되고 전용 노트북이 열린다."""
+    """업무 화면에서 '업무노트에서 묻기'를 호출하면 업무노트 화면으로 전환되고 전용 업무노트가 열린다."""
     _add_docs(db)
     task_id = db.con.execute(
         "INSERT INTO tasks(name, description) VALUES ('예산 편성', '예산안을 작성한다.')"
@@ -1698,7 +1782,7 @@ def test_open_notebook_for_task(make_window, db):
     # _open_notebook_for_task 호출
     window._open_notebook_for_task(task_id)
 
-    # 1. 노트북 뷰로 전환되었는지 확인
+    # 1. 업무노트 뷰로 전환되었는지 확인
     assert window.stack.currentWidget() is window.views["notebooks"]
     notebooks_view = window.views["notebooks"]
     # 2. 작업공간이 열렸는지 확인
@@ -1710,7 +1794,7 @@ def test_open_notebook_for_task(make_window, db):
     assert nb_row["title"] == "예산 편성"
     assert nb_row["task_id"] == task_id
 
-    # 다시 호출했을 때 새 노트북이 만들어지지 않고 기존 노트북이 열리는지 확인
+    # 다시 호출했을 때 새 업무노트가 만들어지지 않고 기존 업무노트가 열리는지 확인
     nb_id_before = notebooks_view.notebook_id
     window._open_notebook_for_task(task_id)
     assert notebooks_view.notebook_id == nb_id_before

@@ -1,4 +1,4 @@
-"""온나라 수집본을 노트북의 자료로 가져온다.
+"""온나라 수집본을 업무노트의 자료로 가져온다.
 
 수집본은 수집 엔진(jobs/onnara_collect.py)이 남긴 폴더다 — manifest.json과
 files/ 아래의 본문·붙임. 이 모듈은 **이미 내려받아 둔 폴더를 읽기만 한다.**
@@ -9,7 +9,7 @@ files/ 아래의 본문·붙임. 이 모듈은 **이미 내려받아 둔 폴더�
   ① files/ 폴더를 자료원(kind='onnara')으로 등록하고 문서를 읽는다.
   ② manifest의 문서번호·상태·본문/붙임 관계를 문서에 잇는다(core/provenance.py).
      그 뒤로 인용에는 공식 출처가 함께 표시된다.
-  ③ 읽은 문서를 이 노트북의 자료로 연결한다.
+  ③ 읽은 문서를 이 업무노트의 자료로 연결한다.
 """
 
 from __future__ import annotations
@@ -118,7 +118,7 @@ def describe(state: dict) -> str:
 
 def add_to_project(db, folder: str | Path,
                    should_stop: Callable[[], bool] = lambda: False) -> dict:
-    """수집본(또는 sAIde 꾸러미)을 프로젝트의 자료 폴더로 등록한다 — 노트북을 거치지 않는다.
+    """수집본(또는 sAIde 꾸러미)을 프로젝트의 자료 폴더로 등록한다 — 업무노트를 거치지 않는다.
 
     여기서는 등록만 한다. 파일을 읽고 업무를 파악하는 일은 다른 자료 폴더와 똑같이
     분석(jobs/pipeline.py)이 하고, 분석이 파일을 읽은 뒤 `relink`가 공식 출처를 잇는다.
@@ -157,7 +157,7 @@ def relink(db) -> int:
 def import_collection(db, notebook_id: int, folder: str | Path, client=None,
                       on_phase: Callable[[str, str], None] = lambda name, phase: None,
                       should_stop: Callable[[], bool] = lambda: False) -> list[Ingested]:
-    """수집본의 문서를 읽고 공식 출처를 이어 노트북에 연결한다.
+    """수집본의 문서를 읽고 공식 출처를 이어 업무노트에 연결한다.
 
     sAIde 꾸러미 폴더를 받으면 먼저 프로젝트 안에 수집본을 만든다.
     """

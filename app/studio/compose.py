@@ -1,6 +1,6 @@
 """서식의 항목마다 근거 대목만으로 초안을 엮는다.
 
-재료는 이 노트북 대화가 인용한 원문 대목이다(대화가 없으면 선택한 자료에서
+재료는 이 업무노트 대화가 인용한 원문 대목이다(대화가 없으면 선택한 자료에서
 고르게 뽑은 조각). **AI가 쓴 답변 문장은 재료가 아니다** — 답변을 재료로 다시
 쓰면 한 번 틀린 문장이 문서로 굳는다. 대화의 질문만 '무엇을 정리하려 했는지'의
 단서로 쓴다.
@@ -85,7 +85,7 @@ def gather(db, notebook_id: int) -> tuple[list[dict], dict, str]:
     if not snapshot:
         raise ValueError("왼쪽 출처에서 근거로 쓸 자료를 선택하세요.")
     evidence = evidence_from_conversation(db, notebook_id, snapshot)
-    note = "이 노트북의 대화가 인용한 원문 대목으로 엮었습니다."
+    note = "이 업무노트의 대화가 인용한 원문 대목으로 엮었습니다."
     if not evidence:
         evidence = evidence_from_sources(db, snapshot, MAX_EVIDENCE)
         note = "대화 기록이 없어 선택한 자료에서 고르게 뽑은 대목으로 엮었습니다."

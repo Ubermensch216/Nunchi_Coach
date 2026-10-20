@@ -194,7 +194,7 @@ def studio(tmp_path: Path, monkeypatch):
     app.setStyleSheet(theme.stylesheet())
     db = Database(tmp_path / "project.db")
     db.init()
-    book = notebook.create(db, "수질 노트북")
+    book = notebook.create(db, "수질 업무노트")
     template = templates.all_templates(db)[0]
     draft = Draft("수질 보고", "# 수질 보고\n\n## 1. 보고 배경\n- 기준이 강화됨\n", [], {})
     keys = [outputs.save_draft(db, book, template, draft) for _ in range(2)]
@@ -253,7 +253,7 @@ def test_each_output_row_has_a_delete_icon(studio, monkeypatch):
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
     buttons[1].click()
     assert [row["id"] for row in outputs.outputs(db, 1)] == [max(keys)]
-    # 보관한 노트북에서는 지울 수 없다 — 휴지통이 없다.
+    # 보관한 업무노트에서는 지울 수 없다 — 휴지통이 없다.
     panel.set_notebook(1, False)
     assert panel.outputs.itemWidget(panel.outputs.item(0)).findChild(QPushButton) is None
 
