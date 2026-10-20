@@ -1,7 +1,7 @@
 """표·핵심 항목·벡터 흐름도로 표시하는 업무 안내. 확대해도 글자는 선명하다."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from ...core.work_brief import Brief, points
@@ -32,6 +32,21 @@ class BulletList(_WrapFrame):
             marker.setObjectName('BriefBulletMark')
             grid.addWidget(marker, row, 0, Qt.AlignmentFlag.AlignTop)
             grid.addWidget(text(value), row, 1)
+        self._reflow_timer = QTimer(self)
+        self._reflow_timer.setSingleShot(True)
+        self._reflow_timer.timeout.connect(self._reflow)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if event.size().width() != event.oldSize().width():
+            self._reflow_timer.start(0)
+
+    def _reflow(self):
+        # 패널 개폐로 폭이 줄면 WrapLabel이 각 행의 최소 높이를 바꾼다.
+        # 크기 변경 이벤트가 끝난 뒤 배치해야 중간 행이 같은 위치에 겹치지 않는다.
+        self.layout().invalidate()
+        self.layout().activate()
+        self.updateGeometry()
 
 
 class FactTable(_WrapFrame):

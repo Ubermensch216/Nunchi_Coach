@@ -83,6 +83,7 @@ from ..widgets import (
     view_title,
 )
 from . import evidence
+from ..widgets.reading_sidecar import ReadingSidecar
 from .cycle_format import (
     cycle_headline,
     month_counts,
@@ -236,7 +237,17 @@ class TasksView(WorkspaceMixin, QWidget):
             page = EvidenceDrawer(embedded=True) if key == "evidence" else Page()
             self.pages[key] = page
             self.stack.addWidget(page)
-        main.addWidget(self.stack, 1)
+        self.content_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.content_splitter.setChildrenCollapsible(False)
+        self.stack.setMinimumWidth(0)
+        self.content_splitter.addWidget(self.stack)
+        self.reading_panel = ReadingSidecar()
+        self.reading_panel.closed.connect(self._close_reading_panel)
+        self.reading_panel.preview.open_original.connect(self._open)
+        self.content_splitter.addWidget(self.reading_panel)
+        self.content_splitter.setStretchFactor(0, 1)
+        self.content_splitter.setStretchFactor(1, 0)
+        main.addWidget(self.content_splitter, 1)
         main.insertWidget(0, header)
         self.evidence_page = self.pages["evidence"]
         self.evidence_page.open_original.connect(self._open)
@@ -288,6 +299,7 @@ class TasksView(WorkspaceMixin, QWidget):
         tasks = self.db.tasks()
         active = {row["id"] for row in tasks}
         if self._task_id is not None and self._task_id not in active:
+            self._close_reading_panel()
             self._capture_workspace()
             self._task_id = None
             force = True
@@ -317,6 +329,8 @@ class TasksView(WorkspaceMixin, QWidget):
         self.state_changed.emit()
 
     def _switch(self, key: str) -> None:
+        if key != 'guide':
+            self._close_reading_panel()
         self._capture_workspace()
         self._rendering = True
         self._render_generation += 1
@@ -338,6 +352,8 @@ class TasksView(WorkspaceMixin, QWidget):
     def open_task(self, task_id: int, tab: str | None = None) -> None:
         if task_id not in {row["id"] for row in self.db.tasks()}:
             return
+        if task_id != self._task_id or (tab is not None and tab != 'guide'):
+            self._close_reading_panel()
         self._capture_workspace()
         self._reveal_kind = "select" if self._task_id is not None else "enter"
         self._task_id = task_id
@@ -354,6 +370,7 @@ class TasksView(WorkspaceMixin, QWidget):
         self.refresh(force=True, capture=False)
 
     def back(self) -> None:
+        self._close_reading_panel()
         self._capture_workspace()
         self._task_id = None
         self._reveal_kind = "select"
@@ -857,6 +874,8 @@ class TasksView(WorkspaceMixin, QWidget):
         self._render_schedule_controls(column, task_id)
         self._render_work(column, task_id, work)
         self._render_reading(self.pages[READ].reset(), picks)
+        if not self.reading_panel.isHidden():
+            self._refresh_reading_panel(picks)
         self._render_when(self.pages[WHEN].reset(), task_id, cycle)
         self._render_how(self.pages[HOW].reset(), task_id)
         self._render_document_browser(self.pages[DOCS].reset(), task_id, docs)
@@ -864,7 +883,7 @@ class TasksView(WorkspaceMixin, QWidget):
         self.tabs.select(self._tab if self._tab in dict(DETAIL_TABS) else WORK if self._tab in (WHEN, HOW) else "guide")
         self.stack.setCurrentWidget(self.pages[self._tab])
 
-    def _render_reading(self, column: QVBoxLayout, picks) -> None:
+    def _render_reading(self, column: QVBoxLayout, picks, *, sidecar=False) -> None:
         column.addWidget(hint_row("이 순서로 읽으세요", DETAIL_HINTS[READ]))
         marks = self.db.reading_marks()
 
@@ -891,14 +910,19 @@ class TasksView(WorkspaceMixin, QWidget):
             name.setObjectName("CardTitle")
             name.setCursor(Qt.CursorShape.PointingHandCursor)
             name.setToolTip(f"{pick['path']}\n클릭하면 이 문서의 첫 대목을 옆에서 봅니다")
+            name.setMinimumWidth(0)
+            name.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            show_document = self._show_reading_document if sidecar else lambda d, r: self._show_evidence(
+                evidence.from_documents(self.db, [d], note=f"고른 이유 · {r}"), '먼저 읽을 문서')
             name.clicked.connect(
-                lambda _=False, d=pick["doc_id"], r=pick["reason"]: self._show_evidence(
-                    evidence.from_documents(self.db, [d], note=f"고른 이유 · {r}"),
-                    "먼저 읽을 문서",
-                )
+                lambda _=False, d=pick["doc_id"], r=pick["reason"], show=show_document: show(d, r)
             )
-            top.addWidget(name)
-            top.addStretch(1)
+            if sidecar:
+                card.body.addWidget(name)
+                name.setToolTip(f"{pick['path']}\n클릭하면 패널 안에서 이 문서의 첫 대목을 봅니다")
+            else:
+                top.addWidget(name, 1)
+                top.addStretch(1)
             when = QLabel(_when(pick))
             when.setObjectName("MetaChip")
             when.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
@@ -923,6 +947,43 @@ class TasksView(WorkspaceMixin, QWidget):
             reason.body.addWidget(muted_label(f"고른 이유 · {pick['reason']}", small=True))
             card.body.addWidget(reason)
             column.addWidget(card)
+
+    def _toggle_reading_panel(self):
+        if not self.reading_panel.isHidden():
+            self._close_reading_panel()
+            return
+        if self._task_id is None:
+            return
+        self.reading_panel.show_list()
+        self._refresh_reading_panel(self.db.task_reading(self._task_id))
+        self.reading_panel.show()
+        width = self.content_splitter.width()
+        panel_width = min(460, max(320, int(width * .42)))
+        self.content_splitter.setSizes([max(0, width - panel_width), panel_width])
+        self.reading_button.setChecked(True)
+
+    def _close_reading_panel(self):
+        self.reading_panel.hide()
+        self.reading_panel.show_list()
+        if hasattr(self, 'reading_button'):
+            self.reading_button.setChecked(False)
+
+    def _refresh_reading_panel(self, picks):
+        scroll = self.reading_panel.list_page.findChild(QScrollArea).verticalScrollBar()
+        position = scroll.value()
+        self._render_reading(self.reading_panel.list_page.reset(), picks, sidecar=True)
+        scroll.setValue(position)
+        doc_id = self.reading_panel.doc_id
+        if doc_id is not None:
+            pick = next((p for p in picks if p['doc_id'] == doc_id), None)
+            if pick is None:
+                self.reading_panel.show_list()
+            else:
+                self._show_reading_document(doc_id, pick['reason'])
+
+    def _show_reading_document(self, doc_id, reason):
+        self.reading_panel.show_document(doc_id, evidence.from_documents(
+            self.db, [doc_id], note=f'고른 이유 · {reason}'))
 
     def _render_when(self, column: QVBoxLayout, task_id: int, cycle) -> None:
         """When — 격자를 세로로 읽어 반복 주기를 보여준다.

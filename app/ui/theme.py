@@ -611,7 +611,7 @@ def stylesheet(text_size: str = "medium") -> str:
 
     /* ── 근거 서랍 ──
        본문에서 떼어 낸 판이다. 왼쪽 선으로 경계를 긋는다. */
-    QFrame#EvidenceDrawer {{
+    QFrame#EvidenceDrawer, QFrame#ReadingSidecar {{
         background: {BG};
         border-left: 1px solid {BORDER_STRONG};
     }}

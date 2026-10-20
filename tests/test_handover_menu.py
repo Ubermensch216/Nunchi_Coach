@@ -106,3 +106,44 @@ def test_empty_project_can_open_archive_without_creating_a_manual(qapp, tmp_path
     finally:
         view.deleteLater()
         database.close()
+
+
+def test_manual_preview_preserves_multiline_tables_and_all_past_steps(db, qapp):
+    db.add_task_item(1, rc.SCOPE, '첫 줄 대상\n둘째 줄 대상', slot='감사대상기관')
+    for n in range(1, 12):
+        db.con.execute(
+            "INSERT INTO work_steps(task_id,slot,ordinal,label,output) VALUES(1,?,?,?,?)",
+            (f'past-{n}', n, f'사례 단계 {n}', f'결과 파일 {n}.xlsx'))
+    view = HandoverView(db)
+    try:
+        view.refresh()
+        text = view.preview.toPlainText()
+        for expected in ('첫 줄 대상', '둘째 줄 대상', '근거·빠진 정보', '제출자료 원문'):
+            assert expected in text
+        for n in range(1, 12):
+            assert f'{n}. 사례 단계 {n}' in text
+            assert f'결과 파일 {n}.xlsx' in text
+        block = view.preview.document().begin()
+        while block.isValid():
+            if block.textList():
+                assert block.text().strip(), '미리보기에 빈 목록 항목이 생겼습니다'
+            block = block.next()
+    finally:
+        view.deleteLater()
+
+
+def test_manual_preview_preserves_quotes_and_literal_markup(db, qapp, tmp_path):
+    note = "'건 확인·고치기'에서 \"우리 기관\" 확인 · <자료> & A | B · **원문**"
+    db.add_task_item(1, rc.RISK, note)
+    view = HandoverView(db)
+    try:
+        view.refresh()
+        text = view.preview.toPlainText()
+        assert note in text
+        assert '&#x27;' not in text
+        assert '&lt;' not in text and '&amp;' not in text
+        path = tmp_path / 'quoted-manual.md'
+        view.write_manual(str(path))
+        assert path.read_text(encoding='utf-8-sig') == view.document_text
+    finally:
+        view.deleteLater()

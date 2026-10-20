@@ -453,6 +453,107 @@ def test_evidence_tab_uses_full_width_and_keeps_tasks_separate(project, qapp):
     assert '첫 업무의 고유한 원문' in words(view.evidence_page)
 
 
+def seed_reading(db):
+    for task_id in (1, 2):
+        for rank, doc in enumerate(db.task_documents(task_id), 1):
+            db.con.execute('INSERT INTO task_reading(task_id,doc_id,ordinal,reason) VALUES(?,?,?,?)',
+                           (task_id, doc['id'], rank, f'업무 {task_id}의 추천 이유 {rank}'))
+            db.replace_sections(doc['id'], [('paragraph', 1, '1문단', f'업무 {task_id}의 문서 본문 {rank}')])
+
+
+def test_reading_button_moves_into_first_steps_without_footer_shortcuts(project, qapp):
+    db, view = project
+    seed_reading(db)
+    view.open_task(1, 'guide')
+    settle(qapp)
+    button = view.reading_button
+    assert button.parentWidget().findChildren(QLabel)[0].text() == '처음 맡으면 할 일'
+    buttons = view.pages['guide'].findChildren(QPushButton)
+    assert [b.text() for b in buttons].count('먼저 읽을 문서') == 1
+    assert not {'일정·진행', '업무 자료', '매뉴얼'} & {b.text() for b in buttons}
+    assert view.reading_panel.isHidden()
+    button.click()
+    settle(qapp)
+    assert view._tab == 'guide' and view.stack.currentWidget() is view.pages['guide']
+    assert view.reading_panel.isVisible() and button.isChecked()
+    assert view.reading_panel.geometry().left() >= view.stack.geometry().right()
+    assert '업무 1의 추천 이유 1' in words(view.reading_panel)
+    button.click()
+    assert view.reading_panel.isHidden() and not button.isChecked()
+    button.click()
+    close = view.reading_panel.close_button
+    assert close.text() == '' and not close.icon().isNull()
+    close.click()
+    assert view.reading_panel.isHidden() and not button.isChecked()
+
+
+def test_reading_panel_previews_and_marks_documents_without_leaving_guide(project, qapp):
+    db, view = project
+    seed_reading(db)
+    view.open_task(1, 'guide')
+    settle(qapp)
+    view.reading_button.click()
+    panel = view.reading_panel
+    filename = next(b for b in panel.list_page.findChildren(QPushButton) if b.text() == '1_자료000.txt')
+    filename.click()
+    assert view._tab == 'guide'
+    assert panel.stack.currentWidget() is panel.preview
+    assert '업무 1의 문서 본문 1' in words(panel.preview)
+    assert '업무 1의 추천 이유 1' in words(panel.preview)
+    panel.back_button.click()
+    assert panel.stack.currentWidget() is panel.list_page
+    read = next(b for b in panel.list_page.findChildren(QPushButton) if b.text() == '읽음 표시')
+    read.click()
+    settle(qapp)
+    assert db.task_reading(1)[0]['doc_id'] in db.reading_marks()
+    assert panel.isVisible() and view.reading_button.isChecked() and view._tab == 'guide'
+    assert any(b.text() == '읽음' for b in panel.list_page.findChildren(QPushButton))
+    view.open_task(2, 'guide')
+    settle(qapp)
+    assert panel.isHidden() and not view.reading_button.isChecked()
+    view.reading_button.click()
+    assert '업무 2의 추천 이유 1' in words(panel.list_page)
+    assert '업무 1의 추천 이유' not in words(panel.list_page)
+    view._switch('docs')
+    assert panel.isHidden()
+
+
+def test_reading_panel_handles_empty_list_and_closes_on_home(project, qapp):
+    _, view = project
+    view.open_task(1, 'guide')
+    settle(qapp)
+    view.reading_button.click()
+    assert '추천할 문서를 고르지 못했습니다.' in words(view.reading_panel)
+    view.back()
+    settle(qapp)
+    assert view.reading_panel.isHidden()
+
+
+def test_reading_panel_reflows_guide_bullets_in_a_narrow_window(project, qapp):
+    from app.ui.widgets.work_brief import BulletList
+
+    db, view = project
+    seed_reading(db)
+    theme.apply(qapp, 'large', 'dark')
+    try:
+        view.resize(1120, 800)
+        view.open_task(1, 'guide')
+        settle(qapp)
+        view.reading_button.click()
+        for _ in range(10):
+            qapp.processEvents()
+        for bullets in view.pages['guide'].findChildren(BulletList):
+            grid = bullets.layout()
+            for row in range(1, grid.rowCount()):
+                previous = grid.itemAtPosition(row - 1, 1).widget()
+                current = grid.itemAtPosition(row, 1).widget()
+                assert previous.geometry().bottom() < current.geometry().top()
+        assert view.reading_panel.list_page.findChild(QScrollArea).horizontalScrollBar().maximum() == 0
+        assert view.reading_panel.width() >= 300 and view.stack.width() >= 400
+    finally:
+        theme.apply(qapp, 'medium', 'light')
+
+
 def test_evidence_link_can_return_to_all_evidence_and_handle_empty_context(project, qapp):
     _, view = project
     view.open_task(1, 'guide')

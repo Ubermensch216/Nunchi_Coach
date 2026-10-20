@@ -294,9 +294,13 @@ def build_manual(db, project: str = '', today: date | None = None) -> str:
     from . import task_manual
 
     def cell(value):
-        value = html.escape(str(value or ''))
-        value = re.sub(r'([\\`*_{}\[\]#+!|])', r'\\\1', value)
-        return value.replace('\n', '<br>')
+        value = re.sub(r'([\\`*_{}\[\]#+!|])', r'\\\1', str(value or ''))
+        # 목록 안의 "1. 단계"가 새 번호 목록으로 중첩되지 않게 한다.
+        value = re.sub(r'(?m)^(\s*\d+)\.(?=\s)', r'\1\\.', value)
+        # Markdown을 먼저 보호해야 HTML 엔티티의 #을 다시 이스케이프하지 않는다.
+        value = html.escape(value, quote=False)
+        # Qt Markdown은 닫지 않은 <br> 뒤의 목록·본문을 누락시킨다.
+        return value.replace('\r\n', '\n').replace('\n', '<br />')
 
     today = today or date.today()
     tasks = sorted(db.tasks(), key=lambda t: t['id'])

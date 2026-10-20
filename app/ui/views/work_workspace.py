@@ -213,6 +213,14 @@ class WorkspaceMixin:
             summarize = compact and section.key not in {'overview', 'first', 'timing', 'procedure', 'output'}
             lines = section.lines[:2] if summarize else section.lines
             card.body.addWidget(section_content(section, lines))
+            if compact and section.key == 'first':
+                self.reading_button = QPushButton('먼저 읽을 문서')
+                self.reading_button.setObjectName('Quiet')
+                self.reading_button.setCheckable(True)
+                self.reading_button.setChecked(not self.reading_panel.isHidden())
+                self.reading_button.setToolTip('추천 문서와 고른 이유를 오른쪽 패널에서 봅니다. 다시 누르면 닫습니다.')
+                self.reading_button.clicked.connect(self._toggle_reading_panel)
+                card.body.addWidget(self.reading_button)
             if section.evidence:
                 card.body.addWidget(self._evidence_button(
                     f'근거 {len(section.evidence)}건', '원문과 위치·확인 상태를 봅니다',
@@ -235,13 +243,6 @@ class WorkspaceMixin:
             column.addWidget(self._version_card(manual.task_id))
             if review.enabled(self.db):
                 column.addWidget(self._link_card(manual.task_id))
-        shortcuts = QHBoxLayout()
-        for text, key in (('먼저 읽을 문서', 'read'), ('일정·진행', 'work'),
-                          ('업무 자료', 'docs'), ('매뉴얼', 'manual')):
-            button = QPushButton(text)
-            button.clicked.connect(lambda _=False, k=key: self._switch(k))
-            shortcuts.addWidget(button)
-        column.addLayout(shortcuts)
 
     def _open_matters(self, task_id):
         from .matter_dialog import MatterDialog
