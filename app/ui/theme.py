@@ -508,13 +508,14 @@ def stylesheet(text_size: str = "medium") -> str:
     }}
     QPushButton#NavTab:disabled {{ color: {NAVBAR_DISABLED}; }}
     QLabel#NavTitle {{ background: transparent; color: {NAVBAR_MUTED}; font-weight: 600; }}
-    QPushButton#NavTab:checked QLabel#NavTitle {{ color: {PRIMARY}; font-weight: 700; }}
-    QPushButton#NavTab:disabled QLabel#NavTitle {{ color: {NAVBAR_DISABLED}; }}
+    QLabel#NavTitle[nav_state="selected"] {{ color: {PRIMARY}; font-weight: 700; }}
+    QLabel#NavTitle[nav_state="disabled"] {{ color: {NAVBAR_DISABLED}; }}
     QLabel#NavCountBadge {{
         background: {PRIMARY}; color: {TEXT_ON_PRIMARY};
         border-radius: 9px; padding: 1px 6px;
         font-size: {small}px; font-weight: 700;
     }}
+    QLabel#NavCountBadge[nav_state="disabled"] {{ background: {SURFACE_ALT}; color: {TEXT_DISABLED}; }}
     /* 띠 오른쪽의 상태 문구들. 누를 수 있지만 평소엔 물러서 있다. */
     QPushButton#TopLink {{
         background: transparent;

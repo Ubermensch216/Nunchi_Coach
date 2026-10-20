@@ -75,11 +75,11 @@ class TodayView(QWidget):
         self.count_changed.emit(data.attention_count)
         column = self.page.reset()
         column.addLayout(self._tiles(data))
-        summary = muted_label('현재 챙길 일 · ' + data.attention_summary)
+        summary = muted_label('현재 챙길 항목 · ' + data.attention_summary)
         summary.setObjectName('AttentionSummary')
         column.addWidget(summary)
         column.addWidget(muted_label(
-            f"참고 지표 · 기한 임박 {data.tiles['due']}건(진행 중인 수행 건에 포함) · "
+            f"참고 지표 · 확인할 기한 {data.tiles['due']}건(진행 중인 수행 건에 포함) · "
             f"끝난 실행 {data.tiles['completed']}건(완료 이력, 합계 제외)", small=True))
         if data.empty:
             scanned = f"마지막으로 살핀 날: {data.scanned_on}. " if data.scanned_on else ""

@@ -47,7 +47,7 @@ class Evidence:
 
 
 class EvidenceDrawer(QFrame):
-    """오른쪽에서 열리는 근거 패널. 기본은 숨어 있다."""
+    """공용 근거 뷰. 기본은 서랍, embedded=True이면 폭 제한 없는 탭 본문이다."""
 
     open_original = Signal(str)   # 원본 경로
     closed = Signal()
