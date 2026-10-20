@@ -109,8 +109,8 @@ def test_cycle_claim_offers_its_evidence(view: TasksView):
 
     _click(view.pages["when"], "근거 3건")
 
-    assert not view.drawer.isHidden()
-    texts = _labels(view.drawer)
+    assert not view.evidence_panel.isHidden()
+    texts = _labels(view.evidence_panel)
     assert any("2023_행정사무감사.hwp" in t for t in texts)
     # 왜 근거인지는 서랍 제목이 말한다 — 같은 문장을 건마다 되풀이하지 않는다.
     assert any("반복 주기의 근거 3건" in t for t in texts)
@@ -122,19 +122,20 @@ def test_step_claim_offers_its_anchor_document(view: TasksView):
 
     _click(view.pages["how"], "2025_행정사무감사.hwp")
 
-    texts = _labels(view.drawer)
+    texts = _labels(view.evidence_panel)
     assert any("요구자료 제출" in t for t in texts)          # 왜 이것이 근거인가
     assert any("2025년 행정사무감사 요구자료입니다" in t for t in texts)   # 실제 인용문
 
 
-def test_task_description_offers_the_documents_it_came_from(view: TasksView):
-    view.open_task(1)
+def test_task_documents_carry_the_passages_they_were_read_from(view: TasksView):
+    view.open_task(1, "docs")
 
-    _click(_head(view), "근거 3건")
+    # 탭에는 문서 수만 단다. 대목은 문서 줄 밑에서 펼친다.
+    assert view.tabs._buttons["docs"].text().endswith("3")
+    assert not any("근거" in b.text() for b in _buttons(_head(view)))
+    _click(view.pages["docs"], "근거 1건")
 
-    texts = _labels(view.drawer)
-    assert any("업무 설명의 근거 3건" in t for t in texts)
-    assert any("2025_행정사무감사.hwp" in t for t in texts)
+    assert any("행정사무감사 요구자료입니다" in t for t in _labels(view.pages["docs"]))
 
 
 def test_reading_pick_shows_the_document_and_the_reason(view: TasksView):
@@ -143,7 +144,7 @@ def test_reading_pick_shows_the_document_and_the_reason(view: TasksView):
 
     _click(view.pages["read"], "2025_행정사무감사.hwp")
 
-    texts = _labels(view.drawer)
+    texts = _labels(view.evidence_panel)
     assert any("가장 최근 자료입니다" in t for t in texts)
     assert any("2025년 행정사무감사 요구자료입니다" in t for t in texts)
 
@@ -163,10 +164,10 @@ def test_drawer_closes_when_the_tab_changes(view: TasksView):
     view.open_task(1)
     view._switch("when")
     _click(view.pages["when"], "근거 3건")
-    assert not view.drawer.isHidden()
+    assert not view.evidence_panel.isHidden()
 
     view._switch("how")
-    assert view.drawer.isHidden()
+    assert view.evidence_panel.isHidden()
 
 
 def test_drawer_closes_when_going_back_to_the_list(view: TasksView):
@@ -175,7 +176,7 @@ def test_drawer_closes_when_going_back_to_the_list(view: TasksView):
     _click(view.pages["when"], "근거 3건")
 
     view.back()
-    assert view.drawer.isHidden()
+    assert view.evidence_panel.isHidden()
 
 
 # ── 근거를 만드는 규칙 ──────────────────────────────────────────────

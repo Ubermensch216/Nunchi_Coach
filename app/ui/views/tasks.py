@@ -58,7 +58,6 @@ from ..widgets import (
     Card,
     EmptyState,
     Evidence,
-    EvidenceDrawer,
     FlowGrid,
     InfoDot,
     ListRow,
@@ -74,6 +73,7 @@ from ..widgets import (
     clear_layout,
     divider,
     doc_icon,
+    evidence_entry,
     header_margins,
     hint_row,
     legend_text,
@@ -109,9 +109,10 @@ DETAIL_TABS = (
     ("guide", "업무 안내"),
     (WORK, "일정·진행"),
     (DOCS, "업무 자료"),
-    ("manual", "매뉴얼"),
-    ("evidence", "근거"),
 )
+# 옛 탭 이름. 매뉴얼은 업무 안내에, 근거는 업무 자료에 합쳐졌다.
+# 저장해 둔 화면 상태나 옛 호출이 이 이름으로 와도 합쳐진 탭으로 연다.
+TAB_ALIASES = {"manual": "guide", "evidence": DOCS}
 # 건강도 판에 세워 둘 업무 수. 넘치면 판이 목록이 되어 '요약'이 아니게 된다.
 HEALTH_ROWS = 5
 # 업무 카드 격자. 세 열을 넘기면 카드 하나하나가 빈약해 보이고 설명이 잘린다.
@@ -145,8 +146,8 @@ DETAIL_HINTS = {
     WHEN: "자료에 남은 문서의 시점을 연도별로 편 것입니다. "
           "세로로 같은 달이 겹치면 반복입니다.",
     HOW: "전임자가 남긴 문서의 순서로 되짚은 것입니다. 틀린 곳은 여기서 바로 고칩니다.",
-    DOCS: "파일명을 누르면 원본이 열립니다. •••을 누르면 다른 업무로 옮기거나 "
-          "이 업무의 대표 문서로 지정합니다.",
+    DOCS: "파일명을 누르면 원본이 열립니다. ‘근거 N건’을 누르면 그 문서에서 읽은 대목을 "
+          "그 자리에서 봅니다. •••을 누르면 다른 업무로 옮기거나 이 업무의 대표 문서로 지정합니다.",
 }
 
 
@@ -234,7 +235,7 @@ class TasksView(WorkspaceMixin, QWidget):
         self.stack.addWidget(self.list_page)
         self.pages: dict[str, QWidget] = {}
         for key, _label in (*DETAIL_TABS, (READ, ""), (WHEN, ""), (HOW, "")):
-            page = EvidenceDrawer(embedded=True) if key == "evidence" else Page()
+            page = Page()
             self.pages[key] = page
             self.stack.addWidget(page)
         self.content_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -249,10 +250,7 @@ class TasksView(WorkspaceMixin, QWidget):
         self.content_splitter.setStretchFactor(1, 0)
         main.addWidget(self.content_splitter, 1)
         main.insertWidget(0, header)
-        self.evidence_page = self.pages["evidence"]
-        self.evidence_page.open_original.connect(self._open)
-        self.evidence_page.all_requested.connect(self._show_all_evidence)
-        self._all_evidence = []
+        self.evidence_panel = None   # 업무 자료 화면을 그릴 때마다 새로 만든다
 
         for page in [self.list_page, *self.pages.values()]:
             page.findChild(QScrollArea).verticalScrollBar().valueChanged.connect(self._scroll_changed)
@@ -329,8 +327,11 @@ class TasksView(WorkspaceMixin, QWidget):
         self.state_changed.emit()
 
     def _switch(self, key: str) -> None:
+        key = TAB_ALIASES.get(key, key)
         if key != 'guide':
             self._close_reading_panel()
+        if key != DOCS:
+            self._close_evidence_panel()
         self._capture_workspace()
         self._rendering = True
         self._render_generation += 1
@@ -360,6 +361,7 @@ class TasksView(WorkspaceMixin, QWidget):
         self._ui_state['last_task'] = task_id
         state = self._state()
         self._tab = tab or state.get("tab", "guide")
+        self._tab = TAB_ALIASES.get(self._tab, self._tab)
         if self._tab not in self.pages:
             self._tab = "guide"
         state["tab"] = self._tab
@@ -369,8 +371,14 @@ class TasksView(WorkspaceMixin, QWidget):
                 target[task_id] = state[key]
         self.refresh(force=True, capture=False)
 
+    def _close_evidence_panel(self) -> None:
+        """고른 주장의 근거는 그 화면을 떠나면 닫는다. 남아 있으면 다른 주장의 근거로 읽힌다."""
+        if self.evidence_panel is not None:
+            self.evidence_panel.hide()
+
     def back(self) -> None:
         self._close_reading_panel()
+        self._close_evidence_panel()
         self._capture_workspace()
         self._task_id = None
         self._reveal_kind = "select"
@@ -860,16 +868,14 @@ class TasksView(WorkspaceMixin, QWidget):
         work = workcard.build(self.db, task_id)
         # 확인할 것이 남은 탭은 열어 보기 전에 알려 준다.
         self.tabs.set_label(WORK, "일정·진행" + ("  ◐" if work.gaps else ""))
-        self.tabs.set_count(DOCS, "업무 자료", len(docs))
         manual = task_manual.build(self.db, task_id, card=work)
         found = evidence.for_task(self.db, row, docs) + evidence.for_cycle(self.db, cycle)
         for section in manual.sections:
             found.extend(self._workspace_evidence(section.evidence))
-        self._all_evidence = list({(item.label, item.path, item.locator, item.snippet, item.note): item for item in found}.values())
-        self.evidence_page.show_evidence(self._all_evidence, "업무 근거")
-        self.tabs.set_count("evidence", "근거", len(self._all_evidence))
-        self._render_manual(self.pages["guide"].reset(), manual, compact=True)
-        self._render_manual(self.pages["manual"].reset(), manual)
+        # 근거는 한 문서에서 여러 대목일 수 있다. 탭에는 대목 수가 아니라 문서 수를 단다.
+        self._materials = self._task_materials(docs, found)
+        self.tabs.set_count(DOCS, "업무 자료", len(self._materials.rows))
+        self._render_manual(self.pages["guide"].reset(), manual)
         column = self.pages[WORK].reset()
         self._render_schedule_controls(column, task_id)
         self._render_work(column, task_id, work)
@@ -878,7 +884,7 @@ class TasksView(WorkspaceMixin, QWidget):
             self._refresh_reading_panel(picks)
         self._render_when(self.pages[WHEN].reset(), task_id, cycle)
         self._render_how(self.pages[HOW].reset(), task_id)
-        self._render_document_browser(self.pages[DOCS].reset(), task_id, docs)
+        self._render_document_browser(self.pages[DOCS].reset(), task_id, self._materials)
 
         self.tabs.select(self._tab if self._tab in dict(DETAIL_TABS) else WORK if self._tab in (WHEN, HOW) else "guide")
         self.stack.setCurrentWidget(self.pages[self._tab])
@@ -1535,8 +1541,14 @@ class TasksView(WorkspaceMixin, QWidget):
         primary_id = primary["id"] if primary else None
 
         for row in rows:
+            holder = QWidget()
+            stack = QVBoxLayout(holder)
+            stack.setContentsMargins(0, 0, 0, 0)
+            stack.setSpacing(theme.SP_XS)
             item = ListRow()
             item.row.setSpacing(theme.SP_MD)
+            stack.addWidget(item)
+            proofs = self._materials.proofs.get(row["path"], [])
 
             star = QLabel("★" if row["id"] == primary_id else "")
             star.setObjectName("PrimaryMark")
@@ -1554,18 +1566,48 @@ class TasksView(WorkspaceMixin, QWidget):
             name.clicked.connect(lambda _=False, p=row["path"]: self._open(p))
             item.row.addWidget(name)
             item.row.addStretch(1)
+            if row["cited"]:
+                cited = muted_label("참고로 읽음", small=True, wrap=False)
+                cited.setToolTip("이 업무에 배정된 문서는 아니지만, 이 업무의 내용을 읽을 때 근거로 쓰였습니다")
+                item.row.addWidget(cited)
+            if proofs:
+                item.row.addWidget(self._proof_toggle(stack, proofs))
             item.row.addWidget(muted_label(_when(row), small=True, wrap=False))
 
-            more = QPushButton("⋯")
-            more.setObjectName("IconButton")
-            more.setFixedWidth(26)
-            more.setCursor(Qt.CursorShape.PointingHandCursor)
-            more.setToolTip("이 문서를 다른 업무로 옮기거나 대표로 지정합니다")
-            more.setMenu(
-                self._document_menu(task_id, row["id"], row["id"] == primary_id, more)
-            )
-            item.row.addWidget(more)
-            column.addWidget(item)
+            if not row["cited"]:
+                more = QPushButton("⋯")
+                more.setObjectName("IconButton")
+                more.setFixedWidth(26)
+                more.setCursor(Qt.CursorShape.PointingHandCursor)
+                more.setToolTip("이 문서를 다른 업무로 옮기거나 대표로 지정합니다")
+                more.setMenu(
+                    self._document_menu(task_id, row["id"], row["id"] == primary_id, more)
+                )
+                item.row.addWidget(more)
+            column.addWidget(holder)
+
+    def _proof_toggle(self, stack: QVBoxLayout, proofs) -> QPushButton:
+        """문서 줄 밑에 그 문서에서 읽은 대목을 펴고 접는다. 처음 펼 때 만든다."""
+        button = QPushButton(f"근거 {len(proofs)}건 ▾")
+        button.setObjectName("Link")
+        button.setCheckable(True)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setToolTip("이 문서에서 읽은 위치와 인용문을 봅니다")
+        body = QWidget()
+        body_column = QVBoxLayout(body)
+        body_column.setContentsMargins(theme.SP_LG, 0, 0, theme.SP_SM)
+        body_column.setSpacing(theme.SP_XS)
+        body.hide()
+        stack.addWidget(body)
+
+        def toggled(checked: bool) -> None:
+            if checked and body_column.count() == 0:
+                for proof in proofs:
+                    body_column.addWidget(evidence_entry(proof, show_name=False))
+            body.setVisible(checked)
+            button.setText(f"근거 {len(proofs)}건 {'▴' if checked else '▾'}")
+        button.toggled.connect(toggled)
+        return button
 
     # ── 교정 ────────────────────────────────────────────────────────
     # AI가 지식을 만들고, 사람이 지식을 확정한다. 여기 있는 조작이 그
@@ -2373,18 +2415,14 @@ class TasksView(WorkspaceMixin, QWidget):
         return button
 
     def _show_evidence(self, items, title: str) -> None:
-        """주장의 근거를 같은 업무의 근거 탭에서 확인한다."""
+        """주장의 근거를 같은 업무의 업무 자료 탭 맨 위에서 확인한다."""
         if self._task_id is None:
             return
-        self._switch("evidence")
-        self.evidence_page.show_evidence(list(items), title, contextual=True)
-        self.evidence_page.findChild(QScrollArea).verticalScrollBar().setValue(0)
-        self._state().setdefault("scroll", {})["evidence"] = 0
+        self._switch(DOCS)
+        self.evidence_panel.show_evidence(list(items), title)
+        self.pages[DOCS].findChild(QScrollArea).verticalScrollBar().setValue(0)
+        self._state().setdefault("scroll", {})[DOCS] = 0
         self._persist()
-
-    def _show_all_evidence(self) -> None:
-        self.evidence_page.show_evidence(self._all_evidence, "업무 근거")
-        self.evidence_page.findChild(QScrollArea).verticalScrollBar().setValue(0)
 
     def _toggle_checks(self) -> None:
         self._checks_open = not self._checks_open

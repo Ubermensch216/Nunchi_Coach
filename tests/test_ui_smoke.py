@@ -847,12 +847,12 @@ def test_task_detail_how_step_shows_evidence_before_the_original(make_window, db
             button.click()
             break
 
-    assert view.stack.currentWidget() is view.evidence_page
-    assert any("2025년 제출 자료입니다" in text for text in _labels(view.evidence_page))
+    assert view.stack.currentWidget() is view.pages["docs"]
+    assert any("2025년 제출 자료입니다" in text for text in _labels(view.evidence_panel))
 
     opened = []
-    view.evidence_page.open_original.connect(opened.append)
-    for button in _button_widgets(view.evidence_page):
+    view.evidence_panel.open_original.connect(opened.append)
+    for button in _button_widgets(view.evidence_panel):
         if button.text() == "원본 열기":
             button.click()
     assert opened == [str(real_file)]
@@ -1747,7 +1747,7 @@ def test_top_work_menu_opens_last_task_guide_without_sidebar_home_button(make_wi
     assert not view.sidebar.isHidden()
     assert not view.sidebar.findChildren(QPushButton)
 
-    view.open_task(task_id, 'manual')
+    view.open_task(task_id, 'guide')
     window.go('notebooks')
     window.topbar._buttons['tasks'].click()
     qapp.processEvents()

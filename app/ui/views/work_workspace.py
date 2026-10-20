@@ -1,7 +1,8 @@
-"""업무 화면의 홈·매뉴얼·열람 상태. 원본 자료와 수행 기록은 읽기만 한다."""
+"""업무 화면의 홈·안내·열람 상태. 원본 자료와 수행 기록은 읽기만 한다."""
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from datetime import date
 
 from PySide6.QtCore import Qt, QTimer
@@ -10,10 +11,26 @@ from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QWidget,
 
 from ...core import manual_versions, matters, work_schedule, workcard, workstate as ws
 from ...core.knowledge import review
-from ..widgets import Card, Evidence, WorkYearDashboard, clear_layout, muted_label, section_title
-from ..widgets.work_brief import section_content
+from ...core.work_brief import points
+from ..widgets import (Card, Evidence, EvidencePanel, WorkYearDashboard, clear_layout, evidence_entry,
+                       muted_label, section_title)
+from ..widgets.work_brief import BulletList, section_content
 
 STATE_KEY = 'ui.work_workspace.v1'
+# 업무 안내에서 구획을 읽는 순서. 업무를 이해하는 순서(개요·처음 할 일·시기·절차·결과물)가 앞이다.
+GUIDE_ORDER = ['overview', 'first', 'timing', 'procedure', 'output', 'prepare', 'evaluation',
+               'cases', 'notes', 'past', 'basis']
+# 이 구획은 줄여 보이지 않는다. 나머지 구획은 처음 두 줄만 펴 두고 그 자리에서 펼친다.
+GUIDE_FULL = {'overview', 'first', 'timing', 'procedure', 'output'}
+GUIDE_SHOWN_LINES = 2
+
+
+@dataclass
+class Materials:
+    """업무 자료 탭이 보이는 것. 탭에 다는 숫자는 rows의 길이, 곧 문서 수다."""
+    rows: list = field(default_factory=list)    # 업무에 배정된 문서, 이어서 근거로만 읽힌 문서
+    proofs: dict = field(default_factory=dict)  # 문서 경로 -> 그 문서에서 읽은 근거 대목
+    loose: list = field(default_factory=list)   # 어느 문서인지 특정하지 못한 근거
 
 
 class WorkspaceMixin:
@@ -200,20 +217,22 @@ class WorkspaceMixin:
             dialog._job.stop()
         return not any(d._job.running for d in self._workboxes.values())
 
-    def _render_manual(self, column, manual, compact=False):
-        sections = manual.sections
-        if compact:
-            priority = ['overview', 'first', 'timing', 'procedure', 'output', 'prepare', 'evaluation', 'cases', 'notes', 'past', 'basis']
-            sections = sorted(sections, key=lambda s: priority.index(s.key))
-        for section in sections:
+    def _render_manual(self, column, manual):
+        """업무 안내 한 화면. 예전에는 요약한 안내와 전체 매뉴얼이 따로 있어 같은 내용을 두 번 읽었다.
+
+        안내는 내용·상태·근거를 다시 생성하지 않는다. 긴 구획은 처음 두 줄만 펴 두고
+        나머지는 그 자리에서 펼친다 — 다른 탭으로 보내지 않는다.
+        """
+        for section in sorted(manual.sections, key=lambda s: GUIDE_ORDER.index(s.key)):
             card = Card()
             card.body.addWidget(section_title(section.title))
-            # 안내는 요약 범위만 줄이며 내용·상태·근거를 다시 생성하지 않는다.
-            # 업무를 이해하는 데 필요한 범위·기간·순서·결과물은 안내에서도 모두 보여 준다.
-            summarize = compact and section.key not in {'overview', 'first', 'timing', 'procedure', 'output'}
-            lines = section.lines[:2] if summarize else section.lines
+            summarize = section.key not in GUIDE_FULL
+            lines = section.lines[:GUIDE_SHOWN_LINES] if summarize else section.lines
             card.body.addWidget(section_content(section, lines))
-            if compact and section.key == 'first':
+            if summarize and section.brief is None and len(section.lines) > GUIDE_SHOWN_LINES:
+                rest = section.lines[GUIDE_SHOWN_LINES:]
+                card.body.addWidget(self._fold(rest, f'나머지 {len(rest):,}줄 펼치기', bullets=True))
+            if section.key == 'first':
                 self.reading_button = QPushButton('먼저 읽을 문서')
                 self.reading_button.setObjectName('Quiet')
                 self.reading_button.setCheckable(True)
@@ -225,24 +244,19 @@ class WorkspaceMixin:
                 card.body.addWidget(self._evidence_button(
                     f'근거 {len(section.evidence)}건', '원문과 위치·확인 상태를 봅니다',
                     lambda s=section: self._show_evidence(self._workspace_evidence(s.evidence), s.title + '의 근거')))
-            if not compact and section.more:
-                card.body.addWidget(self._fold(section))
-            if not compact and section.key == 'cases' and (
+            if section.more:
+                card.body.addWidget(self._fold(section.more, f'나머지 {len(section.more):,}건 펼치기'))
+            if section.key == 'cases' and (
                     matters.for_task(self.db, manual.task_id, include_excluded=True)
                     or matters.waiting_for_locality(self.db, manual.task_id)):
                 button = QPushButton('건 확인·고치기')
                 button.setToolTip('건마다 제출·수용·시행을 확인해 적고, 건이 아닌 행을 뺍니다. 다시 분석해도 남습니다.')
                 button.clicked.connect(lambda _=False, tid=manual.task_id: self._open_matters(tid))
                 card.body.addWidget(button)
-            if summarize and len(section.lines) > 2:
-                button = QPushButton('매뉴얼에서 모두 보기')
-                button.clicked.connect(lambda: self._switch('manual'))
-                card.body.addWidget(button)
             column.addWidget(card)
-        if not compact:
-            column.addWidget(self._version_card(manual.task_id))
-            if review.enabled(self.db):
-                column.addWidget(self._link_card(manual.task_id))
+        column.addWidget(self._version_card(manual.task_id))
+        if review.enabled(self.db):
+            column.addWidget(self._link_card(manual.task_id))
 
     def _open_matters(self, task_id):
         from .matter_dialog import MatterDialog
@@ -253,22 +267,25 @@ class WorkspaceMixin:
         if dialog.changed:
             self.refresh(force=True)
 
-    def _fold(self, section):
+    def _fold(self, values, label, *, bullets=False):
         """접어 둔 나머지 줄. 누르면 그 자리에서 편다."""
         holder = QWidget()
         layout = QVBoxLayout(holder)
         layout.setContentsMargins(0, 0, 0, 0)
-        button = QPushButton(f'나머지 {len(section.more):,}건 펼치기')
+        button = QPushButton(label)
         button.setObjectName('Link')
 
         def unfold():
             button.setVisible(False)
-            for line in section.more:
-                label = QLabel(line)
-                label.setTextFormat(Qt.TextFormat.PlainText)
-                label.setWordWrap(True)
-                label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-                layout.addWidget(label)
+            if bullets:
+                layout.addWidget(BulletList([point for value in values for point in points(value)]))
+                return
+            for line in values:
+                text = QLabel(line)
+                text.setTextFormat(Qt.TextFormat.PlainText)
+                text.setWordWrap(True)
+                text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+                layout.addWidget(text)
         button.clicked.connect(unfold)
         layout.addWidget(button)
         return holder
@@ -451,8 +468,42 @@ class WorkspaceMixin:
             links.addWidget(button)
         column.addLayout(links)
 
-    def _render_document_browser(self, column, task_id, rows):
+    def _task_materials(self, docs, found):
+        """업무 자료 탭에 올릴 문서와, 문서마다 읽은 근거 대목.
+
+        근거는 문서가 아니라 대목(문서·위치·인용문)마다 한 건이다. 한 문서에서 여러 대목을
+        읽거나 업무 설명·주기·안내가 같은 문서를 각자 인용하면 근거가 문서보다 많아지므로,
+        세는 단위는 문서로 하고 대목은 문서 밑에 둔다.
+        이 업무에 배정되지 않았지만 근거로 읽힌 문서는 문서 줄 끝에 '참고로 읽음'으로 더한다.
+        """
+        unique = list({(i.label, i.path, i.locator, i.snippet, i.note): i for i in found}.values())
+        assigned = {doc['path'] for doc in docs}
+        proofs, loose = {}, []
+        for item in unique:
+            if item.path in assigned and not (item.snippet or item.note):
+                continue   # 문서 이름과 날짜뿐인 근거는 문서 줄이 이미 말한다
+            if item.path:
+                proofs.setdefault(item.path, []).append(item)
+            else:
+                loose.append(item)
+        rows = [{**dict(doc), 'cited': False} for doc in docs]
+        for path in list(proofs):
+            if path in assigned:
+                continue
+            doc = self.db.con.execute('SELECT * FROM documents WHERE path=?', (path,)).fetchone()
+            if doc is None:
+                loose.extend(proofs.pop(path))
+            else:
+                rows.append({**dict(doc), 'assign_origin': None, 'cited': True})
+        return Materials(rows, proofs, loose)
+
+    def _render_document_browser(self, column, task_id, materials):
+        rows = materials.rows
         state = self._state()
+        self.evidence_panel = EvidencePanel()
+        self.evidence_panel.open_original.connect(self._open)
+        self.evidence_panel.all_requested.connect(self.evidence_panel.hide)
+        column.addWidget(self.evidence_panel)
         controls = QHBoxLayout()
         search = QLineEdit(str(state.get('doc_search') or ''))
         search.setPlaceholderText('이 업무의 자료 검색 · 파일명·경로')
@@ -510,3 +561,10 @@ class WorkspaceMixin:
         previous.clicked.connect(lambda: move(-100))
         following.clicked.connect(lambda: move(100))
         populate(reset=False)
+        if materials.loose:
+            card = Card()
+            card.body.addWidget(section_title(f'어느 문서인지 확인되지 않은 근거 {len(materials.loose):,}건'))
+            card.body.addWidget(muted_label('원본이 지워졌거나 위치를 찾지 못해 문서 줄에 붙이지 못한 근거입니다.', small=True))
+            for item in materials.loose:
+                card.body.addWidget(evidence_entry(item, self._open))
+            column.addWidget(card)

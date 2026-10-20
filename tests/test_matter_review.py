@@ -126,9 +126,9 @@ def test_the_manual_offers_the_review_only_where_there_are_matters(db, tmp_path,
     rc.restore(db, BASIS, statements=False)
     view = TasksView(db)
     try:
-        view.open_task(1, "manual")
-        assert any(b.text() == "건 확인·고치기" for b in view.pages["manual"].findChildren(QPushButton))
-        view.open_task(2, "manual")
-        assert not any(b.text() == "건 확인·고치기" for b in view.pages["manual"].findChildren(QPushButton))
+        view.open_task(1, "guide")
+        assert any(b.text() == "건 확인·고치기" for b in view.pages["guide"].findChildren(QPushButton))
+        view.open_task(2, "guide")
+        assert not any(b.text() == "건 확인·고치기" for b in view.pages["guide"].findChildren(QPushButton))
     finally:
         view.setParent(None)

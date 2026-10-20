@@ -102,10 +102,10 @@ def test_user_navigation_reveals_but_data_refresh_does_not(view, qapp):
     assert not view.motion.running
     view.refresh(force=True)
     assert not view.motion.running   # 자료 갱신은 움직임 없이 값만 바꾼다
-    view._switch('manual')
+    view._switch('guide')
     assert view.motion.running
     view._switch('docs')   # 연속 전환은 이전 효과를 정리한다
-    assert view.pages['manual'].graphicsEffect() is None
+    assert view.pages['guide'].graphicsEffect() is None
 
 
 def test_reduced_navigation_never_animates(view, qapp):

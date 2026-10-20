@@ -170,7 +170,7 @@ def test_task_opens_on_guide_and_work_tab_keeps_the_next_action_first(view):
 def test_evidence_opens_the_quoted_passage_and_the_original(view):
     page = view.pages[tasks_view.WORK]
     next(b for b in page.findChildren(QPushButton) if b.text() == "근거 1건").click()
-    drawer = texts(view.drawer)
+    drawer = texts(view.evidence_panel)
     assert "2025_실적보고_요청.hwpx" in drawer
     assert any("추진 목적: 분기별 실적의 정기 점검" in t for t in drawer)
 

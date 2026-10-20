@@ -147,3 +147,22 @@
 2026-10-20 21:44:20,374 {"event": "app.start", "version": "0.1.0"}
 2026-10-20 21:50:46,091 {"event": "app.stop"}
 2026-10-20 21:50:52,551 {"event": "app.start", "version": "0.1.0"}
+2026-10-20 22:01:52,029 {"event": "app.stop"}
+2026-10-20 22:06:03,467 {"event": "app.start", "version": "0.1.0"}
+2026-10-20 22:06:37,033 {"event": "app.stop"}
+2026-10-20 22:37:58,298 {"event": "app.start", "version": "0.1.0"}
+2026-10-20 22:37:59,356 {"event": "pipeline.start"}
+2026-10-20 22:37:59,446 {"event": "pipeline.stage", "count": 77, "elapsed_ms": 89, "stage": "scan"}
+2026-10-20 22:37:59,447 {"event": "pipeline.stage", "count": 0, "elapsed_ms": 0, "stage": "hash"}
+2026-10-20 22:37:59,452 {"event": "pipeline.stage", "count": 0, "elapsed_ms": 5, "stage": "parse"}
+2026-10-20 22:38:00,075 {"event": "pipeline.stage", "count": 0, "elapsed_ms": 622, "stage": "pictures"}
+2026-10-20 22:38:00,075 {"event": "pipeline.stage", "count": 0, "elapsed_ms": 0, "stage": "date"}
+2026-10-20 22:38:00,340 {"event": "pipeline.stage", "count": 0, "elapsed_ms": 265, "stage": "embed"}
+2026-10-20 22:38:05,057 {"event": "pipeline.stage", "count": 1, "elapsed_ms": 4716, "stage": "chunks"}
+2026-10-20 22:38:05,524 {"event": "pipeline.stage", "count": 6, "elapsed_ms": 467, "stage": "discover"}
+2026-10-20 22:38:05,530 {"event": "pipeline.stage", "count": 0, "elapsed_ms": 5, "stage": "roles"}
+2026-10-20 22:38:05,574 {"event": "pipeline.stage", "count": 6, "elapsed_ms": 44, "stage": "cycles"}
+2026-10-20 22:38:05,593 {"event": "pipeline.stage", "count": 21, "elapsed_ms": 19, "stage": "steps"}
+2026-10-20 22:38:05,839 {"event": "pipeline.stage", "count": 6, "elapsed_ms": 245, "stage": "restore"}
+2026-10-20 22:38:07,111 {"event": "pipeline.stop"}
+2026-10-20 22:38:54,701 {"event": "app.stop"}

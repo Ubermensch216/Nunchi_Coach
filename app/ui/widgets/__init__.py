@@ -33,7 +33,7 @@ from .common import (
     section_title,
     view_title,
 )
-from .evidence_drawer import Evidence, EvidenceDrawer
+from .evidence_drawer import Evidence, EvidenceDrawer, EvidencePanel, evidence_entry
 from .flow_grid import FlowGrid
 from .task_card import MonthStrip, TaskCard
 from .timeline_grid import TimelineGrid, legend_text
@@ -49,6 +49,8 @@ __all__ = [
     "EmptyState",
     "Evidence",
     "EvidenceDrawer",
+    "EvidencePanel",
+    "evidence_entry",
     "EvidenceChip",
     "FlowGrid",
     "IconChoice",
