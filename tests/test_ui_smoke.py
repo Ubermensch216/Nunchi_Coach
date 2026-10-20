@@ -966,11 +966,11 @@ def test_settings_text_size_has_three_steps_and_rescales(make_window, db, qapp,
 
     dialog.size_choice.chosen.emit("large")
     assert db.get_meta("text_size") == "large"
-    assert "font-size: 12.75pt" in qapp.styleSheet()  # 14 * 1.2 = 17px
+    assert "font-size: 13.5pt" in qapp.styleSheet()  # 본문 15 * 1.2 = 18px
 
     dialog.size_choice.chosen.emit("small")
     assert db.get_meta("text_size") == "small"
-    assert "font-size: 9.75pt" in qapp.styleSheet()   # 14 * 0.9 = 13px
+    assert "font-size: 10.5pt" in qapp.styleSheet()   # 본문 15 * 0.9 ≈ 14px
     dialog.close()
 
 

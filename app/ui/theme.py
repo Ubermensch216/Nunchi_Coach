@@ -282,14 +282,12 @@ def font_family() -> str:
 
 
 FONT_FAMILY = '"Pretendard", "Malgun Gothic", "맑은 고딕", sans-serif'
-# 다섯 단계. 예전에는 20·16·14·12 넷이었는데 이웃한 단계의 차가 2~4px뿐이라
-# 제목·구획·본문이 한 덩어리로 읽혔다. 화면 제목과 구획 제목을 벌리고, 본문과
-# 구획 사이에 '답'의 자리(FS_LEAD)를 따로 둔다 — 기한·제출처처럼 화면이 내놓는
-# 값이 그것을 둘러싼 표지·부기보다 커야 눈이 값부터 읽는다.
+# 화면 제목 24/Bold → 구획 20/SemiBold → 카드·주요 값 17/SemiBold
+# → 본문 15/Regular → 보조 13/Regular. 크기뿐 아니라 굵기·여백으로도 구분한다.
 FS_TITLE = 24
-FS_SECTION = 18
-FS_LEAD = 16
-FS_BODY = 14
+FS_SECTION = 20
+FS_LEAD = 17
+FS_BODY = 15
 FS_SMALL = 13                # Pretendard는 맑은 고딕보다 글자가 좁아 12에서는 부기가 잘다
 LINE_HEIGHT = 1.6            # 한글은 1.5 이하면 답답하다
 
@@ -306,6 +304,15 @@ TEXT_SIZE_ICONS = {"small": "text-small", "medium": "text-medium", "large": "tex
 # 붙어 뭉개진다 — 알파벳은 10px에서도 읽히지만 한글은 아니다. '작게'를
 # 골랐을 때 부기 글자가 11px이 되어 실제로 뭉개졌다.
 MIN_FONT_PX = 12
+_text_size = "medium"
+
+
+def text_px(role: str, text_size: str | None = None) -> int:
+    """전역 QSS와 직접 그리는 위젯이 공유하는 글자 크기(논리 px)."""
+    sizes = {"title": FS_TITLE, "section": FS_SECTION, "lead": FS_LEAD,
+             "body": FS_BODY, "small": FS_SMALL}
+    scale = TEXT_SIZES[normalize_text_size(text_size or _text_size)]
+    return _scaled(sizes[role], scale)
 
 
 def _qss_family() -> str:
@@ -370,6 +377,8 @@ def apply(app, text_size: str = "medium", mode: str = "system") -> str:
     색 교체와 스타일시트 재적용은 항상 붙어 다녀야 한다 — 한쪽만 하면
     QSS는 어두운데 위젯이 직접 칠한 색은 밝은, 반쪽짜리 화면이 나온다.
     """
+    global _text_size
+    _text_size = normalize_text_size(text_size)
     resolved = apply_mode(mode)
     # 앱 기본 글꼴도 같은 이름으로 맞춘다. 스타일시트만 바꾸면 위젯이 들고
     # 있는 QFont는 옛 이름 그대로라, **재는 글꼴과 그리는 글꼴이 갈린다.**
@@ -377,8 +386,18 @@ def apply(app, text_size: str = "medium", mode: str = "system") -> str:
     if name:
         from PySide6.QtGui import QFont
 
-        font = QFont(app.font())
-        font.setFamily(name)
+        # 시스템 기본 폰트의 크기·스타일을 복사하지 않는다. 직접 그리는 표도
+        # QLabel과 같은 본문 크기와 실제 Regular/SemiBold/Bold 파일을 사용한다.
+        font = QFont(name)
+        font.setPointSizeF(text_px("body") * .75)
+        font.setWeight(QFont.Weight.Normal)
+        # 윤곽 글꼴을 요청한 크기로 다시 래스터화한다. LCD 서브픽셀 색상은
+        # 캡처·확대·다른 패널에서 색 테두리가 되므로 회색조 AA를 사용한다.
+        font.setStyleStrategy(QFont.StyleStrategy.ForceOutline
+                              | QFont.StyleStrategy.PreferAntialias
+                              | QFont.StyleStrategy.NoSubpixelAntialias
+                              | QFont.StyleStrategy.PreferMatch)
+        font.setHintingPreference(QFont.HintingPreference.PreferVerticalHinting)
         app.setFont(font)
     app.setStyleSheet(_as_points(stylesheet(text_size)))
     return resolved
@@ -496,16 +515,17 @@ def stylesheet(text_size: str = "medium") -> str:
                화면이 단추밭이 되지 않는다.
     """
     scale = TEXT_SIZES[normalize_text_size(text_size)]
-    body = _scaled(FS_BODY, scale)
-    small = _scaled(FS_SMALL, scale)
-    section = _scaled(FS_SECTION, scale)
-    lead = _scaled(FS_LEAD, scale)
-    title = _scaled(FS_TITLE, scale)
+    body = text_px("body", text_size)
+    small = text_px("small", text_size)
+    section = text_px("section", text_size)
+    lead = text_px("lead", text_size)
+    title = text_px("title", text_size)
     folder_action = "#2DD4BF" if _mode == "dark" else "#0F766E"
     return f"""
     * {{
         font-family: {_qss_family()};
         font-size: {body}px;
+        font-weight: 400;
         color: {TEXT};
     }}
     QMainWindow, QWidget#Content, QDialog {{ background: {BG}; }}
@@ -772,6 +792,19 @@ def stylesheet(text_size: str = "medium") -> str:
     }}
     QFrame#TaskCard:hover {{ border-color: {PRIMARY}; }}
     QFrame#TaskCard:focus {{ border: 2px solid {TEXT}; }}
+    QFrame#WorkYearDashboard {{
+        background: {BG};
+        border: 1px solid {BORDER};
+        border-radius: 12px;
+    }}
+    QFrame#WorkYearDashboard QLabel {{ background: transparent; border: none; }}
+    QTableWidget#YearScheduleTable {{ background: {BG}; border: none; outline: none; }}
+    QTableWidget#YearScheduleTable QHeaderView::section {{
+        background: {SURFACE}; color: {TEXT_MUTED};
+        border: none; border-bottom: 1px solid {BORDER};
+        padding: 8px 0; font-size: {small}px; font-weight: 600;
+    }}
+    QLabel#MonthStripCell {{ font-size: {small}px; font-weight: 600; }}
     /* 큰 폴더형 업무 카드 (WorkFolderCard) */
     QFrame#WorkFolderCard {{
         background: {BG};
@@ -820,7 +853,7 @@ def stylesheet(text_size: str = "medium") -> str:
     QListWidget#WorkList:focus {{ border: 1px solid {PRIMARY}; border-radius: {RADIUS}px; }}
     QLabel#FolderCardTitle {{
         font-size: {lead}px;
-        font-weight: 700;
+        font-weight: 600;
         color: {TEXT};
     }}
     QLabel#FolderCardDesc {{
@@ -833,10 +866,10 @@ def stylesheet(text_size: str = "medium") -> str:
     }}
     QLabel#FolderCardAction {{
         font-size: {small}px;
-        font-weight: 500;
+        font-weight: 400;
         color: {folder_action};
     }}
-    QLabel#NotebookCardTitle {{ font-size: {lead}px; font-weight: 700; color: {TEXT}; }}
+    QLabel#NotebookCardTitle {{ font-size: {lead}px; font-weight: 600; color: {TEXT}; }}
     /* 작업 화면의 세 판. 회색 바탕 위의 흰 판으로 서로 갈린다. */
     QFrame#NotebookPanel {{
         background: {BG};
@@ -1011,7 +1044,7 @@ def stylesheet(text_size: str = "medium") -> str:
     QLabel#FieldName {{
         color: {TEXT_MUTED};
         font-size: {small}px;
-        font-weight: 700;
+        font-weight: 600;
     }}
     QLabel#ViewLead {{
         color: {TEXT_MUTED};
@@ -1019,7 +1052,7 @@ def stylesheet(text_size: str = "medium") -> str:
     }}
     QLabel#SectionTitle {{
         font-size: {section}px;
-        font-weight: 700;
+        font-weight: 600;
     }}
     QLabel#SectionTag {{
         background: {PRIMARY_SOFT};
@@ -1030,7 +1063,10 @@ def stylesheet(text_size: str = "medium") -> str:
         font-weight: 700;
     }}
     /* 화면이 내놓는 답 한 줄. 근거·부연과 같은 크기로 두면 답이 묻힌다. */
-    QLabel#Answer {{ font-size: {lead}px; font-weight: 700; color: {TEXT}; }}
+    QLabel#Answer {{ font-size: {lead}px; font-weight: 600; color: {TEXT}; }}
+    QLabel#DialogTitle {{ font-size: {lead}px; font-weight: 600; }}
+    QLabel#SubTitle {{ font-size: {body}px; font-weight: 600; }}
+    QLabel#MetricValue {{ font-size: {title}px; font-weight: 700; }}
     QLabel#Muted {{ color: {TEXT_MUTED}; }}
     QLabel#Small {{ color: {TEXT_SUBTLE}; font-size: {small}px; }}
     QLabel#Mono {{
@@ -1050,7 +1086,7 @@ def stylesheet(text_size: str = "medium") -> str:
     QLabel#BlockLabel {{
         color: {TEXT_SUBTLE};
         font-size: {small}px;
-        font-weight: 700;
+        font-weight: 600;
         padding-top: {SP_XS}px;
     }}
     /* 규모·시점처럼 "몇 건, 몇 년치"를 말하는 중립 조각. */
@@ -1158,7 +1194,7 @@ def stylesheet(text_size: str = "medium") -> str:
         padding: 0;
         text-align: left;
         font-size: {lead}px;
-        font-weight: 700;
+        font-weight: 600;
         color: {TEXT};
     }}
     QPushButton#CardTitle:hover {{ color: {PRIMARY}; }}
@@ -1449,7 +1485,7 @@ def stylesheet(text_size: str = "medium") -> str:
         border: none;
         border-top: 1px solid {BORDER};
     }}
-    QLabel#SettingsHeading {{ font-size: {round(title * 0.84)}px; font-weight: 700; }}
+    QLabel#SettingsHeading {{ font-size: {section}px; font-weight: 600; }}
     QLabel#SettingsLead {{ color: {TEXT_MUTED}; font-size: {small}px; }}
     /* 설정 항목 하나의 이름. 카드 제목(SectionTitle)보다 한 단계 작다 —
        카드 안에 항목이 둘 이상 들어가므로 위계가 한 층 더 필요하다. */

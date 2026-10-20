@@ -85,3 +85,20 @@
 | [33-work-schedule-large.png](33-work-schedule-large.png) | 1120×720 다크·큰 글자의 일정·진행 |
 
 27~28은 UI01의 합성 분석 상태를 1120×720에 표시한 촬영이다. 29~33은 `.test_runs/capture_work_workspace.py`로 만든 별도 합성 DB를 `TasksView`에 연결해 `QWidget.grab()`으로 저장했다. 6개 업무·30개 문서 메타데이터, 사람이 보탠 항목/절차/메모와 확인된 수행 건 기한을 촬영용으로 넣었다. 문구를 제품 UI에 하드코딩하거나 모델로 생성하지 않았다. 29~32는 1500×1000·기본 글자, 33은 1120×720·큰 글자다. 실제 분석 경로는 별도 `.test_runs/check_ui0205_flow.py`에서 합성 폴더를 `PipelineRunner`로 처리해 확인한다. 실제 기관 데이터·Windows 125/150% 배율·사용성 결과로 해석하지 않는다.
+
+## 2026-10-20 업무 홈 개선
+
+- [34-work-overview-redesign.png](34-work-overview-redesign.png): 1280×900, 밝은 테마·기본 글자.
+- [35-work-overview-redesign-dark.png](35-work-overview-redesign-dark.png): 1120×720, 어두운 테마·기본 글자.
+
+`tests/fixtures/전임자업무_샘플/project.db`를 SQLite backup으로 임시 폴더에 복사한 뒤 `TasksView`를 오프스크린 렌더링했다. 기존 합성 분석 결과인 업무 7개·자료 82건을 그대로 연결했으며 목적·절차·결과물을 촬영용으로 추가하지 않았다. 두 크기 모두 일정판의 업무 7행·12개월 전체가 화면 안에 보이며 표 내부의 가로·세로 스크롤 범위가 0임을 확인했다. 아래 업무 카드 목록을 포함한 홈 전체는 세로 스크롤을 사용한다. 일정판은 업무가 늘어나면 모든 행을 펼치므로 화면 높이를 초과하는 업무 수에서는 홈 스크롤이 필요하다. 카드 설명은 기존 분석에서 확인한 내용만 조합하며 부족한 목적·결과를 새로 추측하지 않는다.
+
+## 2026-10-20 글꼴·정보 위계 개선
+
+- [38-typography-work-home.png](38-typography-work-home.png): 밝은 테마·보통 글자, 1280×900 업무 홈.
+- [39-typography-work-guide.png](39-typography-work-guide.png): 같은 조건의 월간실적보고 업무 안내.
+- [40-typography-dark-large.png](40-typography-dark-large.png): 어두운 테마·큰 글자, 1120×720 업무 홈.
+
+위와 같은 합성 DB 사본을 사용했다. 기본 크기는 제목 24/Bold, 구획 20/SemiBold, 카드·주요 값 17/SemiBold, 본문 15/Regular, 보조 13/Regular(논리 px)이다. 번들 Pretendard 실제 굵기와 안티앨리어싱 선호를 지정하고, 일정 셀도 표의 폰트를 사용한다. 10px로 고정됐던 월 숫자를 공통 보조 크기로 바꿨으며 카드 높이는 줄바꿈에 따라 늘어난다.
+
+업무 홈·업무 안내·일정·문서·노트북 홈·설정을 렌더링해 확인했다. 추가로 `QT_SCALE_FACTOR=1/1.25/1.5`와 작게/보통/크게의 9개 조합에서 카드 설명 높이와 일정 표의 스크롤 범위를 검증했다. 이는 Qt 오프스크린 배율 검증이며 실제 모니터의 ClearType·다중 모니터 이동을 검증한 결과는 아니다. 렌더링은 PNG 원본 크기로 확인하며, 미리보기 확대·축소로 인한 보간은 글꼴 원본과 구분한다.

@@ -109,7 +109,7 @@ class TodayView(QWidget):
             tile.setObjectName("Card")
             tile.body.setSpacing(0)
             number = muted_label(str(data.tiles[key]), wrap=False)
-            number.setStyleSheet("font-size: 26px; font-weight: 700;")
+            number.setObjectName("MetricValue")
             tile.body.addWidget(number)
             tile.body.addWidget(muted_label(label, small=True, wrap=False))
             row.addWidget(tile, 1)

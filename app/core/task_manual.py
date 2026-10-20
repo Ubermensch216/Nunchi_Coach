@@ -5,7 +5,7 @@ import re
 
 from dataclasses import dataclass, field
 
-from . import changes, matters, reconstruction as rc, workcard, workstate as ws
+from . import changes, matters, reconstruction as rc, workcard, workstate as ws, work_instruction
 
 
 @dataclass
@@ -54,8 +54,8 @@ def build(db, task_id: int, card=None) -> Manual:
         raise ValueError('현재 업무 목록에 없는 업무입니다')
     card = card or workcard.build(db, task_id)
     sections = [Section(key, title) for key, title in (
-        ('overview', '업무 개요'), ('output', '목적·결과물'),
-        ('timing', '시작 조건·시기'), ('prepare', '준비물·관련 서식'),
+        ('overview', '업무 개요'), ('output', '만들어야 할 결과물·제출처'),
+        ('timing', '언제 시작하고 언제까지 해야 하나요'), ('prepare', '준비물·관련 서식'),
         ('procedure', '수행 절차'), ('cases', '건별 현황'), ('notes', '주의사항·담당자 메모'),
         ('past', '과거 수행 사례'), ('first', '처음 맡으면 할 일'),
         ('basis', '근거·빠진 정보'))]
@@ -63,20 +63,10 @@ def build(db, task_id: int, card=None) -> Manual:
         # 평가 업무에만 둔다. 다른 업무에 빈 구획을 늘어놓지 않는다.
         sections.insert(4, Section('evaluation', '평가 기준·배점'))
     by_key = {section.key: section for section in sections}
-    # 무슨 일인가가 먼저다. 계획서가 밝힌 목적이 있으면 그것을 개요의 첫 줄로 올리고,
-    # 폴더·문서 수는 자료 현황으로 뒤에 둔다.
-    purpose = next((item for item in card.todo if item['kind'] == rc.PURPOSE), None)
-    if purpose:
-        by_key['overview'].lines.append(f"{purpose['content']}\n{workcard.state_line(purpose)}")
-        by_key['overview'].evidence.extend(purpose['evidence'])
-        if task['description']:
-            by_key['overview'].lines.append(f"자료 현황: {task['description']}")
-    else:
-        by_key['overview'].lines.append(task['description'] or '업무 설명을 자료에서 찾지 못했습니다.')
     mapping = {rc.PURPOSE: 'output', rc.OUTPUT: 'output', rc.AMOUNT: 'output',
                rc.RECIPIENT: 'output', rc.DEADLINE: 'timing', rc.RISK: 'notes',
                rc.NOTE: 'notes', rc.RECORD: 'past', rc.STATEMENT: 'overview',
-               rc.EVALUATION: 'evaluation'}
+               rc.EVALUATION: 'evaluation', rc.SCOPE: 'overview'}
     placed: dict[str, list[dict]] = {}
     for item in card.todo + card.prepare + card.notes + card.records + card.found:
         placed.setdefault(mapping.get(item['kind'], 'prepare'), []).append(item)
@@ -143,6 +133,8 @@ def build(db, task_id: int, card=None) -> Manual:
         by_key['basis'].lines.extend(changes.describe(change) for change in card.changes[:5])
         by_key['basis'].more.extend(changes.describe(change) for change in card.changes[5:])
     by_key['basis'].lines.extend(f"{gap.get('field', '확인 필요')}: {gap.get('detail', '')}" for gap in card.gaps)
+    cycle = db.con.execute('SELECT * FROM task_cycles WHERE task_id=? ORDER BY id DESC LIMIT 1', (task_id,)).fetchone()
+    work_instruction.improve(task, card, sections, cycle)
     for section in sections[:-1]:
         seen = set()
         unique = []
@@ -154,7 +146,11 @@ def build(db, task_id: int, card=None) -> Manual:
         section.evidence = unique
         by_key['basis'].evidence.extend(section.evidence)
         if not section.lines:
-            section.lines.append('자료에서 찾지 못했습니다. 확인·보완이 필요합니다.')
+            section.lines.append({
+                'cases': '진행 중인 개별 건은 아직 확인되지 않았습니다. 현재 취합표와 미회신·보완 목록을 확인하세요.',
+                'notes': '별도로 확인된 주의사항은 없습니다. 변경된 지침과 담당자 메모를 확인해 보완하세요.',
+                'past': '과거 수행 사례는 아직 확인되지 않았습니다. 지난 제출본과 발송 공문에서 처리 내역을 확인하세요.',
+            }.get(section.key, '요청 공문·운영 지침에서 이 항목을 확인해 업무 안내에 보완하세요.'))
     if not by_key['basis'].lines:
         by_key['basis'].lines.append('자료에 적힌 내용과 현재 적용 여부·사람 확인 상태를 구분해 표시합니다.')
     return Manual(task_id, task['name'], sections)

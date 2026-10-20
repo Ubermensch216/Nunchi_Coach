@@ -25,7 +25,7 @@ from pathlib import Path
 from . import changes, continuity, matters, provenance, reconstruction as rc, workstate as ws
 
 # 카드의 '해야 할 일'과 '시작 준비'에 들어가는 항목 종류.
-_TODO_KINDS = (rc.PURPOSE, rc.DEADLINE, rc.RECIPIENT, rc.AMOUNT, rc.OUTPUT)
+_TODO_KINDS = (rc.PURPOSE, rc.SCOPE, rc.DEADLINE, rc.RECIPIENT, rc.AMOUNT, rc.OUTPUT)
 _PREPARE_KINDS = (rc.INPUT, rc.FORM, rc.CONTACT, rc.REGULATION, rc.AGENCY, rc.RISK, rc.EVALUATION)
 OUTPUT_DIR = "outputs"
 

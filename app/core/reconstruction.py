@@ -48,16 +48,21 @@ OUTPUT = "output"
 REGULATION = "regulation"
 RISK = "risk"
 AGENCY = "agency"
+SCOPE = "scope"
 
 KIND_LABEL = {
     DEADLINE: "기한", AMOUNT: "금액", RECIPIENT: "제출처", PURPOSE: "목적",
-    INPUT: "준비 자료", FORM: "서식", CONTACT: "담당·문의", PROCEDURE: "절차",
+    INPUT: "준비 자료", FORM: "서식", CONTACT: "담당·문의", PROCEDURE: "절차", SCOPE: "업무 범위·역할",
     OUTPUT: "산출물", REGULATION: "관련 규정", RISK: "유의·위험", AGENCY: "관계기관",
 }
 
 # 이름표 → 종류. 공문·계획서에서 실제로 쓰는 표기만 둔다. 넓히면 '기간'이나
 # '내용'처럼 아무 데나 붙는 말이 항목으로 올라온다.
 _LABELS: dict[str, tuple[str, ...]] = {
+    SCOPE: ("감사 주체", "감사주체", "감사 기관", "감사기관", "수감기관", "수감 기관",
+            "감사대상기관", "감사 대상 기관", "감사대상기간", "감사 대상 기간",
+            "감사기간", "감사 기간", "자료 작성 기준일", "자료작성기준일",
+            "담당 업무", "담당업무", "업무 대상", "업무 수행 기간"),
     DEADLINE: ("제출기한", "제출 기한", "회신기한", "회신 기한", "신청기한", "신청 기한",
                "접수기한", "접수 마감", "제출마감", "제출 마감", "보고기한", "보고 기한",
                "처리기한", "처리 기한", "납부기한", "납부 기한", "마감일", "마감", "납기", "기한"),
@@ -1092,7 +1097,7 @@ def _own_values(found: list[Found], case_collection: bool = False, from_aside: b
     표에서 읽은 값은 행 이름으로 이미 갈려 있어 목록 규칙을 적용하지 않는다.
     """
     if case_collection or from_aside:
-        found = [item for item in found if item.kind != AMOUNT
+        found = [item for item in found if item.kind not in (AMOUNT, SCOPE)
                  and (item.kind != CONTACT or requested or not case_collection)]
     if case_collection:
         # 사례 안의 '일시: 2024. 3. 13.'은 사례가 연 행사의 날이지 이 업무의 일정이 아니다.

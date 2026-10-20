@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QKeyEvent, QMouseEvent
+from PySide6.QtGui import QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -24,11 +24,11 @@ from PySide6.QtWidgets import (
 )
 
 from .. import theme
-from ..widgets.common import Badge, ElidedLabel, muted_label
+from ..widgets.common import Badge, ElidedLabel, WrapLabel, _WrapFrame, muted_label
 from ..widgets.task_card import MonthStrip, color_for
 
 
-class WorkFolderCard(QFrame):
+class WorkFolderCard(_WrapFrame):
     """큼직한 묶음 형태의 업무 카드."""
 
     opened = Signal(int)
@@ -55,7 +55,7 @@ class WorkFolderCard(QFrame):
         self.setObjectName("WorkFolderCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         self.setMinimumWidth(280)
         self.setMinimumHeight(210)
         self.setAccessibleName(f"업무 {name}")
@@ -114,18 +114,17 @@ class WorkFolderCard(QFrame):
         outer.addLayout(top_row)
 
         # 2. 업무명 (크고 굵게, 최대 2줄)
-        title_label = QLabel(name)
+        title_label = WrapLabel(name)
         title_label.setObjectName("FolderCardTitle")
         title_label.setWordWrap(True)
-        title_font = QFont(self.font())
-        title_font.setPointSizeF(self.font().pointSizeF() + 2)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
         outer.addWidget(title_label)
 
         # 3. 한 줄 설명 (무슨 일인가)
         desc_text = description.strip() if description else "자료에서 분석 중인 업무입니다."
-        desc_label = QLabel(desc_text)
+        self.description = desc_text
+        desc_label = WrapLabel(desc_text)
+        desc_label.setTextFormat(Qt.TextFormat.PlainText)
+        desc_label.setToolTip(desc_text)
         desc_label.setWordWrap(True)
         desc_label.setObjectName("FolderCardDesc")
         outer.addWidget(desc_label)

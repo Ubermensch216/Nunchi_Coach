@@ -49,8 +49,7 @@ TASK_COLORS = [
 
 STRIP_CELL_W = 14
 # 칸 안에 달 숫자를 적으므로 글자 한 줄이 들어갈 높이다.
-STRIP_H = 18
-STRIP_FONT_PX = 10
+STRIP_H = 22
 DESCRIPTION_CHARS = 44
 
 
@@ -102,6 +101,7 @@ class MonthStrip(QWidget):
 
         for _ in range(1, 13):
             cell = QLabel()
+            cell.setObjectName("MonthStripCell")
             cell.setAlignment(Qt.AlignmentFlag.AlignCenter)
             cell.setFixedHeight(STRIP_H)
             cell.setMinimumWidth(STRIP_CELL_W // 2)
@@ -114,8 +114,11 @@ class MonthStrip(QWidget):
     def _apply_styles(self) -> None:
         active = set(self.months)
         accent = self._accent or theme.PRIMARY
-        radius = STRIP_H // 2
+        height = max(STRIP_H, theme.text_px("small") + 8)
+        self.setFixedHeight(height)
+        radius = height // 2
         for idx, cell in enumerate(self._cells):
+            cell.setFixedHeight(height)
             month = idx + 1
             if month in active:
                 cell.setText(str(month))
@@ -132,7 +135,6 @@ class MonthStrip(QWidget):
 
             cell.setStyleSheet(
                 f"background: {fill}; color: {text_color};"
-                f"font-size: {STRIP_FONT_PX}px; font-weight: 700;"
                 f"border-top-left-radius: {left}px;"
                 f"border-bottom-left-radius: {left}px;"
                 f"border-top-right-radius: {right}px;"

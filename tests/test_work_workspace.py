@@ -94,6 +94,21 @@ def test_home_search_filters_cards_and_schedule_without_reordering(project):
     assert [card.task_id for _, card in view._home_cards] == [1, 2]
 
 
+def test_home_shows_and_searches_analyzed_card_description(project, qapp):
+    db, view = project
+    db.con.execute("UPDATE tasks SET description='폴더의 문서 3건입니다.' WHERE id=1")
+    db.add_task_item(1, rc.PURPOSE, '부서 실적을 취합해 목표 달성률을 파악합니다')
+    db.add_task_item(1, rc.OUTPUT, '월간 실적 보고서')
+    view.refresh(force=True)
+    settle(qapp)
+    card = next(card for task, card in view._home_cards if task['id'] == 1)
+    assert '목표 달성률' in words(card)
+    assert '월간 실적 보고서' in words(card)
+    view.home_search.setText('목표 달성률')
+    assert view.dashboard.table.rowCount() == 1
+    assert [card.task_id for _, card in view._home_cards if not card.isHidden()] == [1]
+
+
 def test_sidebar_search_preserves_current_task_and_keyboard_switch(project, qapp):
     _, view = project
     view.open_task(1)
@@ -127,6 +142,21 @@ def test_manual_shares_real_content_and_keeps_conflict(project, qapp):
     assert '실제 결과물 원문' in words(view.drawer)
     assert item_id in {i['id'] for i in db.task_items(1)}
     assert note in {i['id'] for i in db.task_items(1)}
+
+
+def test_guide_shows_full_workflow_and_recipient_after_two_outputs(project, qapp):
+    db, view = project
+    db.con.execute("UPDATE tasks SET name='행정사무감사', description='문서 18건입니다.' WHERE id=1")
+    for content in ('감사 제출자료', '증빙 목록', '추가 질의답변'):
+        db.add_task_item(1, rc.OUTPUT, content)
+    db.add_task_item(1, rc.RECIPIENT, '최종 수신처 의회사무국')
+    view.open_task(1)
+    settle(qapp)
+    guide = words(view.pages['guide'])
+    assert all(text in guide for text in ('지방의회', '감사 대상 기간', '감사 실시 기간',
+                                         '내부 취합 마감까지', '최종 제출기한 전',
+                                         '감사 진행 중·종료 후', '추가 질의답변', '최종 수신처 의회사무국'))
+    assert '폴더의 문서' not in guide
 
 
 def test_schedule_retains_same_date_for_different_tasks(project):

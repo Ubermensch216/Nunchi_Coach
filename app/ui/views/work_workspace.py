@@ -143,7 +143,8 @@ class WorkspaceMixin:
         def dashboard():
             clear_layout(self._dashboard_layout)
             query = self.home_search.text().strip().casefold()
-            matching = [t for t in tasks if query in (t['name'] + ' ' + (t['description'] or '')).casefold()]
+            descriptions = {task['id']: card.description for task, card in self._home_cards}
+            matching = [t for t in tasks if query in (t['name'] + ' ' + descriptions.get(t['id'], t['description'] or '')).casefold()]
             self.dashboard = WorkYearDashboard(cycles, self.home_year.currentData(), tasks=matching, marks=found)
             self.dashboard.open_task.connect(self.open_task)
             self.dashboard.open_month.connect(self._open_schedule)
@@ -199,16 +200,18 @@ class WorkspaceMixin:
         return not any(d._job.running for d in self._workboxes.values())
 
     def _render_manual(self, column, manual, compact=False):
-        column.addWidget(muted_label('현재 자료 기준 · 업무 안내와 매뉴얼은 같은 내용을 사용합니다.'))
+        column.addWidget(muted_label('후임자를 위한 업무 안내 · 자료에서 확인한 내용과 준비를 위한 제안을 구분해 안내합니다.'))
         sections = manual.sections
         if compact:
-            priority = ['overview', 'output', 'first', 'timing', 'prepare', 'evaluation', 'procedure', 'cases', 'notes', 'past', 'basis']
+            priority = ['overview', 'first', 'timing', 'procedure', 'output', 'prepare', 'evaluation', 'cases', 'notes', 'past', 'basis']
             sections = sorted(sections, key=lambda s: priority.index(s.key))
         for section in sections:
             card = Card()
             card.body.addWidget(section_title(section.title))
             # 안내는 요약 범위만 줄이며 내용·상태·근거를 다시 생성하지 않는다.
-            lines = section.lines[:2] if compact else section.lines
+            # 업무를 이해하는 데 필요한 범위·기간·순서·결과물은 안내에서도 모두 보여 준다.
+            summarize = compact and section.key not in {'overview', 'first', 'timing', 'procedure', 'output'}
+            lines = section.lines[:2] if summarize else section.lines
             for line in lines:
                 label = QLabel(line)
                 label.setTextFormat(Qt.TextFormat.PlainText)
@@ -228,7 +231,7 @@ class WorkspaceMixin:
                 button.setToolTip('건마다 제출·수용·시행을 확인해 적고, 건이 아닌 행을 뺍니다. 다시 분석해도 남습니다.')
                 button.clicked.connect(lambda _=False, tid=manual.task_id: self._open_matters(tid))
                 card.body.addWidget(button)
-            if compact and len(section.lines) > 2:
+            if summarize and len(section.lines) > 2:
                 button = QPushButton('매뉴얼에서 모두 보기')
                 button.clicked.connect(lambda: self._switch('manual'))
                 card.body.addWidget(button)

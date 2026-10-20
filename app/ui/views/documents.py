@@ -389,9 +389,6 @@ class DocumentsView(QWidget):
         title_col.setSpacing(2)
         self.banner_title = QLabel("업무 분류")
         self.banner_title.setObjectName("SubTitle")
-        f = self.banner_title.font()
-        f.setBold(True)
-        self.banner_title.setFont(f)
         self.banner_desc = muted_label("", small=True)
         title_col.addWidget(self.banner_title)
         title_col.addWidget(self.banner_desc)
@@ -1293,14 +1290,12 @@ class _TaskMoveDialog(QDialog):
         column.setSpacing(theme.SP_MD)
 
         title = ElidedLabel(f"문서: {filename}")
-        font = title.font()
-        font.setBold(True)
-        title.setFont(font)
+        title.setObjectName("DialogTitle")
         column.addWidget(title)
 
         curr_names = ", ".join(t["name"] for t in current_tasks) if current_tasks else "미분류"
         curr_label = QLabel(f"현재 분류: {curr_names}")
-        curr_label.setStyleSheet("color: #4B5563; font-weight: 500;")
+        curr_label.setObjectName("Muted")
         column.addWidget(curr_label)
 
         column.addWidget(

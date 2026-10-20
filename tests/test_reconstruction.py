@@ -62,13 +62,17 @@ def test_statements_for_where_and_which_form():
     "담당은 별도 안내하겠습니다.",                    # 입니다/이다로 끝나지 않으면 값이 아니다
     "제출기한은 추후 통보입니다.",                    # 날짜 없는 기한
     "예산은 미정입니다.",                            # 숫자 없는 금액
-    "담당 업무는 환경관리입니다.",                    # 이름표가 아니다
     "금액은 총 3건입니다.",                           # 금액이 아닌 개수
     "예산은 12명입니다.",
     "담당은 홍길동 주무관이며 문의는 내선 1234입니다.",   # 이름표가 둘이면 값의 경계를 알 수 없다
 ])
 def test_unstated_statements_are_not_extracted(text):
     assert read(text) == []
+
+
+def test_responsibility_statement_is_a_scope_not_a_contact():
+    found = one('담당 업무는 환경관리입니다.')
+    assert (found.kind, found.slot, found.value) == (rc.SCOPE, '담당업무', '환경관리')
 
 
 def test_labelled_lines_are_read_only_by_their_labels():

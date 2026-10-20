@@ -195,6 +195,8 @@ def brief_markdown(db, task_id: int) -> str:
                  f"반복 주기: {_cycle_line(db.task_cycle(task_id))}"]
     section("개요", overview)
 
+    section("업무 범위·역할", [_item_line(i) for i in group(rc.SCOPE)],
+            "업무 대상·감사 대상 기간·실시 기간·담당 업무")
     section("해야 할 일", [_item_line(i) for i in group(rc.PURPOSE, rc.DEADLINE, rc.RECIPIENT, rc.AMOUNT, rc.OUTPUT)],
             "목적·기한·제출처·금액·산출물")
     section("시작 준비", [_item_line(i) for i in group(rc.INPUT, rc.FORM, rc.CONTACT, rc.REGULATION, rc.AGENCY, rc.RISK)],

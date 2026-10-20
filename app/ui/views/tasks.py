@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from datetime import date
 from .work_workspace import WorkspaceMixin
-from ...core import task_manual
+from ...core import task_manual, task_description
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import (
     QApplication,
@@ -780,17 +780,13 @@ class TasksView(WorkspaceMixin, QWidget):
     def _task_card(self, row, now: bool = False) -> QWidget:
         cycle = self.db.task_cycle(row["id"])
         work = workcard.build(self.db, row["id"])
-        deliverable = ""
         next_act = ""
-        if work.todo:
-            deliverable = next((item["content"] for item in work.todo if item["kind"] == reconstruction.OUTPUT), "")
         if work.actions:
             next_act = work.actions[0].get("text", "")
         card = WorkFolderCard(
             task_id=row["id"],
             name=row["name"],
-            description=row["description"],
-            deliverable=deliverable,
+            description=task_description.describe(row, work, cycle),
             span_text=_span(row),
             months=_active_months(cycle),
             cycle_text=cycle_headline(cycle) if cycle else None,

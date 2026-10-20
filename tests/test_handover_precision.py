@@ -359,7 +359,7 @@ def test_files_do_not_each_become_a_step_when_the_folder_gives_no_order():
     assert [c.doc_id for c in timeline.condense(bare, "문서 처리")] == [1]
 
 
-def test_the_manual_opens_with_what_the_work_is_for_then_the_folder_count(db):
+def test_the_manual_explains_purpose_and_responsibility_instead_of_folder_count(db):
     task_id = _task(db, "우수부서 선발")
     db.con.execute("UPDATE tasks SET description = ? WHERE id = ?", ("‘우수부서’ 폴더의 문서 1건입니다.", task_id))
     purpose = "우수부서 선발 및 인센티브 제공으로 성과를 창출한 부서를 우대하여 공직문화를 조성하고자 함."
@@ -368,7 +368,8 @@ def test_the_manual_opens_with_what_the_work_is_for_then_the_folder_count(db):
 
     overview = task_manual.build(db, task_id).sections[0]
     assert overview.lines[0].startswith(purpose)
-    assert overview.lines[1] == "자료 현황: ‘우수부서’ 폴더의 문서 1건입니다."
+    assert '담당 범위' in overview.lines[1]
+    assert not any('문서 1건' in line for line in overview.lines)
 
 
 # ── 때 ──────────────────────────────────────────────────────────────

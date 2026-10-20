@@ -24,7 +24,7 @@ from .bridge import service as bridge_service
 from .bridge.store import FILE_NAME as BRIDGE_FILE, BridgeStore
 from .db import ForeignProjectError, default_project_dir, open_project_at, registry
 from .db.registry import ProjectEntry
-from .ui import motion, theme
+from .ui import motion, theme, text_rendering
 from .ui.shell import MainWindow
 from .ui.views.launcher import LauncherDialog
 from .core import diagnostics
@@ -60,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
 
     _set_windows_app_id()
+    text_rendering.configure()
     app = QApplication(sys.argv[:1])
     app.setApplicationName("눈치코치")
     app.setOrganizationName("NunchiCoach")
