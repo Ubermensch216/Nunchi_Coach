@@ -63,6 +63,8 @@ class DocumentRecord:
     approved_at: str | None = None
     # document_id의 근거. list-row면 원 시스템의 문서 ID가 아니라 목록 행으로 만든 식별자다.
     id_basis: str = ""
+    # 목록이 밝힌 단위과제(과제카드·기록물철) 이름. 기관이 정한 업무 분류라 업무 찾기의 1차 단서다.
+    task_card: str = ""
 
 
 @dataclass(frozen=True)

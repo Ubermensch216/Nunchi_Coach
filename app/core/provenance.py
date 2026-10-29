@@ -93,20 +93,22 @@ def register_collection(db, state: dict, collection_root: str | Path) -> dict:
                       record.get("author_id", ""), record.get("author_name", ""),
                       record.get("department", ""), record.get("author_role", ""), status,
                       record.get("authored_at"), record.get("registered_at"),
-                      record.get("approved_at"), record.get("id_basis") or "")
+                      record.get("approved_at"), record.get("id_basis") or "",
+                      record.get("task_card") or "")
             if old is None:
                 cursor = con.execute(
                     "INSERT INTO source_records(run_id, title, document_number, author_id,"
                     " author_name, department, author_role, status, authored_at, registered_at,"
-                    " approved_at, id_basis, institution, system_id, document_id)"
-                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (*fields, *origin),
+                    " approved_at, id_basis, task_card, institution, system_id, document_id)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (*fields, *origin),
                 )
                 record_ids[document_id] = cursor.lastrowid
             else:
                 con.execute(
                     "UPDATE source_records SET run_id=?, title=?, document_number=?, author_id=?,"
                     " author_name=?, department=?, author_role=?, status=?, authored_at=?,"
-                    " registered_at=?, approved_at=?, id_basis=?, last_collected=datetime('now') WHERE id=?",
+                    " registered_at=?, approved_at=?, id_basis=?, task_card=?,"
+                    " last_collected=datetime('now') WHERE id=?",
                     (*fields, old["id"]),
                 )
                 record_ids[document_id] = old["id"]

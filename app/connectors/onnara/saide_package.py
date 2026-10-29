@@ -116,7 +116,8 @@ class SaidePackageConnector:
                 authored_at=iso_date(item.get("authored_at")), author_name=author_name,
                 department=_text(item.get("department"), 200),
                 status=_text(item.get("status"), 80) or "unknown",
-                document_number=_text(item.get("document_number"), 200), id_basis=basis)
+                document_number=_text(item.get("document_number"), 200), id_basis=basis,
+                task_card=_text(item.get("task_card"), 200))
             self.assets[document_id] = []
             for raw in item.get("assets") if isinstance(item.get("assets"), list) else []:
                 if not isinstance(raw, dict):

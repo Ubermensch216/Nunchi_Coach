@@ -41,6 +41,8 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("collection_runs", "author_identity", "author_identity TEXT NOT NULL DEFAULT ''"),
     ("source_records", "id_basis", "id_basis TEXT NOT NULL DEFAULT ''"),
     ("source_assets", "fidelity", "fidelity TEXT NOT NULL DEFAULT ''"),
+    # 목록의 단위과제. 공문으로 업무를 세울 때 1차 단서다(ai/discover.py의 공문 업무 찾기).
+    ("source_records", "task_card", "task_card TEXT NOT NULL DEFAULT ''"),
     # 업무 아래의 회차('2024 하반기', '2023 제2차'). 전임자의 폴더 이름에서 읽는다.
     ("task_docs", "round_key", "round_key TEXT NOT NULL DEFAULT ''"),
     # 압축 안의 문서(ingest/members.py). 부모는 압축 문서, member는 압축 안 경로. 디스크에 따로 없다.

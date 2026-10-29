@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 import json
+import re
 
 from ..core import docrole, folders, scoring, discovery_index
 from ..core.clustering import DEFAULT_MIN_SIZE, Cluster, _tokenize, cluster, common_tokens
@@ -44,9 +45,15 @@ class Discovery:
     held_groups: int = 0
     cancelled: bool = False
     named_by_folder: int = 0         # 전임자의 폴더 구조로 찾은 업무
+    named_by_official: int = 0       # 온나라 공문으로 세운 업무
+    matched_to_official: int = 0     # 공문 업무에 붙인 PC 파일
 
     def summary(self) -> str:
         parts = [f"업무 {self.tasks}개", f"배정 {self.assigned:,}건"]
+        if self.named_by_official:
+            parts.append(f"공문으로 세운 업무 {self.named_by_official}개")
+        if self.matched_to_official:
+            parts.append(f"공문 업무에 붙인 PC 파일 {self.matched_to_official:,}건")
         if self.named_by_folder:
             parts.append(f"폴더 구조로 찾은 업무 {self.named_by_folder}개")
         if self.grouped_by_filename:
@@ -88,23 +95,30 @@ def _discover(
     model = client.embed_model if client else db.get_meta("embed_model") or "bge-m3"
     store, contributions = discovery_index.load(db, model)
     protected = _protected_documents(db)
+    # 온나라 공문이 있으면 그것이 업무의 뼈대다. 공문 업무가 가져간 문서(공문과, 공문에
+    # 대응된 PC 파일)는 아래의 폴더·본문 묶기에서 뺀다 — 남은 문서만 지금까지처럼 찾는다.
+    official = _official_plan(db, protected)
+    excluded = protected | {doc_id for task in official for doc_id in task.claimed}
     if store.size:
         import numpy as np
-        keep = np.asarray([int(doc) not in protected for doc in store.ids])
+        keep = np.asarray([int(doc) not in excluded for doc in store.ids])
         store = VectorStore(store.ids[keep], store.matrix[keep])
-    if store.size == 0 and _folder_plan(db, protected) is None:
+    # 전임자가 폴더로 일을 정리해 두었으면 그 구조가 다음 단서다. 본문이
+    # 닮았는지는 그다음이다. 폴더가 평평하면 plan이 없고, 아래의 본문 묶기로 간다.
+    plan = _folder_plan(db, excluded)
+    if store.size == 0 and plan is None:
+        if official:
+            with db.transaction():
+                return _save_official_only(db, result, official)
         result.tasks = len(db.tasks())
         result.unassigned = db.unclassified_count()
         if not protected:
             result.errors.append("의미 색인이 없습니다. 먼저 분석을 끝내세요.")
         return result
 
-    # 전임자가 폴더로 일을 정리해 두었으면 그 구조가 업무의 1차 단서다. 본문이
-    # 닮았는지는 그다음이다. 폴더가 평평하면 plan이 없고, 아래의 본문 묶기로 간다.
-    plan = _folder_plan(db, protected)
     if plan is not None:
         with db.transaction():
-            return _save_folder_discovery(db, result, plan, store, contributions, model)
+            return _save_folder_discovery(db, result, plan, store, contributions, model, official)
 
     kwargs = {}
     if threshold is not None:
@@ -138,15 +152,16 @@ def _discover(
             return Discovery(tasks=len(db.tasks()), unassigned=db.unclassified_count(),
                              errors=["검토 중 자료나 사용자 교정이 변경되어 이전 제안을 보존했습니다. 다시 실행해 주세요."])
         return _save_discovery(db, client, result, grouping, store, contributions, model,
-                               prepared, naming_ready, protected, min_size)
+                               prepared, naming_ready, protected, min_size, official)
 
 
 def _save_discovery(db, client, result, grouping, store, contributions, model,
-                    prepared, naming_ready, protected, min_size):
+                    prepared, naming_ready, protected, min_size, official=()):
     if client is not None and getattr(client, "cancelled", False):
         raise _Cancelled()
     _clear_proposals(db)
     db.con.execute("DELETE FROM discovery_holds")
+    _save_official(db, result, official)
     reviewed: set[int] = set()
     held: set[int] = set()
     for group, named, excerpts in prepared:
@@ -210,7 +225,9 @@ def _save_discovery(db, client, result, grouping, store, contributions, model,
     candidates = set(map(int, store.ids))
     assigned = {r[0] for r in db.con.execute("SELECT DISTINCT td.doc_id FROM task_docs td "
                 "JOIN tasks t ON t.id=td.task_id WHERE t.not_a_task=0 AND t.merged_into IS NULL")}
-    result.assigned = len(candidates & assigned)
+    # 공문 업무가 가져간 문서는 색인 후보에서 이미 뺐다. 배정 건수에는 넣는다.
+    result.assigned = len(candidates & assigned) + len(
+        {doc_id for task in official for doc_id in task.claimed} & assigned)
     result.unassigned = len(candidates - assigned)
 
     result.tasks = db.con.execute("SELECT COUNT(*) AS n FROM tasks").fetchone()["n"]
@@ -265,9 +282,11 @@ class FolderTask:
 
 
 def _folder_plan(db: Database, protected: set[int]) -> list[FolderTask] | None:
+    # 온나라 수집본은 뺀다. 그 폴더(files/<해시>)는 수집기가 만든 것이지 전임자가 정리한 구조가
+    # 아니다 — 넣으면 공문 한 건(본문+붙임)이 해시 이름의 업무가 된다. 공문은 공문 업무 찾기가 맡는다.
     rows = db.con.execute(
         "SELECT d.id, d.path, d.filename, d.parse_status, s.id AS source_id, s.path AS root "
-        "FROM documents d JOIN sources s ON s.id = d.source_id AND s.kind != 'upload' "
+        "FROM documents d JOIN sources s ON s.id = d.source_id AND s.kind NOT IN ('upload', 'onnara') "
         "WHERE d.missing_since IS NULL AND d.parse_status NOT IN ('skipped', 'pending') "
         "ORDER BY d.id").fetchall()
     rows = [row for row in rows if row["id"] not in protected]
@@ -301,7 +320,7 @@ def _folder_plan(db: Database, protected: set[int]) -> list[FolderTask] | None:
     skipped: dict[tuple, int] = {}
     for row in db.con.execute(
             "SELECT d.path, s.id AS source_id FROM documents d JOIN sources s ON s.id = d.source_id "
-            "AND s.kind != 'upload' WHERE d.missing_since IS NULL AND d.parse_status = 'skipped'"):
+            "AND s.kind NOT IN ('upload', 'onnara') WHERE d.missing_since IS NULL AND d.parse_status = 'skipped'"):
         if row["source_id"] in trees:
             placement = trees[row["source_id"]].place(row["path"])
             if not placement.loose:
@@ -402,9 +421,10 @@ def _owner_by_name(filename: str, tasks: list[FolderTask], common: list[str]) ->
     return tasks[hits[0][1]]
 
 
-def _save_folder_discovery(db, result, plan, store, contributions, model) -> Discovery:
+def _save_folder_discovery(db, result, plan, store, contributions, model, official=()) -> Discovery:
     _clear_proposals(db)
     db.con.execute("DELETE FROM discovery_holds")
+    _save_official(db, result, official)
     for task in plan:
         every = task.doc_ids + task.named_ids
         places = len(task.folders)
@@ -445,6 +465,222 @@ def _save_folder_discovery(db, result, plan, store, contributions, model) -> Dis
                  discovery_index.VERSION))
 
     result.clusters = len(plan)
+    result.assigned = db.con.execute(
+        "SELECT COUNT(DISTINCT td.doc_id) FROM task_docs td JOIN tasks t ON t.id=td.task_id "
+        "WHERE t.not_a_task=0 AND t.merged_into IS NULL").fetchone()[0]
+    result.unassigned = db.unclassified_count()
+    result.tasks = db.con.execute("SELECT COUNT(*) AS n FROM tasks").fetchone()["n"]
+    db.audit("task.discover", detail=result.summary(), result="ok")
+    return result
+
+
+# ── 공문으로 업무 찾기 ──────────────────────────────────────────────
+# 공문은 기관이 등록한 기록이라 폴더보다 먼저 믿는다(docs/공문기준_업무분석_계획서 P3·P4a).
+#   1. 단위과제가 같은 공문은 한 업무다. 단위과제가 다른 공문은 합치지 않는다.
+#   2. 제목의 알맹이(core/official.py)가 같거나 한쪽이 다른 쪽을 품으면 한 업무다.
+#   3. 본문이 다른 공문의 문서번호를 적었으면(접수 → 회신) 한 업무다.
+#   4. 공문 2건 이상이거나 단위과제로 묶인 것만 업무로 올린다. 1건짜리 접수 공문이
+#      업무 수백 개로 불어나지 않게, 나머지는 아래의 폴더·본문 묶기에 맡긴다.
+# 그다음 PC 파일을 붙인다. 앞의 근거가 이기고, 두 업무에 같은 무게로 걸리면 붙이지 않는다.
+
+from ..core import official as official_docs  # noqa: E402
+
+OFFICIAL_MIN_RECORDS = 2
+OFFICIAL_EVIDENCE = "온나라 공문"
+SAME_EVIDENCE = "공문 파일과 같은 내용"
+NUMBER_EVIDENCE = "파일 이름에 공문 문서번호"
+TITLE_EVIDENCE = "파일 이름에 공문 제목"
+NEAR_EVIDENCE = "공문과 대응된 파일과 같은 폴더"
+
+
+@dataclass(slots=True)
+class OfficialTask:
+    name: str
+    basis: str                             # 단위과제 | 공문 제목
+    records: list[official_docs.Record]
+    cores: list[str] = field(default_factory=list)
+    local: dict[int, tuple[str, str]] = field(default_factory=dict)  # PC 파일 → (확신, 근거)
+    round_of: dict[int, str] = field(default_factory=dict)
+    protected: set[int] = field(default_factory=set)   # 사람이 다른 업무에 둔 공문 파일
+
+    @property
+    def official_ids(self) -> list[int]:
+        return sorted({doc_id for record in self.records for doc_id in record.doc_ids} - self.protected)
+
+    @property
+    def claimed(self) -> set[int]:
+        return set(self.official_ids) | set(self.local)
+
+
+def _official_plan(db: Database, protected: set[int]) -> list[OfficialTask]:
+    records = official_docs.records(db)
+    if len(records) < OFFICIAL_MIN_RECORDS and not any(r.task_card for r in records):
+        return []
+
+    parent = list(range(len(records)))
+    card = [folders.compact(record.task_card) for record in records]
+
+    def root(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def join(left: int, right: int) -> None:
+        left, right = root(left), root(right)
+        if left == right or (card[left] and card[right] and card[left] != card[right]):
+            return      # 단위과제가 다른 공문은 기관이 다른 업무로 정했다
+        parent[right] = left
+        card[left] = card[left] or card[right]
+
+    first: dict[str, int] = {}
+    for index, record in enumerate(records):
+        if record.task_card:
+            join(first.setdefault("card:" + card[index], index), index)
+    cores = [official_docs.title_core(record.title) for record in records]
+    target = _merge_targets(sorted({core for core in cores if core}))
+    for index, core in enumerate(cores):
+        if core:
+            join(first.setdefault("core:" + target[core], index), index)
+    numbers = {official_docs.normalize_number(record.document_number): index
+               for index, record in enumerate(records) if record.document_number}
+    for index, record in enumerate(records):
+        text = official_docs.body_text(db, record.body_ids)
+        for number in official_docs.numbers_in(text):
+            if number in numbers and numbers[number] != index:
+                join(numbers[number], index)
+
+    members: dict[int, list[int]] = {}
+    for index in range(len(records)):
+        members.setdefault(root(index), []).append(index)
+    tasks: list[OfficialTask] = []
+    for head, indexes in members.items():
+        if len(indexes) < OFFICIAL_MIN_RECORDS and not card[head]:
+            continue
+        group = [records[index] for index in indexes]
+        group_cores = sorted({cores[index] for index in indexes if cores[index]}, key=len)
+        if card[head]:
+            named = next(record.task_card for record in group if record.task_card)
+            basis = "단위과제"
+        else:
+            # 이름은 가장 짧은 알맹이를 가진 공문들에서 가장 흔한 제목.
+            shortest = group_cores[0] if group_cores else ""
+            labels = [official_docs.title_label(records[index].title) for index in indexes
+                      if shortest and cores[index] == shortest]
+            named = max(labels, key=labels.count) if labels else group[0].title
+            basis = "공문 제목"
+        task = OfficialTask(name=named[:60], basis=basis, records=group, cores=group_cores,
+                            protected={doc_id for record in group for doc_id in record.doc_ids} & protected)
+        for record in group:
+            for doc_id in record.doc_ids:
+                task.round_of[doc_id] = record.year
+        tasks.append(task)
+    if not tasks:
+        return []
+    _match_local(db, tasks, protected)
+    tasks.sort(key=lambda task: -len(task.claimed))
+    return tasks
+
+
+def _match_local(db: Database, tasks: list[OfficialTask], protected: set[int]) -> None:
+    """PC 파일(온나라 수집본이 아닌 문서)을 공문 업무에 붙인다."""
+    from pathlib import Path
+
+    rows = [row for row in db.con.execute(
+        "SELECT d.id, d.path, d.filename, d.hash, d.eff_year, s.path AS root "
+        "FROM documents d JOIN sources s ON s.id = d.source_id AND s.kind NOT IN ('upload', 'onnara') "
+        "WHERE d.missing_since IS NULL AND d.parse_status NOT IN ('skipped', 'pending') "
+        "ORDER BY d.id") if row["id"] not in protected]
+    by_hash: dict[str, set[int]] = {}
+    by_number: dict[str, set[int]] = {}
+    for index, task in enumerate(tasks):
+        for record in task.records:
+            for digest in record.hashes:
+                by_hash.setdefault(digest, set()).add(index)
+            if record.document_number:
+                by_number.setdefault(official_docs.normalize_number(record.document_number), set()).add(index)
+
+    def only(owners: set[int]) -> int | None:
+        return next(iter(owners)) if len(owners) == 1 else None
+
+    def by_title(stem: str) -> int | None:
+        hits = sorted(((max((len(core) for core in task.cores if core in stem), default=0), index)
+                       for index, task in enumerate(tasks)), reverse=True)
+        if not hits or not hits[0][0] or (len(hits) > 1 and hits[0][0] == hits[1][0]):
+            return None     # 비기면 정하지 않는다
+        return hits[0][1]
+
+    placed: dict[int, int] = {}
+    for row in rows:
+        stem = re.sub(r"[^\w]", "", folders.compact(Path(row["filename"]).stem))
+        found = None
+        if row["hash"] and (owner := only(by_hash.get(row["hash"], set()))) is not None:
+            found = (owner, "high", SAME_EVIDENCE)
+        elif (owner := only({task for number in official_docs.numbers_in(row["filename"])
+                             for task in by_number.get(number, set())})) is not None:
+            found = (owner, "high", NUMBER_EVIDENCE)
+        elif (owner := by_title(stem)) is not None:
+            found = (owner, "medium", TITLE_EVIDENCE)
+        if found:
+            owner, confidence, evidence = found
+            tasks[owner].local[row["id"]] = (confidence, evidence)
+            placed[row["id"]] = owner
+
+    # 대응된 파일과 같은 폴더의 나머지 — 그 폴더의 대응이 한 업무뿐일 때만. 자료 폴더의 맨 위는
+    # 전임자가 아무 파일이나 두는 곳이라 쓰지 않는다.
+    folder_of = {row["id"]: str(Path(row["path"]).parent) for row in rows}
+    owners: dict[str, set[int]] = {}
+    for doc_id, owner in placed.items():
+        owners.setdefault(folder_of[doc_id], set()).add(owner)
+    for row in rows:
+        if row["id"] in placed or folder_of[row["id"]] == str(Path(row["root"])):
+            continue
+        owner = only(owners.get(folder_of[row["id"]], set()))
+        if owner is not None:
+            tasks[owner].local[row["id"]] = ("low", NEAR_EVIDENCE)
+    years = {row["id"]: row["eff_year"] for row in rows}
+    for task in tasks:
+        for doc_id in task.local:
+            task.round_of[doc_id] = str(years.get(doc_id) or "")
+
+
+def has_official_tasks(db: Database) -> bool:
+    """공문만으로 업무를 세울 수 있는 자료인가(의미 색인이 없어도 된다)."""
+    return bool(_official_plan(db, _protected_documents(db)))
+
+
+def _save_official(db: Database, result: Discovery, plan) -> None:
+    for task in plan:
+        official_ids = task.official_ids
+        years = sorted({record.year for record in task.records if record.year})
+        span = f"{years[0]}~{years[-1]}" if len(years) > 1 else (years[0] if years else "일자 미상")
+        description = f"온나라 공문 {len(task.records)}건({span})을 {task.basis}(으)로 묶었습니다."
+        if task.local:
+            counts = {evidence: sum(1 for _, e in task.local.values() if e == evidence)
+                      for evidence in (SAME_EVIDENCE, NUMBER_EVIDENCE, TITLE_EVIDENCE, NEAR_EVIDENCE)}
+            reasons = ", ".join(f"{evidence} {n}건" for evidence, n in counts.items() if n)
+            description += f" 이 PC의 파일 {len(task.local)}건을 붙였습니다({reasons})."
+        every = official_ids + sorted(task.local)
+        if not every:
+            continue
+        group = Cluster(seed_id=min(every), doc_ids=every)
+        task_id = _upsert_task(db, Named(task.name, description), group, confidence="medium")
+        result.assigned += _attach(db, task_id, official_ids, confidence="high",
+                                   evidence=f"{OFFICIAL_EVIDENCE} · {task.basis}", rounds=task.round_of)
+        for confidence in ("high", "medium", "low"):
+            for evidence in (SAME_EVIDENCE, NUMBER_EVIDENCE, TITLE_EVIDENCE, NEAR_EVIDENCE):
+                ids = sorted(doc_id for doc_id, value in task.local.items() if value == (confidence, evidence))
+                result.matched_to_official += _attach(db, task_id, ids, confidence=confidence,
+                                                      evidence=evidence, rounds=task.round_of)
+        _store_reading(db, task_id, every)
+        result.named_by_official += 1
+
+
+def _save_official_only(db: Database, result: Discovery, plan) -> Discovery:
+    """의미 색인도 폴더 구조도 없고 공문만 있을 때."""
+    _clear_proposals(db)
+    db.con.execute("DELETE FROM discovery_holds")
+    _save_official(db, result, plan)
     result.assigned = db.con.execute(
         "SELECT COUNT(DISTINCT td.doc_id) FROM task_docs td JOIN tasks t ON t.id=td.task_id "
         "WHERE t.not_a_task=0 AND t.merged_into IS NULL").fetchone()[0]

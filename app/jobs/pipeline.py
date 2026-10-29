@@ -23,7 +23,7 @@ from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal
 
 from ..ai import OllamaClient
 from ..ai.settings import project_client
-from ..ai.discover import discover, has_folder_tasks
+from ..ai.discover import discover, has_folder_tasks, has_official_tasks
 from ..core import dating, handover_release, reconstruction, timeline, transfer
 from ..core import diagnostics, coverage
 from ..core import onnara_import
@@ -650,11 +650,11 @@ class Pipeline(QObject):
         문서마다 모델에게 분류를 물으면 1만 건에 7시간이 걸리지만, 묶은 뒤
         묶음당 한 번만 부르면 수십 번으로 끝난다. 이름이 흩어지는 것도 막는다.
         """
-        # 의미 색인이 없어도 전임자가 폴더로 일을 정리해 두었으면 업무를 찾을 수 있다
-        # (ai/discover.py의 폴더 구조로 업무 찾기). 폴더도 평평하면 그때 건너뛴다.
+        # 의미 색인이 없어도 온나라 공문이 있거나 전임자가 폴더로 일을 정리해 두었으면 업무를
+        # 찾을 수 있다(ai/discover.py의 공문·폴더 구조로 업무 찾기). 둘 다 없으면 그때 건너뛴다.
         if (db.counts()["embedded"] == 0
                 and not db.con.execute("SELECT 1 FROM embeddings LIMIT 1").fetchone()
-                and not has_folder_tasks(db)):
+                and not has_official_tasks(db) and not has_folder_tasks(db)):
             self._report(db,
                 StageReport(STAGE_DISCOVER, note="건너뜀 — 의미 색인이 없습니다")
             )

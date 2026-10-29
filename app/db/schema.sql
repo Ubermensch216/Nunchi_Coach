@@ -384,6 +384,7 @@ CREATE TABLE IF NOT EXISTS source_records (
     last_collected  TEXT NOT NULL DEFAULT (datetime('now')),
     -- document_id가 무엇으로 만들어졌는가. list-row면 원 시스템의 문서 ID가 아니다.
     id_basis        TEXT NOT NULL DEFAULT '',  -- source-document-id | management-number-and-date | list-row | ''
+    task_card       TEXT NOT NULL DEFAULT '',  -- 목록의 단위과제(과제카드·기록물철). 빈 값은 목록이 밝히지 않은 것
     UNIQUE (institution, system_id, document_id)
 );
 
