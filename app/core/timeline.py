@@ -85,8 +85,16 @@ def bulk_copy_days(stamps) -> set[str]:
 
 
 def work_month(year: int | None, month: int | None, kind: str | None, precision: str | None,
-               fs_mtime, bulk_days: set[str] | frozenset = frozenset()) -> tuple[int | None, bool]:
+               fs_mtime, bulk_days: set[str] | frozenset = frozenset(),
+               authored_at: str | None = None) -> tuple[int | None, bool]:
     """(일한 달, 믿을 만한가). 달을 알 수 없으면 (None, False)."""
+    # 온나라 공문의 기안·등록일(authored_at)이 있으면 파일 수정일보다 먼저 믿는다(P5).
+    auth = str(authored_at or "").strip()
+    if len(auth) >= 7 and auth[:4].isdigit() and auth[5:7].isdigit():
+        auth_year = int(auth[:4])
+        auth_month = int(auth[5:7])
+        if 1 <= auth_month <= 12 and (year is None or auth_year == year):
+            return auth_month, True
     if year is None or kind == "fs":
         return None, False      # 해조차 파일 날짜로 정한 문서는 일정의 근거가 못 된다
     # 전임자가 폴더·파일 이름에 적어 둔 날짜는 그대로 믿는다.

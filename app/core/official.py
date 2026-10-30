@@ -115,3 +115,20 @@ def body_text(db, doc_ids: list[int], limit: int = 20000) -> str:
     text = " ".join(row["text"] for row in db.con.execute(
         f"SELECT text FROM chunks WHERE doc_id IN ({marks}) ORDER BY doc_id, ordinal", doc_ids))
     return text[:limit]
+
+
+def body_texts(db, records_list: list[Record], limit: int = 20000) -> dict[int, str]:
+    """여러 공문의 본문 앞부분을 한 번의 쿼리로 읽는다(N+1 방지)."""
+    all_ids = sorted({doc_id for record in records_list for doc_id in record.body_ids})
+    if not all_ids:
+        return {}
+    marks = ", ".join("?" * len(all_ids))
+    chunks_by_doc: dict[int, list[str]] = {}
+    for row in db.con.execute(
+            f"SELECT doc_id, text FROM chunks WHERE doc_id IN ({marks}) ORDER BY doc_id, ordinal", all_ids):
+        chunks_by_doc.setdefault(row["doc_id"], []).append(row["text"])
+    out: dict[int, str] = {}
+    for record in records_list:
+        parts = [text for doc_id in record.body_ids for text in chunks_by_doc.get(doc_id, ())]
+        out[record.id] = " ".join(parts)[:limit] if parts else ""
+    return out

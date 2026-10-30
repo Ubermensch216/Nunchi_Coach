@@ -25,7 +25,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from . import provenance
+from . import official as official_docs, provenance
 
 # 이름에서 걷어 낼 판 표시. 4자리 연도는 걷지 않는다 — 해가 다르면 다른 문서다.
 _MARKERS = re.compile(
@@ -74,7 +74,7 @@ def rebuild(db, task_id: int | None = None) -> int:
 def _rebuild_task(db, task_id: int) -> int:
     rows = db.con.execute(
         "SELECT d.id, d.filename, d.path, d.hash, d.eff_year, d.eff_date, d.eff_date_kind, d.fs_mtime, "
-        f"       substr(COALESCE(i.body, ''), 1, {BODY_CHARS}) AS body "
+        f"       substr(COALESCE(i.body, ''), 1, {BODY_CHARS}) AS idx_body "
         "FROM task_docs td JOIN documents d ON d.id = td.doc_id "
         "LEFT JOIN document_index i ON i.doc_id = d.id "
         "WHERE td.task_id = ? AND d.missing_since IS NULL AND d.hash IS NOT NULL", (task_id,)
@@ -85,14 +85,68 @@ def _rebuild_task(db, task_id: int) -> int:
         "SELECT m.doc_id FROM version_members m JOIN version_groups g ON g.id = m.group_id "
         "WHERE g.decided_by = 'user'")}
 
-    by_name: dict[tuple[str, int | None], list] = defaultdict(list)
+    # document_index가 비어 있는 문서(테스트나 일부 조각만 있는 문서)는 chunks에서 앞부분을 보충한다.
+    body_map: dict[int, str] = {}
+    missing_body_ids = [row["id"] for row in rows if not row["idx_body"]]
+    if missing_body_ids:
+        marks = ", ".join("?" * len(missing_body_ids))
+        for crow in db.con.execute(
+            f"SELECT doc_id, text FROM chunks WHERE doc_id IN ({marks}) ORDER BY doc_id, ordinal",
+            missing_body_ids,
+        ):
+            cur = body_map.get(crow["doc_id"], "")
+            if len(cur) < BODY_CHARS:
+                body_map[crow["doc_id"]] = (cur + " " + (crow["text"] or "")).strip()[:BODY_CHARS]
+
+    enriched = []
     for row in rows:
-        key = skeleton(row["filename"])
-        if key and row["id"] not in taken:
-            by_name[(key, row["eff_year"])].append(row)
+        d = dict(row)
+        d["body"] = row["idx_body"] or body_map.get(row["id"], "")
+        enriched.append(d)
 
     official = provenance.official_sources(db, ids)
     made = 0
+    # P5: 같은 해의 문서 가운데 온나라 등록 공문과 PC 로컬 초안이 공문 제목 알맹이나 본문 겹침(>= MIN_OVERLAP)으로
+    # 이어지면, 로컬 초안들만 먼저 묶지 않고 온나라 등록본까지 한 판 묶음으로 합친다.
+    remaining = [row for row in enriched if row["id"] not in taken]
+    off_rows = [row for row in remaining if row["id"] in official]
+    loc_rows = [row for row in remaining if row["id"] not in official]
+    grouped_ids: set[int] = set()
+    for off_row in off_rows:
+        if off_row["id"] in grouped_ids:
+            continue
+        off_meta = official[off_row["id"]]
+        off_year = off_row["eff_year"]
+        if off_year is None and off_meta.get("authored_at") and re.match(r"^\d{4}", off_meta["authored_at"]):
+            off_year = int(off_meta["authored_at"][:4])
+        off_core = official_docs.title_core(off_meta.get("title") or off_row["filename"])
+        off_skel = skeleton(off_row["filename"])
+        off_words = _words(off_row["body"])
+        matched_group = [off_row]
+        for loc_row in loc_rows:
+            if loc_row["id"] in grouped_ids:
+                continue
+            if off_year and loc_row["eff_year"] and off_year != loc_row["eff_year"]:
+                continue
+            loc_words = _words(loc_row["body"])
+            overlap = _overlap(off_words, loc_words)
+            loc_stem = skeleton(loc_row["filename"])
+            title_hit = bool((off_core and off_core in loc_stem) or (off_skel and off_skel == loc_stem))
+            if overlap >= MIN_OVERLAP or (title_hit and overlap >= 0.25):
+                matched_group.append(loc_row)
+        if len({row["hash"] for row in matched_group}) >= 2:
+            _store(db, matched_group, official)
+            grouped_ids.update(row["id"] for row in matched_group)
+            made += 1
+
+    by_name: dict[tuple[str, int | None], list] = defaultdict(list)
+    for row in remaining:
+        if row["id"] in grouped_ids:
+            continue
+        key = skeleton(row["filename"])
+        if key:
+            by_name[(key, row["eff_year"])].append(row)
+
     for (_name, _year), members in by_name.items():
         for group in _by_content(members):
             if len({row["hash"] for row in group}) < 2:
@@ -134,13 +188,17 @@ def _date_tail(row) -> str:
 
 
 def _store(db, group: list, official: dict) -> None:
-    # 치워 둔 판이 먼저(오래된 것), 그다음 이름의 날짜 꼬리표, 그다음 시각.
-    ordered = sorted(group, key=lambda row: (not _set_aside(row), _date_tail(row), _when(row), row["id"]))
+    # 치워 둔 판이 먼저(오래된 것), 그다음 이름의 날짜 꼬리표, 그다음 시각, 온나라 등록본은 맨 나중(확정 판).
+    ordered = sorted(group, key=lambda row: (
+        not _set_aside(row), row["id"] in official, _date_tail(row), _when(row), row["id"]
+    ))
     latest, reason, confidence = _candidate(ordered, official)
+    head_row = next((r for r in ordered if r["id"] == latest), ordered[-1])
+    label = (official.get(head_row["id"], {}).get("title") or Path(head_row["filename"]).stem)[:80]
     group_id = db.con.execute(
         "INSERT INTO version_groups(label, latest_doc_id, latest_reason, confidence) "
         "VALUES (?, ?, ?, ?)",
-        (Path(ordered[-1]["filename"]).stem, latest, reason, confidence)).lastrowid
+        (label, latest, reason, confidence)).lastrowid
     for ordinal, row in enumerate(ordered):
         note = []
         if _FINAL.search(row["filename"]):

@@ -491,6 +491,9 @@ SAME_EVIDENCE = "공문 파일과 같은 내용"
 NUMBER_EVIDENCE = "파일 이름에 공문 문서번호"
 TITLE_EVIDENCE = "파일 이름에 공문 제목"
 NEAR_EVIDENCE = "공문과 대응된 파일과 같은 폴더"
+CONTENT_EVIDENCE = "공문 본문과 내용 유사"
+OFFICIAL_SIMILARITY_THRESHOLD = 0.72
+OFFICIAL_SIMILARITY_MARGIN = 0.04
 
 
 @dataclass(slots=True)
@@ -514,7 +517,7 @@ class OfficialTask:
 
 def _official_plan(db: Database, protected: set[int]) -> list[OfficialTask]:
     records = official_docs.records(db)
-    if len(records) < OFFICIAL_MIN_RECORDS and not any(r.task_card for r in records):
+    if not records:
         return []
 
     parent = list(range(len(records)))
@@ -544,8 +547,9 @@ def _official_plan(db: Database, protected: set[int]) -> list[OfficialTask]:
             join(first.setdefault("core:" + target[core], index), index)
     numbers = {official_docs.normalize_number(record.document_number): index
                for index, record in enumerate(records) if record.document_number}
+    texts = official_docs.body_texts(db, records)
     for index, record in enumerate(records):
-        text = official_docs.body_text(db, record.body_ids)
+        text = texts.get(record.id, "")
         for number in official_docs.numbers_in(text):
             if number in numbers and numbers[number] != index:
                 join(numbers[number], index)
@@ -555,10 +559,10 @@ def _official_plan(db: Database, protected: set[int]) -> list[OfficialTask]:
         members.setdefault(root(index), []).append(index)
     tasks: list[OfficialTask] = []
     for head, indexes in members.items():
-        if len(indexes) < OFFICIAL_MIN_RECORDS and not card[head]:
-            continue
         group = [records[index] for index in indexes]
         group_cores = sorted({cores[index] for index in indexes if cores[index]}, key=len)
+        if len(indexes) < OFFICIAL_MIN_RECORDS and not card[head] and not group_cores and not any(r.hashes or r.document_number for r in group):
+            continue
         if card[head]:
             named = next(record.task_card for record in group if record.task_card)
             basis = "단위과제"
@@ -567,7 +571,7 @@ def _official_plan(db: Database, protected: set[int]) -> list[OfficialTask]:
             shortest = group_cores[0] if group_cores else ""
             labels = [official_docs.title_label(records[index].title) for index in indexes
                       if shortest and cores[index] == shortest]
-            named = max(labels, key=labels.count) if labels else group[0].title
+            named = max(labels, key=labels.count) if labels else (official_docs.title_label(group[0].title) or group[0].title)
             basis = "공문 제목"
         task = OfficialTask(name=named[:60], basis=basis, records=group, cores=group_cores,
                             protected={doc_id for record in group for doc_id in record.doc_ids} & protected)
@@ -578,6 +582,12 @@ def _official_plan(db: Database, protected: set[int]) -> list[OfficialTask]:
     if not tasks:
         return []
     _match_local(db, tasks, protected)
+    # 단위과제가 없는 1건짜리 공문은 대응되는 PC 파일이 있을 때만 업무로 올린다.
+    # PC 파일이 하나도 붙지 않은 1건짜리 공문(단순 안내·열람 등)은 업무 수백 개로 불어나지 않게 뺀다.
+    tasks = [
+        task for task in tasks
+        if len(task.records) >= OFFICIAL_MIN_RECORDS or task.basis == "단위과제" or bool(task.local)
+    ]
     tasks.sort(key=lambda task: -len(task.claimed))
     return tasks
 
@@ -638,6 +648,41 @@ def _match_local(db: Database, tasks: list[OfficialTask], protected: set[int]) -
         owner = only(owners.get(folder_of[row["id"]], set()))
         if owner is not None:
             tasks[owner].local[row["id"]] = ("low", NEAR_EVIDENCE)
+            placed[row["id"]] = owner
+
+    # 5순위(보조): 의미 색인(벡터)이 있으면 아직 붙지 않은 PC 파일과 공문 본문·붙임의 코사인 유사도를 비교한다.
+    unplaced = [row for row in rows if row["id"] not in placed]
+    if unplaced:
+        store = VectorStore.load(db.con)
+        if store.size > 0:
+            import numpy as np
+
+            id_to_idx = {int(doc_id): i for i, doc_id in enumerate(store.ids)}
+            task_vec_indices: list[list[int]] = [
+                [id_to_idx[d] for r in task.records for d in r.doc_ids if d in id_to_idx]
+                for task in tasks
+            ]
+            for row in unplaced:
+                v_idx = id_to_idx.get(row["id"])
+                if v_idx is None:
+                    continue
+                vec = store.matrix[v_idx]
+                scores: list[tuple[float, int]] = []
+                for t_idx, indices in enumerate(task_vec_indices):
+                    if not indices:
+                        continue
+                    best_score = float(np.max(store.matrix[indices] @ vec))
+                    if best_score >= OFFICIAL_SIMILARITY_THRESHOLD:
+                        scores.append((best_score, t_idx))
+                if not scores:
+                    continue
+                scores.sort(reverse=True)
+                if len(scores) > 1 and (scores[0][0] - scores[1][0]) < OFFICIAL_SIMILARITY_MARGIN:
+                    continue
+                owner = scores[0][1]
+                tasks[owner].local[row["id"]] = ("low", CONTENT_EVIDENCE)
+                placed[row["id"]] = owner
+
     years = {row["id"]: row["eff_year"] for row in rows}
     for task in tasks:
         for doc_id in task.local:
@@ -657,7 +702,7 @@ def _save_official(db: Database, result: Discovery, plan) -> None:
         description = f"온나라 공문 {len(task.records)}건({span})을 {task.basis}(으)로 묶었습니다."
         if task.local:
             counts = {evidence: sum(1 for _, e in task.local.values() if e == evidence)
-                      for evidence in (SAME_EVIDENCE, NUMBER_EVIDENCE, TITLE_EVIDENCE, NEAR_EVIDENCE)}
+                      for evidence in (SAME_EVIDENCE, NUMBER_EVIDENCE, TITLE_EVIDENCE, NEAR_EVIDENCE, CONTENT_EVIDENCE)}
             reasons = ", ".join(f"{evidence} {n}건" for evidence, n in counts.items() if n)
             description += f" 이 PC의 파일 {len(task.local)}건을 붙였습니다({reasons})."
         every = official_ids + sorted(task.local)
@@ -668,7 +713,7 @@ def _save_official(db: Database, result: Discovery, plan) -> None:
         result.assigned += _attach(db, task_id, official_ids, confidence="high",
                                    evidence=f"{OFFICIAL_EVIDENCE} · {task.basis}", rounds=task.round_of)
         for confidence in ("high", "medium", "low"):
-            for evidence in (SAME_EVIDENCE, NUMBER_EVIDENCE, TITLE_EVIDENCE, NEAR_EVIDENCE):
+            for evidence in (SAME_EVIDENCE, NUMBER_EVIDENCE, TITLE_EVIDENCE, NEAR_EVIDENCE, CONTENT_EVIDENCE):
                 ids = sorted(doc_id for doc_id, value in task.local.items() if value == (confidence, evidence))
                 result.matched_to_official += _attach(db, task_id, ids, confidence=confidence,
                                                       evidence=evidence, rounds=task.round_of)

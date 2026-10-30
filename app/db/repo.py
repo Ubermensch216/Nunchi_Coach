@@ -878,7 +878,10 @@ class Database(WorkStore, ActionStore):
         return self.con.execute(
             f"""
             SELECT d.id, d.eff_year AS year, d.eff_month AS month,
-                   d.eff_date, d.eff_precision, d.eff_date_kind, d.fs_mtime
+                   d.eff_date, d.eff_precision, d.eff_date_kind, d.fs_mtime,
+                   (SELECT r.authored_at FROM source_assets a
+                    JOIN source_records r ON r.id = a.record_id
+                    WHERE a.doc_id = d.id ORDER BY a.id LIMIT 1) AS authored_at
             FROM task_docs td
             JOIN documents d ON d.id = td.doc_id
             WHERE td.task_id = ? AND d.missing_since IS NULL AND d.eff_year IS NOT NULL
@@ -897,7 +900,13 @@ class Database(WorkStore, ActionStore):
         return self.con.execute(
             f"""
             SELECT d.id, d.filename, d.eff_month AS month, d.eff_date,
-                   d.eff_precision, d.eff_date_kind, d.fs_mtime
+                   d.eff_precision, d.eff_date_kind, d.fs_mtime,
+                   (SELECT r.authored_at FROM source_assets a
+                    JOIN source_records r ON r.id = a.record_id
+                    WHERE a.doc_id = d.id ORDER BY a.id LIMIT 1) AS authored_at,
+                   (SELECT r.title FROM source_assets a
+                    JOIN source_records r ON r.id = a.record_id
+                    WHERE a.doc_id = d.id ORDER BY a.id LIMIT 1) AS official_title
             FROM task_docs td
             JOIN documents d ON d.id = td.doc_id
             WHERE td.task_id = ? AND d.eff_year = ? AND d.missing_since IS NULL

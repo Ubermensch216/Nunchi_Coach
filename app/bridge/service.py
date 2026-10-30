@@ -25,7 +25,9 @@ from .store import BridgeStore
 # 권한을 늘려도 이미 맺은 연결에 저절로 붙이지 않는다 — 다시 연결해야 받는다.
 PAIRED_SCOPES = ("read", "write")
 MAX_ARRIVALS = 20
+MAX_REQUESTS = 20
 MAX_KNOWN_IDS = 500
+REQUEST_STATES = ("pending", "running", "completed", "failed", "cancelled")
 
 
 class BridgeService:
@@ -41,6 +43,9 @@ class BridgeService:
         self.project_db: Path | None = None
         # 확장이 알려 온 꾸러미. 메모리에만 둔다 — 앱을 다시 켜면 폴더를 직접 고르면 된다.
         self._arrivals: dict[str, dict] = {}
+        # 눈치코치에서 확장에 요청한 공문 수집 작업 큐.
+        self._requests: dict[str, dict] = {}
+        self._request_seq = 0
 
     # ── 켜고 끄기 ───────────────────────────────────────────────────
     @property
@@ -124,7 +129,105 @@ class BridgeService:
                 Route("POST", re.compile(r"/bridge/v1/packages"), self._announce, auth="write"),
                 Route("GET", re.compile(r"/bridge/v1/packages/(?P<run>[A-Za-z0-9_-]{6,80})"), self._arrival, auth="read"),
                 Route("POST", re.compile(r"/bridge/v1/known"), self._known, auth="read"),
+                Route("GET", re.compile(r"/bridge/v1/requests"), self._list_requests, auth="read"),
+                Route("POST", re.compile(r"/bridge/v1/requests/(?P<req>[A-Za-z0-9_-]{4,80})/progress"), self._report_progress, auth="write"),
                 *self._extra_routes]
+
+    # ── 수집 요청 큐 ────────────────────────────────────────────────
+    def create_request(self, scope: dict) -> dict:
+        """눈치코치 화면에서 온나라 공문 수집 조건을 등록한다."""
+        raw = scope if isinstance(scope, dict) else {}
+        cleaned_scope = {
+            "listName": str(raw.get("listName") or "문서등록대장").strip()[:80],
+            "authorName": str(raw.get("authorName") or "").strip()[:80],
+            "department": str(raw.get("department") or "").strip()[:80],
+            "startDate": str(raw.get("startDate") or "").strip()[:20],
+            "endDate": str(raw.get("endDate") or "").strip()[:20],
+            "keyword": str(raw.get("keyword") or "").strip()[:120],
+            "docType": str(raw.get("docType") or "all").strip()[:40],
+        }
+        now = round(time.time(), 3)
+        with self._lock:
+            self._request_seq += 1
+            request_id = f"req_{int(now)}_{self._request_seq:02d}"
+            item = {
+                "requestId": request_id,
+                "state": "pending",
+                "scope": cleaned_scope,
+                "done": 0,
+                "total": 0,
+                "runId": "",
+                "message": "",
+                "createdAt": now,
+                "updatedAt": now,
+            }
+            self._requests[request_id] = item
+            for stale in list(self._requests)[:-MAX_REQUESTS]:
+                del self._requests[stale]
+            return dict(item, scope=dict(cleaned_scope))
+
+    def requests(self, active_only: bool = False) -> list[dict]:
+        """등록된 수집 요청 목록. `active_only`이면 대기·진행 중인 요청만 돌려준다."""
+        with self._lock:
+            items = [dict(item, scope=dict(item["scope"])) for item in self._requests.values()]
+        if active_only:
+            return [item for item in items if item["state"] in ("pending", "running")]
+        return items
+
+    def cancel_request(self, request_id: str) -> bool:
+        with self._lock:
+            item = self._requests.get(request_id)
+            if item is None:
+                return False
+            item["state"] = "cancelled"
+            item["updatedAt"] = round(time.time(), 3)
+            return True
+
+    def _list_requests(self, context: Context):
+        """`GET /bridge/v1/requests` — 눈치코치에서 대기·진행 중인 수집 요청 목록."""
+        return 200, {
+            "project": self.describe().get("project"),
+            "requests": self.requests(active_only=True),
+        }
+
+    def _report_progress(self, context: Context):
+        """`POST /bridge/v1/requests/{requestId}/progress` — 확장이 수집 진행 상태를 보고."""
+        request_id = context.params["req"]
+        body = context.body if isinstance(context.body, dict) else {}
+        state = body.get("state")
+        if state is not None and (not isinstance(state, str) or state not in REQUEST_STATES):
+            raise BridgeError(400, "invalid_request", "수집 진행 상태 형식이 올바르지 않습니다.")
+        done = body.get("done")
+        total = body.get("total")
+        if (done is not None and (not isinstance(done, int) or isinstance(done, bool) or done < 0)) or (
+            total is not None and (not isinstance(total, int) or isinstance(total, bool) or total < 0)
+        ):
+            raise BridgeError(400, "invalid_request", "수집 진행 건수가 올바르지 않습니다.")
+        run_id = body.get("runId")
+        if run_id is not None and not isinstance(run_id, str):
+            raise BridgeError(400, "invalid_request", "수집 실행 ID 형식이 올바르지 않습니다.")
+        message = body.get("message")
+        if message is not None and not isinstance(message, str):
+            raise BridgeError(400, "invalid_request", "수집 안내 문구 형식이 올바르지 않습니다.")
+
+        with self._lock:
+            item = self._requests.get(request_id)
+            if item is None:
+                raise BridgeError(404, "not_found", "수집 요청을 찾을 수 없습니다.")
+            if state is not None:
+                item["state"] = state
+            if done is not None:
+                item["done"] = done
+            if total is not None:
+                item["total"] = total
+            if run_id is not None:
+                item["runId"] = run_id[:80]
+            if message is not None:
+                item["message"] = message[:200]
+            item["updatedAt"] = round(time.time(), 3)
+            snapshot = dict(item, scope=dict(item["scope"]))
+        self.store.audit("request.progress", client_id=context.client.id, request_id=request_id, state=snapshot["state"])
+        return 200, snapshot
 
     # ── 꾸러미 알림 ─────────────────────────────────────────────────
     def receive_roots(self) -> list[Path]:

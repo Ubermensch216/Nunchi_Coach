@@ -68,7 +68,8 @@ SNAPSHOT_LABEL = {SNAPSHOT_RESTORATION: "자료 기반 업무 복원본",
 
 # 검토 행동
 REVIEW_ACTIONS = ("confirm", "edit", "supplement", "exclude")
-GAP_KINDS = ("missing", "conflict", "stale", "changed")
+GAP_KINDS = ("missing", "conflict", "stale", "changed",
+             "unanswered_official", "unregistered_final", "missing_attachment")
 
 _BASIS_LABEL = {STATED: "문서에 명시", INFERRED: "자료에서 추정",
                 CONFLICT: "자료가 서로 다름", MISSING: "자료 없음"}

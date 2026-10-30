@@ -1,6 +1,6 @@
 """자료 폴더 연결 — 첫 실행 1회. 메뉴가 아니다.
 
-두 걸음으로 끝낸다: 폴더 추가 → 분석 시작. 지금 눌러야 할 단추 하나만
+두 걸음으로 끝낸다: 폴더 추가(또는 온나라 공문 수집·가져오기) → 분석 시작. 지금 눌러야 할 단추 하나만
 강조색으로 칠해 순서를 화면이 말하게 한다.
 읽기 전용 원칙을 여기서 명시적으로 알린다. 공직 자료를 다루는 프로그램에
 대한 첫 신뢰가 이 문장에서 만들어진다.
@@ -16,20 +16,21 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
+from ...bridge import service as bridge_service
+from ...core import onnara_import
 from ...db import Database
 from ...ingest.parsers import supported_extensions
 from .. import icons, theme
-from ..widgets import Card, SubPanel, body_label, center_column, muted_label, view_title
-
-# 이 화면의 기둥 폭. 할 일이 하나뿐인 화면이라 좁게 세운다.
-ONBOARDING_W = 760
+from ..widgets import Card, SubPanel, body_label, center_column, muted_label, section_title, view_title
 
 # 사전 점검에서 훑을 최대 항목 수. 네트워크 공유 폴더에서 멈추지 않도록 상한을 둔다.
 PRECHECK_CAP = 40_000
@@ -44,6 +45,7 @@ class OnboardingView(QWidget):
         super().__init__(parent)
         self.db = db
         self._folders: list[Path] = []
+        self._onnara_added: list[dict] = []
 
         self.setObjectName("Canvas")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -64,11 +66,51 @@ class OnboardingView(QWidget):
         column.addWidget(view_title("전임자 자료가 있는 폴더를 연결하세요"))
         column.addWidget(
             muted_label(
-                "정리되지 않은 폴더를 그대로 연결해도 됩니다. 내 PC, USB, 네트워크 "
-                "공유 폴더를 여러 개 함께 연결할 수 있고, 흩어져 있어도 하나로 묶어 "
-                "살펴봅니다."
+                "온나라 공문 꾸러미를 먼저 가져오거나, 전임자 PC·USB·네트워크 공유 폴더를 "
+                "함께 연결할 수 있습니다. 공문으로 업무 뼈대를 세우고 PC 자료를 거기에 맞춰 살펴봅니다."
             )
         )
+
+        # 온나라 공문 수집 요청 영역 (브리지 연결 시 활성)
+        self.onnara_card = Card()
+        self.onnara_card.body.addWidget(section_title("온나라 공문 수집 요청 (선택)"))
+        self.onnara_card.body.addWidget(
+            muted_label(
+                "onNara.sAIde 확장과 연결되어 있다면 전임자 이름과 기간을 지정해 문서등록대장 수집을 요청할 수 있습니다.",
+                small=True,
+            )
+        )
+        req_row = QHBoxLayout()
+        req_row.setSpacing(theme.SP_SM)
+        self.req_author = QLineEdit()
+        self.req_author.setPlaceholderText("전임자 이름 (예: 홍길동)")
+        self.req_author.setMinimumHeight(theme.CONTROL_H)
+        req_row.addWidget(self.req_author, 1)
+
+        self.req_start_date = QLineEdit()
+        self.req_start_date.setPlaceholderText("시작일 (YYYY-MM-DD)")
+        self.req_start_date.setMinimumHeight(theme.CONTROL_H)
+        req_row.addWidget(self.req_start_date, 1)
+
+        self.req_end_date = QLineEdit()
+        self.req_end_date.setPlaceholderText("종료일 (YYYY-MM-DD)")
+        self.req_end_date.setMinimumHeight(theme.CONTROL_H)
+        req_row.addWidget(self.req_end_date, 1)
+
+        self.req_keyword = QLineEdit()
+        self.req_keyword.setPlaceholderText("키워드 (선택)")
+        self.req_keyword.setMinimumHeight(theme.CONTROL_H)
+        req_row.addWidget(self.req_keyword, 1)
+
+        self.req_button = QPushButton("onNara.sAIde에 수집 요청")
+        self.req_button.clicked.connect(self._on_request_clicked)
+        req_row.addWidget(self.req_button)
+        self.onnara_card.body.addLayout(req_row)
+
+        self.req_status = muted_label("", small=True)
+        self.req_status.setVisible(False)
+        self.onnara_card.body.addWidget(self.req_status)
+        outer.addWidget(self.onnara_card)
 
         card = Card()
 
@@ -94,6 +136,11 @@ class OnboardingView(QWidget):
         self.add.setObjectName("Primary")
         self.add.clicked.connect(self._add_folder)
         buttons.addWidget(self.add)
+
+        self.add_onnara_button = QPushButton("+ 온나라 자료 가져오기")
+        self.add_onnara_button.setToolTip("onNara.sAIde로 내려받은 꾸러미 폴더나 온나라 수집본 폴더를 추가합니다")
+        self.add_onnara_button.clicked.connect(self._pick_onnara)
+        buttons.addWidget(self.add_onnara_button)
 
         self.remove = QPushButton("선택한 폴더 빼기")
         self.remove.setObjectName("Quiet")
@@ -143,6 +190,70 @@ class OnboardingView(QWidget):
         seed = self.db.get_meta("seed_source")
         if seed and not self.db.work_sources():
             self._append(Path(seed))
+        self.sync_requests()
+
+    # ── 온나라 수집 요청 및 가져오기 ────────────────────────────────
+    def _on_request_clicked(self) -> None:
+        self.request_collection({
+            "listName": "문서등록대장",
+            "authorName": self.req_author.text(),
+            "startDate": self.req_start_date.text(),
+            "endDate": self.req_end_date.text(),
+            "keyword": self.req_keyword.text(),
+        })
+
+    def request_collection(self, scope: dict | None = None) -> dict | None:
+        bridge = bridge_service.current()
+        if bridge is None or not bridge.running:
+            self.req_status.setText("onNara.sAIde 연결이 꺼져 있습니다. 설정 › 시스템에서 연결을 먼저 켜세요.")
+            self.req_status.setVisible(True)
+            return None
+        req = bridge.create_request(scope or {})
+        self.sync_requests()
+        return req
+
+    def sync_requests(self) -> None:
+        bridge = bridge_service.current()
+        if bridge is None:
+            return
+        reqs = bridge.requests()
+        if not reqs:
+            return
+        latest = reqs[-1]
+        state = latest["state"]
+        author = latest["scope"].get("authorName") or "전체"
+        done, total = latest.get("done", 0), latest.get("total", 0)
+        msg = latest.get("message") or ""
+        if state == "pending":
+            text = f"수집 요청 대기 중 ({author}) — onNara.sAIde 확장 창에서 수집을 시작하세요."
+        elif state == "running":
+            count_text = f" {done}/{total}건" if total else (f" {done}건" if done else "")
+            text = f"수집 중{count_text}… {msg}".strip()
+        elif state == "completed":
+            text = f"수집 완료 ({done}건) {msg}".strip()
+        elif state == "failed":
+            text = f"수집 실패: {msg or '확장에서 상태를 확인하세요.'}"
+        else:
+            text = f"수집 취소됨 ({author})"
+        self.req_status.setText(text)
+        self.req_status.setVisible(True)
+
+    def _pick_onnara(self) -> None:
+        chosen = QFileDialog.getExistingDirectory(
+            self, "sAIde 꾸러미 폴더 (package.json) 또는 온나라 수집본 폴더 (manifest.json)")
+        if not chosen:
+            return
+        try:
+            self.add_onnara(chosen)
+        except (ValueError, OSError) as exc:
+            QMessageBox.warning(self, "온나라 자료 가져오기", str(exc))
+
+    def add_onnara(self, folder: str | Path) -> dict:
+        result = onnara_import.add_to_project(self.db, folder)
+        self._onnara_added.append(result)
+        self.list.addItem(QListWidgetItem(f"[온나라] {result['root']}"))
+        self._precheck()
+        return result
 
     # ── 폴더 ────────────────────────────────────────────────────────
     def _add_folder(self) -> None:
@@ -162,14 +273,16 @@ class OnboardingView(QWidget):
         for item in self.list.selectedItems():
             row = self.list.row(item)
             self.list.takeItem(row)
-            del self._folders[row]
+            if row < len(self._folders):
+                del self._folders[row]
         self._precheck()
 
     def _precheck(self) -> None:
         """읽기 권한과 대략적인 규모를 실행 전에 보여준다 (PRJ-004)."""
-        self.list.setVisible(bool(self._folders))
-        self.placeholder.setVisible(not self._folders)
-        if not self._folders:
+        has_any = bool(self._folders or self._onnara_added)
+        self.list.setVisible(has_any)
+        self.placeholder.setVisible(not has_any)
+        if not has_any:
             self.summary.setText("아직 선택한 폴더가 없습니다.")
             self.start.setEnabled(False)
             self._sync_actions()
@@ -208,11 +321,17 @@ class OnboardingView(QWidget):
             except (PermissionError, OSError) as exc:
                 denied.append(f"{folder} ({exc.strerror or exc})")
 
+        onnara_docs = sum(item.get("records", 0) for item in self._onnara_added)
+        onnara_files = sum(item.get("assets", 0) for item in self._onnara_added)
+        total_target = target + onnara_files
+
         prefix = "약 " if capped else ""
         text = (
-            f"{prefix}파일 {files:,}개 · {_human(size)} · "
-            f"분석 대상 문서 {target:,}건 · 접근 불가 {blocked:,}개"
+            f"{prefix}파일 {files + onnara_files:,}개 · {_human(size)} · "
+            f"분석 대상 문서 {total_target:,}건 · 접근 불가 {blocked:,}개"
         )
+        if onnara_docs:
+            text += f"  (온나라 공문 {onnara_docs:,}건 포함)"
         if capped:
             text += f"  (사전 점검은 {PRECHECK_CAP:,}건까지만 훑습니다)"
         if denied:
@@ -222,11 +341,11 @@ class OnboardingView(QWidget):
                 f"\nⓘ 파일 {blocked:,}개는 권한이나 잠금 때문에 지금 읽을 수 없습니다. "
                 "나머지는 그대로 분석합니다."
             )
-        if target == 0 and not denied:
+        if total_target == 0 and not denied:
             text += "\n⚠ 분석할 수 있는 문서를 찾지 못했습니다."
 
         self.summary.setText(text)
-        self.start.setEnabled(target > 0)
+        self.start.setEnabled(total_target > 0)
         self._sync_actions()
 
     def _sync_actions(self) -> None:
@@ -236,10 +355,10 @@ class OnboardingView(QWidget):
         하나다. 둘을 다 칠해 두면 처음 보는 사람은 순서를 다시 읽어야 한다.
         """
         ready = self.start.isEnabled()
-        has_folders = bool(self._folders)
+        has_folders = bool(self._folders or self._onnara_added)
         self.list.setVisible(has_folders)
-        self.list.setFixedHeight(min(len(self._folders), 5) * theme.ROW_H + theme.SP_MD)
-        self.remove.setVisible(has_folders)
+        self.list.setFixedHeight(min(self.list.count(), 5) * theme.ROW_H + theme.SP_MD)
+        self.remove.setVisible(bool(self._folders))
         for button, primary in ((self.add, not ready), (self.start, ready)):
             button.setObjectName("Primary" if primary else "")
             button.style().unpolish(button)
@@ -248,11 +367,12 @@ class OnboardingView(QWidget):
     def _start(self) -> None:
         for folder in self._folders:
             self.db.add_source(folder, kind=_source_kind(folder))
-        self.db.audit("scan.request", detail=f"{len(self._folders)}개 자료원")
+        total_sources = len(self._folders) + len(self._onnara_added)
+        self.db.audit("scan.request", detail=f"{total_sources}개 자료원")
         self.started.emit()
 
     def refresh(self) -> None:
-        pass
+        self.sync_requests()
 
 
 def _source_kind(path: Path) -> str:

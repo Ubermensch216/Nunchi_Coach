@@ -144,6 +144,7 @@ def find_gaps(db, task_id: int, basis: date | None = None,
             if shape["classified"] and shape["one_off"]:
                 continue    # 한 번 있었던 일에 '이번 회차를 시작했는지'를 묻지 않는다
             gaps.append(_afterwards(context, item))
+    gaps.extend(_official_local_gaps(db, task_id))
     return gaps
 
 
@@ -281,12 +282,18 @@ _WHOM = {rc.DEADLINE: " 문서로 정해지지 않으면 요청 공문을 보낸
 def _conflict(db, item: dict, step_id) -> dict:
     name = rc.KIND_LABEL.get(item["kind"], item["kind"])
     lines = []
+    off_map = provenance.official_sources(
+        db, [e["doc_id"] for e in item["evidence"] if e.get("doc_id")]
+    )
     for evidence in item["evidence"]:
         document = db.document(evidence["doc_id"]) if evidence["doc_id"] else None
-        when = (document["eff_date"] or "시점 미상") if document else "원본 없음"
-        official = provenance.describe(
-            provenance.official_sources(db, [evidence["doc_id"]]).get(evidence["doc_id"]))
-        source = official or "개인 폴더 자료"
+        off_info = off_map.get(evidence["doc_id"]) if evidence["doc_id"] else None
+        when = (
+            (str(off_info["authored_at"])[:10] if off_info and off_info.get("authored_at") else None)
+            or ((document["eff_date"] or "시점 미상") if document else "원본 없음")
+        )
+        official = provenance.describe(off_info)
+        source = official or "개인 폴더 자료(PC 파일)"
         lines.append(f"{evidence['quote']} — {evidence['filename']} ({when} · {source})")
     # 무엇이 다른가 · 어디에 영향을 주는가 · 누구에게 확인하는가 · 정해지면 무엇이 바뀌는가(개선계획서 7장)
     detail = f"자료가 서로 다른 값을 적고 있습니다: {item['content']}"
@@ -395,6 +402,211 @@ def review_task(db, task_id: int, basis: date | None = None,
                 candidates: list[dict] | None = None) -> dict[str, int]:
     """공백을 다시 찾아 저장된 자동 공백과 맞춘다."""
     return db.sync_info_gaps(task_id, find_gaps(db, task_id, basis, candidates))
+
+
+# ── 공문 ↔ PC 로컬 비교 공백 (P5) ───────────────────────────────────
+
+_REQUEST_TITLE = re.compile(r"요청|제출\s*요령|제출\s*안내|시행\s*계획|추진\s*계획\s*알림|협조\s*요청|의뢰")
+_REPLY_TITLE = re.compile(r"회신|제출(?!\s*요청|\s*안내|\s*요령)|결과\s*보고|송부|보고")
+_FINAL_LOCAL_MARK = re.compile(r"최종|확정|결재|(?<![A-Za-z])final(?![A-Za-z])", re.IGNORECASE)
+
+
+def _official_local_gaps(db, task_id: int) -> list[dict]:
+    """온나라 공문과 PC 파일을 나란히 놓고 빠진 고리를 찾는다(P5).
+
+      1. unanswered_official: 접수·요청 공문이 있으나 이에 대응하는 회신 공문이나
+         PC 제출본이 없는 경우
+      2. unregistered_final: PC에 '최종·확정·결재' 파일이 있으나 대응하는 등록 공문이 없는 경우
+      3. missing_attachment: 공문에 붙임이 기록되어 있으나 내려받지 못했고 PC 폴더에서도
+         대응 파일을 찾지 못한 경우
+    """
+    from . import docrole, official as official_docs, versions
+
+    rows = db.con.execute(
+        "SELECT d.id, d.filename, d.path, d.hash, d.eff_year, d.eff_date, s.kind AS source_kind, "
+        "COALESCE(r.role, '') AS role "
+        "FROM task_docs td JOIN documents d ON d.id = td.doc_id "
+        "JOIN sources s ON s.id = d.source_id "
+        "LEFT JOIN doc_roles r ON r.doc_id = d.id "
+        "WHERE td.task_id = ? AND d.missing_since IS NULL ORDER BY d.id",
+        (task_id,),
+    ).fetchall()
+    if not rows:
+        return []
+
+    doc_ids = [row["id"] for row in rows]
+    off_sources = provenance.official_sources(db, doc_ids)
+    # 이 업무에 공문 기록이 하나도 연결돼 있지 않으면 공문↔로컬 대조 공백을 만들지 않는다.
+    records_in_task = db.con.execute(
+        f"""
+        SELECT DISTINCT r.id, r.document_id, r.title, r.document_number, r.authored_at, r.status
+        FROM source_records r
+        JOIN source_assets a ON a.record_id = r.id
+        WHERE a.doc_id IN ({', '.join('?' * len(doc_ids))})
+        ORDER BY COALESCE(r.authored_at, ''), r.id
+        """,
+        doc_ids,
+    ).fetchall()
+    if not records_in_task:
+        return []
+
+    gaps: list[dict] = []
+    local_rows = [row for row in rows if row["source_kind"] != "onnara" and row["id"] not in off_sources]
+
+    # 공문별 본문 문서 ID와 본문 텍스트(인용 문서번호 확인용)
+    rec_body_doc: dict[int, int] = {}
+    for row in db.con.execute(
+        f"SELECT record_id, doc_id FROM source_assets "
+        f"WHERE record_id IN ({', '.join('?' * len(records_in_task))}) AND doc_id IS NOT NULL ORDER BY id",
+        [r["id"] for r in records_in_task],
+    ):
+        rec_body_doc.setdefault(row["record_id"], row["doc_id"])
+
+    cited_numbers: set[str] = set()
+    for r in records_in_task:
+        bdoc = rec_body_doc.get(r["id"])
+        if bdoc:
+            text = official_docs.body_text(db, [bdoc])
+            cited_numbers |= official_docs.numbers_in(text)
+
+    # 1) unanswered_official: 가장 최근 연도의 요청 공문에 회신 공문도, PC 제출본/초안도 없는지 점검
+    directives = [
+        r for r in records_in_task
+        if _REQUEST_TITLE.search(r["title"] or "") and not _REPLY_TITLE.search(r["title"] or "")
+    ]
+    replies = [r for r in records_in_task if _REPLY_TITLE.search(r["title"] or "")]
+    for req in directives:
+        req_num = official_docs.normalize_number(req["document_number"] or "")
+        req_year = int(req["authored_at"][:4]) if req["authored_at"] and req["authored_at"][:4].isdigit() else None
+        has_reply_letter = bool(req_num and req_num in cited_numbers) or any(
+            (not req_year or (rep["authored_at"] and rep["authored_at"][:4] == str(req_year)))
+            and (not req["authored_at"] or not rep["authored_at"] or rep["authored_at"] >= req["authored_at"])
+            for rep in replies
+        )
+        has_local_submission = any(
+            (not req_year or not lrow["eff_year"] or lrow["eff_year"] >= req_year)
+            and (
+                lrow["role"] in (docrole.SUBMISSION, docrole.PERFORMANCE, docrole.RESULT)
+                or _REPLY_TITLE.search(lrow["filename"] or "")
+                or _FINAL_LOCAL_MARK.search(lrow["filename"] or "")
+                or (req_num and req_num in official_docs.numbers_in(lrow["filename"] or ""))
+            )
+            for lrow in local_rows
+        )
+        if not has_reply_letter and not has_local_submission:
+            ev_doc = rec_body_doc.get(req["id"])
+            num_text = f"({req['document_number']})" if req["document_number"] else ""
+            gaps.append({
+                "gap_key": f"unanswered_official:{req['document_id']}",
+                "kind": "unanswered_official",
+                "field": "회신 미확인 공문",
+                "item_id": None,
+                "step_id": None,
+                "detail": (
+                    f"요청 공문 ‘{req['title']}’{num_text}은(는) 있으나 이에 대응하는 회신·제출 공문이나 "
+                    "PC 제출본을 찾지 못했습니다."
+                ),
+                "research": f"공문 시행·등록일: {req['authored_at'] or '시점 미상'}",
+                "next_action": (
+                    "온나라에서 이 공문에 대한 회신·제출 결재 문서가 있는지 확인하거나, "
+                    "제출 대상이 아닌 안내 공문이면 ‘확인했습니다’로 닫으세요."
+                ),
+                "evidence": [(ev_doc, "공문", req["title"])] if ev_doc else [],
+            })
+
+    # 2) unregistered_final: PC 폴더에 '최종/확정/결재' 표시가 붙은 파일이 있으나 같은 해 등록 공문이 없는 경우
+    vgroups = versions.groups_for(db, doc_ids)
+    grouped_with_official = {
+        m["doc_id"]
+        for g in vgroups
+        if any(member["doc_id"] in off_sources for member in g["members"])
+        for m in g["members"]
+    }
+    official_years = {
+        int(r["authored_at"][:4])
+        for r in records_in_task
+        if r["authored_at"] and len(r["authored_at"]) >= 4 and r["authored_at"][:4].isdigit()
+    }
+    for lrow in local_rows:
+        if not _FINAL_LOCAL_MARK.search(lrow["filename"] or ""):
+            continue
+        if lrow["id"] in grouped_with_official:
+            continue
+        lyear = lrow["eff_year"]
+        # 같은 해에 제출·회신·보고·계획 성격의 등록 공문이 있거나 문서번호가 파일명에 있으면 등록된 것으로 본다.
+        nums_in_file = official_docs.numbers_in(lrow["filename"] or "")
+        rec_nums = {official_docs.normalize_number(r["document_number"] or "") for r in records_in_task if r["document_number"]}
+        if nums_in_file & rec_nums:
+            continue
+        same_year_registered = any(
+            (not lyear or (r["authored_at"] and r["authored_at"][:4] == str(lyear)))
+            and not _REQUEST_TITLE.search(r["title"] or "")
+            for r in records_in_task
+        )
+        if same_year_registered and lyear in official_years:
+            continue
+        gaps.append({
+            "gap_key": f"unregistered_final:{lrow['id']}",
+            "kind": "unregistered_final",
+            "field": "등록 미확인 최종본",
+            "item_id": None,
+            "step_id": None,
+            "detail": (
+                f"PC 폴더에 ‘{lrow['filename']}’ 파일(최종·확정·결재 표시)이 있으나, "
+                "이에 대응하는 온나라 등록·결재 공문을 찾지 못했습니다."
+            ),
+            "research": f"파일 시점: {lrow['eff_date'] or lrow['eff_year'] or '시점 미상'} · 개인 폴더 자료",
+            "next_action": (
+                "실제로 결재·발송까지 마친 문서인지 온나라 문서등록대장에서 확인하세요. "
+                "결재 전 초안이면 파일 이름의 최종 표시만 믿지 않도록 유의하세요."
+            ),
+            "evidence": [(lrow["id"], "파일 이름", lrow["filename"])],
+        })
+
+    # 3) missing_attachment: 공문에 붙임이 기록되어 있으나 내려받지 못했고 PC 폴더에서도 찾지 못한 경우
+    failed_assets = db.con.execute(
+        f"""
+        SELECT a.id, a.record_id, a.asset_id, a.filename, a.sha256, a.status, a.error,
+               r.title, r.document_number, r.document_id
+        FROM source_assets a
+        JOIN source_records r ON r.id = a.record_id
+        WHERE a.record_id IN ({', '.join('?' * len(records_in_task))})
+          AND a.role = 'attachment'
+          AND (a.status != 'downloaded' OR a.doc_id IS NULL)
+        ORDER BY a.id
+        """,
+        [r["id"] for r in records_in_task],
+    ).fetchall()
+    local_hashes = {lrow["hash"] for lrow in local_rows if lrow["hash"]}
+    local_names = {(lrow["filename"] or "").casefold() for lrow in local_rows if lrow["filename"]}
+    for asset in failed_assets:
+        if asset["sha256"] and asset["sha256"] in local_hashes:
+            continue
+        att_name = (asset["filename"] or "").strip()
+        if att_name and att_name.casefold() in local_names:
+            continue
+        ev_doc = rec_body_doc.get(asset["record_id"])
+        label_name = att_name or asset["asset_id"]
+        num_text = f"({asset['document_number']})" if asset["document_number"] else ""
+        gaps.append({
+            "gap_key": f"missing_attachment:{asset['record_id']}:{asset['asset_id']}",
+            "kind": "missing_attachment",
+            "field": "누락된 공문 붙임",
+            "item_id": None,
+            "step_id": None,
+            "detail": (
+                f"공문 ‘{asset['title']}’{num_text}의 붙임 파일 ‘{label_name}’이(가) "
+                "수집되지 않았고 PC 자료 폴더에서도 찾지 못했습니다."
+            ),
+            "research": f"수집 상태: {asset['status'] or '미수집'}" + (f" ({asset['error']})" if asset["error"] else ""),
+            "next_action": (
+                "온나라에서 해당 공문의 붙임 파일을 다시 내려받거나 전임자 PC의 다른 폴더에 "
+                "저장되어 있는지 확인하세요."
+            ),
+            "evidence": [(ev_doc, "공문 붙임", label_name)] if ev_doc else [],
+        })
+
+    return gaps
 
 
 # ── 다음 행동 ───────────────────────────────────────────────────────

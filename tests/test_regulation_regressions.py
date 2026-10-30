@@ -266,7 +266,8 @@ def test_the_operating_manual_is_the_first_thing_to_read(db):
     assert first["text"].index("사용매뉴얼(지자체용)") < first["text"].index("지표매뉴얼")
     assert "(2025년 자료)" in first["text"]
     first_section = next(s for s in task_manual.build(db, task_id).sections if s.key == "first")
-    assert first_section.lines[0].startswith("지금 할 일: 이 업무 자료에서 처리 절차를")
+    assert first_section.lines[0].startswith("인수 직후에는 이번 회차 요청 공문")
+    assert any(line.startswith("지금 할 일: 이 업무 자료에서 처리 절차를") for line in first_section.lines)
 
 
 # ── C09 서식의 빈칸 ─────────────────────────────────────────────────

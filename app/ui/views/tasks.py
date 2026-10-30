@@ -863,6 +863,10 @@ class TasksView(WorkspaceMixin, QWidget):
         # 머리에는 확인 상태만 남기고, 원문 근거는 별도 탭에서 확인한다.
         if state != status.INFERRED:
             action_row.addWidget(Badge.state(state))
+        report = self._health_of(task_id)
+        if report is not None and report.missing:
+            lacks = " · ".join(check.label for check in report.missing)
+            action_row.addWidget(muted_label(f"아직 없는 것 — {lacks}", small=True))
 
         cycle = self.db.task_cycle(task_id)
         work = workcard.build(self.db, task_id)
@@ -888,6 +892,13 @@ class TasksView(WorkspaceMixin, QWidget):
 
         self.tabs.select(self._tab if self._tab in dict(DETAIL_TABS) else WORK if self._tab in (WHEN, HOW) else "guide")
         self.stack.setCurrentWidget(self.pages[self._tab])
+
+    def _health_of(self, task_id: int):
+        """업무 하나의 건강도. 목록과 같은 규칙을 쓴다(core/health.py)."""
+        for row in self.db.task_health_inputs():
+            if row["task_id"] == task_id:
+                return health.evaluate(row)
+        return None
 
     def _render_reading(self, column: QVBoxLayout, picks, *, sidecar=False) -> None:
         column.addWidget(hint_row("이 순서로 읽으세요", DETAIL_HINTS[READ]))
@@ -2498,7 +2509,8 @@ _RUN_BUTTONS = {
     workstate.DONE: (("완료 취소", workstate.IN_PROGRESS),),
 }
 _GAP_LABEL = {"missing": "자료 없음", "conflict": "자료가 엇갈림", "stale": "지난 기한",
-              "changed": "이전과 다름"}
+              "changed": "이전과 다름", "unanswered_official": "회신 미확인",
+              "unregistered_final": "등록 미확인", "missing_attachment": "붙임 누락"}
 
 
 def _split_tag(text: str) -> tuple[str, str]:

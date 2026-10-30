@@ -172,3 +172,17 @@ def test_a_pc_file_that_fits_two_letters_equally_is_left_alone(project):
     discover(project, client=None)
     assert set(_tasks(project)) == {"성과평가", "조직진단"}
     assert both not in set().union(*_tasks(project).values())
+
+
+def test_single_letter_without_card_becomes_a_task_when_matched_to_local_file(project):
+    seed = Seed(project)
+    letter = seed.letter("S1", "2025년 상반기 공공데이터 품질진단 결과 제출", "정보화과-301", year=2025)
+    alone = seed.letter("S2", "청사 대청소 실시 알림", "총무과-12", year=2025)
+    local_draft = seed.doc(seed.local, rf"{LOCAL}\공공데이터\공공데이터 품질진단 점검표_초안.xlsx", "draft-1", year=2025)
+
+    assert has_official_tasks(project)
+    discover(project, client=None)
+    tasks = _tasks(project)
+    assert "공공데이터 품질진단" in tasks
+    assert tasks["공공데이터 품질진단"] == {*letter.values(), local_draft}
+    assert alone["body"] not in set().union(*tasks.values())

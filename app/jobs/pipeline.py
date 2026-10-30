@@ -727,18 +727,21 @@ class Pipeline(QObject):
             rows = db.task_grid_documents(task["id"])
             # 받은 자료·참고자료·이전 판의 날짜는 이 일의 일정이 아니다.
             outside = foldersteps.outside_the_work(db, [row["id"] for row in rows])
-            rows = [row for row in rows if row["id"] not in outside]
+            reps = versions.representatives(db, [row["id"] for row in rows])
+            rows = [row for row in rows if row["id"] not in outside and reps.get(row["id"], row["id"]) == row["id"]]
             docs = []
             for row in rows:
+                auth = row["authored_at"] if "authored_at" in row.keys() else None
                 month, trusted = timeline.work_month(
                     row["year"], row["month"], row["eff_date_kind"], row["eff_precision"],
-                    row["fs_mtime"], bulk_days)
+                    row["fs_mtime"], bulk_days, authored_at=auth)
+                auth_day = int(auth[8:10]) if auth and len(auth) >= 10 and auth[8:10].isdigit() else None
                 same = month == row["month"] and row["eff_precision"] == "day"
                 docs.append(timeline.DatedDoc(
                     doc_id=row["id"],
                     year=row["year"],
                     month=month,
-                    day=int(row["eff_date"][8:10]) if same else None,
+                    day=auth_day if auth_day is not None else (int(row["eff_date"][8:10]) if same else None),
                     trustworthy=trusted,
                 ))
             # 문서가 스스로 적은 일정·기한('6. 17.(월) 한', '…까지 제출')의 달도 넣는다.
@@ -850,20 +853,24 @@ class Pipeline(QObject):
                     continue
                 rows = db.task_year_documents(task["id"], year)
                 outside = foldersteps.outside_the_work(db, [row["id"] for row in rows])
-                rows = [row for row in rows if row["id"] not in outside]
+                reps = versions.representatives(db, [row["id"] for row in rows])
+                rows = [row for row in rows if row["id"] not in outside and reps.get(row["id"], row["id"]) == row["id"]]
                 candidates = []
                 for row in rows:
+                    auth = row["authored_at"] if "authored_at" in row.keys() else None
+                    off_title = row["official_title"] if "official_title" in row.keys() else None
                     # 일정 파악과 같은 달을 쓴다 — 본문 속 기간의 달이 아니라 일한 달.
                     month, _ = timeline.work_month(
                         year, row["month"], row["eff_date_kind"], row["eff_precision"],
-                        row["fs_mtime"], bulk_days)
+                        row["fs_mtime"], bulk_days, authored_at=auth)
                     month = month or row["month"]
+                    auth_day = int(auth[8:10]) if auth and len(auth) >= 10 and auth[8:10].isdigit() else None
                     same = month == row["month"] and row["eff_precision"] == "day"
                     candidates.append(timeline.StepCandidate(
                         doc_id=row["id"],
                         month=month,
-                        day=int(row["eff_date"][8:10]) if same else None,
-                        label=_step_label(row["filename"]),
+                        day=auth_day if auth_day is not None else (int(row["eff_date"][8:10]) if same else None),
+                        label=_step_label(off_title or row["filename"]),
                     ))
                 steps = timeline.reconstruct_steps(timeline.condense(candidates, FALLBACK_LABEL), year)
                 with db.transaction():

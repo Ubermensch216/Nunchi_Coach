@@ -262,7 +262,7 @@ class TemplateDialog(QDialog):
 
     def _editor_page(self, column):
         content = QWidget()
-        column.setContentsMargins(0, 4, 4, 8)
+        column.setContentsMargins(0, 0, 4, 0)
         content.setLayout(column)
         scroll = QScrollArea()
         scroll.setObjectName("TemplateEditorScroll")
