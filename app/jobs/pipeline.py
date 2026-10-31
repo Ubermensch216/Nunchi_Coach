@@ -184,12 +184,7 @@ class Pipeline(QObject):
                     run_jobs(db, should_stop=self._stopped)
                 except Exception as exc:
                     diagnostics.record('knowledge.jobs.error', exc)
-            if not self._stop:
-                from ..core import notebook_tasks
-                try:
-                    notebook_tasks.auto_generate_for_tasks(db)
-                except Exception as exc:
-                    diagnostics.record('notebook.auto_generate.error', exc)
+
             db.audit("pipeline.stop", result="cancelled" if self._stop else "completed")
             db.set_meta("analysis_run_state", "cancelled" if self._stop else "completed")
             diagnostics.record("pipeline.stop")
@@ -732,6 +727,29 @@ class Pipeline(QObject):
 
 
 
+    @staticmethod
+    def _is_task_stale(db: Database, task_id: int) -> bool:
+        """새 문서가 들어왔거나 내용이 바뀌었거나 업무가 수정되었으면 True."""
+        row = db.con.execute(
+            "SELECT state, finished_at FROM task_analysis_state WHERE task_id = ?", (task_id,)
+        ).fetchone()
+        if not row or row["state"] != "completed" or not row["finished_at"]:
+            return True
+        fin = row["finished_at"]
+        stale_doc = db.con.execute(
+            "SELECT 1 FROM task_docs td "
+            "JOIN documents d ON d.id = td.doc_id "
+            "WHERE td.task_id = ? AND (d.fs_mtime > ? OR d.first_seen > ? OR d.parse_status = 'pending') "
+            "LIMIT 1",
+            (task_id, fin, fin)
+        ).fetchone()
+        if stale_doc:
+            return True
+        task_row = db.con.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        if task_row and task_row["status"] == "edited":
+            return True
+        return False
+
     def _analyze_by_tasks(self, db: Database) -> None:
         """S5: 파이프라인 뒤 단계를 업무 단위로 나누어 집중 분석한다."""
         tasks = _order_tasks_for_analysis(db)
@@ -750,6 +768,31 @@ class Pipeline(QObject):
         docrole.reset_outdated(db)
         docyears.refresh_outdated(db)
 
+        # 문서 갈래 확인 및 판 묶음 사전 구축 (대표본 기준 분석을 위해 선행)
+        pending = docrole.pending(db)
+        report_roles = StageReport(STAGE_ROLES, total=len(pending))
+        if pending:
+            for start in range(0, len(pending), COMMIT_EVERY):
+                if self._stop:
+                    break
+                batch = pending[start:start + COMMIT_EVERY]
+                docrole.classify_documents(db, batch)
+                docyears.mark_documents(db, batch)
+                report_roles.done = start + len(batch)
+                self.progress.emit(STAGE_ROLES, report_roles.done, len(pending), "")
+        groups = 0 if self._stop else versions.rebuild(db)
+        report_roles.note = (f"문서 {report_roles.done:,}건의 갈래 확인" if pending
+                             else "새로 확인할 문서가 없습니다")
+        if groups:
+            report_roles.note += f" · 판 묶음 {groups:,}개"
+        self._report(db, report_roles)
+
+        if self._stop:
+            return
+
+        # 근거 다시 잇기
+        transfer.relink_evidence(db)
+
         bulk_days = timeline.bulk_copy_days(
             (row["fs_mtime"], str(Path(row["path"]).parent)) for row in db.con.execute(
                 "SELECT fs_mtime, path FROM documents WHERE missing_since IS NULL"))
@@ -760,15 +803,26 @@ class Pipeline(QObject):
             if candidate.health().generation_ready:
                 client = candidate
 
-        for task in tasks:
+        # 전역 복원 연산 사전 수행 (matters, common_skeletons, relations 1회 계산)
+        prep = reconstruction.prepare_restore(db, tasks=tasks, statements=True, should_stop=self._stopped)
+
+        report_cycles = StageReport(STAGE_CYCLES, total=len(tasks))
+        report_steps = StageReport(STAGE_STEPS, total=len(tasks))
+        report_restore = StageReport(STAGE_RESTORE, total=len(tasks))
+
+        total_restore_totals = {
+            "tasks": 0, "items": 0, "added": 0, "updated": 0, "removed": 0,
+            "recheck": 0, "conflicts": 0, "steps": 0, "stated_steps": 0, "gaps": 0,
+            "statements": 0, "matters": prep["matters"],
+            "matter_answers": prep["matter_answers"], "changes": 0
+        }
+
+        for index, task in enumerate(tasks, start=1):
             if self._stop:
                 break
             task_id = task["id"]
 
-            row_state = db.con.execute(
-                "SELECT state FROM task_analysis_state WHERE task_id = ?", (task_id,)
-            ).fetchone()
-            if row_state and row_state[0] == "completed":
+            if not self._is_task_stale(db, task_id):
                 continue
 
             with db.transaction():
@@ -778,31 +832,32 @@ class Pipeline(QObject):
                     (task_id,),
                 )
 
-            # 1. 문서 갈래
             task_doc_rows = db.task_documents(task_id)
             task_doc_ids = [r["id"] for r in task_doc_rows]
-            pending_batch = [did for did in task_doc_ids if not db.con.execute("SELECT 1 FROM doc_roles WHERE doc_id = ?", (did,)).fetchone()]
-            if pending_batch:
-                docrole.classify_documents(db, pending_batch)
-                docyears.mark_documents(db, pending_batch)
-
-            if self._stop:
-                break
 
             # 2. 일정
             self._analyze_single_task_cycles(db, task, bulk_days)
+            self.progress.emit(STAGE_CYCLES, index, len(tasks), task["name"])
 
             if self._stop:
                 break
 
             # 3. 처리 순서
             self._analyze_single_task_steps(db, task, bulk_days)
+            self.progress.emit(STAGE_STEPS, index, len(tasks), task["name"])
 
             if self._stop:
                 break
 
-            # 4. 복원
-            reconstruction.restore(db, tasks=[task], should_stop=self._stopped, client=client)
+            # 4. 복원 (전역 계산 재사용)
+            t_totals = reconstruction.restore(
+                db, tasks=[task], should_stop=self._stopped, client=client,
+                common=prep["common"], related=prep["related"], skip_global=True
+            )
+            for k, v in t_totals.items():
+                if k in total_restore_totals and k not in ("matters", "matter_answers"):
+                    total_restore_totals[k] += v
+            self.progress.emit(STAGE_RESTORE, index, len(tasks), task["name"])
 
             if self._stop:
                 break
@@ -831,7 +886,7 @@ class Pipeline(QObject):
 
             self.task_analyzed.emit(task_id)
 
-            if len(task_doc_ids) >= 2 and not task["not_a_task"]:
+            if (len(task_doc_ids) >= 2 and not task["not_a_task"] and not task["merged_into"] and (task["kind"] != "loose" if "kind" in task.keys() else True)):
                 try:
                     from ..core import notebook_tasks
                     notebook_tasks.open_for_task(db, task_id, client=None)
@@ -839,16 +894,27 @@ class Pipeline(QObject):
                     diagnostics.record("notebook.task_analyzed.error", exc)
 
         if not self._stop:
-            pending = docrole.pending(db)
-            if pending:
-                for start in range(0, len(pending), COMMIT_EVERY):
-                    if self._stop:
-                        break
-                    batch = pending[start:start + COMMIT_EVERY]
-                    docrole.classify_documents(db, batch)
-                    docyears.mark_documents(db, batch)
-            versions.rebuild(db)
+            db.set_meta("cycles_checked", "1")
             db.set_meta("steps_checked", "1")
+            db.set_meta("items_checked", "1")
+
+            report_cycles.done = len(tasks)
+            report_cycles.note = f"반복 업무 {len(tasks)}개 분석"
+            self._report(db, report_cycles)
+
+            report_steps.done = len(tasks)
+            report_steps.note = f"업무별 처리 단계 재구성 완료"
+            self._report(db, report_steps)
+
+            report_restore.done = len(tasks)
+            report_restore.note = f"항목 {total_restore_totals['items']:,}개 복원"
+            saved = handover_release.autosave(db)
+            if saved and saved[1]:
+                report_restore.note += " · 복원본 저장"
+            from ..core.knowledge.lifecycle import schedule_tasks
+            schedule_tasks(db)
+
+            self._report(db, report_restore)
 
     def _analyze_single_task_cycles(self, db: Database, task, bulk_days) -> None:
         rows = db.task_grid_documents(task["id"])
@@ -883,28 +949,28 @@ class Pipeline(QObject):
             years_seen = {row["year"] for row in db.task_grid_documents(task["id"])}
             periodic = asked and db.con.execute(
                 "SELECT 1 FROM documents WHERE id IN (%s) AND (filename LIKE '%%년도%%' "
-                "OR filename LIKE '%%분기%%' OR filename LIKE '%%반기%%')" %
-                ",".join("?" * len(asked)), [d for d, _ in asked]).fetchone()
-            if asked and (periodic or len(years_seen) >= 2):
-                month = asked[0][1].month
-                evidence = "매년 오는 요청 공문의 제출 기한입니다."
+                "OR filename LIKE '%%상반기%%' OR filename LIKE '%%하반기%%' OR filename LIKE '%%분기%%')"
+                % ", ".join("?" * len(asked)), [doc for doc, _when in asked]).fetchone()
+            if asked and (len(years_seen) >= 2 or periodic):
+                newest = max(when.year for _doc, when in asked)
+                latest = [when for _doc, when in asked if when.year == newest]
+                months = sorted({when.month for when in latest})
+                days = {(when.month, when.day) for when in latest}
                 cycles.append({
-                    "kind": "yearly", "months": str(month),
-                    "day_hint": timeline.cycle_day_hint([asked[0][1]]),
-                    "years_observed": max(1, len(years_seen)),
-                    "confidence": "low",
-                    "evidence": evidence,
+                    "kind": timeline.YEARLY, "months": ",".join(str(m) for m in months),
+                    "day_hint": f"{next(iter(days))[1]}일까지" if len(days) == 1 else None,
+                    "years_observed": 1, "confidence": "low",
+                    "evidence": ",".join(str(doc) for doc, _when in asked[:10]),
                 })
         else:
-            evidence = ("매년 특정 달에 집중된 문서들의 작성 시점입니다."
-                        if guess.kind == "yearly" else "매월 고르게 작성된 문서들의 시점입니다.")
+            hint = timeline.day_hint(docs, None) if guess.kind == timeline.MONTHLY else None
             cycles.append({
                 "kind": guess.kind,
                 "months": ",".join(str(m) for m in guess.months),
-                "day_hint": guess.day_hint,
+                "day_hint": hint,
                 "years_observed": guess.years_observed,
                 "confidence": guess.confidence,
-                "evidence": evidence,
+                "evidence": ",".join(str(i) for i in guess.evidence_doc_ids),
             })
         with db.transaction():
             db.replace_task_cycles(task["id"], cycles)

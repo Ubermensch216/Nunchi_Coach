@@ -1540,8 +1540,30 @@ def _link_stated_order(db, task_id: int) -> None:
         previous = row["id"]
 
 
+def prepare_restore(db, tasks=None, statements: bool = True, should_stop=lambda: False) -> dict:
+    """복원에 앞서 전체를 한 번만 계산하면 되는 항목들을 준비한다."""
+    from . import matter_trail, matters, relations
+    from . import statements as statement_finder
+
+    tasks = list(tasks) if tasks is not None else db.tasks()
+    all_ids = [task["id"] for task in tasks]
+    matters_count = matters.rebuild(db, should_stop)["matters"]
+    trail = matter_trail.link(db, should_stop)
+    answers_count = trail["answered"] + trail["decided"]
+    common = (statement_finder.common_skeletons(db, all_ids)
+              if statements else frozenset())
+    related = relations.find(db)
+    return {
+        "matters": matters_count,
+        "matter_answers": answers_count,
+        "common": common,
+        "related": related,
+    }
+
+
 def restore(db, basis: date | None = None, should_stop=lambda: False,
-            client=None, statements: bool = True, tasks=None) -> dict[str, int]:
+            client=None, statements: bool = True, tasks=None,
+            common=None, related=None, skip_global: bool = False) -> dict[str, int]:
     """모든 업무의 항목과 수행 단계를 자료에서 다시 읽어 맞춘다.
 
     전임자 정보 없이 시작한다. 시작 맥락이 아직 없으면 '자료로 시작'으로
@@ -1565,16 +1587,24 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
     tasks = list(tasks) if tasks is not None else db.tasks()
     if not tasks:
         return totals
-    # 건 목록을 먼저 세운다. 업무의 다음 행동이 '이번 회차 건 중 회신이 없는 것'을 묻는다.
-    totals["matters"] = matters.rebuild(db, should_stop)["matters"]
-    # 건이 목록 밖의 공문·붙임에 나온 곳 — 회신의 체크 표시, 심의·의결 결과, 시행 근거 후보.
-    trail = matter_trail.link(db, should_stop)
-    totals["matter_answers"] = trail["answered"] + trail["decided"]
+    if not skip_global:
+        # 건 목록을 먼저 세운다. 업무의 다음 행동이 '이번 회차 건 중 회신이 없는 것'을 묻는다.
+        totals["matters"] = matters.rebuild(db, should_stop)["matters"]
+        # 건이 목록 밖의 공문·붙임에 나온 곳 — 회신의 체크 표시, 심의·의결 결과, 시행 근거 후보.
+        trail = matter_trail.link(db, should_stop)
+        totals["matter_answers"] = trail["answered"] + trail["decided"]
+        if common is None:
+            common = (statement_finder.common_skeletons(db, [task["id"] for task in tasks])
+                      if statements else frozenset())
+        if related is None:
+            related = relations.find(db)
+    else:
+        if common is None:
+            common = frozenset()
+        if related is None:
+            related = relations.find(db)
     context = db.work_context()
     context_id = context["id"] if context else db.start_work_context()
-    common = (statement_finder.common_skeletons(db, [task["id"] for task in tasks])
-              if statements else frozenset())
-    related = relations.find(db)
 
     for task in tasks:
         if should_stop():

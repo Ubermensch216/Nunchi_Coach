@@ -85,3 +85,71 @@ def test_analyze_by_tasks_emits_signal_and_persists_state(sample_db: Database):
     emitted.clear()
     pipe._analyze_by_tasks(db)
     assert len(emitted) == 0
+
+
+def test_analyze_by_tasks_sets_meta_flags_and_reports(sample_db: Database):
+    db = sample_db
+    t1 = db.con.execute("INSERT INTO tasks(name, origin, status) VALUES ('시설관리', 'ai', 'proposed')").lastrowid
+    db.con.execute("INSERT INTO task_docs(task_id, doc_id, origin, confidence) VALUES (?, 1, 'ai', 'high')", (t1,))
+    db.con.commit()
+
+    pipe = Pipeline(db.path)
+    stages = []
+    pipe.stage_done.connect(lambda r: stages.append(r.stage))
+
+    pipe._analyze_by_tasks(db)
+
+    # 메타 플래그 세팅 확인
+    assert db.get_meta("cycles_checked") == "1"
+    assert db.get_meta("steps_checked") == "1"
+    assert db.get_meta("items_checked") == "1"
+
+    # StageReport 방출 확인 (roles, cycles, steps, restore)
+    from app.jobs.pipeline import STAGE_ROLES, STAGE_CYCLES, STAGE_STEPS, STAGE_RESTORE
+    assert STAGE_ROLES in stages
+    assert STAGE_CYCLES in stages
+    assert STAGE_STEPS in stages
+    assert STAGE_RESTORE in stages
+
+
+def test_analyze_by_tasks_reanalyzes_on_doc_change(sample_db: Database):
+    db = sample_db
+    t1 = db.con.execute("INSERT INTO tasks(name, origin, status) VALUES ('시설관리', 'ai', 'proposed')").lastrowid
+    db.con.execute("INSERT INTO task_docs(task_id, doc_id, origin, confidence) VALUES (?, 1, 'ai', 'high')", (t1,))
+    db.con.commit()
+
+    pipe = Pipeline(db.path)
+    emitted = []
+    pipe.task_analyzed.connect(emitted.append)
+
+    pipe._analyze_by_tasks(db)
+    assert emitted == [t1]
+
+    # 완료 후 다시 돌리면 스킵
+    emitted.clear()
+    pipe._analyze_by_tasks(db)
+    assert len(emitted) == 0
+
+    # 문서 mtime을 미래로 업데이트하면 stale 감지되어 재분석됨
+    db.con.execute("UPDATE documents SET fs_mtime = '2099-01-01T00:00:00' WHERE id = 1")
+    db.con.commit()
+
+    pipe._analyze_by_tasks(db)
+    assert emitted == [t1]
+
+
+def test_single_task_cycles_evidence_is_doc_id_list(sample_db: Database):
+    from app.ui.views.evidence import for_cycle
+    db = sample_db
+    t1 = db.con.execute("INSERT INTO tasks(name, origin, status) VALUES ('시설관리', 'ai', 'proposed')").lastrowid
+    db.con.execute("INSERT INTO task_docs(task_id, doc_id, origin, confidence) VALUES (?, 1, 'ai', 'high')", (t1,))
+    db.con.commit()
+
+    pipe = Pipeline(db.path)
+    pipe._analyze_by_tasks(db)
+
+    cycle = db.task_cycle(t1)
+    if cycle:
+        # evidence가 빈 문자열이거나 쉼표 구분 doc_id여야 하고 for_cycle 호출 시 에러가 없어야 함
+        ev_list = for_cycle(db, cycle)
+        assert isinstance(ev_list, list)

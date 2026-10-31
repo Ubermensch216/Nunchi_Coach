@@ -154,8 +154,8 @@ def test_conflict_gap_lays_both_sources_side_by_side(db):
     rc.restore(db, BASIS)
     gap = gaps(db)["conflict:deadline:제출기한"]
     assert gap["field"] == "기한 · 제출기한" and gap["item_id"]
-    assert "제출기한: 2025-09-30 — 시행공문.hwpx (2025-09-01 · 개인 폴더 자료)" in gap["research"]
-    assert "제출기한: 2025-09-26 — 메모.hwpx (2025-09-05 · 개인 폴더 자료)" in gap["research"]
+    assert "제출기한: 2025-09-30 — 시행공문.hwpx (2025-09-01 · 개인 폴더 자료(PC 파일))" in gap["research"]
+    assert "제출기한: 2025-09-26 — 메모.hwpx (2025-09-05 · 개인 폴더 자료(PC 파일))" in gap["research"]
     assert "확정 전에도" in gap["next_action"]
     assert gap["step_id"] == stated(db)[-1]["id"]
     assert not stated(db)[0]["blocked"]
