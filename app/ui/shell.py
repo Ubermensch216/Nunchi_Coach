@@ -356,6 +356,7 @@ class MainWindow(QMainWindow):
         # 업무 상세에서 일정으로 넘어간다.
         self.views["tasks"].go_calendar.connect(self.views["tasks"]._show_schedule)
         self.views["tasks"].open_notebook.connect(self._open_notebook_for_task)
+        self.views["notebooks"].go_task.connect(self._open_task_from_calendar)
         self.views["today"].workbox_opener = self.views["tasks"]._open_workbox
         self.views["today"].open_task.connect(self._open_task_from_calendar)
         self.views["today"].changed.connect(self._sync_today)

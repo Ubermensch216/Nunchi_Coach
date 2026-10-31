@@ -723,6 +723,10 @@ class TasksView(WorkspaceMixin, QWidget):
         next_act = ""
         if work.actions:
             next_act = work.actions[0].get("text", "")
+        state_row = self.db.con.execute(
+            "SELECT state FROM task_analysis_state WHERE task_id = ?", (row["id"],)
+        ).fetchone()
+        ana_state = state_row[0] if state_row else ""
         card = WorkFolderCard(
             task_id=row["id"],
             name=row["name"],
@@ -733,8 +737,10 @@ class TasksView(WorkspaceMixin, QWidget):
             next_action=next_act,
             confidence=row["confidence"],
             review_state=status.of_task(row),
+            analysis_state=ana_state,
         )
         card.opened.connect(self.open_task)
+        card.open_manual.connect(self.open_notebook.emit)
         return card
 
     def _render_leftovers(self, counts: dict) -> None:

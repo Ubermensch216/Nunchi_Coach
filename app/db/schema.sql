@@ -620,3 +620,26 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_logs(at);
+
+-- ── 업무분장·업무기술서 항목 (v14) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS charter_items (
+    id         INTEGER PRIMARY KEY,
+    doc_id     INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    locator    TEXT NOT NULL DEFAULT '',
+    name       TEXT NOT NULL,
+    parent_id  INTEGER REFERENCES charter_items(id) ON DELETE CASCADE,
+    owner      TEXT NOT NULL DEFAULT '',
+    weight     REAL NOT NULL DEFAULT 1.0,
+    decided_by TEXT NOT NULL DEFAULT 'ai',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_charter_items_doc ON charter_items(doc_id);
+CREATE INDEX IF NOT EXISTS idx_charter_items_parent ON charter_items(parent_id);
+
+-- ── 업무별 집중 분석 상태 (v14) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS task_analysis_state (
+    task_id     INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+    stage       TEXT NOT NULL DEFAULT 'all',
+    state       TEXT NOT NULL DEFAULT 'pending',
+    finished_at TEXT
+);

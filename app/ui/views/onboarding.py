@@ -21,12 +21,15 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QHeaderView,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from ...bridge import service as bridge_service
-from ...core import onnara_import
+from ...core import onnara_import, survey
 from ...db import Database
 from ...ingest.parsers import supported_extensions
 from .. import icons, theme
@@ -179,6 +182,27 @@ class OnboardingView(QWidget):
         card.body.addWidget(foot)
 
         outer.addWidget(card)
+
+        # 자료 지도 (개괄) 카드 — 스캔 직후 분석 중이어도 바로 확인 가능
+        self.survey_card = Card()
+        self.survey_card.body.addWidget(section_title("자료 지도 (개괄)"))
+        self.survey_card.body.addWidget(
+            muted_label("분석이 진행 중이어도 지금 볼 수 있는 자료 구조와 규모입니다.", small=True)
+        )
+        self.survey_summary = muted_label("", small=True)
+        self.survey_card.body.addWidget(self.survey_summary)
+
+        self.survey_tree = QTreeWidget()
+        self.survey_tree.setHeaderLabels(["폴더 (업무 후보)", "문서 수", "연도 띠", "업무 비중"])
+        self.survey_tree.setFixedHeight(220)
+        self.survey_tree.setAlternatingRowColors(True)
+        self.survey_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.survey_tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.survey_tree.header().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.survey_tree.header().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.survey_card.body.addWidget(self.survey_tree)
+        self.survey_card.setVisible(False)
+        outer.addWidget(self.survey_card)
 
         self.list.itemSelectionChanged.connect(
             lambda: self.remove.setEnabled(bool(self.list.selectedItems()))
@@ -373,6 +397,47 @@ class OnboardingView(QWidget):
 
     def refresh(self) -> None:
         self.sync_requests()
+        self.sync_survey()
+
+    def sync_survey(self) -> None:
+        sv = survey.get_survey(self.db)
+        if not sv or sv.total_files == 0:
+            self.survey_card.setVisible(False)
+            return
+
+        self.survey_summary.setText(
+            f"총 문서 {sv.total_docs:,}건 · 전체 파일 {sv.total_files:,}개 · {_human(sv.total_size)} · "
+            f"중복 해시 {sv.duplicate_hash_ratio * 100:.1f}% · 비문서 {sv.non_doc_ratio * 100:.1f}%"
+        )
+
+        self.survey_tree.clear()
+
+        def _add_nodes(parent_item, folder_node: survey.FolderSurvey):
+            sorted_years = sorted(folder_node.years.items())
+            year_band = " ".join(f"{y}({c})" for y, c in sorted_years[-4:])
+            weight_str = f"{int(folder_node.weight * 100)}%" if folder_node.weight > 0 else "-"
+            item = QTreeWidgetItem([
+                folder_node.name,
+                f"{folder_node.doc_count:,}건",
+                year_band or "-",
+                weight_str,
+            ])
+            if parent_item is None:
+                self.survey_tree.addTopLevelItem(item)
+            else:
+                parent_item.addChild(item)
+            for ch in folder_node.children:
+                _add_nodes(item, ch)
+
+        for rf in sv.root_folders:
+            if rf.children:
+                for ch in rf.children:
+                    _add_nodes(None, ch)
+            else:
+                _add_nodes(None, rf)
+
+        self.survey_tree.expandToDepth(0)
+        self.survey_card.setVisible(True)
 
 
 def _source_kind(path: Path) -> str:

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
 
 from ....core import notebook
@@ -15,6 +16,7 @@ __all__ = ["NotebooksView", "NotebookHome", "NotebookWorkspace"]
 
 
 class NotebooksView(QWidget):
+    go_task = Signal(int)
     def __init__(self, db, parent: QWidget | None = None):
         super().__init__(parent)
         self.db = db
@@ -28,6 +30,7 @@ class NotebooksView(QWidget):
         self.stack.addWidget(self.workspace)
         self.home.opened.connect(self.open_notebook)
         self.workspace.back.connect(self.show_home)
+        self.workspace.go_task.connect(self.go_task.emit)
         # 셸의 종료 절차가 안쪽 작업도 기다린다(ui/shell.py shutdown).
         self._runner = self.workspace.chat._runner
         self._warmup = self.workspace.chat._warmup

@@ -44,6 +44,7 @@ CHAT_MIN_W = 420
 
 class NotebookWorkspace(QWidget):
     back = Signal()
+    go_task = Signal(int)
 
     def __init__(self, db, parent: QWidget | None = None):
         super().__init__(parent)
@@ -78,6 +79,12 @@ class NotebookWorkspace(QWidget):
         bar.addWidget(self.rename_button)
         self.archived_badge = Badge("보관됨")
         bar.addWidget(self.archived_badge)
+        self.task_button = QPushButton("업무 카드로")
+        self.task_button.setObjectName("Quiet")
+        self.task_button.setToolTip("연결된 업무 카드로 이동합니다")
+        self.task_button.clicked.connect(self._on_go_task)
+        self.task_button.hide()
+        bar.addWidget(self.task_button)
         bar.addStretch(1)
         self.toggles: dict[str, QPushButton] = {}
         for key in PANELS:
@@ -179,6 +186,17 @@ class NotebookWorkspace(QWidget):
             self.banner.setMessage("보관한 업무노트입니다. 자료와 대화는 읽을 수 있지만 질문·수정은 "
                                    "보관을 해제한 뒤에 할 수 있습니다(홈의 ••• 메뉴).")
         self.banner.setVisible(bool(row["archived"]))
+        task_id = row["task_id"] if "task_id" in row.keys() else None
+        if task_id:
+            self._current_task_id = task_id
+            self.task_button.show()
+        else:
+            self._current_task_id = None
+            self.task_button.hide()
+
+    def _on_go_task(self) -> None:
+        if getattr(self, "_current_task_id", None):
+            self.go_task.emit(self._current_task_id)
 
     def _rename(self) -> None:
         row = notebook.require(self.db, self.notebook_id, active=False)

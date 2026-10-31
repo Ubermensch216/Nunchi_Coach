@@ -117,6 +117,22 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+
+def _charter_parent_map(db) -> dict[str, str]:
+    """charter_items에서 (세부업무 name) -> (대업무 name) 매핑 생성."""
+    out = {}
+    try:
+        rows = db.con.execute("""
+            SELECT c.name AS child_name, p.name AS parent_name
+            FROM charter_items c
+            JOIN charter_items p ON p.id = c.parent_id
+        """).fetchall()
+        for r in rows:
+            out[r["child_name"]] = r["parent_name"]
+    except Exception:
+        pass
+    return out
+
 def _official_meta(db) -> dict[int, dict]:
     """doc_id -> 공문 메타데이터(문서번호·제목·기안일·역할)."""
     out: dict[int, dict] = {}
@@ -183,6 +199,7 @@ def export_handover_folder(
     tasks = sorted(db.tasks(), key=lambda t: t["id"])
     result = HandoverFolderResult(root=target_root, unclassified_count=db.unclassified_count())
 
+    parent_map = _charter_parent_map(db)
     used_task_dirs: set[str] = set()
     for task in tasks:
         task_id = task["id"]
@@ -193,7 +210,11 @@ def export_handover_folder(
             dir_name = f"{base_dir_name}_{suffix}"
             suffix += 1
         used_task_dirs.add(dir_name.casefold())
-        task_dir = target_root / dir_name
+        parent_name = parent_map.get(task["name"])
+        if parent_name:
+            task_dir = target_root / _safe_name(parent_name) / dir_name
+        else:
+            task_dir = target_root / dir_name
         task_dir.mkdir(parents=True, exist_ok=True)
         result.tasks_exported += 1
 
@@ -390,6 +411,36 @@ def _build_root_readme(
         if result.unclassified_count > len(unclassified_rows):
             head.append(f"- 외 {result.unclassified_count - len(unclassified_rows):,}건")
         head.append("")
+
+    comparison_json = db.get_meta("charter_comparison")
+    if comparison_json:
+        try:
+            comp = json.loads(comparison_json)
+            charter_only = comp.get("charter_only", [])
+            data_only = comp.get("data_only", [])
+            if charter_only or data_only:
+                head.extend([
+                    "## 업무분장표 ↔ 자료 대조 현황",
+                    "",
+                ])
+                if charter_only:
+                    head.extend([
+                        "### ⚠️ 분장표에는 있으나 PC 자료를 찾지 못한 업무",
+                        "> 신설 업무이거나 온나라/공용 폴더 등 다른 저장소에 자료가 있을 수 있습니다.",
+                        "",
+                        *[f"- **{item['name']}**" for item in charter_only],
+                        "",
+                    ])
+                if data_only:
+                    head.extend([
+                        "### 📁 자료는 발견되었으나 분장표에 명시되지 않은 업무",
+                        "> 전임자가 비공식적으로 수행했거나 이전 담당자로부터 이관된 업무일 수 있습니다.",
+                        "",
+                        *[f"- **{item['name']}** ({item.get('doc_count', 0)}건)" for item in data_only],
+                        "",
+                    ])
+        except Exception:
+            pass
 
     head.extend(["---", "", report_md])
     return "\n".join(head)

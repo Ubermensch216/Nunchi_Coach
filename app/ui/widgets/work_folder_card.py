@@ -16,6 +16,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import (
     QFrame,
+    QPushButton,
     QHBoxLayout,
     QLabel,
     QSizePolicy,
@@ -32,6 +33,7 @@ class WorkFolderCard(_WrapFrame):
     """큼직한 묶음 형태의 업무 카드."""
 
     opened = Signal(int)
+    open_manual = Signal(int)
 
     def __init__(
         self,
@@ -45,6 +47,7 @@ class WorkFolderCard(_WrapFrame):
         next_action: str = "",
         review_state: str = "",
         confidence: str = "high",
+        analysis_state: str = "",
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -70,6 +73,7 @@ class WorkFolderCard(_WrapFrame):
             next_action=next_action,
             review_state=review_state,
             confidence=confidence,
+            analysis_state=analysis_state,
         )
 
     @property
@@ -87,6 +91,7 @@ class WorkFolderCard(_WrapFrame):
         next_action: str,
         review_state: str,
         confidence: str,
+        analysis_state: str = "",
     ) -> None:
         outer = QVBoxLayout(self)
         outer.setContentsMargins(18, 16, 18, 16)
@@ -105,6 +110,11 @@ class WorkFolderCard(_WrapFrame):
         top_row.addWidget(self.tab_indicator)
 
         top_row.addStretch(1)
+
+        if analysis_state == "running":
+            top_row.addWidget(Badge("분석 중", "neutral"))
+        elif analysis_state == "completed":
+            top_row.addWidget(Badge("분석 완료", "ok"))
 
         if review_state and review_state != "inferred":
             top_row.addWidget(Badge.state(review_state))
@@ -142,6 +152,14 @@ class WorkFolderCard(_WrapFrame):
         outer.addWidget(self.month_strip)
 
         outer.addStretch(1)
+
+        # 6. AI 매뉴얼 버튼
+        self.manual_btn = QPushButton("AI 매뉴얼 열기")
+        self.manual_btn.setObjectName("Quiet")
+        self.manual_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.manual_btn.setToolTip(f"{name} 업무 매뉴얼(노트북)을 엽니다")
+        self.manual_btn.clicked.connect(lambda: self.open_manual.emit(self.task_id))
+        outer.addWidget(self.manual_btn)
 
         # 6. 하단 메타 정보 (규모 / 주기 요약)
         bottom_row = QHBoxLayout()
@@ -236,7 +254,8 @@ class WorkFolderCard(_WrapFrame):
             self.tab_indicator.setStyleSheet(
                 f"background-color: {self.cover_color}; border-radius: 4px;"
             )
-            self.hint_label.setStyleSheet(
-                f"color: {self.cover_color};"
-            )
+            if hasattr(self, "hint_label"):
+                self.hint_label.setStyleSheet(
+                    f"color: {self.cover_color};"
+                )
         super().changeEvent(event)

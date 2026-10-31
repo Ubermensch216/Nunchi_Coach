@@ -384,3 +384,87 @@ def open_for_task(db, task_id: int, client=None) -> Opened:
         except Exception as exc:
             opened.warnings.append(f"업무 문서를 연결하지 못했습니다: {type(exc).__name__}: {exc}")
     return opened
+
+
+def auto_generate_for_tasks(db) -> list[int]:
+    """분석 완료 후 적격 업무들에 대해 자동으로 업무노트(AI 매뉴얼)를 사전 생성한다.
+
+    대상:
+      - not_a_task=0, merged_into IS NULL
+      - loose(묶음) 업무 제외
+      - 문서 2건 이상
+    모델 호출 없이 규칙 기반 정리본만 넣는다.
+    """
+    created_ids = []
+    for task in db.tasks():
+        if task["not_a_task"] or task["merged_into"]:
+            continue
+        if "kind" in task.keys() and task["kind"] == "loose":
+            continue
+        docs = [row for row in db.task_documents(task["id"])
+                if row["hash"] and not row["missing_since"] and row["parse_status"] in ("ok", "partial")]
+        if len(docs) < 2:
+            continue
+        try:
+            opened = open_for_task(db, task["id"], client=None)
+            if opened.created:
+                created_ids.append(opened.notebook_id)
+        except Exception:
+            pass
+    return created_ids
+
+
+def archive_for_task(db, task_id: int, archive: bool = True) -> None:
+    """업무 합치기 또는 '업무 아님' 시 해당 업무의 노트북을 보관(archive) 처리하거나 복원한다."""
+    with db.transaction():
+        db.con.execute(
+            "UPDATE notebooks SET archived=?, updated_at=datetime('now') WHERE task_id=?",
+            (1 if archive else 0, task_id),
+        )
+
+
+def suggested_questions(db, task_id: int) -> list[str]:
+    """S6: 업무 종류·다음 일정·공백에서 만든 추천 질문 5개."""
+    task = _task(db, task_id)
+    questions = []
+
+    # 1. 기한 및 제출처
+    items = db.task_items(task_id)
+    has_deadline = any(i["kind"] == rc.DEADLINE for i in items)
+    if has_deadline:
+        questions.append("다음 제출 기한과 제출처는 어디인가요?")
+    else:
+        questions.append("이 업무의 정기적인 보고나 제출 기한이 언제인가요?")
+
+    # 2. 서식 및 준비물
+    has_form = any(i["kind"] == rc.FORM for i in items)
+    if has_form:
+        questions.append("작년에는 어떤 서식과 양식으로 제출했나요?")
+    else:
+        questions.append("업무 진행에 필요한 서식이나 증빙 자료는 무엇인가요?")
+
+    # 3. 공문 및 회신
+    off_count = db.con.execute(
+        "SELECT COUNT(*) FROM task_docs td JOIN source_assets a ON a.doc_id=td.doc_id WHERE td.task_id=?",
+        (task_id,)
+    ).fetchone()[0]
+    if off_count > 0:
+        questions.append("접수된 공문 중 후속 조치나 회신이 필요한 건이 있나요?")
+    else:
+        questions.append("이 업무의 근거가 되는 지침이나 상급기관 공문이 있나요?")
+
+    # 4. 일정/절차
+    cycle = db.task_cycle(task_id)
+    if cycle and cycle["kind"] != "none":
+        questions.append("연간 추진 일정과 단계별 처리 순서는 어떻게 되나요?")
+    else:
+        questions.append("이 업무를 시작할 때 가장 먼저 해야 할 일은 무엇인가요?")
+
+    # 5. 확인 필요/주의사항
+    gaps = db.info_gaps(task_id)
+    if gaps:
+        questions.append(f"전임자 자료에서 비어 있는 '{gaps[0]['field']}' 정보는 어떻게 확인하나요?")
+    else:
+        questions.append("전임자가 남긴 메모나 유의사항 중 주의할 점은 무엇인가요?")
+
+    return questions[:5]

@@ -1409,6 +1409,10 @@ class Database(WorkStore, ActionStore):
         )
         self._record("tasks", task_id, "not_a_task", int(not flag), int(flag))
         self.audit("task.not_a_task" if flag else "task.restore", str(task_id))
+        self.con.execute(
+            "UPDATE notebooks SET archived = ?, updated_at = datetime('now') WHERE task_id = ?",
+            (int(flag), task_id),
+        )
 
     def preview_task_edit(self, task_id: int, doc_ids=None) -> dict:
         from .taskedit import preview

@@ -20,6 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 import json
 import re
+from pathlib import Path
 
 from ..core import docrole, folders, scoring, discovery_index
 from ..core.clustering import DEFAULT_MIN_SIZE, Cluster, _tokenize, cluster, common_tokens
@@ -47,6 +48,10 @@ class Discovery:
     named_by_folder: int = 0         # 전임자의 폴더 구조로 찾은 업무
     named_by_official: int = 0       # 온나라 공문으로 세운 업무
     matched_to_official: int = 0     # 공문 업무에 붙인 PC 파일
+    charter_tasks: int = 0           # 분장으로 세운 업무 수
+    charter_matched: int = 0         # 분장 ↔ 자료 매칭 건수
+    charter_only: int = 0            # 분장에는 있으나 자료 없음
+    data_only: int = 0               # 분장 밖 업무 후보
 
     def summary(self) -> str:
         parts = [f"업무 {self.tasks}개", f"배정 {self.assigned:,}건"]
@@ -66,6 +71,8 @@ class Discovery:
             parts.append(f"단일 문서 확인 후보 {self.singleton_candidates}개")
         if self.held_groups:
             parts.append(f"동일 업무 판단 보류 {self.held_groups}개")
+        if self.charter_matched or self.charter_only or self.data_only:
+            parts.append(f"분장 일치 {self.charter_matched}개 · 분장 전용 {self.charter_only}개 · 분장 밖 후보 {self.data_only}개")
         return " · ".join(parts)
 
 
@@ -99,6 +106,10 @@ def _discover(
     # 대응된 PC 파일)는 아래의 폴더·본문 묶기에서 뺀다 — 남은 문서만 지금까지처럼 찾는다.
     official = _official_plan(db, protected)
     excluded = protected | {doc_id for task in official for doc_id in task.claimed}
+
+    # S3: 분장표 기반 업무 체계 대조
+    charter_tasks, charter_claimed, charter_counts = _charter_plan(db, excluded, official)
+
     if store.size:
         import numpy as np
         keep = np.asarray([int(doc) not in excluded for doc in store.ids])
@@ -106,6 +117,38 @@ def _discover(
     # 전임자가 폴더로 일을 정리해 두었으면 그 구조가 다음 단서다. 본문이
     # 닮았는지는 그다음이다. 폴더가 평평하면 plan이 없고, 아래의 본문 묶기로 간다.
     plan = _folder_plan(db, excluded)
+
+    if plan and charter_tasks:
+        for ftask in plan:
+            if ftask.loose:
+                continue
+            matched_charter = next(
+                (ct for ct in charter_tasks if _match_names(ct.name, ftask.name, ct.details)),
+                None
+            )
+            if matched_charter:
+                ftask.name = matched_charter.name
+                if matched_charter.match_kind == "charter_only":
+                    matched_charter.match_kind = "matched"
+                    matched_charter.doc_ids = ftask.doc_ids
+
+    # 대조 결과(세 갈래: matched, charter_only, data_only)
+    charter_matched_names = [t.name for t in charter_tasks if t.match_kind == "matched"]
+    charter_only_names = [t.name for t in charter_tasks if t.match_kind == "charter_only"]
+    data_only_names = [
+        ft.name for ft in (plan or [])
+        if not ft.loose and not any(_match_names(ct.name, ft.name, ct.details) for ct in charter_tasks)
+    ]
+
+    db.set_meta("charter_comparison", json.dumps({
+        "matched": charter_matched_names,
+        "charter_only": charter_only_names,
+        "data_only": data_only_names,
+    }, ensure_ascii=False))
+
+    result.charter_matched = len(charter_matched_names)
+    result.charter_only = len(charter_only_names)
+    result.data_only = len(data_only_names)
     if store.size == 0 and plan is None:
         if official:
             with db.transaction():
@@ -118,7 +161,7 @@ def _discover(
 
     if plan is not None:
         with db.transaction():
-            return _save_folder_discovery(db, result, plan, store, contributions, model, official)
+            return _save_folder_discovery(db, result, plan, store, contributions, model, official, charter_tasks)
 
     kwargs = {}
     if threshold is not None:
@@ -258,6 +301,140 @@ def _protected_documents(db: Database) -> set[int]:
 #      아니면 미분류로 둔다 — 확신 없는 문서를 업무에 밀어 넣지 않는다.
 # 본문을 읽지 못한 문서(스캔 PDF 등)도 폴더가 알려 주는 업무에는 붙인다. 내용은
 # 몰라도 그 일의 자료라는 것은 전임자가 이미 정해 두었다.
+
+
+
+def _match_names(charter_name: str, candidate_name: str, details: list[str] = ()) -> bool:
+    """분장 항목 이름과 폴더/문서 이름이 같은 업무인지 판정한다."""
+    c_clean = re.sub(r"^[0-9_\-\.\s]+", "", charter_name).strip()
+    cand_clean = re.sub(r"^[0-9_\-\.\s]+", "", candidate_name).strip()
+    if not c_clean or not cand_clean:
+        return False
+    c_comp = folders.compact(c_clean)
+    cand_comp = folders.compact(cand_clean)
+    if len(c_comp) >= 2 and (c_comp in cand_comp or cand_comp in c_comp):
+        return True
+    for d in details:
+        d_comp = folders.compact(d)
+        if len(d_comp) >= 2 and (d_comp in cand_comp or cand_comp in d_comp):
+            return True
+    if len(c_clean) >= 4 and len(cand_clean) >= 4:
+        c_prefix, c_suffix = c_clean[:2], c_clean[-2:]
+        if c_prefix in cand_clean and c_suffix in cand_clean:
+            return True
+    return False
+
+@dataclass(slots=True)
+class CharterTask:
+    name: str
+    charter_item_id: int
+    details: list[str] = field(default_factory=list)
+    weight: float = 1.0
+    doc_ids: list[int] = field(default_factory=list)
+    match_kind: str = "charter_only"  # matched | charter_only
+    alias_of: str | None = None
+
+
+def _charter_plan(
+    db: Database,
+    excluded: set[int],
+    official: list[OfficialTask],
+) -> tuple[list[CharterTask], set[int], dict[str, int]]:
+    """S3: 업무분장표를 1차 단서로 업무 목록과 문서를 대조한다."""
+    from ..core import charter
+    c_rows = db.con.execute(
+        "SELECT id, doc_id, locator, name, weight, owner FROM charter_items WHERE parent_id IS NULL ORDER BY id"
+    ).fetchall()
+    if not c_rows:
+        return [], set(), {"charter_only": 0, "data_only": 0, "matched": 0}
+
+    all_docs = db.con.execute(
+        "SELECT id, path, filename FROM documents WHERE missing_since IS NULL"
+    ).fetchall()
+    available_docs = [r for r in all_docs if r["id"] not in excluded]
+
+    claimed: set[int] = set()
+    tasks: list[CharterTask] = []
+    official_cores = {folders.compact(task.name): task.name for task in official}
+
+    for crow in c_rows:
+        c_name = crow["name"]
+        c_id = crow["id"]
+        c_weight = crow["weight"]
+        details = [r[0] for r in db.con.execute("SELECT name FROM charter_items WHERE parent_id=?", (c_id,))]
+
+        c_compact = folders.compact(c_name)
+        detail_compacts = [folders.compact(d) for d in details]
+
+        matched_official = None
+        for off_core, off_name in official_cores.items():
+            if (len(c_compact) >= 2 and c_compact in off_core) or (len(off_core) >= 2 and off_core in c_compact):
+                matched_official = off_name
+                break
+
+        if matched_official:
+            tasks.append(CharterTask(
+                name=c_name,
+                charter_item_id=c_id,
+                details=details,
+                weight=c_weight,
+                doc_ids=[],
+                match_kind="matched",
+                alias_of=matched_official,
+            ))
+            continue
+
+        matched_doc_ids = []
+        for d in available_docs:
+            if d["id"] in claimed:
+                continue
+            doc_path = d["path"].replace("\\", "/")
+            parent_folder = doc_path.rsplit("/", 1)[0].rsplit("/", 1)[-1] if "/" in doc_path else ""
+            folder_compact = folders.compact(parent_folder)
+            file_compact = folders.compact(Path(d["filename"]).stem)
+
+            folder_matched = _match_names(c_name, parent_folder, details)
+            file_matched = _match_names(c_name, Path(d["filename"]).stem, details)
+
+            if folder_matched or file_matched:
+                matched_doc_ids.append(d["id"])
+                claimed.add(d["id"])
+
+        match_kind = "matched" if matched_doc_ids else "charter_only"
+        tasks.append(CharterTask(
+            name=c_name,
+            charter_item_id=c_id,
+            details=details,
+            weight=c_weight,
+            doc_ids=matched_doc_ids,
+            match_kind=match_kind,
+        ))
+
+    matched_cnt = sum(1 for t in tasks if t.match_kind == "matched")
+    charter_only_cnt = sum(1 for t in tasks if t.match_kind == "charter_only")
+
+    counts = {
+        "charter_only": charter_only_cnt,
+        "matched": matched_cnt,
+        "data_only": 0,
+    }
+    return tasks, claimed, counts
+
+
+def _save_charter(db, result: Discovery, charter_tasks: list[CharterTask]) -> None:
+    for ctask in charter_tasks:
+        if ctask.alias_of:
+            db.con.execute(
+                "UPDATE tasks SET description = description || ' (업무분장: ' || ? || ')' "
+                "WHERE name = ? AND origin = 'ai' AND status = 'proposed'",
+                (ctask.name, ctask.alias_of),
+            )
+            continue
+        if ctask.match_kind == "charter_only":
+            description = "업무분장표에 기재되어 있으나 아직 관련 문서를 찾지 못한 업무입니다."
+            group = Cluster(seed_id=0, doc_ids=[])
+            _upsert_task(db, Named(ctask.name, description), group, confidence="low")
+            result.charter_tasks += 1
 
 from ..core import bundles  # noqa: E402
 
@@ -421,10 +598,11 @@ def _owner_by_name(filename: str, tasks: list[FolderTask], common: list[str]) ->
     return tasks[hits[0][1]]
 
 
-def _save_folder_discovery(db, result, plan, store, contributions, model, official=()) -> Discovery:
+def _save_folder_discovery(db, result, plan, store, contributions, model, official=(), charter_tasks=()) -> Discovery:
     _clear_proposals(db)
     db.con.execute("DELETE FROM discovery_holds")
     _save_official(db, result, official)
+    _save_charter(db, result, list(charter_tasks))
     for task in plan:
         every = task.doc_ids + task.named_ids
         places = len(task.folders)

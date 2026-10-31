@@ -236,6 +236,26 @@ class ChatPanel(QWidget):
                 "자료에 대해 물어보세요",
                 "왼쪽에서 선택한 자료만 근거로 답합니다. 답의 번호를 누르면 "
                 "그 문서의 원문이 왼쪽에 펼쳐집니다."))
+
+            task_row = self.db.con.execute(
+                "SELECT task_id FROM notebooks WHERE id=?", (self.notebook_id,)
+            ).fetchone()
+            task_id = task_row[0] if task_row and task_row[0] else None
+            if task_id:
+                try:
+                    from ...core import notebook_tasks
+                    questions = notebook_tasks.suggested_questions(self.db, task_id)
+                    if questions:
+                        self.thread.addWidget(muted_label("💡 추천 질문 (누르면 바로 입력창에 채워집니다)", small=True))
+                        for q in questions:
+                            btn = QPushButton(q)
+                            btn.setObjectName("Quiet")
+                            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                            btn.setStyleSheet("text-align: left; padding: 6px 10px; margin-bottom: 2px;")
+                            btn.clicked.connect(lambda _, text=q: self.input.setPlainText(text))
+                            self.thread.addWidget(btn)
+                except Exception:
+                    pass
             # 무엇을 물을지 정하기 전에 자료가 무엇인지부터 보인다.
             if guides:
                 self.thread.addWidget(muted_label("AI가 만든 자료 안내 · 원문이 아닙니다", small=True))

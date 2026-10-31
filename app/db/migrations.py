@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "13"
+SCHEMA_VERSION = "14"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -477,6 +477,37 @@ def _to_v13(con: sqlite3.Connection) -> None:
                 "WHERE partition_key IN (SELECT partition_key FROM kg_generations)")
 
 
+
+
+def _to_v14(con: sqlite3.Connection) -> None:
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS charter_items (
+            id         INTEGER PRIMARY KEY,
+            doc_id     INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            locator    TEXT NOT NULL DEFAULT '',
+            name       TEXT NOT NULL,
+            parent_id  INTEGER REFERENCES charter_items(id) ON DELETE CASCADE,
+            owner      TEXT NOT NULL DEFAULT '',
+            weight     REAL NOT NULL DEFAULT 1.0,
+            decided_by TEXT NOT NULL DEFAULT 'ai',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    con.execute("CREATE INDEX IF NOT EXISTS idx_charter_items_doc ON charter_items(doc_id)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_charter_items_parent ON charter_items(parent_id)")
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS task_analysis_state (
+            task_id     INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+            stage       TEXT NOT NULL DEFAULT 'all',
+            state       TEXT NOT NULL DEFAULT 'pending',
+            finished_at TEXT
+        )
+        """
+    )
+
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
@@ -490,6 +521,7 @@ STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "11": _to_v11,
     "12": _to_v12,
     "13": _to_v13,
+    "14": _to_v14,
 }
 
 

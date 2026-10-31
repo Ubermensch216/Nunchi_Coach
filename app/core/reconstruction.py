@@ -1541,7 +1541,7 @@ def _link_stated_order(db, task_id: int) -> None:
 
 
 def restore(db, basis: date | None = None, should_stop=lambda: False,
-            client=None, statements: bool = True) -> dict[str, int]:
+            client=None, statements: bool = True, tasks=None) -> dict[str, int]:
     """모든 업무의 항목과 수행 단계를 자료에서 다시 읽어 맞춘다.
 
     전임자 정보 없이 시작한다. 시작 맥락이 아직 없으면 '자료로 시작'으로
@@ -1562,7 +1562,7 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
 
     run = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    tasks = db.tasks()
+    tasks = list(tasks) if tasks is not None else db.tasks()
     if not tasks:
         return totals
     # 건 목록을 먼저 세운다. 업무의 다음 행동이 '이번 회차 건 중 회신이 없는 것'을 묻는다.

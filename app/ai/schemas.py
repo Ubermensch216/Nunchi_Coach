@@ -184,3 +184,24 @@ def clean_task_name(value: Any) -> str | None:
     if not (2 <= len(text) <= 20):
         return None
     return text
+
+
+CHARTER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "details": {"type": "array", "items": {"type": "string"}},
+                    "owner": {"type": "string"},
+                    "weight": {"type": "number"},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    "required": ["items"],
+}

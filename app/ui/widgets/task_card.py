@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -125,6 +126,7 @@ class TaskCard(QFrame):
     """클릭하면 상세로 들어가는 업무 카드."""
 
     opened = Signal(int)
+    open_manual = Signal(int)
 
     def __init__(
         self,
@@ -167,6 +169,12 @@ class TaskCard(QFrame):
         span.setObjectName("Small")
         column.addWidget(span)
         column.addLayout(_footer(confidence, review_state, reading_count))
+        self.manual_btn = QPushButton("AI 매뉴얼 열기")
+        self.manual_btn.setObjectName("Quiet")
+        self.manual_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.manual_btn.setToolTip(f"{name} 업무 매뉴얼(노트북)을 엽니다")
+        self.manual_btn.clicked.connect(lambda: self.open_manual.emit(self._task_id))
+        column.addWidget(self.manual_btn)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802 — Qt 규약
         if event.button() == Qt.MouseButton.LeftButton:

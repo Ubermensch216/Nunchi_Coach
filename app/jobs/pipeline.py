@@ -25,7 +25,7 @@ from ..ai import OllamaClient
 from ..ai.settings import project_client
 from ..ai.discover import discover, has_folder_tasks, has_official_tasks
 from ..core import dating, handover_release, reconstruction, timeline, transfer
-from ..core import diagnostics, coverage
+from ..core import diagnostics, coverage, survey, charter
 from ..core import onnara_import
 from ..core import reindex
 from ..core import bundles, docrole, docyears, foldersteps, pictures, versions
@@ -87,6 +87,32 @@ class StageReport:
     state: str = ""
 
 
+
+def _order_tasks_for_analysis(db: Database) -> list:
+    """S5: 자료량 비중(S1) → 분장 비중(S2) → 공문 건수 순으로 정렬."""
+    tasks = db.tasks()
+    if not tasks:
+        return []
+    folder_weights = survey.get_folder_weights(db)
+    charter_weights = {}
+    for r in db.con.execute("SELECT name, weight FROM charter_items WHERE parent_id IS NULL"):
+        charter_weights[r[0]] = r[1]
+
+    def _score(task):
+        tname = task["name"]
+        f_score = max((w for fld, w in folder_weights.items() if fld in tname or tname in fld), default=0.0)
+        c_score = charter_weights.get(tname, 0.0)
+        off_count = db.con.execute(
+            "SELECT COUNT(DISTINCT td.doc_id) FROM task_docs td "
+            "LEFT JOIN source_assets a ON a.doc_id = td.doc_id "
+            "LEFT JOIN doc_roles dr ON dr.doc_id = td.doc_id "
+            "WHERE td.task_id = ? AND (a.id IS NOT NULL OR dr.role = 'directive')",
+            (task["id"],)
+        ).fetchone()[0]
+        return (f_score, c_score, off_count)
+
+    return sorted(tasks, key=_score, reverse=True)
+
 class Pipeline(QObject):
     """워커 스레드에서 도는 처리 본체.
 
@@ -95,6 +121,7 @@ class Pipeline(QObject):
 
     progress = Signal(str, int, int, str)   # stage, done, total, note
     stage_done = Signal(object)             # StageReport
+    task_analyzed = Signal(int)
     finished = Signal()
     failed = Signal(str)
 
@@ -127,6 +154,10 @@ class Pipeline(QObject):
             self._scan(db)
             if not self._stop:
                 self._hash(db)
+                try:
+                    survey.build(db)
+                except Exception as exc:
+                    diagnostics.record("survey.build.error", exc)
             if not self._stop:
                 # 자료 폴더로 등록한 온나라 수집본 — 파일을 찾고 해시한 뒤에야 공식 출처가 이어진다.
                 try:
@@ -146,19 +177,19 @@ class Pipeline(QObject):
             if not self._stop:
                 self._discover(db)
             if not self._stop:
-                self._roles(db)
-            if not self._stop:
-                self._cycles(db)
-            if not self._stop:
-                self._steps(db)
-            if not self._stop:
-                self._restore(db)
+                self._analyze_by_tasks(db)
             if not self._stop:
                 from ..core.knowledge.lifecycle import run_jobs
                 try:
                     run_jobs(db, should_stop=self._stopped)
                 except Exception as exc:
                     diagnostics.record('knowledge.jobs.error', exc)
+            if not self._stop:
+                from ..core import notebook_tasks
+                try:
+                    notebook_tasks.auto_generate_for_tasks(db)
+                except Exception as exc:
+                    diagnostics.record('notebook.auto_generate.error', exc)
             db.audit("pipeline.stop", result="cancelled" if self._stop else "completed")
             db.set_meta("analysis_run_state", "cancelled" if self._stop else "completed")
             diagnostics.record("pipeline.stop")
@@ -272,7 +303,15 @@ class Pipeline(QObject):
                        AND """ + outdated_clause("d") + """)
                    OR """ + _DISTRIBUTION_NOTICE + """)
               AND COALESCE(j.attempts, 0) < ?
-            ORDER BY d.id
+            ORDER BY
+                CASE
+                    WHEN d.filename LIKE '%업무분장%' OR d.filename LIKE '%사무분장%'
+                      OR d.filename LIKE '%사무분담%' OR d.filename LIKE '%업무분담%'
+                      OR d.filename LIKE '%업무기술서%' OR d.filename LIKE '%직무기술서%'
+                      OR d.filename LIKE '%담당업무%' OR d.filename LIKE '%업무현황%'
+                      OR d.filename LIKE '%인수인계서%' OR d.filename LIKE '%업무인계%'
+                    THEN 0 ELSE 1
+                END, d.id
             """,
             (MAX_ATTEMPTS,),
         ).fetchall()
@@ -343,6 +382,15 @@ class Pipeline(QObject):
                         if result.members:
                             db.update_document(row["id"], char_count=sum(len(s.text) for s in own))
                     _clear_job(db, row["id"], "parse")
+                    if charter.is_charter_candidate(row["filename"], row["path"]):
+                        try:
+                            full_text = "\n".join(s.text for s in own if s.text)
+                            predecessor = db.get_meta("predecessor_name") or ""
+                            items = charter.extract_items(full_text, predecessor)
+                            if items:
+                                charter.save_charter_items(db, row["id"], items)
+                        except Exception as exc:
+                            diagnostics.record("charter.extract.error", exc)
                 elif result.status == LOCKED:
                     # 잠긴 파일은 실패로 굳히지 않는다. pending으로 되돌려
                     # 다음 실행에서 다시 읽고, 재시도 횟수도 세지 않는다 —
@@ -608,7 +656,15 @@ class Pipeline(QObject):
             WHERE d.missing_since IS NULL
               AND d.parse_status IN ('ok', 'partial')
               AND e.doc_id IS NULL
-            ORDER BY d.id
+            ORDER BY
+                CASE
+                    WHEN d.filename LIKE '%업무분장%' OR d.filename LIKE '%사무분장%'
+                      OR d.filename LIKE '%사무분담%' OR d.filename LIKE '%업무분담%'
+                      OR d.filename LIKE '%업무기술서%' OR d.filename LIKE '%직무기술서%'
+                      OR d.filename LIKE '%담당업무%' OR d.filename LIKE '%업무현황%'
+                      OR d.filename LIKE '%인수인계서%' OR d.filename LIKE '%업무인계%'
+                    THEN 0 ELSE 1
+                END, d.id
             """,
             (client.embed_model,),
         ).fetchall()
@@ -674,6 +730,227 @@ class Pipeline(QObject):
         report.errors = result.errors[:20]
         self._report(db, report)
 
+
+
+    def _analyze_by_tasks(self, db: Database) -> None:
+        """S5: 파이프라인 뒤 단계를 업무 단위로 나누어 집중 분석한다."""
+        tasks = _order_tasks_for_analysis(db)
+        if not tasks:
+            self._roles(db)
+            if not self._stop:
+                self._cycles(db)
+            if not self._stop:
+                self._steps(db)
+            if not self._stop:
+                self._restore(db)
+            return
+
+        with db.transaction():
+            members.inherit_tasks(db)
+        docrole.reset_outdated(db)
+        docyears.refresh_outdated(db)
+
+        bulk_days = timeline.bulk_copy_days(
+            (row["fs_mtime"], str(Path(row["path"]).parent)) for row in db.con.execute(
+                "SELECT fs_mtime, path FROM documents WHERE missing_since IS NULL"))
+
+        client = None
+        if db.counts()["embedded"]:
+            candidate = self._client = project_client(db, OllamaClient)
+            if candidate.health().generation_ready:
+                client = candidate
+
+        for task in tasks:
+            if self._stop:
+                break
+            task_id = task["id"]
+
+            row_state = db.con.execute(
+                "SELECT state FROM task_analysis_state WHERE task_id = ?", (task_id,)
+            ).fetchone()
+            if row_state and row_state[0] == "completed":
+                continue
+
+            with db.transaction():
+                db.con.execute(
+                    "INSERT OR REPLACE INTO task_analysis_state(task_id, stage, state, finished_at) "
+                    "VALUES (?, 'all', 'running', NULL)",
+                    (task_id,),
+                )
+
+            # 1. 문서 갈래
+            task_doc_rows = db.task_documents(task_id)
+            task_doc_ids = [r["id"] for r in task_doc_rows]
+            pending_batch = [did for did in task_doc_ids if not db.con.execute("SELECT 1 FROM doc_roles WHERE doc_id = ?", (did,)).fetchone()]
+            if pending_batch:
+                docrole.classify_documents(db, pending_batch)
+                docyears.mark_documents(db, pending_batch)
+
+            if self._stop:
+                break
+
+            # 2. 일정
+            self._analyze_single_task_cycles(db, task, bulk_days)
+
+            if self._stop:
+                break
+
+            # 3. 처리 순서
+            self._analyze_single_task_steps(db, task, bulk_days)
+
+            if self._stop:
+                break
+
+            # 4. 복원
+            reconstruction.restore(db, tasks=[task], should_stop=self._stopped, client=client)
+
+            if self._stop:
+                break
+
+            # 5. 질문 준비 조각 생성
+            for did in task_doc_ids:
+                if self._stop:
+                    break
+                has_chunk = db.con.execute("SELECT 1 FROM chunks WHERE doc_id = ? LIMIT 1", (did,)).fetchone()
+                if not has_chunk:
+                    sections = db.con.execute(
+                        "SELECT kind, locator, text, meta FROM document_sections WHERE doc_id = ? ORDER BY ordinal",
+                        (did,),
+                    ).fetchall()
+                    pieces = build_chunks_with_context([(s["kind"], s["locator"], s["text"], s["meta"]) for s in sections])
+                    if pieces:
+                        with db.transaction():
+                            db.replace_document_chunks(did, pieces)
+                    db.ensure_child_chunks(did)
+
+            with db.transaction():
+                db.con.execute(
+                    "UPDATE task_analysis_state SET state = 'completed', finished_at = datetime('now') WHERE task_id = ?",
+                    (task_id,),
+                )
+
+            self.task_analyzed.emit(task_id)
+
+            if len(task_doc_ids) >= 2 and not task["not_a_task"]:
+                try:
+                    from ..core import notebook_tasks
+                    notebook_tasks.open_for_task(db, task_id, client=None)
+                except Exception as exc:
+                    diagnostics.record("notebook.task_analyzed.error", exc)
+
+        if not self._stop:
+            pending = docrole.pending(db)
+            if pending:
+                for start in range(0, len(pending), COMMIT_EVERY):
+                    if self._stop:
+                        break
+                    batch = pending[start:start + COMMIT_EVERY]
+                    docrole.classify_documents(db, batch)
+                    docyears.mark_documents(db, batch)
+            versions.rebuild(db)
+            db.set_meta("steps_checked", "1")
+
+    def _analyze_single_task_cycles(self, db: Database, task, bulk_days) -> None:
+        rows = db.task_grid_documents(task["id"])
+        outside = foldersteps.outside_the_work(db, [row["id"] for row in rows])
+        reps = versions.representatives(db, [row["id"] for row in rows])
+        rows = [row for row in rows if row["id"] not in outside and reps.get(row["id"], row["id"]) == row["id"]]
+        docs = []
+        for row in rows:
+            auth = row["authored_at"] if "authored_at" in row.keys() else None
+            month, trusted = timeline.work_month(
+                row["year"], row["month"], row["eff_date_kind"], row["eff_precision"],
+                row["fs_mtime"], bulk_days, authored_at=auth)
+            auth_day = int(auth[8:10]) if auth and len(auth) >= 10 and auth[8:10].isdigit() else None
+            same = month == row["month"] and row["eff_precision"] == "day"
+            docs.append(timeline.DatedDoc(
+                doc_id=row["id"],
+                year=row["year"],
+                month=month,
+                day=auth_day if auth_day is not None else (int(row["eff_date"][8:10]) if same else None),
+                trustworthy=trusted,
+            ))
+        docs += [timeline.DatedDoc(doc_id=doc_id, year=when.year, month=when.month,
+                                   day=when.day, trustworthy=True)
+                 for doc_id, when in reconstruction.schedule_dates(db, task["id"])]
+        grid = timeline.build_grid(docs)
+        bundled = bundles.kind(db, task["id"])
+        guess = None if bundled else timeline.detect_cycle(grid)
+
+        cycles = []
+        if guess is None:
+            asked = [] if bundled else reconstruction.request_deadlines(db, task["id"])
+            years_seen = {row["year"] for row in db.task_grid_documents(task["id"])}
+            periodic = asked and db.con.execute(
+                "SELECT 1 FROM documents WHERE id IN (%s) AND (filename LIKE '%%년도%%' "
+                "OR filename LIKE '%%분기%%' OR filename LIKE '%%반기%%')" %
+                ",".join("?" * len(asked)), [d for d, _ in asked]).fetchone()
+            if asked and (periodic or len(years_seen) >= 2):
+                month = asked[0][1].month
+                evidence = "매년 오는 요청 공문의 제출 기한입니다."
+                cycles.append({
+                    "kind": "yearly", "months": str(month),
+                    "day_hint": timeline.cycle_day_hint([asked[0][1]]),
+                    "years_observed": max(1, len(years_seen)),
+                    "confidence": "low",
+                    "evidence": evidence,
+                })
+        else:
+            evidence = ("매년 특정 달에 집중된 문서들의 작성 시점입니다."
+                        if guess.kind == "yearly" else "매월 고르게 작성된 문서들의 시점입니다.")
+            cycles.append({
+                "kind": guess.kind,
+                "months": ",".join(str(m) for m in guess.months),
+                "day_hint": guess.day_hint,
+                "years_observed": guess.years_observed,
+                "confidence": guess.confidence,
+                "evidence": evidence,
+            })
+        with db.transaction():
+            db.replace_task_cycles(task["id"], cycles)
+
+    def _analyze_single_task_steps(self, db: Database, task, bulk_days) -> None:
+        if bundles.kind(db, task["id"]):
+            for year in db.task_years(task["id"]):
+                with db.transaction():
+                    db.replace_task_steps(task["id"], year, [])
+            return
+        recorded = foldersteps.plan(db, task["id"])
+        for year, steps in recorded.items():
+            with db.transaction():
+                db.replace_task_steps(task["id"], year, steps)
+        for year in db.task_years(task["id"]):
+            if year in recorded:
+                continue
+            rows = db.task_year_documents(task["id"], year)
+            outside = foldersteps.outside_the_work(db, [row["id"] for row in rows])
+            reps = versions.representatives(db, [row["id"] for row in rows])
+            rows = [row for row in rows if row["id"] not in outside and reps.get(row["id"], row["id"]) == row["id"]]
+            candidates = []
+            for row in rows:
+                auth = row["authored_at"] if "authored_at" in row.keys() else None
+                off_title = row["official_title"] if "official_title" in row.keys() else None
+                month, _ = timeline.work_month(
+                    year, row["month"], row["eff_date_kind"], row["eff_precision"],
+                    row["fs_mtime"], bulk_days, authored_at=auth)
+                month = month or row["month"]
+                auth_day = int(auth[8:10]) if auth and len(auth) >= 10 and auth[8:10].isdigit() else None
+                same = month == row["month"] and row["eff_precision"] == "day"
+                candidates.append(timeline.StepCandidate(
+                    doc_id=row["id"],
+                    month=month,
+                    day=auth_day if auth_day is not None else (int(row["eff_date"][8:10]) if same else None),
+                    label=_step_label(off_title or row["filename"]),
+                ))
+            steps = timeline.reconstruct_steps(timeline.condense(candidates, FALLBACK_LABEL), year)
+            with db.transaction():
+                db.replace_task_steps(task["id"], year, [
+                    {
+                        "ordinal": s.ordinal, "label": s.label, "month": s.month,
+                        "day_hint": s.day_hint, "doc_id": s.doc_id, "gap_note": s.gap_note,
+                    }
+                    for s in steps
+                ])
 
     # ── 문서 갈래 확인 (역할·해·판 묶음) ────────────────────────────
     def _roles(self, db: Database) -> None:
@@ -1141,6 +1418,7 @@ class PipelineRunner(QObject):
 
     progress = Signal(str, int, int, str)
     stage_done = Signal(object)
+    task_analyzed = Signal(int)
     finished = Signal()
     failed = Signal(str)
 
@@ -1169,6 +1447,7 @@ class PipelineRunner(QObject):
 
         self._pipeline.progress.connect(self.progress)
         self._pipeline.stage_done.connect(self.stage_done)
+        self._pipeline.task_analyzed.connect(self.task_analyzed.emit)
         self._pipeline.failed.connect(self.failed)
         self._pipeline.finished.connect(self._cleanup)
         self._thread.started.connect(self._pipeline.run)

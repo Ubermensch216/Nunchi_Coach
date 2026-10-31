@@ -191,3 +191,46 @@ def test_handover_view_triggers_copy_folder_export(workspace, qapp):
         assert (target / "00_인계_안내.md").is_file()
     finally:
         view.setParent(None)
+
+def test_export_handover_folder_with_charter_hierarchy_and_comparison(workspace):
+    db, _, local_root, _, _, tmp_path = workspace
+
+    # 분장 계층 등록: 대업무(시설관리) -> 세부업무(청사시설관리)
+    p_id = db.con.execute(
+        "INSERT INTO charter_items(name, doc_id, weight) VALUES ('시설관리', 1, 10.0)"
+    ).lastrowid
+    db.con.execute(
+        "INSERT INTO charter_items(name, parent_id, doc_id, weight) VALUES ('청사시설관리', ?, 1, 5.0)",
+        (p_id,),
+    )
+
+    # 3갈래 대조 메타데이터 등록
+    comparison_meta = {
+        "matched": [{"name": "청사시설관리", "doc_count": 2}],
+        "charter_only": [{"name": "예산총괄", "weight": 5.0}],
+        "data_only": [{"name": "비공식행사", "doc_count": 1}],
+    }
+    db.set_meta("charter_comparison", json.dumps(comparison_meta, ensure_ascii=False))
+
+    # task 등록
+    task_id = db.con.execute(
+        "INSERT INTO tasks(name, origin, status) VALUES ('청사시설관리', 'ai', 'proposed')"
+    ).lastrowid
+    doc_id = db.con.execute("SELECT id FROM documents LIMIT 1").fetchone()[0]
+    db.con.execute(
+        "INSERT INTO task_docs(task_id, doc_id, origin, confidence) VALUES (?, ?, 'ai', 'high')",
+        (task_id, doc_id),
+    )
+    db.con.commit()
+
+    target = tmp_path / "charter_handover_out"
+    res = handover_folder.export_handover_folder(db, target, today=date(2026, 10, 31))
+
+    # 폴더 구조 검증: <출력루트>/시설관리/청사시설관리/<연도>/...
+    assert (target / "시설관리" / "청사시설관리").is_dir()
+
+    # 00_인계_안내.md에 charter_only와 data_only가 실렸는지 검증
+    readme = (target / "00_인계_안내.md").read_text(encoding="utf-8")
+    assert "업무분장표 ↔ 자료 대조 현황" in readme
+    assert "예산총괄" in readme
+    assert "비공식행사" in readme
