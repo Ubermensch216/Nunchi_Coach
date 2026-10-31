@@ -728,26 +728,42 @@ class Pipeline(QObject):
 
 
     @staticmethod
+    def task_doc_fingerprint(db: Database, task_id: int) -> str:
+        """업무에 묶인 문서 구성(ID 목록), 내용 해시, 수정 시각, 파싱 상태의 지문."""
+        rows = db.con.execute(
+            "SELECT td.doc_id, d.hash, d.fs_mtime, d.parse_status "
+            "FROM task_docs td JOIN documents d ON d.id = td.doc_id "
+            "WHERE td.task_id = ? ORDER BY td.doc_id",
+            (task_id,)
+        ).fetchall()
+        if not rows:
+            return "empty"
+        import hashlib
+        raw = ";".join(f"{r[0]}:{r[1] or ''}:{r[2] or ''}:{r[3] or ''}" for r in rows)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    @staticmethod
     def _is_task_stale(db: Database, task_id: int) -> bool:
-        """새 문서가 들어왔거나 내용이 바뀌었거나 업무가 수정되었으면 True."""
+        """문서 구성이나 내용이 바뀌었거나, 분석 완료 후 사용자가 업무를 편집했으면 True."""
         row = db.con.execute(
-            "SELECT state, finished_at FROM task_analysis_state WHERE task_id = ?", (task_id,)
+            "SELECT state, finished_at, doc_fingerprint FROM task_analysis_state WHERE task_id = ?", (task_id,)
         ).fetchone()
         if not row or row["state"] != "completed" or not row["finished_at"]:
             return True
-        fin = row["finished_at"]
-        stale_doc = db.con.execute(
-            "SELECT 1 FROM task_docs td "
-            "JOIN documents d ON d.id = td.doc_id "
-            "WHERE td.task_id = ? AND (d.fs_mtime > ? OR d.first_seen > ? OR d.parse_status = 'pending') "
-            "LIMIT 1",
-            (task_id, fin, fin)
-        ).fetchone()
-        if stale_doc:
+
+        current_fp = Pipeline.task_doc_fingerprint(db, task_id)
+        saved_fp = row["doc_fingerprint"] if "doc_fingerprint" in row.keys() else None
+        if not saved_fp or saved_fp != current_fp:
             return True
-        task_row = db.con.execute("SELECT status FROM tasks WHERE id = ?", (task_id,)).fetchone()
-        if task_row and task_row["status"] == "edited":
-            return True
+
+        task_row = db.con.execute("SELECT status, reviewed_at FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        if task_row:
+            reviewed_at = task_row["reviewed_at"]
+            fin = row["finished_at"]
+            # 분석 완료 이후에 사용자가 업무를 새로 편집한 경우에만 stale
+            if reviewed_at and fin and reviewed_at > fin:
+                return True
+
         return False
 
     def _analyze_by_tasks(self, db: Database) -> None:
@@ -803,8 +819,12 @@ class Pipeline(QObject):
             if candidate.health().generation_ready:
                 client = candidate
 
-        # 전역 복원 연산 사전 수행 (matters, common_skeletons, relations 1회 계산)
-        prep = reconstruction.prepare_restore(db, tasks=tasks, statements=True, should_stop=self._stopped)
+        # 재분석이 필요한 업무들만 선별 (바뀐 업무가 없으면 무거운 전역 계산 skip)
+        stale_task_ids = {t["id"] for t in tasks if self._is_task_stale(db, t["id"])}
+
+        # 전역 복원 연산: 재분석할 업무가 있을 때만 1회 수행
+        prep = (reconstruction.prepare_restore(db, tasks=tasks, statements=True, should_stop=self._stopped)
+                if stale_task_ids else {"matters": 0, "matter_answers": 0, "common": frozenset(), "related": {}})
 
         report_cycles = StageReport(STAGE_CYCLES, total=len(tasks))
         report_steps = StageReport(STAGE_STEPS, total=len(tasks))
@@ -822,7 +842,7 @@ class Pipeline(QObject):
                 break
             task_id = task["id"]
 
-            if not self._is_task_stale(db, task_id):
+            if task_id not in stale_task_ids:
                 continue
 
             with db.transaction():
@@ -878,10 +898,11 @@ class Pipeline(QObject):
                             db.replace_document_chunks(did, pieces)
                     db.ensure_child_chunks(did)
 
+            current_fp = self.task_doc_fingerprint(db, task_id)
             with db.transaction():
                 db.con.execute(
-                    "UPDATE task_analysis_state SET state = 'completed', finished_at = datetime('now') WHERE task_id = ?",
-                    (task_id,),
+                    "UPDATE task_analysis_state SET state = 'completed', finished_at = datetime('now'), doc_fingerprint = ? WHERE task_id = ?",
+                    (current_fp, task_id),
                 )
 
             self.task_analyzed.emit(task_id)
@@ -898,8 +919,11 @@ class Pipeline(QObject):
             db.set_meta("steps_checked", "1")
             db.set_meta("items_checked", "1")
 
+            found_cycles = db.con.execute(
+                "SELECT COUNT(DISTINCT task_id) FROM task_cycles WHERE kind != 'none'"
+            ).fetchone()[0]
             report_cycles.done = len(tasks)
-            report_cycles.note = f"반복 업무 {len(tasks)}개 분석"
+            report_cycles.note = f"반복 업무 {found_cycles}개 발견" if tasks else "업무가 없습니다"
             self._report(db, report_cycles)
 
             report_steps.done = len(tasks)

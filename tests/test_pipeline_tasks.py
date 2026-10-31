@@ -153,3 +153,84 @@ def test_single_task_cycles_evidence_is_doc_id_list(sample_db: Database):
         # evidence가 빈 문자열이거나 쉼표 구분 doc_id여야 하고 for_cycle 호출 시 에러가 없어야 함
         ev_list = for_cycle(db, cycle)
         assert isinstance(ev_list, list)
+
+
+def test_analyze_by_tasks_reanalyzes_on_task_docs_membership_change(sample_db: Database):
+    """업무 찾기 단계에서 문서가 새로 붙거나 빠져도(mtime 불변) stale로 감지되어 재분석된다."""
+    db = sample_db
+    t1 = db.con.execute("INSERT INTO tasks(name, origin, status) VALUES ('시설관리', 'ai', 'proposed')").lastrowid
+    db.con.execute("INSERT INTO task_docs(task_id, doc_id, origin, confidence) VALUES (?, 1, 'ai', 'high')", (t1,))
+    db.con.commit()
+
+    pipe = Pipeline(db.path)
+    emitted = []
+    pipe.task_analyzed.connect(emitted.append)
+
+    pipe._analyze_by_tasks(db)
+    assert emitted == [t1]
+
+    # 완료 후 mtime 변경 없이 기존 2번 문서가 업무에 새로 추가됨
+    emitted.clear()
+    assert not pipe._is_task_stale(db, t1)
+
+    db.con.execute("INSERT INTO task_docs(task_id, doc_id, origin, confidence) VALUES (?, 2, 'ai', 'high')", (t1,))
+    db.con.commit()
+
+    # fingerprint가 달라져 stale: True가 됨!
+    assert pipe._is_task_stale(db, t1)
+
+    pipe._analyze_by_tasks(db)
+    assert emitted == [t1]
+    assert not pipe._is_task_stale(db, t1)
+
+
+def test_edited_task_not_infinitely_reanalyzed(sample_db: Database):
+    """사람이 고친 업무(status='edited')도 한 번 재분석된 후에는 무한 재분석되지 않는다."""
+    db = sample_db
+    t1 = db.con.execute(
+        "INSERT INTO tasks(name, origin, status, reviewed_at) VALUES ('시설관리', 'user', 'edited', datetime('now'))"
+    ).lastrowid
+    db.con.execute("INSERT INTO task_docs(task_id, doc_id, origin, confidence) VALUES (?, 1, 'ai', 'high')", (t1,))
+    db.con.commit()
+
+    pipe = Pipeline(db.path)
+    emitted = []
+    pipe.task_analyzed.connect(emitted.append)
+
+    # 1회 분석
+    pipe._analyze_by_tasks(db)
+    assert emitted == [t1]
+    assert not pipe._is_task_stale(db, t1)
+
+    # 다시 돌려도 stale이 아니므로 재실행되지 않음
+    emitted.clear()
+    pipe._analyze_by_tasks(db)
+    assert len(emitted) == 0
+
+    # 사용자가 이후에 업무를 다시 편집하면(reviewed_at 갱신) 다시 stale: True
+    db.con.execute("UPDATE tasks SET reviewed_at = datetime('now', '+1 minute') WHERE id = ?", (t1,))
+    db.con.commit()
+    assert pipe._is_task_stale(db, t1)
+
+    pipe._analyze_by_tasks(db)
+    assert emitted == [t1]
+
+
+def test_cycles_report_note_counts_actual_cycles(sample_db: Database):
+    """일정 단계 보고 문구가 전체 업무 수가 아니라 실제 발견된 반복 업무 수를 센다."""
+    db = sample_db
+    t1 = db.con.execute("INSERT INTO tasks(name, origin, status) VALUES ('시설관리', 'ai', 'proposed')").lastrowid
+    t2 = db.con.execute("INSERT INTO tasks(name, origin, status) VALUES ('보안관리', 'ai', 'proposed')").lastrowid
+    db.con.execute("INSERT INTO task_docs(task_id, doc_id, origin, confidence) VALUES (?, 1, 'ai', 'high')", (t1,))
+    db.con.execute("INSERT INTO task_docs(task_id, doc_id, origin, confidence) VALUES (?, 3, 'ai', 'high')", (t2,))
+    db.con.commit()
+
+    pipe = Pipeline(db.path)
+    reports = []
+    pipe.stage_done.connect(reports.append)
+
+    pipe._analyze_by_tasks(db)
+
+    cycle_rep = next(r for r in reports if r.stage == "일정 파악")
+    found_count = db.con.execute("SELECT COUNT(DISTINCT task_id) FROM task_cycles WHERE kind != 'none'").fetchone()[0]
+    assert cycle_rep.note == f"반복 업무 {found_count}개 발견"

@@ -638,8 +638,9 @@ CREATE INDEX IF NOT EXISTS idx_charter_items_parent ON charter_items(parent_id);
 
 -- ── 업무별 집중 분석 상태 (v14) ──────────────────────────────────
 CREATE TABLE IF NOT EXISTS task_analysis_state (
-    task_id     INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
-    stage       TEXT NOT NULL DEFAULT 'all',
-    state       TEXT NOT NULL DEFAULT 'pending',
-    finished_at TEXT
+    task_id         INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+    stage           TEXT NOT NULL DEFAULT 'all',
+    state           TEXT NOT NULL DEFAULT 'pending',
+    finished_at     TEXT,
+    doc_fingerprint TEXT
 );

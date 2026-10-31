@@ -500,10 +500,11 @@ def _to_v14(con: sqlite3.Connection) -> None:
     con.execute(
         """
         CREATE TABLE IF NOT EXISTS task_analysis_state (
-            task_id     INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
-            stage       TEXT NOT NULL DEFAULT 'all',
-            state       TEXT NOT NULL DEFAULT 'pending',
-            finished_at TEXT
+            task_id         INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+            stage           TEXT NOT NULL DEFAULT 'all',
+            state           TEXT NOT NULL DEFAULT 'pending',
+            finished_at     TEXT,
+            doc_fingerprint TEXT
         )
         """
     )

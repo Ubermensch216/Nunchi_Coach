@@ -112,8 +112,7 @@ def merge(db, source, target):
         db.con.execute("UPDATE task_steps SET task_id=?,decided_by='user' WHERE task_id=?", (target, source))
         db.con.execute("UPDATE task_cycles SET task_id=?,decided_by='user' WHERE task_id=?", (target, source))
         db.con.execute("UPDATE knowledge_cards SET task_id=? WHERE task_id=?", (target, source))
-        from ..core import notebook_tasks
-        notebook_tasks.archive_for_task(db, source, archive=True)
+        db.con.execute("UPDATE notebooks SET task_id=? WHERE task_id=?", (target, source))
         db.con.execute(
             "INSERT OR IGNORE INTO task_reading SELECT ?,doc_id,ordinal,score,reason "
             "FROM task_reading WHERE task_id=?", (target, source))
