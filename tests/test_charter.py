@@ -259,3 +259,31 @@ def test_model_results_are_kept_when_the_model_is_off_later(db: Database, tmp_pa
     assert charter.refresh_items(db, client=None) == 0
     assert charter.refresh_items(db, client=model) == 0
     assert {item["name"] for item in charter.get_charter_items(db, doc_id)} == names
+
+
+def test_settings_change_the_predecessor_after_analysis_started(db: Database, tmp_path: Path):
+    """분석을 시작한 뒤에도 설정에서 전임자를 바꾸고, 분장표 담당자에서 고를 수 있다."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    from app.ui.views.settings import SettingsDialog
+
+    QApplication.instance() or QApplication([])
+    doc_id = _charter_document(db, tmp_path)
+    charter.extract_from_document(db, doc_id)
+    dialog = SettingsDialog(db)
+    changed = []
+    dialog.sources_changed.connect(lambda: changed.append(True))
+    try:
+        assert dialog.predecessor.text() == ""
+        assert [dialog.predecessor_pick.itemData(i) for i in range(1, dialog.predecessor_pick.count())] \
+            == ["김철수", "홍길동"]
+        dialog.predecessor_pick.setCurrentIndex(dialog.predecessor_pick.findData("홍길동"))
+        assert dialog.predecessor.text() == "홍길동"
+        dialog._save_predecessor()
+        assert charter.predecessor_name(db) == "홍길동" and changed == [True]
+        dialog._save_predecessor()                     # 같은 이름이면 다시 분석하지 않는다
+        assert changed == [True]
+    finally:
+        dialog.close()
+        dialog.deleteLater()

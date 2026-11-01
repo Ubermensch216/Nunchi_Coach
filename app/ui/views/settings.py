@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QLineEdit,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
@@ -48,7 +49,7 @@ from ...jobs.ai_status import check_status
 from ...db import Database
 from ...bridge import service as bridge_service
 from ...bridge.packages import downloads_folder
-from ...core import onnara_import
+from ...core import charter, onnara_import
 from ...core.knowledge import review
 from ...core.output_policy import UnsafeOutputError, safe_text_writer
 from .. import icons, motion, theme
@@ -360,6 +361,7 @@ class SettingsDialog(QDialog):
                 )
             )
         body.addWidget(card)
+        body.addWidget(self._predecessor_card())
 
         # 두 경로를 헷갈리게 두지 않는다. 여기서 상대를 명시적으로 가리킨다.
         compare = Card(tone="static")
@@ -378,6 +380,50 @@ class SettingsDialog(QDialog):
         jump.clicked.connect(lambda: self.go("system"))
         compare.body.addWidget(jump, 0, Qt.AlignmentFlag.AlignLeft)
         body.addWidget(compare)
+
+    def _predecessor_card(self) -> Card:
+        """업무분장표에서 누구의 업무를 고를지. 분석을 시작한 뒤에도 바꿀 수 있게 여기 둔다."""
+        card = Card(tone="static")
+        card.body.addWidget(section_title("전임자"))
+        card.body.addWidget(muted_label(
+            "업무분장표에 과 전체 업무가 들어 있으면 이 사람의 업무만 고릅니다. "
+            "바꾸면 다음 분석이 분장 항목을 다시 뽑고, 바뀐 업무를 다시 살핍니다.", small=True))
+        line = QHBoxLayout()
+        self.predecessor = QLineEdit(charter.predecessor_name(self.db))
+        self.predecessor.setPlaceholderText("전임자 이름 (예: 홍길동)")
+        self.predecessor.setMinimumHeight(theme.CONTROL_H)
+        self.predecessor.setAccessibleName("전임자 이름")
+        line.addWidget(self.predecessor, 1)
+        owners = charter.owners(self.db)
+        if owners:
+            # 분장표에 적힌 담당자를 고르기만 해도 되게 한다. 입력칸이 기준이다.
+            self.predecessor_pick = QComboBox()
+            self.predecessor_pick.addItem("분장표 담당자에서 고르기", "")
+            for name in owners:
+                self.predecessor_pick.addItem(name, name)
+            self.predecessor_pick.currentIndexChanged.connect(self._pick_predecessor)
+            line.addWidget(self.predecessor_pick)
+        save = QPushButton("저장")
+        save.clicked.connect(self._save_predecessor)
+        line.addWidget(save)
+        card.body.addLayout(line)
+        self.predecessor_state = muted_label("", small=True)
+        card.body.addWidget(self.predecessor_state)
+        return card
+
+    def _pick_predecessor(self, _index: int) -> None:
+        name = self.predecessor_pick.currentData()
+        if name:
+            self.predecessor.setText(name)
+
+    def _save_predecessor(self) -> None:
+        name = " ".join(self.predecessor.text().split())
+        if name == charter.predecessor_name(self.db):
+            self.predecessor_state.setText("바뀐 것이 없습니다.")
+            return
+        charter.set_predecessor(self.db, name)
+        self.predecessor_state.setText("저장했습니다. 다음 분석부터 반영됩니다.")
+        self.sources_changed.emit()
 
     def _add_source(self) -> None:
         chosen = QFileDialog.getExistingDirectory(self, "업무 자료 폴더 선택")
