@@ -177,7 +177,7 @@ class Pipeline(QObject):
                 self._chunks(db)
             if not self._stop:
                 try:
-                    charter.refresh_items(db)
+                    charter.refresh_items(db, client=self._generation_client(db))
                 except Exception as exc:
                     diagnostics.record("charter.refresh.error", exc)
             if not self._stop:
@@ -209,6 +209,17 @@ class Pipeline(QObject):
         finally:
             db.close()
             self.finished.emit()
+
+    def _generation_client(self, db: Database):
+        """생성 모델을 쓸 수 있으면 그 클라이언트, 아니면 None.
+
+        의미 색인이 없는 프로젝트(AI 없이 쓰는 경우)와 모델이 준비되지 않은 경우에는
+        부르지 않는다.
+        """
+        if not db.counts()["embedded"]:
+            return None
+        candidate = self._client = project_client(db, OllamaClient)
+        return candidate if candidate.health().generation_ready else None
 
     # ── 1단계: 찾기 ─────────────────────────────────────────────────
     def _report(self, db: Database, report: StageReport) -> None:
@@ -815,11 +826,7 @@ class Pipeline(QObject):
             (row["fs_mtime"], str(Path(row["path"]).parent)) for row in db.con.execute(
                 "SELECT fs_mtime, path FROM documents WHERE missing_since IS NULL"))
 
-        client = None
-        if db.counts()["embedded"]:
-            candidate = self._client = project_client(db, OllamaClient)
-            if candidate.health().generation_ready:
-                client = candidate
+        client = self._generation_client(db)
 
         # 재분석이 필요한 업무들만 선별 (바뀐 업무가 없으면 무거운 전역 계산 skip)
         stale_task_ids = {t["id"] for t in tasks if self._is_task_stale(db, t["id"])}
@@ -1282,11 +1289,7 @@ class Pipeline(QObject):
         transfer.relink_evidence(db)
         # 이름표 없이 문장으로만 적힌 내용은 생성 모델이 고른다. 의미 색인이 없는
         # 프로젝트(AI 없이 쓰는 경우)와 모델이 준비되지 않은 경우에는 부르지 않는다.
-        client = None
-        if db.counts()["embedded"]:
-            candidate = self._client = project_client(db, OllamaClient)
-            if candidate.health().generation_ready:
-                client = candidate
+        client = self._generation_client(db)
         totals = reconstruction.restore(db, should_stop=self._stopped, client=client)
         report.done = report.total = totals["tasks"]
         if not totals["tasks"]:

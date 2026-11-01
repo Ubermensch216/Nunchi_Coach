@@ -62,32 +62,93 @@ def set_predecessor(db: Database, name: str) -> None:
     db.audit("charter.predecessor", result="set" if name.strip() else "cleared")
 
 
-def extract_from_document(db: Database, doc_id: int, predecessor: str | None = None) -> int:
-    """문서 본문에서 분장 항목을 뽑아 저장한다. 저장한 최상위 항목 수를 돌려준다."""
+def extract_from_document(db: Database, doc_id: int, predecessor: str | None = None,
+                          client=None) -> int:
+    """문서 본문에서 분장 항목을 뽑아 저장한다. 저장한 최상위 항목 수를 돌려준다.
+
+    표는 규칙으로 읽는다. 표가 아니면 생성 모델(client)이 있을 때 모델로 읽고,
+    없거나 모델이 아무것도 내지 못하면 개조식 머리 줄을 규칙으로 읽는다.
+    """
     text = "\n".join(row["text"] for row in db.con.execute(
         "SELECT text FROM document_sections WHERE doc_id = ? ORDER BY ordinal", (doc_id,))
         if row["text"])
-    items = extract_items(text, predecessor_name(db) if predecessor is None else predecessor)
+    predecessor = predecessor_name(db) if predecessor is None else predecessor
+    lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+    items = _extract_from_table(lines, predecessor) if lines else []
+    if not items and client is not None and lines:
+        items = extract_with_model(text, predecessor, client)
+    if not items:
+        items = extract_items(text, predecessor)
     save_charter_items(db, doc_id, items)
     return len(items)
 
 
-def refresh_items(db: Database) -> int:
-    """전임자 이름이 바뀌었으면 읽어 둔 분장 문서에서 항목을 다시 뽑는다.
+MODEL_TEXT_LIMIT = 6000
+_NAME_WORD = re.compile(r"[가-힣A-Za-z0-9]{2,}")
 
-    분장표는 파싱하면서 바로 뽑는다. 그 뒤에 전임자 이름을 적으면 과 전체 항목이
-    그대로 남으므로, 분석 때마다 여기서 맞춘다. 다시 뽑은 문서 수를 돌려준다.
+
+def _grounded(phrase: str, text: str) -> bool:
+    """모델이 낸 이름의 낱말이 문서에 실제로 있는가. 문서에 없는 업무를 지어내지 않게 한다."""
+    words = _NAME_WORD.findall(phrase)
+    return bool(words) and sum(word in text for word in words) * 2 >= len(words)
+
+
+def extract_with_model(text: str, predecessor: str, client) -> list[ExtractedItem]:
+    """줄글·개조식 분장 문서에서 생성 모델로 업무를 뽑는다. 실패하면 빈 목록이다."""
+    from ..ai.prompts_loader import render
+    from ..ai.schemas import CHARTER_SCHEMA
+
+    body = text[:MODEL_TEXT_LIMIT]
+    instruction = (f"전임자 이름: {predecessor}. 이 사람의 업무만 추출하세요." if predecessor
+                   else "전임자 이름이 주어지지 않았습니다. 문서에 적힌 업무를 모두 추출하세요.")
+    prompt, _version = render("charter", target_owner_instruction=instruction, text=body)
+    data, error, _raw = client.generate_json(prompt, CHARTER_SCHEMA, num_predict=900)
+    if error or not isinstance(data, dict):
+        return []
+    items: list[ExtractedItem] = []
+    for raw in data.get("items") or []:
+        if not isinstance(raw, dict):
+            continue
+        name = " ".join(str(raw.get("name") or "").split())
+        if not (2 <= len(name) <= 60) or not _grounded(name, body):
+            continue
+        owner = " ".join(str(raw.get("owner") or "").split())
+        if predecessor and owner and predecessor not in owner:
+            continue
+        details = [" ".join(str(d).split()) for d in raw.get("details") or [] if isinstance(d, str)]
+        weight = raw.get("weight")
+        items.append(ExtractedItem(
+            name=name,
+            details=[d for d in details if 2 <= len(d) <= 80 and _grounded(d, body)],
+            owner=owner if owner and owner in body else "",
+            weight=float(weight) if isinstance(weight, (int, float)) and 0 < weight <= 100 else 1.0,
+            locator="model",
+        ))
+    return items
+
+
+def refresh_items(db: Database, client=None) -> int:
+    """전임자 이름이 바뀌었거나 모델을 처음 쓸 수 있게 되면 분장 항목을 다시 뽑는다.
+
+    분장표는 파싱하면서 바로 뽑는다. 그 뒤에 전임자 이름을 적거나 모델이 준비되면
+    그때의 결과가 낡으므로, 분석 때마다 여기서 맞춘다. 모델로 뽑아 둔 뒤 모델이
+    꺼졌다고 규칙 결과로 되돌리지는 않는다. 다시 뽑은 문서 수를 돌려준다.
     """
     predecessor = predecessor_name(db)
-    if (db.get_meta(EXTRACTED_FOR_META) or "") == predecessor:
+    stored = db.get_meta(EXTRACTED_FOR_META) or ""
+    used_model = stored.endswith(_MODEL_MARK)
+    if stored.removesuffix(_MODEL_MARK) == predecessor and (used_model or client is None):
         return 0
     done = 0
     for candidate in find_candidates(db):
         if candidate["parse_status"] in ("ok", "partial"):
-            extract_from_document(db, candidate["id"], predecessor)
+            extract_from_document(db, candidate["id"], predecessor, client)
             done += 1
-    db.set_meta(EXTRACTED_FOR_META, predecessor)
+    db.set_meta(EXTRACTED_FOR_META, predecessor + (_MODEL_MARK if client is not None else ""))
     return done
+
+
+_MODEL_MARK = "|model"
 
 
 def is_charter_candidate(filename: str, path: str = "") -> bool:

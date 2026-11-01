@@ -198,3 +198,64 @@ def test_user_decided_items_survive_reextraction(db: Database, tmp_path: Path):
     charter.set_predecessor(db, "홍길동")
     charter.refresh_items(db)
     assert "사람이 넣은 업무" in {item["name"] for item in charter.get_charter_items(db)}
+
+
+_PROSE = (
+    "홍길동 주무관은 매년 행정사무감사 수감 자료를 준비하고, 상반기에는 예산 편성 지침을 "
+    "각 부서에 안내한다. 김철수 주무관은 청사 시설 관리를 맡는다."
+)
+
+
+class _FakeModel:
+    def __init__(self, items, error=None):
+        self.items, self.error, self.prompts = items, error, []
+
+    def generate_json(self, prompt, schema, num_predict=400, temperature=0.0):
+        self.prompts.append(prompt)
+        return (None if self.error else {"items": self.items}), self.error, ""
+
+
+def _prose_document(db: Database, tmp_path: Path) -> int:
+    source = db.add_source(tmp_path)
+    doc_id = db.upsert_document(source, {
+        "path": str(tmp_path / "업무기술서.hwpx"), "filename": "업무기술서.hwpx",
+        "ext": ".hwpx", "parse_status": "ok", "hash": "prose"})
+    db.replace_sections(doc_id, [("paragraph", 1, "1문단", _PROSE, {})])
+    return doc_id
+
+
+def test_model_reads_prose_charters_and_drops_what_the_document_does_not_say():
+    model = _FakeModel([
+        {"name": "행정사무감사 수감", "details": ["수감 자료 준비"], "owner": "홍길동", "weight": 40},
+        {"name": "예산 편성 지침 안내", "owner": "홍길동"},
+        {"name": "청사 시설 관리", "owner": "김철수"},          # 다른 담당자
+        {"name": "인사 평가 운영", "owner": "홍길동"},          # 문서에 없는 업무
+    ])
+    items = charter.extract_with_model(_PROSE, "홍길동", model)
+    assert [item.name for item in items] == ["행정사무감사 수감", "예산 편성 지침 안내"]
+    assert items[0].details == ["수감 자료 준비"] and items[0].weight == 40
+    assert "전임자 이름: 홍길동" in model.prompts[0]
+
+
+def test_tables_never_go_to_the_model(db: Database, tmp_path: Path):
+    doc_id = _charter_document(db, tmp_path)
+    model = _FakeModel([{"name": "엉뚱한 업무"}])
+    charter.extract_from_document(db, doc_id, "홍길동", client=model)
+    assert model.prompts == []
+
+
+def test_model_failure_falls_back_to_rules(db: Database, tmp_path: Path):
+    doc_id = _prose_document(db, tmp_path)
+    assert charter.extract_from_document(db, doc_id, "", client=_FakeModel([], error="timeout")) >= 1
+
+
+def test_model_results_are_kept_when_the_model_is_off_later(db: Database, tmp_path: Path):
+    doc_id = _prose_document(db, tmp_path)
+    model = _FakeModel([{"name": "행정사무감사 수감", "owner": "홍길동"}])
+    assert charter.refresh_items(db, client=model) == 1
+    names = {item["name"] for item in charter.get_charter_items(db, doc_id)}
+    assert names == {"행정사무감사 수감"}
+
+    assert charter.refresh_items(db, client=None) == 0
+    assert charter.refresh_items(db, client=model) == 0
+    assert {item["name"] for item in charter.get_charter_items(db, doc_id)} == names
