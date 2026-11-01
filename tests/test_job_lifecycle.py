@@ -124,3 +124,27 @@ def test_summary_is_discarded_if_original_changes_during_generation(tmp_path, qa
     assert db.analysis(doc) is None
     assert results and "갱신" in results[0][2]
     db.close()
+
+
+def test_ollama_requests_share_one_ssl_context(monkeypatch):
+    """요청마다 SSL 설정을 새로 짓지 않는다(호출당 약 220ms였다)."""
+    import httpx
+    from app.ai import client as client_module
+
+    seen = []
+
+    class Refused:
+        def __init__(self, *args, **kwargs):
+            seen.append(kwargs.get("verify"))
+
+        async def __aenter__(self):
+            raise httpx.ConnectError("시험용 연결 실패")
+
+        async def __aexit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(client_module.httpx, "AsyncClient", Refused)
+    ollama = client_module.OllamaClient(base_url="http://127.0.0.1:11434")
+    ollama.health()
+    ollama.health()
+    assert len(seen) == 2 and seen[0] is seen[1] and seen[0] is not None

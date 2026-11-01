@@ -30,6 +30,22 @@ DEFAULT_EMBED_MODEL = "bge-m3"
 LOOPBACK = {"127.0.0.1", "localhost", "::1", "[::1]"}
 
 CONNECT_TIMEOUT = 3.0
+
+_SSL_CONTEXT = None
+
+
+def _ssl_context():
+    """httpx 클라이언트에 함께 넘길 SSL 설정. 한 번만 만든다.
+
+    요청마다 클라이언트를 새로 만드는데(취소를 위해), 클라이언트는 만들 때마다 인증서
+    묶음을 다시 읽어 SSL 설정을 짓는다. 실측(2026-11-01) 호출마다 약 220ms였다 —
+    Ollama는 로컬 http라 쓰지도 않는 설정이다. 하나를 같이 쓰면 약 3.5ms다.
+    """
+    global _SSL_CONTEXT
+    if _SSL_CONTEXT is None:
+        import ssl
+        _SSL_CONTEXT = ssl.create_default_context()
+    return _SSL_CONTEXT
 # 생성 호출의 문맥 창(토큰). Ollama의 기본은 4,096이고, 프롬프트가 이를 넘으면 오류 없이
 # 앞쪽 — 지시문 — 을 버리고 뒤쪽 절반쯤만 읽는다. 실측(gemma4:e2b, 2026-10-10): 질문
 # 프롬프트는 지시문 720토큰에 근거 4,800자가 붙는데, 근거가 숫자 많은 표이면 5,029토큰이
@@ -182,7 +198,8 @@ class OllamaClient:
         # 기관 PC의 환경 프록시를 따라 문서를 외부로 보내지 않는다.
         # 생성에는 긴 읽기 시간이 필요해도 연결 대기는 짧게 제한한다.
         request_timeout = httpx.Timeout(timeout, connect=CONNECT_TIMEOUT)
-        async with httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=request_timeout) as client:
+        async with httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=request_timeout,
+                                     verify=_ssl_context()) as client:
             request = asyncio.create_task(client.request(method, f"{self.base_url}{endpoint}", **kwargs))
             loop = asyncio.get_running_loop()
             deadline = loop.time() + timeout
