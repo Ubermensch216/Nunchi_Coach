@@ -422,7 +422,8 @@ def _build_root_readme(
                             for item in comp.get("charter_only", [])]
             data_only = [item if isinstance(item, dict) else {"name": item}
                          for item in comp.get("data_only", [])]
-            if charter_only or data_only:
+            past = [item if isinstance(item, dict) else {"name": item} for item in comp.get("past", [])]
+            if charter_only or data_only or past:
                 head.extend([
                     "## 업무분장표 ↔ 자료 대조 현황",
                     "",
@@ -441,6 +442,14 @@ def _build_root_readme(
                         "> 전임자가 비공식적으로 수행했거나 이전 담당자로부터 이관된 업무일 수 있습니다.",
                         "",
                         *[f"- **{item['name']}** ({item.get('doc_count', 0)}건)" for item in data_only],
+                        "",
+                    ])
+                if past:
+                    head.extend([
+                        "### 🗂️ 지난 해 분장표에만 있던 업무",
+                        "> 올해 분장에는 없습니다. 끝났거나 다른 담당자에게 넘긴 업무인지 확인하세요.",
+                        "",
+                        *[f"- {item['name']}" for item in past],
                         "",
                     ])
         except Exception as exc:

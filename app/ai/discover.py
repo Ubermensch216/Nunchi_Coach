@@ -327,9 +327,9 @@ def _charter_plan(
 ) -> tuple[list[CharterTask], set[int], dict[str, int]]:
     """S3: 업무분장표를 1차 단서로 업무 목록과 문서를 대조한다."""
     from ..core import charter
-    c_rows = db.con.execute(
-        "SELECT id, doc_id, locator, name, weight, owner FROM charter_items WHERE parent_id IS NULL ORDER BY id"
-    ).fetchall()
+    # 여러 해의 분장표가 있으면 가장 최근 해의 것으로 체계를 세운다. 지난 해에만 있던
+    # 업무를 '자료를 찾지 못한 업무'로 새로 만들지 않는다.
+    c_rows = charter.current_items(db)
     if not c_rows:
         return [], set(), {"charter_only": 0, "data_only": 0, "matched": 0}
 
@@ -416,8 +416,8 @@ def _compare_charter(db: Database, result: Discovery) -> None:
         charter_only  분장에는 있는데 자료가 없는 업무    [{name, weight}]  비중 큰 순
         data_only     자료는 있는데 분장에 없는 업무      [{name, doc_count}] 자료 많은 순
     """
-    items = db.con.execute(
-        "SELECT id, name, weight FROM charter_items WHERE parent_id IS NULL ORDER BY id").fetchall()
+    from ..core import charter
+    items = charter.current_items(db)
     if not items:
         db.set_meta("charter_comparison", "")
         result.charter_matched = result.charter_only = result.data_only = 0
@@ -450,6 +450,8 @@ def _compare_charter(db: Database, result: Discovery) -> None:
     data_only = sorted(((name, docs) for name, docs in tasks if name not in claimed),
                        key=lambda pair: (-pair[1], pair[0]))
     db.set_meta("charter_comparison", json.dumps({
+        # 지난 해 분장에만 있던 업무 — 끝났거나 넘긴 업무일 수 있어 따로 알린다.
+        "past": [{"name": name} for name in charter.past_items(db)],
         "matched": [{"name": name, "doc_count": docs} for name, docs in matched.items()],
         "charter_only": [{"name": name, "weight": weight} for name, weight in
                          sorted(charter_only.items(), key=lambda pair: (-pair[1], pair[0]))],

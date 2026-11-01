@@ -96,8 +96,8 @@ def _order_tasks_for_analysis(db: Database) -> list:
         return []
     folder_weights = survey.get_folder_weights(db)
     charter_weights = {}
-    for r in db.con.execute("SELECT name, weight FROM charter_items WHERE parent_id IS NULL"):
-        charter_weights[r[0]] = r[1]
+    for r in charter.current_items(db):
+        charter_weights[r["name"]] = r["weight"]
 
     def _score(task):
         tname = task["name"]

@@ -152,3 +152,29 @@ def test_comparison_is_cleared_when_the_charter_disappears(db: Database):
     db.con.execute("DELETE FROM charter_items")
     discover(db)
     assert not db.get_meta("charter_comparison")
+
+
+def test_older_charters_become_past_items_not_tasks(db: Database, tmp_path: Path):
+    """여러 해의 분장표가 있으면 최신 해로 체계를 세우고, 지난 해에만 있던 업무는 따로 알린다."""
+    source = db.con.execute("SELECT id FROM sources LIMIT 1").fetchone()[0]
+    old = db.upsert_document(source, {
+        "path": str(tmp_path / "2022년_업무분장표.xlsx"), "filename": "2022년_업무분장표.xlsx",
+        "ext": ".xlsx", "hash": "old_charter", "parse_status": "ok", "eff_year": 2022})
+    charter.save_charter_items(db, old, [
+        charter.ExtractedItem(name="예산편성"),
+        charter.ExtractedItem(name="코로나방역지원"),       # 올해 분장에는 없다
+    ])
+    db.con.execute("UPDATE documents SET eff_year = 2024 WHERE filename = '업무분장표.xlsx'")
+    db.con.commit()
+
+    assert charter.past_items(db) == ["코로나방역지원"]
+    discover(db)
+    assert "코로나방역지원" not in {t["name"] for t in db.tasks()}
+    comp = json.loads(db.get_meta("charter_comparison"))
+    assert comp["past"] == [{"name": "코로나방역지원"}]
+    assert "코로나방역지원" not in {item["name"] for item in comp["charter_only"]}
+
+
+def test_charters_without_known_years_are_all_current(db: Database):
+    assert charter.current_doc_ids(db) is None
+    assert charter.past_items(db) == []

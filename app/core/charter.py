@@ -433,3 +433,52 @@ def get_charter_items(db: Database, doc_id: int | None = None) -> list[dict]:
             "FROM charter_items ORDER BY id"
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── 여러 해의 분장표 ────────────────────────────────────────────────
+
+_YEAR_IN_NAME = re.compile(r"(?<!\d)(20\d{2})(?!\d)")
+
+
+def _charter_year(row) -> int | None:
+    """분장 문서가 어느 해의 것인가. 파일 이름의 해가 먼저고, 없으면 문서 시점의 해."""
+    found = _YEAR_IN_NAME.findall(row["filename"] or "")
+    return int(found[-1]) if found else row["eff_year"]
+
+
+def current_doc_ids(db: Database) -> set[int] | None:
+    """가장 최근 해의 분장 문서. 해를 아는 분장 문서가 둘 이상의 해에 걸치지 않으면 None(전부 현재)."""
+    rows = db.con.execute(
+        "SELECT DISTINCT d.id, d.filename, d.eff_year FROM charter_items c "
+        "JOIN documents d ON d.id = c.doc_id WHERE d.missing_since IS NULL").fetchall()
+    years = {row["id"]: _charter_year(row) for row in rows}
+    known = {year for year in years.values() if year}
+    if len(known) < 2:
+        return None
+    latest = max(known)
+    # 해를 모르는 분장 문서는 최신으로 둔다 — 근거 없이 '지난 분장'으로 내리지 않는다.
+    return {doc_id for doc_id, year in years.items() if year is None or year == latest}
+
+
+def current_items(db: Database) -> list:
+    """업무 체계의 기준이 되는 최상위 분장 항목 — 가장 최근 해의 분장표에서."""
+    rows = db.con.execute(
+        "SELECT id, doc_id, locator, name, weight, owner FROM charter_items "
+        "WHERE parent_id IS NULL ORDER BY id").fetchall()
+    current = current_doc_ids(db)
+    return rows if current is None else [row for row in rows if row["doc_id"] in current]
+
+
+def past_items(db: Database) -> list[str]:
+    """지난 해의 분장표에만 있고 올해 분장에는 없는 업무 이름. 끝났거나 넘긴 업무일 수 있다."""
+    current = current_doc_ids(db)
+    if current is None:
+        return []
+    from .folders import compact
+    now = {compact(row["name"]) for row in current_items(db)}
+    past: list[str] = []
+    for row in db.con.execute(
+            "SELECT name, doc_id FROM charter_items WHERE parent_id IS NULL ORDER BY id"):
+        if row["doc_id"] not in current and compact(row["name"]) not in now and row["name"] not in past:
+            past.append(row["name"])
+    return past

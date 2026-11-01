@@ -257,3 +257,12 @@ def test_guide_lists_the_comparison_that_discovery_actually_stores(workspace):
                                                  ensure_ascii=False))
     handover_folder.export_handover_folder(db, tmp_path / "out2", today=date(2026, 11, 1))
     assert "예전형식업무" in (tmp_path / "out2" / "00_인계_안내.md").read_text(encoding="utf-8")
+
+
+def test_guide_lists_past_charter_items(workspace):
+    db, _, _, _, _, tmp_path = workspace
+    db.set_meta("charter_comparison", json.dumps(
+        {"past": [{"name": "코로나방역지원"}], "charter_only": [], "data_only": []}, ensure_ascii=False))
+    handover_folder.export_handover_folder(db, tmp_path / "out_past", today=date(2026, 11, 1))
+    text = (tmp_path / "out_past" / "00_인계_안내.md").read_text(encoding="utf-8")
+    assert "지난 해 분장표에만 있던 업무" in text and "코로나방역지원" in text
