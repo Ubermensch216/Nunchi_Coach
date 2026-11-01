@@ -417,8 +417,11 @@ def _build_root_readme(
     if comparison_json:
         try:
             comp = json.loads(comparison_json)
-            charter_only = comp.get("charter_only", [])
-            data_only = comp.get("data_only", [])
+            # 2026-11-01 전에 분석한 프로젝트는 이름만 담긴 목록이다.
+            charter_only = [item if isinstance(item, dict) else {"name": item}
+                            for item in comp.get("charter_only", [])]
+            data_only = [item if isinstance(item, dict) else {"name": item}
+                         for item in comp.get("data_only", [])]
             if charter_only or data_only:
                 head.extend([
                     "## 업무분장표 ↔ 자료 대조 현황",

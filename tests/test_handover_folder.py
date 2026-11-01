@@ -234,3 +234,26 @@ def test_export_handover_folder_with_charter_hierarchy_and_comparison(workspace)
     assert "업무분장표 ↔ 자료 대조 현황" in readme
     assert "예산총괄" in readme
     assert "비공식행사" in readme
+
+
+def test_guide_lists_the_comparison_that_discovery_actually_stores(workspace):
+    """discover가 저장하는 꼴 그대로 안내문에 실린다. 예전 프로젝트의 이름 목록도 읽는다."""
+    from app.core import charter
+
+    db, _, _, _, _, tmp_path = workspace
+    doc_id = db.con.execute("SELECT id FROM documents LIMIT 1").fetchone()[0]
+    charter.save_charter_items(db, doc_id, [charter.ExtractedItem(name="미래전략기획")])
+    db.con.commit()
+    discover(db, client=None)
+    data_only = json.loads(db.get_meta("charter_comparison"))["data_only"]
+    assert data_only, "공문으로 세운 업무가 분장 밖 후보로 잡혀야 한다"
+    first = data_only[0]
+
+    handover_folder.export_handover_folder(db, tmp_path / "out1", today=date(2026, 11, 1))
+    text = (tmp_path / "out1" / "00_인계_안내.md").read_text(encoding="utf-8")
+    assert "미래전략기획" in text and f"**{first['name']}** ({first['doc_count']}건)" in text
+
+    db.set_meta("charter_comparison", json.dumps({"charter_only": ["예전형식업무"], "data_only": []},
+                                                 ensure_ascii=False))
+    handover_folder.export_handover_folder(db, tmp_path / "out2", today=date(2026, 11, 1))
+    assert "예전형식업무" in (tmp_path / "out2" / "00_인계_안내.md").read_text(encoding="utf-8")

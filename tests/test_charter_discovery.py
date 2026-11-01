@@ -97,9 +97,9 @@ def test_charter_discovery_three_branches(db: Database):
     assert raw_comp is not None
     comp = json.loads(raw_comp)
 
-    assert set(comp["matched"]) == {"예산편성", "규제개혁", "의회대응", "청사관리"}
-    assert set(comp["charter_only"]) == {"미래전략기획", "대외통상협력"}
-    assert any("수질통계" in n for n in comp["data_only"])
+    assert {item["name"] for item in comp["matched"]} == {"예산편성", "규제개혁", "의회대응", "청사관리"}
+    assert {item["name"] for item in comp["charter_only"]} == {"미래전략기획", "대외통상협력"}
+    assert any("수질통계" in item["name"] and item["doc_count"] == 2 for item in comp["data_only"])
 
     # 분장 이름을 대표 이름으로 채택 확인 (폴더명 '02_규제개혁추진' 대신 분장명 '규제개혁')
     tasks = db.tasks()
@@ -110,3 +110,45 @@ def test_charter_discovery_three_branches(db: Database):
     assert "분장 일치 4개" in result.summary()
     assert "분장 전용 2개" in result.summary()
     assert "분장 밖 후보 1개" in result.summary()
+
+
+def test_comparison_covers_tasks_from_any_discovery_path_and_ranks_by_volume(tmp_path: Path):
+    """본문 군집 등 폴더 계획 밖에서 세운 업무도 견주고, 분장 밖 후보는 자료가 많은 순이다."""
+    from app.ai.discover import Discovery, _compare_charter
+
+    database = Database(tmp_path / "p.db")
+    database.init()
+    source = database.add_source(tmp_path)
+    doc = database.upsert_document(source, {
+        "path": str(tmp_path / "업무분장표.xlsx"), "filename": "업무분장표.xlsx", "ext": ".xlsx",
+        "hash": "c", "parse_status": "ok"})
+    charter.save_charter_items(database, doc, [
+        charter.ExtractedItem(name="예산편성", weight=30),
+        charter.ExtractedItem(name="미래전략기획", weight=10),
+        charter.ExtractedItem(name="대외통상협력", weight=50),
+    ])
+    for name, count in (("예산편성 업무", 2), ("수질 통계", 1), ("민원 응대", 3)):
+        task = database.con.execute(
+            "INSERT INTO tasks(name, origin, status) VALUES (?, 'ai', 'proposed')", (name,)).lastrowid
+        for index in range(count):
+            doc_id = database.upsert_document(source, {
+                "path": str(tmp_path / f"{name}{index}.hwp"), "filename": f"{name}{index}.hwp",
+                "ext": ".hwp", "hash": f"{name}{index}", "parse_status": "ok"})
+            database.con.execute("INSERT INTO task_docs(task_id, doc_id, origin) VALUES (?, ?, 'ai')",
+                                 (task, doc_id))
+    result = Discovery()
+    _compare_charter(database, result)
+    comp = json.loads(database.get_meta("charter_comparison"))
+
+    assert comp["matched"] == [{"name": "예산편성", "doc_count": 2}]
+    assert [item["name"] for item in comp["charter_only"]] == ["대외통상협력", "미래전략기획"]
+    assert comp["data_only"] == [{"name": "민원 응대", "doc_count": 3}, {"name": "수질 통계", "doc_count": 1}]
+    assert (result.charter_matched, result.charter_only, result.data_only) == (1, 2, 2)
+
+
+def test_comparison_is_cleared_when_the_charter_disappears(db: Database):
+    discover(db)
+    assert db.get_meta("charter_comparison")
+    db.con.execute("DELETE FROM charter_items")
+    discover(db)
+    assert not db.get_meta("charter_comparison")

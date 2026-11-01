@@ -83,10 +83,12 @@ class _Cancelled(Exception):
 def discover(db, client=None, threshold=None, min_size=None, on_progress=None) -> Discovery:
     # Failed/cancelled rediscovery must not erase the previous proposals.
     try:
-        return _discover(db, client, threshold, min_size, on_progress)
+        result = _discover(db, client, threshold, min_size, on_progress)
     except _Cancelled:
         return Discovery(tasks=len(db.tasks()), unassigned=db.unclassified_count(), cancelled=True,
                          errors=["업무 발견을 중단했습니다. 이전 제안을 보존했습니다."])
+    _compare_charter(db, result)
+    return result
 
 
 def _discover(
@@ -132,23 +134,6 @@ def _discover(
                     matched_charter.match_kind = "matched"
                     matched_charter.doc_ids = ftask.doc_ids
 
-    # 대조 결과(세 갈래: matched, charter_only, data_only)
-    charter_matched_names = [t.name for t in charter_tasks if t.match_kind == "matched"]
-    charter_only_names = [t.name for t in charter_tasks if t.match_kind == "charter_only"]
-    data_only_names = [
-        ft.name for ft in (plan or [])
-        if not ft.loose and not any(_match_names(ct.name, ft.name, ct.details) for ct in charter_tasks)
-    ]
-
-    db.set_meta("charter_comparison", json.dumps({
-        "matched": charter_matched_names,
-        "charter_only": charter_only_names,
-        "data_only": data_only_names,
-    }, ensure_ascii=False))
-
-    result.charter_matched = len(charter_matched_names)
-    result.charter_only = len(charter_only_names)
-    result.data_only = len(data_only_names)
     if store.size == 0 and plan is None:
         if official:
             with db.transaction():
@@ -419,6 +404,59 @@ def _charter_plan(
         "data_only": 0,
     }
     return tasks, claimed, counts
+
+
+def _compare_charter(db: Database, result: Discovery) -> None:
+    """분장 항목과 최종 업무 목록을 견주어 세 갈래로 남긴다.
+
+    공문·폴더·본문 군집 어느 길로 업무를 세웠든 끝난 결과로 견준다. 폴더 계획만
+    보면 본문 군집으로 세운 업무는 '분장 밖'에 한 번도 오르지 않는다.
+
+        matched       분장에 있고 자료도 있는 업무        [{name, doc_count}]
+        charter_only  분장에는 있는데 자료가 없는 업무    [{name, weight}]  비중 큰 순
+        data_only     자료는 있는데 분장에 없는 업무      [{name, doc_count}] 자료 많은 순
+    """
+    items = db.con.execute(
+        "SELECT id, name, weight FROM charter_items WHERE parent_id IS NULL ORDER BY id").fetchall()
+    if not items:
+        db.set_meta("charter_comparison", "")
+        result.charter_matched = result.charter_only = result.data_only = 0
+        return
+    details = {}
+    for row in db.con.execute("SELECT parent_id, name FROM charter_items WHERE parent_id IS NOT NULL"):
+        details.setdefault(row["parent_id"], []).append(row["name"])
+    tasks = []
+    for row in db.con.execute(
+            "SELECT t.id, t.name, COUNT(d.id) AS docs FROM tasks t "
+            "LEFT JOIN task_docs td ON td.task_id = t.id "
+            "LEFT JOIN documents d ON d.id = td.doc_id AND d.missing_since IS NULL "
+            "WHERE t.not_a_task = 0 AND t.merged_into IS NULL GROUP BY t.id"):
+        if row["docs"] and not bundles.kind(db, row["id"]):
+            tasks.append((row["name"], row["docs"]))
+
+    matched: dict[str, int] = {}
+    charter_only: dict[str, float] = {}
+    claimed: set[str] = set()
+    for item in items:
+        hits = [(name, docs) for name, docs in tasks
+                if _match_names(item["name"], name, details.get(item["id"], []))]
+        if hits:
+            matched[item["name"]] = max(matched.get(item["name"], 0), sum(docs for _n, docs in hits))
+            claimed.update(name for name, _docs in hits)
+        elif item["name"] not in matched:
+            charter_only[item["name"]] = max(charter_only.get(item["name"], 0), item["weight"] or 0)
+    for name in matched:
+        charter_only.pop(name, None)
+    data_only = sorted(((name, docs) for name, docs in tasks if name not in claimed),
+                       key=lambda pair: (-pair[1], pair[0]))
+    db.set_meta("charter_comparison", json.dumps({
+        "matched": [{"name": name, "doc_count": docs} for name, docs in matched.items()],
+        "charter_only": [{"name": name, "weight": weight} for name, weight in
+                         sorted(charter_only.items(), key=lambda pair: (-pair[1], pair[0]))],
+        "data_only": [{"name": name, "doc_count": docs} for name, docs in data_only],
+    }, ensure_ascii=False))
+    result.charter_matched, result.charter_only, result.data_only = (
+        len(matched), len(charter_only), len(data_only))
 
 
 def _save_charter(db, result: Discovery, charter_tasks: list[CharterTask]) -> None:
