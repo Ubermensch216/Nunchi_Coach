@@ -58,3 +58,14 @@ def current_state(db, task_id: int) -> dict:
             "created_at": last["created_at"] if last is not None else None,
             "current": last is not None and last["digest"] == digest,
             "failure": failed["note"] if failed is not None else ""}
+
+
+def version_line(db, task_id: int) -> str:
+    """내보내기 문서에 적을 한 줄 — 업무노트의 정리본과 같은 판인지. 판이 없으면 빈 문자열."""
+    state = current_state(db, task_id)
+    if not state["version"]:
+        return ""
+    if state["current"]:
+        return f"업무노트 정리본 판 {state['version']}과 같은 내용입니다."
+    return (f"업무노트 정리본 판 {state['version']} 이후 업무 내용이 바뀌었습니다. "
+            "업무노트를 열면 새 판으로 바뀝니다.")

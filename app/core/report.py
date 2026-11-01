@@ -291,7 +291,7 @@ def build_manual(db, project: str = '', today: date | None = None) -> str:
     """화면의 업무 안내·매뉴얼을 후임자에게 전달할 문서로 묶는다. 새 사실을 생성하지 않는다."""
     import html
     import re
-    from . import task_manual
+    from . import manual_versions, task_manual
 
     def cell(value):
         value = re.sub(r'([\\`*_{}\[\]#+!|])', r'\\\1', str(value or ''))
@@ -314,6 +314,9 @@ def build_manual(db, project: str = '', today: date | None = None) -> str:
     order = ('overview', 'first', 'timing', 'prepare', 'evaluation', 'procedure', 'output', 'cases', 'notes', 'past', 'basis')
     for task in tasks:
         out += [f"## {cell(task['name'])}", '']
+        version = manual_versions.version_line(db, task['id'])
+        if version:
+            out += ['> ' + cell(version), '']
         manual = task_manual.build(db, task['id'])
         for section in sorted(manual.sections, key=lambda s: order.index(s.key)):
             out += [f'### {cell(section.title)}', '']

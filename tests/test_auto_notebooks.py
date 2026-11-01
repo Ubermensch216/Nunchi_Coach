@@ -231,3 +231,21 @@ def test_brief_of_a_charter_only_task_asks_for_material(db: Database):
         "INSERT INTO tasks(name, origin, status, description) VALUES ('미래전략기획', 'ai', 'proposed', ?)",
         ("업무분장표에 기재되어 있으나 아직 관련 문서를 찾지 못한 업무입니다.",)).lastrowid
     assert "자료를 찾지 못했습니다" in notebook_tasks.brief_markdown(db, t_id)
+
+
+def test_exports_state_the_notebook_brief_version(db: Database, tmp_path: Path):
+    from app.core import handover_folder, manual_versions, report
+
+    t_id = db.con.execute("SELECT id FROM tasks WHERE name='예산 편성'").fetchone()[0]
+    assert manual_versions.version_line(db, t_id) == ""
+    notebook_tasks.auto_generate_for_tasks(db)
+    assert "판 1과 같은 내용" in manual_versions.version_line(db, t_id)
+    assert "판 1과 같은 내용" in report.build_manual(db)
+
+    db.add_task_item(t_id, "deadline", "매년 3월 15일까지 제출")
+    assert "판 1 이후 업무 내용이 바뀌었습니다" in manual_versions.version_line(db, t_id)
+
+    out = tmp_path.parent / f"{tmp_path.name}_copies"
+    handover_folder.export_handover_folder(db, out)
+    guides = list(out.rglob("00_업무안내.md"))
+    assert any("업무노트 정리본 판 1" in g.read_text(encoding="utf-8") for g in guides)

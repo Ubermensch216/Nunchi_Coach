@@ -333,10 +333,13 @@ def _build_task_guide(
     missing_originals: list[str],
     today: date,
 ) -> str:
+    from . import manual_versions
     draft = workcard.draft_markdown(db, task["id"], today=today)
+    version = manual_versions.version_line(db, task["id"])
     lines = [
         draft.rstrip(),
         "",
+        *([f"> {version}", ""] if version else []),
         "## 이 폴더에 복사된 사본 목록",
         "",
         "> 원본 파일은 원래 자리에 그대로 두고 사본만 복사했습니다. 배정 근거와 확신도를 함께 적습니다.",
