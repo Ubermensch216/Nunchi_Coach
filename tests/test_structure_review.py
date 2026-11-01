@@ -155,3 +155,38 @@ def test_progress_screen_offers_review_only_while_pending(db, qapp):
         assert view.review.isHidden()
     finally:
         view.deleteLater()
+
+
+def _department_charter(db):
+    from app.core import charter
+    source = db.con.execute("SELECT id FROM sources LIMIT 1").fetchone()[0]
+    doc = db.upsert_document(source, {
+        "path": "C:/분장/업무분장표.xlsx", "filename": "업무분장표.xlsx", "ext": ".xlsx",
+        "hash": "charter", "parse_status": "ok"})
+    charter.save_charter_items(db, doc, [
+        charter.ExtractedItem(name="예산편성", owner="홍길동"),
+        charter.ExtractedItem(name="결산", owner="홍길동"),
+        charter.ExtractedItem(name="청사관리", owner="김철수"),
+    ])
+    db.con.commit()
+
+
+def test_owner_choice_is_offered_only_when_the_charter_mixes_people(db, qapp):
+    from app.core import charter
+    from app.ui.views.structure_review import StructureReviewDialog
+
+    assert not charter.needs_owner_choice(db)
+    _department_charter(db)
+    assert charter.owners(db) == ["홍길동", "김철수"]
+    assert charter.needs_owner_choice(db)
+
+    dialog = StructureReviewDialog(db)
+    try:
+        assert not dialog.owner.isHidden()
+        dialog.owner.setCurrentIndex(dialog.owner.findData("홍길동"))
+        assert charter.predecessor_name(db) == "홍길동" and dialog.changed
+        assert dialog.owner.isHidden()
+    finally:
+        dialog.deleteLater()
+    assert charter.refresh_items(db) == 1
+    assert {item["owner"] for item in charter.get_charter_items(db) if item["parent_id"] is None} <= {"홍길동"}

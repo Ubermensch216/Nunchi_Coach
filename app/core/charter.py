@@ -482,3 +482,18 @@ def past_items(db: Database) -> list[str]:
         if row["doc_id"] not in current and compact(row["name"]) not in now and row["name"] not in past:
             past.append(row["name"])
     return past
+
+
+def owners(db: Database) -> list[str]:
+    """최신 분장표에 담당자로 적힌 사람들. 전임자 이름을 모를 때 고르게 한다(항목 수가 많은 순)."""
+    counts: dict[str, int] = {}
+    for row in current_items(db):
+        owner = " ".join((row["owner"] or "").split())
+        if owner:
+            counts[owner] = counts.get(owner, 0) + 1
+    return sorted(counts, key=lambda name: (-counts[name], name))
+
+
+def needs_owner_choice(db: Database) -> bool:
+    """분장표에 여러 담당자가 있는데 누구의 행인지 모른다 — 과 전체 업무가 섞여 있다."""
+    return not predecessor_name(db) and len(owners(db)) > 1
