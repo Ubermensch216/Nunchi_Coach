@@ -16,11 +16,24 @@ OS가 실제로 프로그램을 띄우는지가 아니므로, 외부 실행만 �
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
+
+# 실행마다 tmp-* 폴더가 하나씩 생긴다. 지우지 않으면 수십 GB까지 쌓인다.
+# 실패한 실행을 들여다볼 수 있게 최근 몇 개는 남긴다.
+KEEP_TEST_RUNS = 3
+
+
+def _prune_old_runs(root: Path, keep: int) -> None:
+    runs = sorted((p for p in root.glob("tmp-*") if p.is_dir()),
+                  key=lambda p: p.stat().st_mtime, reverse=True)
+    for old in runs[keep:]:
+        # 다른 시험 실행이 쓰는 중이라 잠긴 파일은 남겨 두고 다음 실행 때 지운다.
+        shutil.rmtree(old, ignore_errors=True)
 
 
 def pytest_configure(config):
@@ -28,6 +41,7 @@ def pytest_configure(config):
     root = Path(__file__).resolve().parents[1] / ".test_runs"
     root.mkdir(exist_ok=True)
     if not config.option.basetemp:
+        _prune_old_runs(root, KEEP_TEST_RUNS - 1)
         config.option.basetemp = str(root / f"tmp-{uuid4().hex[:12]}")
 
 
