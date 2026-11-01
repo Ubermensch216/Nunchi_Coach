@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ....core import notebook
+from ....core import notebook, notebook_tasks
 from ... import theme
 from ...widgets import Badge, UnknownBlock
 from .chat_panel import ChatPanel
@@ -140,6 +140,9 @@ class NotebookWorkspace(QWidget):
         self.notebook_id = notebook_id
         notebook.touch(self.db, notebook_id, opened=True)
         editable = not row["archived"]
+        # 재분석으로 정리본 판이 올랐으면 이번에 여는 동안 알린다. 알린 판은 본 것으로 적는다.
+        self._version_notice = notebook_tasks.version_notice(self.db, notebook_id)
+        notebook_tasks.mark_version_seen(self.db, notebook_id)
         self._sync_header(row)
         self.sources.set_notebook(notebook_id, editable)
         self.chat.set_notebook(notebook_id, editable)
@@ -183,9 +186,13 @@ class NotebookWorkspace(QWidget):
         self._paint_icons()
         self.archived_badge.setVisible(bool(row["archived"]))
         if row["archived"]:
-            self.banner.setMessage("보관한 업무노트입니다. 자료와 대화는 읽을 수 있지만 질문·수정은 "
-                                   "보관을 해제한 뒤에 할 수 있습니다(홈의 ••• 메뉴).")
-        self.banner.setVisible(bool(row["archived"]))
+            message = ("보관한 업무노트입니다. 자료와 대화는 읽을 수 있지만 질문·수정은 "
+                       "보관을 해제한 뒤에 할 수 있습니다(홈의 ••• 메뉴).")
+        else:
+            message = getattr(self, "_version_notice", "")
+        if message:
+            self.banner.setMessage(message)
+        self.banner.setVisible(bool(message))
         task_id = row["task_id"] if "task_id" in row.keys() else None
         if task_id:
             self._current_task_id = task_id

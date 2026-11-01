@@ -147,3 +147,63 @@ def test_chat_panel_shows_suggested_questions(db: Database, monkeypatch):
         panel._warmup.stop()
         panel.deleteLater()
         app.processEvents()
+
+
+def test_version_notice_after_reanalysis_changes_the_brief(db: Database):
+    """재분석으로 정리본 판이 오르면 다음에 열 때 '판 n → n+1'을 한 번 알린다."""
+    nb_id = notebook_tasks.auto_generate_for_tasks(db)[0]
+    t_id = db.con.execute("SELECT id FROM tasks WHERE name='예산 편성'").fetchone()[0]
+    assert notebook_tasks.version_notice(db, nb_id) == ""        # 처음 여는 업무노트
+
+    db.add_task_item(t_id, "deadline", "매년 3월 15일까지 제출")
+    assert notebook_tasks.open_for_task(db, t_id).refreshed      # 분석 뒤 파이프라인이 하는 일
+    notice = notebook_tasks.version_notice(db, nb_id)
+    assert "판 1 → 2" in notice
+
+    notebook_tasks.mark_version_seen(db, nb_id)
+    assert notebook_tasks.version_notice(db, nb_id) == ""
+
+
+def test_answer_applied_to_the_task_appears_in_the_next_brief(db: Database):
+    nb_id = notebook_tasks.auto_generate_for_tasks(db)[0]
+    t_id = db.con.execute("SELECT id FROM tasks WHERE name='예산 편성'").fetchone()[0]
+
+    item_id = notebook_tasks.apply_answer(db, nb_id, "recipient", "기획예산과 예산팀")
+    item = db.con.execute("SELECT * FROM task_items WHERE id=?", (item_id,)).fetchone()
+    assert item["task_id"] == t_id and item["origin"] == "user"
+    assert "기획예산과 예산팀" in notebook_tasks.brief_markdown(db, t_id)
+    assert t_id in set(notebook_tasks.outdated(db, nb_id).values())
+
+
+def test_apply_answer_needs_a_task_notebook(db: Database):
+    plain = notebook.create(db, "그냥 메모")
+    with pytest.raises(ValueError):
+        notebook_tasks.apply_answer(db, plain, "note", "내용")
+
+
+def test_workspace_shows_the_version_notice_once(db: Database, monkeypatch):
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    from app.jobs.ask_task import WarmupRunner
+    from app.ui.views.notebooks.workspace import NotebookWorkspace
+
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(WarmupRunner, "start", lambda self: False)
+    nb_id = notebook_tasks.auto_generate_for_tasks(db)[0]
+    t_id = db.con.execute("SELECT id FROM tasks WHERE name='예산 편성'").fetchone()[0]
+    notebook_tasks.version_notice(db, nb_id)                       # 처음 열었다
+    db.add_task_item(t_id, "deadline", "매년 3월 15일까지 제출")
+    notebook_tasks.open_for_task(db, t_id)
+
+    view = NotebookWorkspace(db)
+    try:
+        view.open(nb_id)
+        assert "판 1 → 2" in view.banner.label.text() and not view.banner.isHidden()
+        view.open(nb_id)
+        assert view.banner.isHidden()
+    finally:
+        view.chat._runner.stop()
+        view.chat._warmup.stop()
+        view.deleteLater()
+        app.processEvents()

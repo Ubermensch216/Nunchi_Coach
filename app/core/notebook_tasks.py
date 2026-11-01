@@ -415,6 +415,51 @@ def auto_generate_for_tasks(db) -> list[int]:
     return created_ids
 
 
+SEEN_META = "manual_seen:{}"
+
+
+def version_notice(db, notebook_id: int) -> str:
+    """지난번에 이 업무노트를 연 뒤 재분석으로 정리본 판이 올랐으면 그 알림. 없으면 빈 문자열.
+
+    처음 여는 업무노트는 알릴 것이 없다 — 본 판을 적어 두기만 한다.
+    """
+    from . import manual_versions
+    row = db.con.execute("SELECT task_id FROM notebooks WHERE id=?", (notebook_id,)).fetchone()
+    last = manual_versions.latest(db, row["task_id"]) if row is not None and row["task_id"] else None
+    if last is None:
+        return ""
+    seen = db.get_meta(SEEN_META.format(notebook_id)) or ""
+    if not seen.isdigit():
+        mark_version_seen(db, notebook_id)
+        return ""
+    if last["version"] <= int(seen):
+        return ""
+    return (f"업무 내용이 바뀌어 정리본을 판 {seen} → {last['version']}로 바꿨습니다. "
+            "지난 답의 인용은 그때의 판으로 계속 열립니다.")
+
+
+def mark_version_seen(db, notebook_id: int) -> None:
+    from . import manual_versions
+    row = db.con.execute("SELECT task_id FROM notebooks WHERE id=?", (notebook_id,)).fetchone()
+    last = manual_versions.latest(db, row["task_id"]) if row is not None and row["task_id"] else None
+    if last is not None:
+        db.set_meta(SEEN_META.format(notebook_id), str(last["version"]))
+
+
+def apply_answer(db, notebook_id: int, kind: str, content: str) -> int:
+    """업무노트 대화에서 확인한 사실을 그 업무의 항목으로 올린다(S6 왕복).
+
+    사람이 보탠 항목으로 남아 다음 정리본 판에 실린다. 업무에 묶이지 않은 업무노트는 받지 않는다.
+    """
+    row = db.con.execute("SELECT task_id FROM notebooks WHERE id=?", (notebook_id,)).fetchone()
+    if row is None or not row["task_id"]:
+        raise ValueError("업무에 묶인 업무노트에서만 업무에 반영할 수 있습니다.")
+    name, role = db.reviewer()
+    item_id = db.add_task_item(row["task_id"], kind, content, reviewer_name=name, reviewer_role=role)
+    db.audit("notebook.apply_answer", f"{notebook_id}/{row['task_id']}")
+    return item_id
+
+
 def archive_for_task(db, task_id: int, archive: bool = True) -> None:
     """업무 합치기 또는 '업무 아님' 시 해당 업무의 노트북을 보관(archive) 처리하거나 복원한다."""
     with db.transaction():

@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFrame,
     QHBoxLayout,
+    QInputDialog,
     QLineEdit,
     QMessageBox,
     QLabel,
@@ -494,6 +495,13 @@ class ChatPanel(QWidget):
             line.addWidget(save)
             if answer.generation.get("mode") != "overview":
                 line.addWidget(self._whole_button(answer.question))
+            if answer.text and self._task_id() is not None:
+                apply = icon_button("tasks",
+                                    "업무에 반영 — 이 답에서 확인한 사실(기한·제출처 등)을 업무 항목으로 올립니다. "
+                                    "사람이 보탠 내용으로 남고 다음 정리본 판에 실립니다.",
+                                    "업무에 반영")
+                apply.clicked.connect(lambda _=False, t=answer.text: self._ask_apply(t))
+                line.addWidget(apply)
         for name, value, label, done in (("thumb-up", "right", "맞습니다", "맞다고 남김"),
                                          ("thumb-down", "wrong", "사실과 다릅니다", "사실과 다르다고 남김")):
             chosen = row["rating"] == value
@@ -510,6 +518,29 @@ class ChatPanel(QWidget):
                 line.addWidget(mark)
         line.addStretch(1)
         return line
+
+    def _task_id(self) -> int | None:
+        if self.notebook_id is None:
+            return None
+        row = self.db.con.execute("SELECT task_id FROM notebooks WHERE id=?", (self.notebook_id,)).fetchone()
+        return row["task_id"] if row is not None and row["task_id"] else None
+
+    def _ask_apply(self, text: str) -> None:
+        from ....core import notebook_tasks, reconstruction as rc
+        kinds = [k for k in rc.KIND_LABEL if k not in (rc.RECORD, rc.PROCEDURE, rc.STATEMENT)]
+        labels = [rc.KIND_LABEL[k] for k in kinds]
+        label, ok = QInputDialog.getItem(self, "업무에 반영", "무엇에 관한 사실인가요?", labels,
+                                         labels.index(rc.KIND_LABEL[rc.NOTE]), False)
+        if not ok:
+            return
+        content, ok = QInputDialog.getText(
+            self, "업무에 반영", "확인한 내용을 다듬어 적어 주세요. 사람이 보탠 내용으로 남습니다.",
+            text=" ".join(text.split())[:200])
+        if not ok or not content.strip():
+            return
+        notebook_tasks.apply_answer(self.db, self.notebook_id, kinds[labels.index(label)], content)
+        QMessageBox.information(self, "업무에 반영",
+                                "업무 항목으로 올렸습니다. 업무 화면과 다음 정리본 판에 실립니다.")
 
     def _whole_button(self, question: str) -> QPushButton:
         """보통 질문으로 받은 답이 모자랄 때 — 같은 질문을 자료 전체를 훑어 다시 받는다."""
