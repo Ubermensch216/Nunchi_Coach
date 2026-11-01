@@ -178,3 +178,77 @@ def test_older_charters_become_past_items_not_tasks(db: Database, tmp_path: Path
 def test_charters_without_known_years_are_all_current(db: Database):
     assert charter.current_doc_ids(db) is None
     assert charter.past_items(db) == []
+
+
+class _Embedder:
+    """분장 항목 글을 정해 둔 벡터로 바꾸는 가짜 임베딩 모델."""
+    embed_model = "bge-m3"
+
+    def __init__(self, vectors):
+        self.vectors = vectors
+
+    def embed(self, texts):
+        return [self.vectors[text.split()[0]] for text in texts], None
+
+
+def _semantic_project(tmp_path: Path) -> Database:
+    from app.search.vector import pack
+
+    database = Database(tmp_path / "meaning.db")
+    database.init()
+    source = database.add_source(tmp_path)
+    doc = database.upsert_document(source, {
+        "path": str(tmp_path / "업무분장표.xlsx"), "filename": "업무분장표.xlsx", "ext": ".xlsx",
+        "hash": "c", "parse_status": "ok"})
+    charter.save_charter_items(database, doc, [
+        charter.ExtractedItem(name="의회대응", details=["행정사무감사"]),
+        charter.ExtractedItem(name="미래전략기획"),
+    ])
+    for name, vector in (("감사 수감 자료", [1.0, 0.0, 0.0]), ("수질 통계", [0.0, 1.0, 0.0])):
+        task = database.con.execute(
+            "INSERT INTO tasks(name, origin, status) VALUES (?, 'ai', 'proposed')", (name,)).lastrowid
+        for index in range(2):
+            doc_id = database.upsert_document(source, {
+                "path": str(tmp_path / f"{name}{index}.hwp"), "filename": f"{name}{index}.hwp",
+                "ext": ".hwp", "hash": f"{name}{index}", "parse_status": "ok"})
+            database.con.execute("INSERT INTO task_docs(task_id, doc_id, origin) VALUES (?, ?, 'ai')",
+                                 (task, doc_id))
+            database.con.execute("INSERT INTO doc_embeddings(doc_id, model, dim, vector) VALUES (?, 'bge-m3', 3, ?)",
+                                 (doc_id, pack(vector)))
+    # 분장만 있고 자료가 없을 때 discover가 만드는 자리표시 업무
+    database.con.execute("INSERT INTO tasks(name, origin, status, description) VALUES ('의회대응', 'ai', 'proposed', ?)",
+                         ("업무분장표에 기재되어 있으나 아직 관련 문서를 찾지 못한 업무입니다.",))
+    database.con.commit()
+    return database
+
+
+def test_charter_items_meet_tasks_by_meaning_when_names_differ(tmp_path: Path):
+    from app.ai.discover import Discovery, _compare_charter
+
+    database = _semantic_project(tmp_path)
+    try:
+        model = _Embedder({"의회대응": [0.95, 0.1, 0.0], "미래전략기획": [0.0, 0.0, 1.0]})
+        _compare_charter(database, Discovery(), model)
+        comp = json.loads(database.get_meta("charter_comparison"))
+        assert comp["matched"] == [{"name": "의회대응", "doc_count": 2}]
+        assert [i["name"] for i in comp["charter_only"]] == ["미래전략기획"]
+        assert [i["name"] for i in comp["data_only"]] == ["수질 통계"]
+        task = database.con.execute("SELECT description FROM tasks WHERE name='감사 수감 자료'").fetchone()
+        assert "(업무분장: 의회대응)" in task["description"]
+        assert not database.con.execute("SELECT 1 FROM tasks WHERE name='의회대응'").fetchone()
+    finally:
+        database.close()
+
+
+def test_weak_meaning_is_not_a_match(tmp_path: Path):
+    from app.ai.discover import Discovery, _compare_charter
+
+    database = _semantic_project(tmp_path)
+    try:
+        model = _Embedder({"의회대응": [0.6, 0.6, 0.5], "미래전략기획": [0.0, 0.0, 1.0]})
+        _compare_charter(database, Discovery(), model)
+        comp = json.loads(database.get_meta("charter_comparison"))
+        assert comp["matched"] == []
+        assert database.con.execute("SELECT 1 FROM tasks WHERE name='의회대응'").fetchone()
+    finally:
+        database.close()

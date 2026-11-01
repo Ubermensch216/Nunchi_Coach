@@ -87,7 +87,7 @@ def discover(db, client=None, threshold=None, min_size=None, on_progress=None) -
     except _Cancelled:
         return Discovery(tasks=len(db.tasks()), unassigned=db.unclassified_count(), cancelled=True,
                          errors=["업무 발견을 중단했습니다. 이전 제안을 보존했습니다."])
-    _compare_charter(db, result)
+    _compare_charter(db, result, client)
     return result
 
 
@@ -406,7 +406,64 @@ def _charter_plan(
     return tasks, claimed, counts
 
 
-def _compare_charter(db: Database, result: Discovery) -> None:
+CHARTER_MEANING = 0.72   # 공문 대응의 의미 유사(5순위)와 같은 문턱
+CHARTER_PLACEHOLDER = "업무분장표에 기재되어 있으나 아직 관련 문서를 찾지 못한 업무입니다."
+
+
+def _match_by_meaning(db, client, items, details, tasks) -> list[tuple[str, str]]:
+    """이름으로 맞지 않은 분장 항목을 업무 문서의 뜻과 견준다. [(분장 이름, 업무 이름)].
+
+    분장 항목(이름+세부업무)의 임베딩과 업무 문서 벡터의 평균이 문턱 이상이고, 서로가
+    서로의 가장 가까운 짝일 때만 잇는다. 애매하면 잇지 않는다 — 분장 밖 후보로 남는다.
+    """
+    import numpy as np
+
+    if not items or not tasks:
+        return []
+    centroids: dict[str, np.ndarray] = {}
+    for name, _docs in tasks:
+        vectors = [vector for vector in (
+            discovery_index._vector(row) for row in db.con.execute(
+                "SELECT e.dim, e.vector FROM tasks t JOIN task_docs td ON td.task_id = t.id "
+                "JOIN doc_embeddings e ON e.doc_id = td.doc_id AND e.model = ? WHERE t.name = ?",
+                (client.embed_model, name))) if vector is not None]
+        if vectors:
+            mean = np.mean(vectors, axis=0)
+            norm = np.linalg.norm(mean)
+            if norm:
+                centroids[name] = mean / norm
+    if not centroids:
+        return []
+    texts = [" ".join([item["name"], *details.get(item["id"], [])]) for item in items]
+    embedded, error = client.embed(texts)
+    if error or not embedded:
+        return []
+    names = list(centroids)
+    matrix = np.stack([centroids[name] for name in names])
+    queries = np.asarray(embedded, dtype=np.float32)
+    queries /= np.maximum(np.linalg.norm(queries, axis=1, keepdims=True), 1e-12)
+    if queries.shape[1] != matrix.shape[1]:
+        return []
+    scores = queries @ matrix.T                     # 항목 × 업무
+    pairs = []
+    for row, item in enumerate(items):
+        column = int(scores[row].argmax())
+        if scores[row, column] >= CHARTER_MEANING and int(scores[:, column].argmax()) == row:
+            pairs.append((item["name"], names[column]))
+    return pairs
+
+
+def _adopt_charter_name(db, item_name: str, task_name: str) -> None:
+    """뜻으로 이은 분장 항목을 업무의 별칭으로 달고, 빈 자리표시 업무를 거둔다."""
+    db.con.execute(
+        "UPDATE tasks SET description = COALESCE(description, '') || ' (업무분장: ' || ? || ')' "
+        "WHERE name = ? AND origin = 'ai' AND status = 'proposed'", (item_name, task_name))
+    db.con.execute(
+        "DELETE FROM tasks WHERE name = ? AND origin = 'ai' AND status = 'proposed' AND description = ? "
+        "AND NOT EXISTS (SELECT 1 FROM task_docs WHERE task_id = tasks.id)", (item_name, CHARTER_PLACEHOLDER))
+
+
+def _compare_charter(db: Database, result: Discovery, client=None) -> None:
     """분장 항목과 최종 업무 목록을 견주어 세 갈래로 남긴다.
 
     공문·폴더·본문 군집 어느 길로 업무를 세웠든 끝난 결과로 견준다. 폴더 계획만
@@ -447,6 +504,14 @@ def _compare_charter(db: Database, result: Discovery) -> None:
             charter_only[item["name"]] = max(charter_only.get(item["name"], 0), item["weight"] or 0)
     for name in matched:
         charter_only.pop(name, None)
+    if charter_only and client is not None:
+        unmatched = [item for item in items if item["name"] in charter_only]
+        for item_name, task_name in _match_by_meaning(db, client, unmatched, details,
+                                                      [t for t in tasks if t[0] not in claimed]):
+            matched[item_name] = dict(tasks)[task_name]
+            claimed.add(task_name)
+            charter_only.pop(item_name, None)
+            _adopt_charter_name(db, item_name, task_name)
     data_only = sorted(((name, docs) for name, docs in tasks if name not in claimed),
                        key=lambda pair: (-pair[1], pair[0]))
     db.set_meta("charter_comparison", json.dumps({
@@ -471,7 +536,7 @@ def _save_charter(db, result: Discovery, charter_tasks: list[CharterTask]) -> No
             )
             continue
         if ctask.match_kind == "charter_only":
-            description = "업무분장표에 기재되어 있으나 아직 관련 문서를 찾지 못한 업무입니다."
+            description = CHARTER_PLACEHOLDER
             group = Cluster(seed_id=0, doc_ids=[])
             _upsert_task(db, Named(ctask.name, description), group, confidence="low")
             result.charter_tasks += 1
