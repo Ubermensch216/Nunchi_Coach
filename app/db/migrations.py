@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "14"
+SCHEMA_VERSION = "15"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -500,14 +500,18 @@ def _to_v14(con: sqlite3.Connection) -> None:
     con.execute(
         """
         CREATE TABLE IF NOT EXISTS task_analysis_state (
-            task_id         INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
-            stage           TEXT NOT NULL DEFAULT 'all',
-            state           TEXT NOT NULL DEFAULT 'pending',
-            finished_at     TEXT,
-            doc_fingerprint TEXT
+            task_id     INTEGER PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+            stage       TEXT NOT NULL DEFAULT 'all',
+            state       TEXT NOT NULL DEFAULT 'pending',
+            finished_at TEXT
         )
         """
     )
+
+
+def _to_v15(con: sqlite3.Connection) -> None:
+    if not column_exists(con, "task_analysis_state", "doc_fingerprint"):
+        con.execute("ALTER TABLE task_analysis_state ADD COLUMN doc_fingerprint TEXT")
 
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
@@ -523,6 +527,7 @@ STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "12": _to_v12,
     "13": _to_v13,
     "14": _to_v14,
+    "15": _to_v15,
 }
 
 

@@ -264,3 +264,37 @@ def test_nunchi2_project_is_refused_before_anything_is_written(tmp_path: Path):
     tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     con.close()
     assert tables == {"meta", "jobs"}
+
+
+def test_v14_project_upgrades_to_v15_and_adds_doc_fingerprint(tmp_path: Path):
+    """?? ??? ??? v14 DB? ?? v15? ???????? doc_fingerprint ?? ???."""
+    path = tmp_path / "project.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    con.execute("INSERT INTO meta VALUES ('schema_version', '14')")
+    con.execute(
+        """
+        CREATE TABLE task_analysis_state (
+            task_id     INTEGER PRIMARY KEY,
+            stage       TEXT NOT NULL DEFAULT 'all',
+            state       TEXT NOT NULL DEFAULT 'pending',
+            finished_at TEXT
+        )
+        """
+    )
+    con.execute("INSERT INTO task_analysis_state(task_id, stage, state) VALUES (1, 'all', 'completed')")
+    con.commit()
+    con.close()
+
+    db = Database(path)
+    db.init()
+
+    assert db.get_meta("schema_version") == "15"
+    cols = {r[1] for r in db.con.execute("PRAGMA table_info(task_analysis_state)")}
+    assert "doc_fingerprint" in cols
+
+    row = db.con.execute("SELECT task_id, stage, state, doc_fingerprint FROM task_analysis_state WHERE task_id = 1").fetchone()
+    assert row["task_id"] == 1
+    assert row["state"] == "completed"
+    assert row["doc_fingerprint"] is None
+    db.close()

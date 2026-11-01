@@ -13,6 +13,7 @@ jobs 테이블은 재시도 횟수를 세는 데만 쓴다. 실패한 파일을 
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import datetime
 
 import time
@@ -752,7 +753,7 @@ class Pipeline(QObject):
             return True
 
         current_fp = Pipeline.task_doc_fingerprint(db, task_id)
-        saved_fp = row["doc_fingerprint"] if "doc_fingerprint" in row.keys() else None
+        saved_fp = row["doc_fingerprint"]
         if not saved_fp or saved_fp != current_fp:
             return True
 
