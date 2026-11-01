@@ -207,3 +207,27 @@ def test_workspace_shows_the_version_notice_once(db: Database, monkeypatch):
         view.chat._warmup.stop()
         view.deleteLater()
         app.processEvents()
+
+
+def test_brief_cites_the_charter_entry_without_owner_names(db: Database, tmp_path: Path):
+    from app.core import charter
+
+    source = db.con.execute("SELECT id FROM sources LIMIT 1").fetchone()[0]
+    doc = db.upsert_document(source, {
+        "path": str(tmp_path / "2026년_업무분장표.xlsx"), "filename": "2026년_업무분장표.xlsx",
+        "ext": ".xlsx", "hash": "charter", "parse_status": "ok"})
+    charter.save_charter_items(db, doc, [charter.ExtractedItem(
+        name="예산 편성", details=["본예산", "추경"], owner="홍길동", locator="row:4")])
+    t_id = db.con.execute("SELECT id FROM tasks WHERE name='예산 편성'").fetchone()[0]
+
+    brief = notebook_tasks.brief_markdown(db, t_id)
+    assert "업무분장" in brief and "세부업무: 본예산, 추경" in brief
+    assert "2026년_업무분장표.xlsx 4행" in brief
+    assert "홍길동" not in brief
+
+
+def test_brief_of_a_charter_only_task_asks_for_material(db: Database):
+    t_id = db.con.execute(
+        "INSERT INTO tasks(name, origin, status, description) VALUES ('미래전략기획', 'ai', 'proposed', ?)",
+        ("업무분장표에 기재되어 있으나 아직 관련 문서를 찾지 못한 업무입니다.",)).lastrowid
+    assert "자료를 찾지 못했습니다" in notebook_tasks.brief_markdown(db, t_id)

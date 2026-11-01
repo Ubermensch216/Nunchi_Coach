@@ -193,7 +193,18 @@ def brief_markdown(db, task_id: int) -> str:
         overview.append(f"업무 설명: {_flat(task['description'])}")
     overview += [f"관련 문서: {len(present)}건{span}",
                  f"반복 주기: {_cycle_line(db.task_cycle(task_id))}"]
+    if not present and "업무분장표에 기재되어" in (task["description"] or ""):
+        overview.append("업무분장표에는 있지만 이 업무의 자료를 찾지 못했습니다. 새로 맡은 업무이거나 다른 "
+                        "곳에 자료가 있을 수 있습니다 — 넣을 자료가 있으면 업무노트에 추가하세요.")
     section("개요", overview)
+
+    from . import charter
+    charted = []
+    for found in charter.items_for_task(db, name, task["description"]):
+        where = found["document"] + (f" {found['locator'][4:]}행" if found["locator"].startswith("row:") else "")
+        detail = f" — 세부업무: {', '.join(found['details'])}" if found["details"] else ""
+        charted.append(f"{found['name']}{detail} (근거: {where})")
+    section("업무분장", charted, "분장표에 적힌 이 업무")
 
     section("업무 범위·역할", [_item_line(i) for i in group(rc.SCOPE)],
             "업무 대상·감사 대상 기간·실시 기간·담당 업무")

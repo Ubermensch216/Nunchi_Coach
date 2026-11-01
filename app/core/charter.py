@@ -497,3 +497,24 @@ def owners(db: Database) -> list[str]:
 def needs_owner_choice(db: Database) -> bool:
     """분장표에 여러 담당자가 있는데 누구의 행인지 모른다 — 과 전체 업무가 섞여 있다."""
     return not predecessor_name(db) and len(owners(db)) > 1
+
+
+def items_for_task(db: Database, task_name: str, description: str | None = None) -> list[dict]:
+    """이 업무와 같은 일로 본 최신 분장 항목 — {name, details, document, locator}.
+
+    이름이 맞거나, 뜻으로 이어 '(업무분장: …)' 별칭을 단 항목이다. 담당자 성명은 담지
+    않는다 — 분장표의 개인정보는 담당자 판정에만 쓴다.
+    """
+    from ..ai.discover import _match_names
+
+    aliases = set(re.findall(r"\(업무분장: ([^)]+)\)", description or ""))
+    found = []
+    for row in current_items(db):
+        details = [r["name"] for r in db.con.execute(
+            "SELECT name FROM charter_items WHERE parent_id = ? ORDER BY id", (row["id"],))]
+        if row["name"] in aliases or _match_names(row["name"], task_name, details):
+            document = db.con.execute("SELECT filename FROM documents WHERE id = ?", (row["doc_id"],)).fetchone()
+            found.append({"name": row["name"], "details": details,
+                          "document": document["filename"] if document else "",
+                          "locator": row["locator"] or ""})
+    return found
