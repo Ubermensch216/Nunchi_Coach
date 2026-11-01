@@ -150,3 +150,51 @@ def test_save_and_get_charter_items(db: Database, tmp_path: Path):
     assert len(top_items) == 2
     assert len(sub_items) == 2
     assert top_items[0]["name"] == "예산편성"
+
+
+_DEPARTMENT_TABLE = (
+    "연번\t직급\t성명\t담당업무\t비중\n"
+    "1\t행정6급\t김철수\t- 일반서무 및 보안관리\t40%\n"
+    "2\t행정7급\t홍길동\t1. 예산 편성 및 집행 관리\t60%\n"
+)
+
+
+def _charter_document(db: Database, tmp_path: Path) -> int:
+    source = db.add_source(tmp_path)
+    doc_id = db.upsert_document(source, {
+        "path": str(tmp_path / "2024년_업무분장표.xlsx"), "filename": "2024년_업무분장표.xlsx",
+        "ext": ".xlsx", "parse_status": "ok", "hash": "charter"})
+    db.replace_sections(doc_id, [("table", 1, "표1", _DEPARTMENT_TABLE, {})])
+    return doc_id
+
+
+def test_predecessor_comes_from_the_work_context_when_not_typed(db: Database):
+    assert charter.predecessor_name(db) == ""
+    db.start_work_context("with_predecessor", predecessor="홍길동")
+    assert charter.predecessor_name(db) == "홍길동"
+    charter.set_predecessor(db, "  김 철수 ")
+    assert charter.predecessor_name(db) == "김 철수"
+
+
+def test_typing_the_predecessor_later_reextracts_only_their_rows(db: Database, tmp_path: Path):
+    """파싱 때는 이름을 몰라 과 전체를 뽑았어도, 이름을 적고 다시 분석하면 그 사람 행만 남는다."""
+    doc_id = _charter_document(db, tmp_path)
+    charter.extract_from_document(db, doc_id)
+    assert {item["owner"] for item in charter.get_charter_items(db)} == {"김철수", "홍길동"}
+    assert charter.refresh_items(db) == 0          # 이름이 그대로면 다시 뽑지 않는다
+
+    charter.set_predecessor(db, "홍길동")
+    assert charter.refresh_items(db) == 1
+    items = charter.get_charter_items(db)
+    assert items and {item["owner"] for item in items} == {"홍길동"}
+    assert not any("서무" in item["name"] for item in items)
+    assert charter.refresh_items(db) == 0
+
+
+def test_user_decided_items_survive_reextraction(db: Database, tmp_path: Path):
+    doc_id = _charter_document(db, tmp_path)
+    charter.save_charter_items(db, doc_id, [charter.ExtractedItem(name="사람이 넣은 업무")],
+                               decided_by="user")
+    charter.set_predecessor(db, "홍길동")
+    charter.refresh_items(db)
+    assert "사람이 넣은 업무" in {item["name"] for item in charter.get_charter_items(db)}

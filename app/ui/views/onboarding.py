@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...bridge import service as bridge_service
-from ...core import onnara_import, survey
+from ...core import charter, onnara_import, survey
 from ...db import Database
 from ...ingest.parsers import supported_extensions
 from .. import icons, theme
@@ -157,6 +157,12 @@ class OnboardingView(QWidget):
         self.summary = muted_label("아직 선택한 폴더가 없습니다.")
         card.body.addWidget(self.summary)
 
+        # 업무분장표에는 과 전체가 들어 있는 경우가 많다. 이름을 알면 그 사람의 행만 고른다.
+        self.predecessor = QLineEdit(charter.predecessor_name(self.db))
+        self.predecessor.setPlaceholderText("전임자 이름 (선택) — 업무분장표에서 이 사람의 업무만 고릅니다")
+        self.predecessor.setMinimumHeight(theme.CONTROL_H)
+        card.body.addWidget(self.predecessor)
+
         # 시작 버튼은 카드 안, 고른 폴더 바로 아래에 둔다. 카드 밖에 떨어져
         # 있으면 무엇을 시작하는 버튼인지가 카드와 끊긴다.
         foot = QFrame()
@@ -218,6 +224,8 @@ class OnboardingView(QWidget):
 
     # ── 온나라 수집 요청 및 가져오기 ────────────────────────────────
     def _on_request_clicked(self) -> None:
+        if not self.predecessor.text().strip():
+            self.predecessor.setText(self.req_author.text().strip())
         self.request_collection({
             "listName": "문서등록대장",
             "authorName": self.req_author.text(),
@@ -389,6 +397,9 @@ class OnboardingView(QWidget):
             button.style().polish(button)
 
     def _start(self) -> None:
+        name = " ".join(self.predecessor.text().split())
+        if name != charter.predecessor_name(self.db):
+            charter.set_predecessor(self.db, name)
         for folder in self._folders:
             self.db.add_source(folder, kind=_source_kind(folder))
         total_sources = len(self._folders) + len(self._onnara_added)

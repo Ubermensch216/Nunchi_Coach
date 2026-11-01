@@ -176,6 +176,11 @@ class Pipeline(QObject):
             if not self._stop:
                 self._chunks(db)
             if not self._stop:
+                try:
+                    charter.refresh_items(db)
+                except Exception as exc:
+                    diagnostics.record("charter.refresh.error", exc)
+            if not self._stop:
                 self._discover(db)
             if not self._stop:
                 self._analyze_by_tasks(db)
@@ -380,11 +385,7 @@ class Pipeline(QObject):
                     _clear_job(db, row["id"], "parse")
                     if charter.is_charter_candidate(row["filename"], row["path"]):
                         try:
-                            full_text = "\n".join(s.text for s in own if s.text)
-                            predecessor = db.get_meta("predecessor_name") or ""
-                            items = charter.extract_items(full_text, predecessor)
-                            if items:
-                                charter.save_charter_items(db, row["id"], items)
+                            charter.extract_from_document(db, row["id"])
                         except Exception as exc:
                             diagnostics.record("charter.extract.error", exc)
                 elif result.status == LOCKED:

@@ -39,6 +39,57 @@ class ExtractedItem:
     locator: str = ""
 
 
+PREDECESSOR_META = "predecessor_name"
+# 분장 항목을 마지막으로 뽑을 때 쓴 전임자 이름. 이름이 바뀌면 다시 뽑는다.
+EXTRACTED_FOR_META = "charter_predecessor"
+
+
+def predecessor_name(db: Database) -> str:
+    """분장표에서 고를 전임자 이름. 없으면 빈 문자열이다.
+
+    사용자가 적은 이름이 먼저고, 없으면 전임자와 함께 시작한 맥락의 이름을 쓴다.
+    """
+    name = (db.get_meta(PREDECESSOR_META) or "").strip()
+    if name:
+        return name
+    context = db.work_context()
+    return ((context["predecessor"] or "") if context else "").strip()
+
+
+def set_predecessor(db: Database, name: str) -> None:
+    """분장표에서 고를 전임자 이름을 정한다. 성명은 감사 기록에 남기지 않는다."""
+    db.set_meta(PREDECESSOR_META, " ".join((name or "").split()))
+    db.audit("charter.predecessor", result="set" if name.strip() else "cleared")
+
+
+def extract_from_document(db: Database, doc_id: int, predecessor: str | None = None) -> int:
+    """문서 본문에서 분장 항목을 뽑아 저장한다. 저장한 최상위 항목 수를 돌려준다."""
+    text = "\n".join(row["text"] for row in db.con.execute(
+        "SELECT text FROM document_sections WHERE doc_id = ? ORDER BY ordinal", (doc_id,))
+        if row["text"])
+    items = extract_items(text, predecessor_name(db) if predecessor is None else predecessor)
+    save_charter_items(db, doc_id, items)
+    return len(items)
+
+
+def refresh_items(db: Database) -> int:
+    """전임자 이름이 바뀌었으면 읽어 둔 분장 문서에서 항목을 다시 뽑는다.
+
+    분장표는 파싱하면서 바로 뽑는다. 그 뒤에 전임자 이름을 적으면 과 전체 항목이
+    그대로 남으므로, 분석 때마다 여기서 맞춘다. 다시 뽑은 문서 수를 돌려준다.
+    """
+    predecessor = predecessor_name(db)
+    if (db.get_meta(EXTRACTED_FOR_META) or "") == predecessor:
+        return 0
+    done = 0
+    for candidate in find_candidates(db):
+        if candidate["parse_status"] in ("ok", "partial"):
+            extract_from_document(db, candidate["id"], predecessor)
+            done += 1
+    db.set_meta(EXTRACTED_FOR_META, predecessor)
+    return done
+
+
 def is_charter_candidate(filename: str, path: str = "") -> bool:
     """파일명이나 폴더 경로에 업무분장 키워드가 있고 대상 확장자인지 검사한다."""
     ext = Path(filename).suffix.lower()

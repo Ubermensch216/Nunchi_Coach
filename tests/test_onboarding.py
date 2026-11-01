@@ -105,3 +105,19 @@ def test_no_analysable_document_blocks_the_start_button(view, tmp_path: Path):
 
     assert "분석할 수 있는 문서를 찾지 못했습니다" in view.summary.text()
     assert not view.start.isEnabled()
+
+
+def test_predecessor_name_is_saved_when_analysis_starts(view, tmp_path: Path):
+    from app.core import charter
+
+    view._folders = [_folder(tmp_path)]
+    view.predecessor.setText("  홍길동 ")
+    view._start()
+    assert charter.predecessor_name(view.db) == "홍길동"
+
+
+def test_onnara_author_fills_an_empty_predecessor(view, monkeypatch):
+    monkeypatch.setattr(view, "request_collection", lambda scope=None: None)
+    view.req_author.setText("홍길동")
+    view._on_request_clicked()
+    assert view.predecessor.text() == "홍길동"
