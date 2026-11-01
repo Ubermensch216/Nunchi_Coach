@@ -56,7 +56,9 @@ def research(db, task_id: int, kind: str) -> tuple[list[rc.Found], int]:
         params += [f"%{word}%", f"%{word}%"]
 
     documents = db.con.execute(
+        # 업무노트에 올린 자료와 눈치코치가 만든 업무 정리본(upload)은 근거가 아니다.
         f"SELECT d.id, d.eff_year FROM documents d JOIN document_index i ON i.doc_id = d.id "
+        f"JOIN sources s ON s.id = d.source_id AND s.kind != 'upload' "
         f"WHERE d.missing_since IS NULL AND d.parse_status IN ('ok', 'partial') "
         f"  AND NOT EXISTS (SELECT 1 FROM task_docs td WHERE td.task_id = ? AND td.doc_id = d.id) "
         f"  AND ({label_filter}) AND {relation} "

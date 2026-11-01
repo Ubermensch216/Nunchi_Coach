@@ -117,3 +117,33 @@ def test_suggested_questions(db: Database):
     assert len(questions) == 5
     assert any("기한" in q or "제출" in q for q in questions)
     assert any("서식" in q or "양식" in q or "자료" in q for q in questions)
+
+
+def test_chat_panel_shows_suggested_questions(db: Database, monkeypatch):
+    """빈 대화에 추천 질문 단추가 실제로 그려진다.
+
+    예전에는 잘못된 상대 경로 import가 조용히 삼켜져 단추가 한 번도 나오지 않았다.
+    """
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication, QPushButton
+    from app.jobs.ask_task import WarmupRunner
+    from app.ui.views.notebooks.chat_panel import ChatPanel
+
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(WarmupRunner, "start", lambda self: False)
+    nb_id = notebook_tasks.auto_generate_for_tasks(db)[0]
+    t_id = db.con.execute("SELECT id FROM tasks WHERE name='예산 편성'").fetchone()[0]
+    expected = notebook_tasks.suggested_questions(db, t_id)
+
+    panel = ChatPanel(db)
+    try:
+        panel.set_notebook(nb_id, editable=True)
+        app.processEvents()
+        shown = {button.text() for button in panel.findChildren(QPushButton)}
+        assert set(expected) <= shown
+    finally:
+        panel._runner.stop()
+        panel._warmup.stop()
+        panel.deleteLater()
+        app.processEvents()

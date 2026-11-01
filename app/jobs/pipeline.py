@@ -838,23 +838,21 @@ class Pipeline(QObject):
             "matter_answers": prep["matter_answers"], "changes": 0
         }
 
+        # 일정·처리 순서는 재분석할 업무 모두에 먼저 끝낸다. 복원은 문서에 적힌 절차가
+        # 남의 것인지 다른 업무의 단계와 견주어 정하므로(_belongs_elsewhere), 업무를 하나씩
+        # 끝까지 돌리면 뒤 업무의 단계가 아직 없어 처리 순서에 따라 결과가 달라진다.
         for index, task in enumerate(tasks, start=1):
             if self._stop:
                 break
-            task_id = task["id"]
-
-            if task_id not in stale_task_ids:
+            if task["id"] not in stale_task_ids:
                 continue
 
             with db.transaction():
                 db.con.execute(
                     "INSERT OR REPLACE INTO task_analysis_state(task_id, stage, state, finished_at) "
                     "VALUES (?, 'all', 'running', NULL)",
-                    (task_id,),
+                    (task["id"],),
                 )
-
-            task_doc_rows = db.task_documents(task_id)
-            task_doc_ids = [r["id"] for r in task_doc_rows]
 
             # 2. 일정
             self._analyze_single_task_cycles(db, task, bulk_days)
@@ -867,8 +865,16 @@ class Pipeline(QObject):
             self._analyze_single_task_steps(db, task, bulk_days)
             self.progress.emit(STAGE_STEPS, index, len(tasks), task["name"])
 
+        for index, task in enumerate(tasks, start=1):
             if self._stop:
                 break
+            task_id = task["id"]
+
+            if task_id not in stale_task_ids:
+                continue
+
+            task_doc_rows = db.task_documents(task_id)
+            task_doc_ids = [r["id"] for r in task_doc_rows]
 
             # 4. 복원 (전역 계산 재사용)
             t_totals = reconstruction.restore(

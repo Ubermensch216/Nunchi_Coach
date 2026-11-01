@@ -243,7 +243,7 @@ class ChatPanel(QWidget):
             task_id = task_row[0] if task_row and task_row[0] else None
             if task_id:
                 try:
-                    from ...core import notebook_tasks
+                    from ....core import notebook_tasks
                     questions = notebook_tasks.suggested_questions(self.db, task_id)
                     if questions:
                         self.thread.addWidget(muted_label("💡 추천 질문 (누르면 바로 입력창에 채워집니다)", small=True))
@@ -254,8 +254,9 @@ class ChatPanel(QWidget):
                             btn.setStyleSheet("text-align: left; padding: 6px 10px; margin-bottom: 2px;")
                             btn.clicked.connect(lambda _, text=q: self.input.setPlainText(text))
                             self.thread.addWidget(btn)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    from ....core import diagnostics
+                    diagnostics.record("notebook.suggested_questions.error", exc)
             # 무엇을 물을지 정하기 전에 자료가 무엇인지부터 보인다.
             if guides:
                 self.thread.addWidget(muted_label("AI가 만든 자료 안내 · 원문이 아닙니다", small=True))

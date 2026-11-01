@@ -129,8 +129,9 @@ def _charter_parent_map(db) -> dict[str, str]:
         """).fetchall()
         for r in rows:
             out[r["child_name"]] = r["parent_name"]
-    except Exception:
-        pass
+    except Exception as exc:
+        from . import diagnostics
+        diagnostics.record("handover_folder.charter_parents.error", exc)
     return out
 
 def _official_meta(db) -> dict[int, dict]:
@@ -439,8 +440,9 @@ def _build_root_readme(
                         *[f"- **{item['name']}** ({item.get('doc_count', 0)}건)" for item in data_only],
                         "",
                     ])
-        except Exception:
-            pass
+        except Exception as exc:
+            from . import diagnostics
+            diagnostics.record("handover_folder.charter_comparison.error", exc)
 
     head.extend(["---", "", report_md])
     return "\n".join(head)

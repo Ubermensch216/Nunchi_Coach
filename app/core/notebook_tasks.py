@@ -409,8 +409,9 @@ def auto_generate_for_tasks(db) -> list[int]:
             opened = open_for_task(db, task["id"], client=None)
             if opened.created:
                 created_ids.append(opened.notebook_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            from . import diagnostics
+            diagnostics.record("notebook.auto_generate.error", exc)
     return created_ids
 
 
