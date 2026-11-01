@@ -3,7 +3,7 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QProgressBar, QPushButton, QVBoxLayout, QWidget
 
-from ...core import initial_analysis
+from ...core import initial_analysis, structure_review
 from .. import stages
 from ..widgets import Card, Page, muted_label, view_title
 
@@ -14,6 +14,7 @@ class InitialAnalysisView(QWidget):
     open_results = Signal()
     show_status = Signal()
     change_sources = Signal()
+    review_structure = Signal()
 
     def __init__(self, db, parent=None):
         super().__init__(parent)
@@ -52,6 +53,10 @@ class InitialAnalysisView(QWidget):
         self.sources.clicked.connect(self.change_sources.emit)
         controls.addWidget(self.sources)
         card.body.addLayout(controls)
+        # 업무를 찾은 뒤에는 분석이 끝나기 전에도 업무 목록을 확인할 수 있다(S4). 막지 않는다.
+        self.review = QPushButton("업무 체계 확인")
+        self.review.clicked.connect(self.review_structure.emit)
+        card.body.addWidget(self.review)
         body.addWidget(card)
         body.addWidget(muted_label("원본은 읽기만 합니다. 분석 중에도 업무노트를 사용할 수 있습니다."))
         body.addStretch(1)
@@ -88,6 +93,7 @@ class InitialAnalysisView(QWidget):
         self.action.setEnabled(not self._stopping)
         self.sources.setEnabled(not self._running)
         self.progress.setVisible(self._running)
+        self.review.setVisible(structure_review.pending(self.db))
         if not self._running:
             counts = self.db.counts()
             self.summary.setText(f"등록 파일 {counts['total']:,}건 · 읽은 문서 {counts['parsed']:,}건 · 파악한 업무 {counts['tasks']:,}개")

@@ -33,6 +33,7 @@ from ..core import handover
 from ..core import initial_analysis
 from ..db import Database
 from ..jobs import PipelineRunner
+from ..jobs.pipeline import STAGE_DISCOVER
 from ..jobs.knowledge_task import KnowledgeRunner
 from . import icons, motion, stages, theme
 from .views.calendar import CalendarView
@@ -382,6 +383,8 @@ class MainWindow(QMainWindow):
         initial.open_results.connect(self._open_initial_results)
         initial.show_status.connect(self._open_status)
         initial.change_sources.connect(self._open_settings)
+        initial.review_structure.connect(self._open_structure_review)
+        self.views["tasks"].review_structure.connect(self._open_structure_review)
         self._knowledge = KnowledgeRunner(self.db.path, self)
         self._knowledge_tick = QTimer(self)
         self._knowledge_tick.setInterval(2000)
@@ -581,8 +584,29 @@ class MainWindow(QMainWindow):
     def _update_attention_count(self, count) -> None:
         self.topbar.set_count('today', count, self.views['today'].data.attention_summary)
 
+    def _open_structure_review(self) -> None:
+        """업무 체계 확인(S4). 고친 업무는 다음 분석이 다시 본다 — 돌고 있으면 끝난 뒤에 한 번 더."""
+        from .views.structure_review import StructureReviewDialog
+
+        dialog = StructureReviewDialog(self.db, self)
+        dialog.handover_folder_requested.connect(self._make_handover_folder)
+        dialog.exec()
+        if dialog.changed:
+            if self.runner.running:
+                self._rerun_after_review = True
+            else:
+                self._start_pipeline()
+        self._refresh_current()
+
+    def _make_handover_folder(self) -> None:
+        self.go("handover")
+        self.views["handover"]._export_folder()
+
     def _on_pipeline_finished(self) -> None:
         self._tick.stop()
+        if getattr(self, "_rerun_after_review", False):
+            self._rerun_after_review = False
+            QTimer.singleShot(0, self._start_pipeline)
         self._scan_proactive()
         initial = self.views["initial_analysis"]
         initial.set_run(False, self._pipeline_error)
@@ -637,6 +661,9 @@ class MainWindow(QMainWindow):
 
     def _on_stage_done(self, report) -> None:
         self.stage_reports[report.stage] = report
+        if report.stage == STAGE_DISCOVER:
+            # 업무를 찾았으면 분석이 끝나기 전에도 업무 체계를 확인할 수 있다(S4).
+            self.views["initial_analysis"].refresh()
 
     def _open_task_from_calendar(self, task_id: int) -> None:
         self.go("tasks")

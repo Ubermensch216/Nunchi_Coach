@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QWidget,
                               QLineEdit, QPushButton, QScrollArea, QVBoxLayout)
 
-from ...core import manual_versions, matters, work_schedule, workcard, workstate as ws
+from ...core import manual_versions, matters, structure_review, work_schedule, workcard, workstate as ws
 from ...core.knowledge import review
 from ...core.work_brief import points
 from ..widgets import (Card, Evidence, EvidencePanel, WorkYearDashboard, clear_layout, evidence_entry,
@@ -142,6 +142,19 @@ class WorkspaceMixin:
     def _home_workspace(self, tasks, cycles):
         tasks = sorted(tasks, key=lambda t: t['id'])
         state = self._ui_state['home']
+        if structure_review.pending(self.db):
+            # S4: 막지 않는 확인. 분석은 이미 제안대로 진행 중이다.
+            banner = Card()
+            row = QHBoxLayout()
+            row.addWidget(muted_label(
+                f'업무 {len(structure_review.rows(self.db))}개를 찾았습니다. 이름이 어색하거나 한 일이 '
+                '둘로 갈렸으면 한 번 확인해 주세요. 확인하지 않아도 분석은 계속됩니다.'), 1)
+            self.review_button = QPushButton('업무 체계 확인')
+            self.review_button.setObjectName('Primary')
+            self.review_button.clicked.connect(self.review_structure.emit)
+            row.addWidget(self.review_button)
+            banner.body.addLayout(row)
+            self.column.addWidget(banner)
         controls = QHBoxLayout()
         self.home_search = QLineEdit(str(state.get('search') or ''))
         self.home_search.setPlaceholderText('업무명·설명 검색')

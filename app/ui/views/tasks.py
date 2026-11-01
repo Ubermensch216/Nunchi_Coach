@@ -157,6 +157,7 @@ class TasksView(WorkspaceMixin, QWidget):
     go_calendar = Signal()
     open_notebook = Signal(int)   # task_id로 업무노트 열기 (개편계획서 §7)
     state_changed = Signal()   # 확인·교정이 일어났다 (셸의 진행도가 듣는다)
+    review_structure = Signal()   # 업무 체계 확인(S4)을 열어 달라
 
     def __init__(self, db: Database, parent: QWidget | None = None):
         super().__init__(parent)
