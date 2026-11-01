@@ -306,11 +306,77 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
     expander는 질문을 받아 바꿔 쓴 검색 질의 목록을 돌려주는 함수다(업무노트
     대화만 준다 — search/expand.py). 규칙으로 답하는 경로에서는 부르지 않는다.
     바꿔 쓴 질의는 후보를 넓히는 데만 쓰고, 답과 검증은 원래 질문으로 한다.
+
+    단계마다 답을 보류하고 끝낼 수 있다. 각 단계 함수는 그럴 때 Answer를 돌려준다.
+        범위 → 이름표 값 → 검색 → 근거 글 → 규칙 답 → 생성 → 검증
     """
     question = question.strip()
     if not question:
         return Answer(question=question, text="", withheld=True, error="빈 질문입니다")
     content_revision = db.get_meta("content_revision")
+    scope, search_docs = _resolve_scope(db, question, scope, trace)
+    if search_docs == []:
+        # 고른 업무·연도에 맞는 자료가 없다. 범위 밖 자료로 메우지 않는다.
+        return Answer(question, OUT_OF_SCOPE, True, inferred_years=scope.years)
+
+    client = client or project_client(db, OllamaClient)
+    health = client.health()
+    if not health.embedding_ready:
+        return search_only(db, question, scope, "로컬 AI를 사용할 수 없어 자료 검색 결과를 보여 드립니다.")
+
+    labelled = _direct_field_answer(db, question, scope, trace, content_revision)
+    if labelled is not None:
+        return labelled
+
+    found = _retrieve(db, question, client, scope, search_docs, expander, trace)
+    if isinstance(found, Answer):
+        return found
+    grounds = _prepare_grounds(db, question, scope, found, trace)
+    if isinstance(grounds, Answer):
+        return grounds
+
+    ruled = _rule_answer(grounds)
+    if ruled is not None:
+        return ruled
+
+    if _subject_unknown(db, question, grounds.asked.field if grounds.asked.stems else "", scope):
+        # 묻는 대상의 이름이 자료 어디에도 없다. 같은 속성을 가진 다른 대상의 값이
+        # 답으로 나가면 안 된다(실측: "정수장 소독약품 구매 단가는 얼마야?"에 사무용품
+        # 구매 계약의 "토너의 단가는 58,000원이다"가 나갔다). 모델에 묻지 않고 보류한다.
+        return grounds.insufficient(generation={**grounds.diagnosis, "withheld": "subject_unknown"})
+
+    generated = _generate(db, client, grounds, content_revision, trace)
+    if isinstance(generated, Answer):
+        return generated
+    data, generation = generated
+    return _verified_answer(client, grounds, data, generation, trace)
+
+
+@dataclass
+class _Grounds:
+    """생성·검증·화면 발췌가 함께 보는 근거. 따로 자르면 모델이 본 값과 검증이 본 값이 어긋난다."""
+    question: str
+    scope: QueryScope
+    rows: list
+    official: set
+    source_text: dict
+    asked: object
+    diagnosis: dict
+
+    def related(self) -> list[RelatedDoc]:
+        return _dedupe([RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in self.rows[:3]])
+
+    def insufficient(self, model: str = "", **extra) -> Answer:
+        return Answer(question=self.question, text="확인 가능한 자료가 부족합니다.", withheld=True,
+                      related_docs=self.related(), model=model, inferred_years=self.scope.years, **extra)
+
+
+def _refreshed(question: str) -> Answer:
+    return Answer(question=question, text="", withheld=True,
+                  error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
+
+
+def _resolve_scope(db, question: str, scope: QueryScope | None, trace) -> tuple[QueryScope, list | None]:
     inferred_basis = _basis_from_question(scope)
     scope = infer_scope(question).merged_with(scope)
     with trace.stage("scope"):
@@ -325,33 +391,33 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
     trace.record(scope_documents=len(search_docs) if search_docs is not None else None,
                  years=list(scope.years), task_scoped=scope.has_task,
                  year_basis=scope.year_basis, case_id=scope.case_id)
+    return scope, search_docs
 
-    if search_docs == []:
-        # 고른 업무·연도에 맞는 자료가 없다. 범위 밖 자료로 메우지 않는다.
-        return Answer(question, OUT_OF_SCOPE, True, inferred_years=scope.years)
 
-    client = client or project_client(db, OllamaClient)
-    health = client.health()
-    if not health.embedding_ready:
-        return search_only(db, question, scope, "로컬 AI를 사용할 수 없어 자료 검색 결과를 보여 드립니다.")
+def _direct_field_answer(db, question: str, scope: QueryScope, trace, content_revision) -> Answer | None:
+    """업무명·속성이 명시된 단일 값은 전체 허용 자료에서 대조한다.
 
-    # 업무명·속성이 명시된 단일 값은 전체 허용 자료에서 대조한다.
-    # 상충 판본이 근접 중복 축약이나 검색 순위 때문에 사라지기 전에 확인한다.
+    상충 판본이 근접 중복 축약이나 검색 순위 때문에 사라지기 전에 확인한다.
+    """
     with trace.stage("direct_fields"):
         labelled = _labelled_answer(db, question, scope)
-    if labelled is not None:
-        trace.path = "direct_fields"
-        from .graph import augment
-        # Direct-field answers still inspect all allowed originals and are not
-        # replaced by ranked graph candidates. Record scoped graph diagnostics.
-        _, _, graph_trace = augment(db, question, scope,
-            [(c.chunk_id, 1/(60+i)) for i,c in enumerate(labelled.citations, 1) if c.chunk_id is not None], set())
-        graph_trace['direct_fields_preserved'] = True
-        trace.record(graph=graph_trace)
-        if db.get_meta("content_revision") != content_revision:
-            return Answer(question, "", True, error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
-        return labelled
+    if labelled is None:
+        return None
+    trace.path = "direct_fields"
+    from .graph import augment
+    # Direct-field answers still inspect all allowed originals and are not
+    # replaced by ranked graph candidates. Record scoped graph diagnostics.
+    _, _, graph_trace = augment(db, question, scope,
+        [(c.chunk_id, 1/(60+i)) for i,c in enumerate(labelled.citations, 1) if c.chunk_id is not None], set())
+    graph_trace['direct_fields_preserved'] = True
+    trace.record(graph=graph_trace)
+    if db.get_meta("content_revision") != content_revision:
+        return _refreshed(question)
+    return labelled
 
+
+def _retrieve(db, question: str, client, scope: QueryScope, search_docs, expander, trace):
+    """의미·정확 일치 검색으로 근거 후보를 고른다. (고른 조각, 변형 질의) 또는 보류한 Answer."""
     with trace.stage("expansion"):
         variants = [v for v in (expander(question) if expander else []) if v and v != question]
     trace.record(query_variants=len(variants))
@@ -422,7 +488,12 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
             related_docs=related,
             inferred_years=scope.years,
         )
+    return strong, variants
 
+
+def _prepare_grounds(db, question: str, scope: QueryScope, found, trace):
+    """고른 조각과 이웃을 읽어 근거 글을 만든다. _Grounds 또는 보류한 Answer."""
+    strong, variants = found
     with trace.stage("context"):
         selected = _expand_neighbors(db, [cid for cid, _ in strong], question, scope)
         context_rows = _load_chunk_context(db, selected)
@@ -450,9 +521,16 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         diagnosis["expansions"] = len(variants)
     if ignored:
         diagnosis["instructions_ignored"] = ignored
+    return _Grounds(question, scope, context_rows, official, source_text, asked, diagnosis)
 
-    # 표의 한 행에서 가장 큰/작은 값을 묻는 질문은 규칙으로 답한다. 경량 모델은
-    # 값 견주기를 자주 틀리고, 틀린 값도 표 안의 숫자라 검증을 지나간다.
+
+def _rule_answer(grounds: _Grounds) -> Answer | None:
+    """표의 한 행에서 가장 큰/작은 값, 표의 한 칸에 적힌 수량은 규칙으로 답한다.
+
+    경량 모델은 값 견주기를 자주 틀리고, 틀린 값도 표 안의 숫자라 검증을 지나간다.
+    """
+    question, asked = grounds.question, grounds.asked
+    context_rows, source_text = grounds.rows, grounds.source_text
     computed, rule = tablemath.extreme(question, source_text), "table_extreme"
     if computed is None:
         # 표의 한 칸에 적힌 수량을 묻는 질문도 같다. 모델은 표에 값이 있는데도
@@ -461,44 +539,39 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         computed, rule = tablemath.count(question, source_text, {
             index: f"{row['filename']}\n{about[index]}"
             for index, row in enumerate(context_rows, start=1)}, stems=asked.stems), "table_cell"
-    if computed is not None:
-        if asked.intent == 'count':
-            from . import quantity
-            # 규칙으로 읽은 무단위 표 숫자는 모델의 수량 표현 검사에 보내지 않는다.
-            # 다만 인원 역할은 그 표의 원문 행·열과 다시 대조한다.
-            support = _support_text(context_rows, source_text)
-            values = {v[1] for v in intent.values(computed[0]) if v[0] == 'num'}
-            verdicts = [quantity.binding_verdict(asked, computed[0], support.get(n, ''),
-                        context_rows[n-1]['filename'], computed_values=values) for n in computed[1]
-                        if 0 < n <= len(context_rows)]
-            failure = '' if '' in verdicts else 'quantity_role_unbound'
-            if failure:
-                return Answer(question, '질문한 수량·역할을 원문에서 확인할 수 없어 확정을 보류했습니다.', True,
-                              inferred_years=scope.years, generation={**diagnosis, 'withheld': failure})
-        text, citations = _compose_answer(
-            [VerifiedSentence(text=computed[0], sources=computed[1])],
-            context_rows, official, source_text)
-        return Answer(question=question, text=text, withheld=False, citations=citations,
-                      inferred_years=scope.years, generation={**diagnosis, "rule_answer": rule})
+    if computed is None:
+        return None
+    if asked.intent == 'count':
+        from . import quantity
+        # 규칙으로 읽은 무단위 표 숫자는 모델의 수량 표현 검사에 보내지 않는다.
+        # 다만 인원 역할은 그 표의 원문 행·열과 다시 대조한다.
+        support = _support_text(context_rows, source_text)
+        values = {v[1] for v in intent.values(computed[0]) if v[0] == 'num'}
+        verdicts = [quantity.binding_verdict(asked, computed[0], support.get(n, ''),
+                    context_rows[n-1]['filename'], computed_values=values) for n in computed[1]
+                    if 0 < n <= len(context_rows)]
+        failure = '' if '' in verdicts else 'quantity_role_unbound'
+        if failure:
+            return Answer(question, '질문한 수량·역할을 원문에서 확인할 수 없어 확정을 보류했습니다.', True,
+                          inferred_years=grounds.scope.years, generation={**grounds.diagnosis, 'withheld': failure})
+    text, citations = _compose_answer(
+        [VerifiedSentence(text=computed[0], sources=computed[1])],
+        context_rows, grounds.official, source_text)
+    return Answer(question=question, text=text, withheld=False, citations=citations,
+                  inferred_years=grounds.scope.years, generation={**grounds.diagnosis, "rule_answer": rule})
 
-    if _subject_unknown(db, question, asked.field if asked.stems else "", scope):
-        # 묻는 대상의 이름이 자료 어디에도 없다. 같은 속성을 가진 다른 대상의 값이
-        # 답으로 나가면 안 된다(실측: "정수장 소독약품 구매 단가는 얼마야?"에 사무용품
-        # 구매 계약의 "토너의 단가는 58,000원이다"가 나갔다). 모델에 묻지 않고 보류한다.
-        related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
-        return Answer(question=question, text="확인 가능한 자료가 부족합니다.", withheld=True,
-                      related_docs=_dedupe(related), inferred_years=scope.years,
-                      generation={**diagnosis, "withheld": "subject_unknown"})
 
+def _generate(db, client, grounds: _Grounds, content_revision, trace):
+    """모델에게 묻는다. (응답, 생성 기록) 또는 보류한 Answer."""
+    question = grounds.question
     prompt, _version = render(
-        "ask", context=_format_context(context_rows, official, source_text), question=question)
+        "ask", context=_format_context(grounds.rows, grounds.official, grounds.source_text), question=question)
     with trace.stage("generation"):
         data, gen_error, raw = client.generate_json(prompt, ASK_SCHEMA, num_predict=GEN_TOKEN_BUDGET)
     trace.record(generation_calls=1)
-    generation = {**diagnosis, **_generation_record(client)}
+    generation = {**grounds.diagnosis, **_generation_record(client)}
     if db.get_meta("content_revision") != content_revision:
-        return Answer(question=question, text="", withheld=True,
-                      error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
+        return _refreshed(question)
 
     if data is None and raw:
         # 토큰 한도에 걸려 JSON이 중간에 잘렸을 수 있다 — 완성된 문장까지는
@@ -511,7 +584,7 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
 
     if gen_error or data is None:
         return Answer(question=question, text="", withheld=True, error=gen_error or "응답 생성 실패",
-                       inferred_years=scope.years, generation=generation)
+                       inferred_years=grounds.scope.years, generation=generation)
 
     if not data.get("answered", False) and not getattr(client, "cancelled", False):
         # 같은 질문·같은 근거에 모델이 어떤 때는 답하고 어떤 때는 답할 수 없다고
@@ -523,24 +596,14 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         trace.record(generation_calls=trace.counts['generation_calls']+1)
         generation = {**generation, **_generation_record(client), "asked_twice": True}
         if db.get_meta("content_revision") != content_revision:
-            return Answer(question=question, text="", withheld=True,
-                          error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
+            return _refreshed(question)
         if (not again_error and isinstance(again, dict) and again.get("answered")
                 and again.get("sentences")):
             data = again
 
     if not data.get("answered", False):
         generation["withheld"] = "model_declined"
-        related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
-        return Answer(
-            question=question,
-            text="확인 가능한 자료가 부족합니다.",
-            withheld=True,
-            related_docs=_dedupe(related),
-            model=client.gen_model,
-            inferred_years=scope.years,
-            generation=generation,
-        )
+        return grounds.insufficient(model=client.gen_model, generation=generation)
 
     if not (data.get("sentences") or []) and not getattr(client, "cancelled", False):
         # 답할 수 있다고 하고는 문장을 하나도 내지 않았다. 30문항 평가에서 6문항이
@@ -552,27 +615,29 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         trace.record(generation_calls=trace.counts['generation_calls']+1)
         generation = {**generation, **_generation_record(client), "empty_answer_retry": True}
         if db.get_meta("content_revision") != content_revision:
-            return Answer(question=question, text="", withheld=True,
-                          error="답변을 준비하는 동안 자료가 갱신되었습니다. 다시 질문해 주세요.")
+            return _refreshed(question)
         if not forced_error and isinstance(forced, dict) and forced.get("answered"):
             data = forced
 
     if not (data.get("sentences") or []):
         # 다시 물어도 문장이 없다. 같은 질문·같은 근거에 어떤 때는 옳게 답하고
-        # 어떤 때는 빈 목록을 낸다 —
-        # 같은 질문·같은 근거에 어떤 때는 옳게 답하고 어떤 때는 빈 목록을 냈다.
-        # 이것은 자료가 없는 것이 아니라 생성이 실패한 것이다. '자료 부족'으로
-        # 보여 주면 사용자는 문서를 찾으러 간다.
+        # 어떤 때는 빈 목록을 냈다. 이것은 자료가 없는 것이 아니라 생성이 실패한
+        # 것이다. '자료 부족'으로 보여 주면 사용자는 문서를 찾으러 간다.
         generation["empty_answer"] = True
-        related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
         return Answer(
             question=question, text="", withheld=True,
             error="모델이 답변 문장을 만들지 못했습니다. 자료가 없다는 뜻은 아닙니다 — "
                   "다시 질문하거나 아래 문서를 직접 확인해 보세요.",
-            related_docs=_dedupe(related), model=client.gen_model,
-            inferred_years=scope.years, generation=generation,
+            related_docs=grounds.related(), model=client.gen_model,
+            inferred_years=grounds.scope.years, generation=generation,
         )
+    return data, generation
 
+
+def _verified_answer(client, grounds: _Grounds, data: dict, generation: dict, trace) -> Answer:
+    """모델의 문장을 근거와 대조해 남은 것만 답으로 낸다."""
+    question, asked = grounds.question, grounds.asked
+    context_rows, source_text = grounds.rows, grounds.source_text
     # 모델이 문장·근거를 스스로 짝지어 냈어도, 그 근거가 실제로 그 문장을
     # 뒷받침하는지는 모델이 보장하지 않는다. 여기서 규칙으로 한 번 더
     # 확인한다 — 근거 없는 문장은 화면에 올리지 않는다(§1 측정 1).
@@ -591,16 +656,7 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         # 왜 버렸는지를 갈래로만 남긴다 — 사유 문장의 쌍점 뒤(문장의 값)는 넣지 않는다.
         generation["withheld"] = "unverified"
         generation["dropped"] = sorted({d.reason.split(":", 1)[0] for d in verified.dropped})
-        related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
-        return Answer(
-            question=question,
-            text="확인 가능한 자료가 부족합니다.",
-            withheld=True,
-            related_docs=_dedupe(related),
-            model=client.gen_model,
-            inferred_years=scope.years,
-            generation=generation,
-        )
+        return grounds.insufficient(model=client.gen_model, generation=generation)
 
     if _asks_reason(question) and not any(_GIVES_REASON.search(s.text) for s in verified.kept):
         # 이유를 물었는데 이유를 말하는 문장이 없다. 30문항 평가에서 "집행액이
@@ -608,26 +664,21 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         # 근거에 있는 숫자지만 묻는 것에 대한 답이 아니다.
         generation["reason_missing"] = True
         generation["withheld"] = "reason_missing"
-        related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
-        return Answer(
-            question=question, text="확인 가능한 자료가 부족합니다.", withheld=True,
-            related_docs=_dedupe(related), model=client.gen_model,
-            inferred_years=scope.years, generation=generation)
+        return grounds.insufficient(model=client.gen_model, generation=generation)
 
     with trace.stage("answer_fit"):
         off = _off_the_point(question, verified.kept, context_rows, source_text, asked)
     if off:
         generation[off] = True
         generation["withheld"] = off
-        related = [RelatedDoc(r["doc_id"], r["filename"], r["path"]) for r in context_rows[:3]]
         quantity_problem = off.startswith("quantity_")
-        return Answer(
-            question=question, text=("질문한 수량과 단위를 답변·원문에서 함께 확인할 수 없어 확정을 보류했습니다."
-                                    if quantity_problem else "확인 가능한 자료가 부족합니다."), withheld=True,
-            related_docs=_dedupe(related), model=client.gen_model,
-            inferred_years=scope.years, generation=generation,
+        answer = grounds.insufficient(
+            model=client.gen_model, generation=generation,
             guidance=("수량·단위·대상 기간이 표시된 원문을 확인하세요. 원문에 값이 있다면 다시 질문해 주세요."
                       if quantity_problem else ""))
+        if quantity_problem:
+            answer.text = "질문한 수량과 단위를 답변·원문에서 함께 확인할 수 없어 확정을 보류했습니다."
+        return answer
 
     kept = verified.kept
     if asked.intent == 'count':
@@ -642,9 +693,9 @@ def _ask(db: Database, question: str, client: OllamaClient | None,
         if any(wrong):
             generation["sentences_off_field"] = sum(wrong)
             kept = [sentence for sentence, off_field in zip(kept, wrong) if not off_field]
-    text, citations = _compose_answer(kept, context_rows, official, source_text)
+    text, citations = _compose_answer(kept, context_rows, grounds.official, source_text)
     return Answer(question=question, text=text, withheld=False, citations=citations,
-                  model=client.gen_model, inferred_years=scope.years, generation=generation)
+                  model=client.gen_model, inferred_years=grounds.scope.years, generation=generation)
 
 
 # ── 내부 ────────────────────────────────────────────────────────────
