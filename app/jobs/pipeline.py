@@ -955,8 +955,14 @@ class Pipeline(QObject):
 
             self._report(db, report_restore)
 
-    def _analyze_single_task_cycles(self, db: Database, task, bulk_days) -> None:
+    def _analyze_single_task_cycles(self, db: Database, task, bulk_days) -> str | None:
+        """업무 하나의 연도×월 격자를 만들어 반복 주기를 찾아 저장한다.
+
+        찾았으면 "found", 요청 공문의 기한으로 해마다 오는 일로 보았으면 "guessed",
+        아니면 None. 일괄 단계(_cycles)와 업무 단위 분석이 이 함수 하나를 쓴다.
+        """
         rows = db.task_grid_documents(task["id"])
+        # 받은 자료·참고자료·이전 판의 날짜는 이 일의 일정이 아니다.
         outside = foldersteps.outside_the_work(db, [row["id"] for row in rows])
         reps = versions.representatives(db, [row["id"] for row in rows])
         rows = [row for row in rows if row["id"] not in outside and reps.get(row["id"], row["id"]) == row["id"]]
@@ -975,15 +981,22 @@ class Pipeline(QObject):
                 day=auth_day if auth_day is not None else (int(row["eff_date"][8:10]) if same else None),
                 trustworthy=trusted,
             ))
+        # 문서가 스스로 적은 일정·기한('6. 17.(월) 한', '…까지 제출')의 달도 넣는다.
+        # 문서가 남은 달보다 직접적인 근거다.
         docs += [timeline.DatedDoc(doc_id=doc_id, year=when.year, month=when.month,
                                    day=when.day, trustworthy=True)
                  for doc_id, when in reconstruction.schedule_dates(db, task["id"])]
         grid = timeline.build_grid(docs)
+        # 참고 자료 묶음과 낱장 묶음은 되풀이하는 일이 아니다.
         bundled = bundles.kind(db, task["id"])
         guess = None if bundled else timeline.detect_cycle(grid)
 
         cycles = []
+        outcome = None
         if guess is None:
+            # 반복을 주장할 만큼 여러 해가 없다. 그래도 받은 요청 공문에 기한이 있고
+            # 이 업무의 자료(참고로 둔 전년도 판 포함)가 두 해 이상에 걸쳐 있으면 해마다
+            # 오는 요청으로 보인다. 확신은 낮음이다 — 알림은 내지 않고 일정에만 보인다.
             asked = [] if bundled else reconstruction.request_deadlines(db, task["id"])
             years_seen = {row["year"] for row in db.task_grid_documents(task["id"])}
             periodic = asked and db.con.execute(
@@ -994,6 +1007,7 @@ class Pipeline(QObject):
                 newest = max(when.year for _doc, when in asked)
                 latest = [when for _doc, when in asked if when.year == newest]
                 months = sorted({when.month for when in latest})
+                # 기한이 한 날로 모이면 그 날을 적는다. 날까지 아는 기한은 알림의 근거가 된다.
                 days = {(when.month, when.day) for when in latest}
                 cycles.append({
                     "kind": timeline.YEARLY, "months": ",".join(str(m) for m in months),
@@ -1001,7 +1015,11 @@ class Pipeline(QObject):
                     "years_observed": 1, "confidence": "low",
                     "evidence": ",".join(str(doc) for doc, _when in asked[:10]),
                 })
+                outcome = "guessed"
         else:
+            # 일(day) 힌트는 '매월 5~10일'처럼 매월 반복에만 붙인다. 연간
+            # 반복에 붙이면 "매년 9~11월 12일"처럼 어느 달의 12일인지
+            # 모호해져 오히려 혼란을 준다.
             hint = timeline.day_hint(docs, None) if guess.kind == timeline.MONTHLY else None
             cycles.append({
                 "kind": guess.kind,
@@ -1011,20 +1029,31 @@ class Pipeline(QObject):
                 "confidence": guess.confidence,
                 "evidence": ",".join(str(i) for i in guess.evidence_doc_ids),
             })
+            outcome = "found"
         with db.transaction():
             db.replace_task_cycles(task["id"], cycles)
+        return outcome
 
-    def _analyze_single_task_steps(self, db: Database, task, bulk_days) -> None:
+    def _analyze_single_task_steps(self, db: Database, task, bulk_days) -> tuple[int, int]:
+        """업무 하나의 해마다 처리 순서를 재현해 저장한다. (만든 단계 수, 살핀 해 수).
+
+        전임자가 폴더에 번호·날짜로 적어 둔 순서가 있는 해는 그것을 그대로 쓴다.
+        문서를 날짜순으로 늘어놓는 재구성은 그런 기록이 없는 해에만 한다.
+        """
+        years = db.task_years(task["id"])
         if bundles.kind(db, task["id"]):
-            for year in db.task_years(task["id"]):
+            # 일이 아닌 묶음에 '문서 처리' 단계를 늘어놓지 않는다.
+            for year in years:
                 with db.transaction():
                     db.replace_task_steps(task["id"], year, [])
-            return
+            return 0, len(years)
+        made = 0
         recorded = foldersteps.plan(db, task["id"])
         for year, steps in recorded.items():
             with db.transaction():
                 db.replace_task_steps(task["id"], year, steps)
-        for year in db.task_years(task["id"]):
+            made += len(steps)
+        for year in years:
             if year in recorded:
                 continue
             rows = db.task_year_documents(task["id"], year)
@@ -1035,6 +1064,7 @@ class Pipeline(QObject):
             for row in rows:
                 auth = row["authored_at"] if "authored_at" in row.keys() else None
                 off_title = row["official_title"] if "official_title" in row.keys() else None
+                # 일정 파악과 같은 달을 쓴다 — 본문 속 기간의 달이 아니라 일한 달.
                 month, _ = timeline.work_month(
                     year, row["month"], row["eff_date_kind"], row["eff_precision"],
                     row["fs_mtime"], bulk_days, authored_at=auth)
@@ -1056,6 +1086,8 @@ class Pipeline(QObject):
                     }
                     for s in steps
                 ])
+            made += len(steps)
+        return made, len(years)
 
     # ── 문서 갈래 확인 (역할·해·판 묶음) ────────────────────────────
     def _roles(self, db: Database) -> None:
@@ -1097,86 +1129,17 @@ class Pipeline(QObject):
         """
         tasks = db.tasks()
         report = StageReport(STAGE_CYCLES, total=len(tasks))
-        found = 0
         bulk_days = timeline.bulk_copy_days(
             (row["fs_mtime"], str(Path(row["path"]).parent)) for row in db.con.execute(
                 "SELECT fs_mtime, path FROM documents WHERE missing_since IS NULL"))
 
-        guessed = 0
+        found = guessed = 0
         for index, task in enumerate(tasks, start=1):
             if self._stop:
                 break
-            rows = db.task_grid_documents(task["id"])
-            # 받은 자료·참고자료·이전 판의 날짜는 이 일의 일정이 아니다.
-            outside = foldersteps.outside_the_work(db, [row["id"] for row in rows])
-            reps = versions.representatives(db, [row["id"] for row in rows])
-            rows = [row for row in rows if row["id"] not in outside and reps.get(row["id"], row["id"]) == row["id"]]
-            docs = []
-            for row in rows:
-                auth = row["authored_at"] if "authored_at" in row.keys() else None
-                month, trusted = timeline.work_month(
-                    row["year"], row["month"], row["eff_date_kind"], row["eff_precision"],
-                    row["fs_mtime"], bulk_days, authored_at=auth)
-                auth_day = int(auth[8:10]) if auth and len(auth) >= 10 and auth[8:10].isdigit() else None
-                same = month == row["month"] and row["eff_precision"] == "day"
-                docs.append(timeline.DatedDoc(
-                    doc_id=row["id"],
-                    year=row["year"],
-                    month=month,
-                    day=auth_day if auth_day is not None else (int(row["eff_date"][8:10]) if same else None),
-                    trustworthy=trusted,
-                ))
-            # 문서가 스스로 적은 일정·기한('6. 17.(월) 한', '…까지 제출')의 달도 넣는다.
-            # 문서가 남은 달보다 직접적인 근거다.
-            docs += [timeline.DatedDoc(doc_id=doc_id, year=when.year, month=when.month,
-                                       day=when.day, trustworthy=True)
-                     for doc_id, when in reconstruction.schedule_dates(db, task["id"])]
-            grid = timeline.build_grid(docs)
-            # 참고 자료 묶음과 낱장 묶음은 되풀이하는 일이 아니다.
-            bundled = bundles.kind(db, task["id"])
-            guess = None if bundled else timeline.detect_cycle(grid)
-
-            cycles = []
-            if guess is None:
-                # 반복을 주장할 만큼 여러 해가 없다. 그래도 받은 요청 공문에 기한이 있고
-                # 이 업무의 자료(참고로 둔 전년도 판 포함)가 두 해 이상에 걸쳐 있으면 해마다
-                # 오는 요청으로 보인다. 확신은 낮음이다 — 알림은 내지 않고 일정에만 보인다.
-                asked = [] if bundled else reconstruction.request_deadlines(db, task["id"])
-                years_seen = {row["year"] for row in db.task_grid_documents(task["id"])}
-                periodic = asked and db.con.execute(
-                    "SELECT 1 FROM documents WHERE id IN (%s) AND (filename LIKE '%%년도%%' "
-                    "OR filename LIKE '%%상반기%%' OR filename LIKE '%%하반기%%' OR filename LIKE '%%분기%%')"
-                    % ", ".join("?" * len(asked)), [doc for doc, _when in asked]).fetchone()
-                if asked and (len(years_seen) >= 2 or periodic):
-                    newest = max(when.year for _doc, when in asked)
-                    latest = [when for _doc, when in asked if when.year == newest]
-                    months = sorted({when.month for when in latest})
-                    # 기한이 한 날로 모이면 그 날을 적는다. 날까지 아는 기한은 알림의 근거가 된다.
-                    days = {(when.month, when.day) for when in latest}
-                    cycles.append({
-                        "kind": timeline.YEARLY, "months": ",".join(str(m) for m in months),
-                        "day_hint": f"{next(iter(days))[1]}일까지" if len(days) == 1 else None,
-                        "years_observed": 1, "confidence": "low",
-                        "evidence": ",".join(str(doc) for doc, _when in asked[:10]),
-                    })
-                    guessed += 1
-            if guess:
-                found += 1
-                # 일(day) 힌트는 '매월 5~10일'처럼 매월 반복에만 붙인다. 연간
-                # 반복에 붙이면 "매년 9~11월 12일"처럼 어느 달의 12일인지
-                # 모호해져 오히려 혼란을 준다.
-                hint = timeline.day_hint(docs, None) if guess.kind == timeline.MONTHLY else None
-                cycles.append({
-                    "kind": guess.kind,
-                    "months": ",".join(str(m) for m in guess.months),
-                    "day_hint": hint,
-                    "years_observed": guess.years_observed,
-                    "confidence": guess.confidence,
-                    "evidence": ",".join(str(i) for i in guess.evidence_doc_ids),
-                })
-            with db.transaction():
-                db.replace_task_cycles(task["id"], cycles)
-
+            outcome = self._analyze_single_task_cycles(db, task, bulk_days)
+            found += outcome == "found"
+            guessed += outcome == "guessed"
             if index % 5 == 0 or index == len(tasks):
                 self.progress.emit(STAGE_CYCLES, index, len(tasks), task["name"])
 
@@ -1213,60 +1176,10 @@ class Pipeline(QObject):
         for task in tasks:
             if self._stop:
                 break
-            # 전임자가 폴더에 번호·날짜로 적어 둔 순서가 있는 해는 그것을 그대로 쓴다.
-            # 문서를 날짜순으로 늘어놓는 재구성은 그런 기록이 없는 해에만 한다.
-            if bundles.kind(db, task["id"]):
-                # 일이 아닌 묶음에 '문서 처리' 단계를 늘어놓지 않는다.
-                for year in db.task_years(task["id"]):
-                    with db.transaction():
-                        db.replace_task_steps(task["id"], year, [])
-                    done += 1
-                continue
-            recorded = foldersteps.plan(db, task["id"])
-            for year, steps in recorded.items():
-                with db.transaction():
-                    db.replace_task_steps(task["id"], year, steps)
-                steps_made += len(steps)
-            for year in db.task_years(task["id"]):
-                if self._stop:
-                    break
-                if year in recorded:
-                    done += 1
-                    continue
-                rows = db.task_year_documents(task["id"], year)
-                outside = foldersteps.outside_the_work(db, [row["id"] for row in rows])
-                reps = versions.representatives(db, [row["id"] for row in rows])
-                rows = [row for row in rows if row["id"] not in outside and reps.get(row["id"], row["id"]) == row["id"]]
-                candidates = []
-                for row in rows:
-                    auth = row["authored_at"] if "authored_at" in row.keys() else None
-                    off_title = row["official_title"] if "official_title" in row.keys() else None
-                    # 일정 파악과 같은 달을 쓴다 — 본문 속 기간의 달이 아니라 일한 달.
-                    month, _ = timeline.work_month(
-                        year, row["month"], row["eff_date_kind"], row["eff_precision"],
-                        row["fs_mtime"], bulk_days, authored_at=auth)
-                    month = month or row["month"]
-                    auth_day = int(auth[8:10]) if auth and len(auth) >= 10 and auth[8:10].isdigit() else None
-                    same = month == row["month"] and row["eff_precision"] == "day"
-                    candidates.append(timeline.StepCandidate(
-                        doc_id=row["id"],
-                        month=month,
-                        day=auth_day if auth_day is not None else (int(row["eff_date"][8:10]) if same else None),
-                        label=_step_label(off_title or row["filename"]),
-                    ))
-                steps = timeline.reconstruct_steps(timeline.condense(candidates, FALLBACK_LABEL), year)
-                with db.transaction():
-                    db.replace_task_steps(task["id"], year, [
-                        {
-                            "ordinal": s.ordinal, "label": s.label, "month": s.month,
-                            "day_hint": s.day_hint, "doc_id": s.doc_id, "gap_note": s.gap_note,
-                        }
-                        for s in steps
-                    ])
-                steps_made += len(steps)
-                done += 1
-                if done % 5 == 0 or done == total_years:
-                    self.progress.emit(STAGE_STEPS, done, total_years, task["name"])
+            made, years = self._analyze_single_task_steps(db, task, bulk_days)
+            steps_made += made
+            done += years
+            self.progress.emit(STAGE_STEPS, done, total_years, task["name"])
 
         report.done = report.total
         report.note = f"{steps_made:,}단계 재구성" if steps_made else "재구성할 자료가 없습니다"
