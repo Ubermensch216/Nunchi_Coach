@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ...ai import classify_units
 from ...core import charter, structure_review
 from .. import theme
 from ..widgets import muted_label, view_title
@@ -85,6 +86,11 @@ class StructureReviewDialog(QDialog):
         for button in (self.rename_button, self.merge_button, self.not_task_button):
             edits.addWidget(button)
         edits.addStretch(1)
+        # 사용자가 업무 분장을 적었다면 자료가 어느 항목으로 나뉘었는지 확인한다.
+        self.classification_button = QPushButton("자료 분류 확인…")
+        self.classification_button.setVisible(bool(classify_units.assignments(db)))
+        self.classification_button.clicked.connect(self._open_classification)
+        edits.addWidget(self.classification_button)
         layout.addLayout(edits)
 
         foot = QHBoxLayout()
@@ -203,6 +209,13 @@ class StructureReviewDialog(QDialog):
         charter.set_predecessor(self.db, name)
         self.changed = True
         self._sync_owner()
+
+    def _open_classification(self) -> None:
+        from .classification_review import ClassificationReviewDialog
+        dialog = ClassificationReviewDialog(self.db, self)
+        dialog.exec()
+        if dialog.changed:
+            self.changed = True
 
     def _edited(self) -> None:
         self.changed = True
