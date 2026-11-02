@@ -144,3 +144,51 @@ def test_cited_letters_follow_the_sure_one(db):
     assert mine["적극행정 실행계획"].item_name == "적극행정 실행계획"
     cited = mine["회신"]
     assert (cited.item_name, cited.basis) == ("적극행정 실행계획", cu.BASIS_CITE)
+
+
+def test_user_fix_teaches_same_folder_and_subfolders(db):
+    setup(db, "고객 응대 혁신\n예산 편성")
+    for rel in ("잡다/a1.hwp", "잡다/a2.hwp", "잡다/세부/b1.hwp", "잡다/세부/b2.hwp", "다른/c1.hwp", "다른/c2.hwp"):
+        doc(db, rel, "x")
+    cu.classify(db)
+    loaded = {u["label"]: u["key"] for u in units.load(db)}
+    cu.set_user_assignment(db, loaded["잡다"], "예산 편성")
+    cu.classify(db)
+    mine = result(db)
+    assert mine["세부"].item_name == "예산 편성" and mine["세부"].basis == cu.BASIS_TAUGHT
+    assert mine["다른"].bucket == cu.UNKNOWN              # 관계없는 폴더는 따라가지 않는다
+
+
+def test_conflicting_fixes_teach_nothing(db):
+    setup(db, "고객 응대 혁신\n예산 편성")
+    for rel in ("잡다/x1.hwp", "잡다/x2.hwp", "잡다/하위/y1.hwp", "잡다/하위/y2.hwp"):
+        doc(db, rel, "x")
+    cu.classify(db)
+    mine = {u["label"]: u["key"] for u in units.load(db)}
+    # 같은 폴더 경로를 가진 두 단위를 서로 다른 분류로 고친다(폴더 단위와 그 폴더의 낱장).
+    cu.set_user_assignment(db, mine["잡다"], "예산 편성")
+    loose_key = "loose:fake"
+    db.con.execute("INSERT INTO work_units(kind, unit_key, label, card) VALUES ('loose', ?, '낱장 문서', ?)",
+                   (loose_key, '{"folder": "잡다"}'))
+    cu.set_user_assignment(db, loose_key, "고객 응대 혁신")
+    users = cu._stored_user(db)
+    folder_rules, _labels = cu._taught(units.load(db), users)
+    assert "잡다" not in folder_rules                      # 같은 폴더를 둘로 고쳤으니 규칙이 아니다
+
+
+def test_review_rows_and_summary(db):
+    setup(db, "고객 응대 혁신\n예산 편성\n인사 관리")
+    doc(db, "예산 편성/a.xlsx", "x")
+    doc(db, "예산 편성/b.xlsx", "x")
+    doc(db, "잡다/c.hwp", "x")
+    doc(db, "잡다/d.hwp", "x")
+    cu.classify(db)
+    rows = cu.review_rows(db)
+    assert [r.label for r in rows] == ["잡다"] and rows[0].bucket == cu.UNKNOWN
+    assert cu.review_rows(db, attention_only=False)[-1].label in ("예산 편성", "잡다")
+    summary = {r["name"]: r for r in cu.summary_by_item(db)}
+    assert summary["예산 편성"]["docs"] == 2 and summary["인사 관리"]["units"] == 0
+    assert summary["판단 불가"]["docs"] == 2
+    cu.set_user_assignment(db, rows[0].unit_key, "고객 응대 혁신")
+    assert cu.review_rows(db) == []                       # 사람이 정한 것은 더 묻지 않는다
+    assert {r["name"]: r for r in cu.summary_by_item(db)}["고객 응대 혁신"]["user"] == 1

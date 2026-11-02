@@ -35,6 +35,7 @@ BASIS_AI = "AI 판단"
 BASIS_WORDS = "낱말 겹침"
 BASIS_CITE = "인용으로 이어진 공문"
 BASIS_USER = "사용자 지정"
+BASIS_TAUGHT = "사용자가 고친 폴더·제목"
 
 _WORDS = re.compile(r"[가-힣A-Za-z0-9]{2,}")
 
@@ -140,6 +141,44 @@ def _citation_groups(db, loaded: list[dict]) -> list[list[str]]:
     return [keys for keys in groups.values() if len(keys) > 1]
 
 
+def _taught(loaded: list[dict], users: dict[str, Assignment]) -> tuple[dict, dict]:
+    """사람이 고친 단위에서 규칙을 배운다 — 같은 폴더(와 그 아래)·같은 공문 제목은 같은 분류.
+
+    같은 폴더나 제목을 서로 다른 분류로 고쳤으면 그 규칙은 쓰지 않는다(애매하다).
+    값은 분장 항목 이름이고, None은 '분장 밖'이다.
+    """
+    folder_rules: dict[str, set] = defaultdict(set)
+    label_rules: dict[str, set] = defaultdict(set)
+    by_key = {u["key"]: u for u in loaded}
+    for key, assignment in users.items():
+        unit = by_key.get(key)
+        if unit is None or assignment.bucket == UNKNOWN:
+            continue
+        target = assignment.item_name if assignment.bucket == ITEM else None
+        folder = (unit["card"].get("folder") or "").lower()
+        if folder:
+            folder_rules[folder].add(target)
+        if unit["kind"] != units.FOLDER:
+            label = folders.compact(unit["label"])
+            if len(label) >= 4:
+                label_rules[label].add(target)
+    return ({k: next(iter(v)) for k, v in folder_rules.items() if len(v) == 1},
+            {k: next(iter(v)) for k, v in label_rules.items() if len(v) == 1})
+
+
+def _apply_taught(unit: dict, folder_rules: dict, label_rules: dict) -> tuple[str | None, str] | None:
+    folder = (unit["card"].get("folder") or "").lower()
+    if folder:
+        best = max((f for f in folder_rules if folder == f or folder.startswith(f + "/")), key=len, default=None)
+        if best is not None:
+            return folder_rules[best], f"사용자가 폴더 ‘{best}’를 고침"
+    if unit["kind"] != units.FOLDER:
+        label = folders.compact(unit["label"])
+        if label in label_rules:
+            return label_rules[label], f"사용자가 같은 제목 ‘{unit['label']}’을 고침"
+    return None
+
+
 def classify(db, client=None, max_calls: int = MAX_CALLS, on_progress=None) -> dict[str, int]:
     """저장된 자료 단위를 분류해 unit_assignments에 남긴다. 건수 요약을 돌려준다."""
     options = charter_match.charter_options(db)
@@ -154,11 +193,18 @@ def classify(db, client=None, max_calls: int = MAX_CALLS, on_progress=None) -> d
     users = {k: a for k, a in _stored_user(db).items() if a.bucket != ITEM or a.item_name in names}
 
     result: dict[str, Assignment] = dict(users)
+    folder_rules, label_rules = _taught(loaded, users)
     pending: list[dict] = []
     for unit in loaded:
         if unit["key"] in result:
             continue
         card = unit["card"]
+        taught = _apply_taught(unit, folder_rules, label_rules)
+        if taught is not None:
+            name, where = taught
+            result[unit["key"]] = (Assignment(unit["key"], name, ITEM, "high", BASIS_TAUGHT, where) if name else
+                                   Assignment(unit["key"], None, OUTSIDE, "high", BASIS_TAUGHT, where))
+            continue
         winner = _by_name(options, _identity(card, unit["label"]))
         if winner is not None:
             result[unit["key"]] = Assignment(unit["key"], winner["name"], ITEM, "high", BASIS_NAME,
@@ -255,3 +301,64 @@ def by_item(db) -> dict[str, list[dict]]:
         if a is not None and a.bucket == ITEM and a.item_name:
             out[a.item_name].append({**unit, "assignment": a})
     return out
+
+
+# ── 확인 화면이 쓰는 것 ─────────────────────────────────────────────
+
+@dataclass(slots=True)
+class ReviewRow:
+    unit_key: str
+    label: str
+    kind: str
+    doc_count: int
+    bucket: str
+    item_name: str | None
+    confidence: str
+    basis: str
+    evidence: str
+    decided_by: str
+    folder: str
+    sample: str
+
+
+_ATTENTION_ORDER = {UNKNOWN: 0, OUTSIDE: 1, ITEM: 2}
+
+
+def review_rows(db, attention_only: bool = True) -> list[ReviewRow]:
+    """사람이 볼 단위. 기본은 판단 불가·분장 밖·확신 낮음·AI 판단만(분명한 것은 뺀다)."""
+    mine = assignments(db)
+    rows: list[ReviewRow] = []
+    for unit in units.load(db):
+        a = mine.get(unit["key"])
+        if a is None:
+            continue
+        needs = (a.bucket != ITEM or a.confidence == "low" or a.basis == BASIS_AI) and a.decided_by != "user"
+        if attention_only and not needs:
+            continue
+        card = unit["card"]
+        titles = card.get("titles") or card.get("attachments") or ([card["title"]] if card.get("title") else [])
+        rows.append(ReviewRow(unit["key"], unit["label"], unit["kind"], len(unit["doc_ids"]), a.bucket,
+                              a.item_name, a.confidence, a.basis, a.evidence, a.decided_by,
+                              card.get("folder", ""), " / ".join(titles[:3])))
+    rows.sort(key=lambda r: (_ATTENTION_ORDER[r.bucket], r.confidence != "low", -r.doc_count, r.label))
+    return rows
+
+
+def summary_by_item(db) -> list[dict]:
+    """분장 항목마다 분류된 단위·문서 수와, 사람이 정한 것 · AI가 판단한 것의 수. 자료가 없는 항목도 나온다."""
+    mine = assignments(db)
+    out: dict[str, dict] = {o["name"]: {"name": o["name"], "units": 0, "docs": 0, "user": 0, "ai": 0}
+                            for o in charter_match.charter_options(db)}
+    extra = {OUTSIDE: {"name": "분장 밖", "units": 0, "docs": 0, "user": 0, "ai": 0},
+             UNKNOWN: {"name": "판단 불가", "units": 0, "docs": 0, "user": 0, "ai": 0}}
+    for unit in units.load(db):
+        a = mine.get(unit["key"])
+        if a is None:
+            continue
+        row = out.get(a.item_name) if a.bucket == ITEM else extra[a.bucket]
+        if row is None:
+            continue
+        row["units"] += 1
+        row["docs"] += len(unit["doc_ids"])
+        row["user" if a.decided_by == "user" else "ai"] += 1
+    return list(out.values()) + [extra[OUTSIDE], extra[UNKNOWN]]
