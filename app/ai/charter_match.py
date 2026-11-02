@@ -27,6 +27,7 @@ class Verdict:
     confidence: str
     evidence: str
     cached: bool = False
+    rejected: bool = False     # 모델이 항목을 골랐지만 근거가 자료와 맞지 않거나 확신이 낮아 쓰지 않았다
 
 
 def _compact(value: str) -> str:
@@ -47,6 +48,23 @@ def material_text(label: str, titles: list[str] = (), folders: list[str] = (), f
     return "\n".join(parts)[:MATERIAL_LIMIT]
 
 
+_EVIDENCE_WORDS = re.compile(r"[가-힣A-Za-z0-9]{2,}")
+GROUNDED_SHARE = 0.7
+
+
+def grounded(evidence: str, material: str) -> bool:
+    """근거가 자료에 있는가. 작은 모델은 원문을 띄어쓰기·문장부호까지 옮기지 못하므로, 그대로 들어 있지
+    않으면 근거의 낱말 가운데 대부분(70%)이 자료에 있는지 본다. 낱말이 둘보다 적으면 그대로 있어야 한다."""
+    if len(evidence) < 4:
+        return False
+    if _compact(evidence) in _compact(material):
+        return True
+    words = _EVIDENCE_WORDS.findall(evidence)
+    if len(words) < 2:
+        return False
+    return sum(word in material for word in words) >= GROUNDED_SHARE * len(words)
+
+
 def _fingerprint(items: list[dict], material: str) -> str:
     raw = json.dumps([[i["id"], i["name"], i.get("details", [])] for i in items], ensure_ascii=False) + material
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:20]
@@ -61,7 +79,8 @@ def judge(db, client, items: list[dict], material: str) -> Verdict | None:
     if stored:
         try:
             data = json.loads(stored)
-            return Verdict(data["item_id"], data["confidence"], data["evidence"], cached=True)
+            return Verdict(data["item_id"], data["confidence"], data["evidence"], cached=True,
+                           rejected=bool(data.get("rejected")))
         except (ValueError, KeyError):
             pass
     listing = "\n".join(
@@ -77,12 +96,12 @@ def judge(db, client, items: list[dict], material: str) -> Verdict | None:
     if not isinstance(choice, int) or not 0 <= choice <= len(items):
         return None                                  # 목록 밖 번호
     item_id = items[choice - 1]["id"] if choice else None
-    if item_id is not None and (confidence not in ACCEPT or len(evidence) < 4
-                                or _compact(evidence) not in _compact(material)):
-        item_id, confidence = None, "low"            # 근거가 자료에 없거나 확신이 낮다
-    verdict = Verdict(item_id, confidence, evidence)
-    db.set_meta(key, json.dumps({"item_id": item_id, "confidence": confidence, "evidence": evidence},
-                                ensure_ascii=False))
+    rejected = item_id is not None and (confidence not in ACCEPT or not grounded(evidence, material))
+    if rejected:
+        item_id, confidence = None, "low"            # 근거가 자료에 없거나 확신이 낮다 — '해당 없음'과는 다르다
+    verdict = Verdict(item_id, confidence, evidence, rejected=rejected)
+    db.set_meta(key, json.dumps({"item_id": item_id, "confidence": confidence, "evidence": evidence,
+                                 "rejected": rejected}, ensure_ascii=False))
     return verdict
 
 

@@ -28,12 +28,15 @@ ITEM, OUTSIDE, UNKNOWN = "item", "outside", "unknown"
 OUTSIDE_NAME, UNKNOWN_NAME = "분장 밖", "판단 불가"
 MAX_CALLS = 150
 MAX_PART_CALLS = 100        # 분장 항목 안의 세부업무를 모델에 묻는 횟수의 상한
-MAX_OPTIONS = 8
+# 모델에게 보일 분장 항목 수. 팀 전체 분장표는 40개 안팎이다 — 몇 개만 잘라 보이면 맞는 항목이 목록에서
+# 빠진다(2026-11-02 실자료: 김명진 행의 'IT 지원'이 40개 가운데 39번째라 8개 후보에 들지 못했다).
+MAX_OPTIONS = 40
 NAME_MIN = 3                 # 이름 규칙에 쓰는 항목 이름의 최소 길이(짧은 이름은 어디에나 있다)
 WEAK_MIN = 3                 # 모델이 없을 때 붙이는 최소 점수 — 항목 이름이나 세부업무가 통째로 나와야 한다
 
 BASIS_NAME = "이름 일치"
 BASIS_AI = "AI 판단"
+BASIS_AI_REJECTED = "AI 답 보류(근거 불일치·확신 낮음)"
 BASIS_WORDS = "낱말 겹침"
 BASIS_CITE = "인용으로 이어진 공문"
 BASIS_USER = "사용자 지정"
@@ -232,7 +235,10 @@ def classify(db, client=None, max_calls: int = MAX_CALLS, on_progress=None,
             calls += 1
         elif client is not None:
             skipped += 1
-        if verdict is not None:
+        if verdict is not None and verdict.rejected:
+            result[unit["key"]] = Assignment(unit["key"], None, UNKNOWN, "low", BASIS_AI_REJECTED,
+                                             verdict.evidence)
+        elif verdict is not None:
             if verdict.item_id is None:
                 result[unit["key"]] = Assignment(unit["key"], None, OUTSIDE, verdict.confidence, BASIS_AI,
                                                  verdict.evidence)

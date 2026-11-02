@@ -209,3 +209,28 @@ def test_parts_inside_an_item_by_name_and_by_model(db):
     key = result(db)["잡다"].unit_key
     cu.set_user_assignment(db, key, "예산 편성")        # 사람이 항목을 다시 지정하면 세부업무는 다시 정한다
     assert cu.assignments(db)[key].part == ""
+
+
+def test_grounding_tolerates_spacing_but_not_invented_evidence():
+    from app.ai.charter_match import grounded
+    material = "문서 제목: 데이터센터 정보자원 반입 신청 / 반입 장비 목록"
+    assert grounded("데이터센터 정보자원 반입신청", material)          # 띄어쓰기만 다르다
+    assert grounded("데이터센터 반입 신청 장비 목록", material)          # 낱말 대부분이 자료에 있다
+    assert not grounded("예산 결산 회계 감사 처분", material)
+    assert not grounded("반입", material)
+
+
+def test_rejected_model_answer_is_unknown_not_outside(db):
+    setup(db, "고객 응대 혁신\n예산 편성")
+    doc(db, "잡다/상담 현황.hwp", "상담")
+    doc(db, "잡다/상담 결과.hwp", "상담")
+
+    class Unsure(LLM):
+        def generate_json(self, prompt, schema, num_predict=0):
+            self.calls += 1
+            return {"choice": 1, "confidence": "low", "evidence": "상담 현황"}, None, ""
+
+    cu.classify(db, Unsure())
+    a = result(db)["잡다"]
+    assert (a.bucket, a.basis) == (cu.UNKNOWN, cu.BASIS_AI_REJECTED)
+    assert [r.label for r in cu.review_rows(db)] == ["잡다"]
