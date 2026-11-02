@@ -142,6 +142,9 @@ def test_chat_panel_shows_suggested_questions(db: Database, monkeypatch):
         app.processEvents()
         shown = {button.text() for button in panel.findChildren(QPushButton)}
         assert set(expected) <= shown
+        # 누르면 입력칸에 채워진다 (예전에는 QLineEdit에 없는 setPlainText를 불러 조용히 실패했다).
+        next(b for b in panel.findChildren(QPushButton) if b.text() == expected[0]).click()
+        assert panel.input.text() == expected[0]
     finally:
         panel._runner.stop()
         panel._warmup.stop()

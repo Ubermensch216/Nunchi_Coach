@@ -253,7 +253,7 @@ class ChatPanel(QWidget):
                             btn.setObjectName("Quiet")
                             btn.setCursor(Qt.CursorShape.PointingHandCursor)
                             btn.setStyleSheet("text-align: left; padding: 6px 10px; margin-bottom: 2px;")
-                            btn.clicked.connect(lambda _, text=q: self.input.setPlainText(text))
+                            btn.clicked.connect(lambda _, text=q: self._fill(text))
                             self.thread.addWidget(btn)
                 except Exception as exc:
                     from ....core import diagnostics
@@ -304,6 +304,12 @@ class ChatPanel(QWidget):
             self.thread.addWidget(self._question_block(self._answer.question))
             self.thread.addWidget(self._answer_block(self._answer, None))
         QTimer.singleShot(0, self._scroll_to_end)
+
+    def _fill(self, text: str) -> None:
+        """추천 질문을 입력칸에 채운다. 바로 보내지 않고, 고쳐 쓸 수 있게 커서를 끝에 둔다."""
+        self.input.setText(text)
+        self.input.setFocus()
+        self.input.setCursorPosition(len(text))
 
     def _scroll_to_end(self) -> None:
         bar = self.scroll.verticalScrollBar()
