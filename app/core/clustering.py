@@ -218,6 +218,11 @@ def _tokenize(name: str) -> list[str]:
     from pathlib import Path
 
     stem = Path(name).stem
+    # 온나라에서 받은 파일은 '<공문 키 12자리>-제목' 꼴이다. 키는 업무 이름이 아니다.
+    from . import gongmun
+    stem = gongmun.strip_marks(stem)
+    # '붙임2' '별첨' 같은 표지는 어느 업무에나 붙는다.
+    stem = re.sub(r"(붙임|별첨|첨부)\s*\d*", " ", stem)
     # 버전 꼬리표와 연도는 업무 이름이 아니다.
     stem = re.sub(r"(진짜|최|정말)*(최종|최신|수정|송부|결재|부장수정|사본|복사본)\d*", " ", stem)
     stem = re.sub(r"(?:19|20)\d{2}", " ", stem)

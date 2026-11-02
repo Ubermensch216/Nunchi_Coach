@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from . import folders
+from . import folders, gongmun
 
 # 공문 제목 끝에 붙는 동작어. 업무가 아니라 그 공문이 하는 일이다.
 ACTION_WORDS = frozenset({
@@ -104,7 +104,10 @@ def records(db) -> list[Record]:
         (record.body_ids if row["role"] == "body" else record.attachment_ids).append(row["doc_id"])
         if row["sha256"]:
             record.hashes.add(row["sha256"])
-    return list(out.values())
+    found = list(out.values())
+    # 폴더에 내려받아 둔 파일('[본문]' 표시)도 공문이다 — 꾸러미 기록이 없어도 뼈대가 된다.
+    taken = {doc_id for record in found for doc_id in record.doc_ids}
+    return found + gongmun.folder_records(db, taken)
 
 
 def body_text(db, doc_ids: list[int], limit: int = 20000) -> str:

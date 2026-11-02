@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import folders, provenance
+from . import folders, gongmun, provenance
 
 DIRECTIVE, CRITERIA, PLAN, PERFORMANCE = "directive", "criteria", "plan", "performance"
 EVIDENCE, SUBMISSION, RESULT, FORM, OTHER = "evidence", "submission", "result", "form", "other"
@@ -103,6 +103,8 @@ def classify(filename: str, title: str = "", head: str = "", table_headers: str 
 
     modifiers는 이 문서가 놓인 폴더의 성격이다('부서제출' 폴더 → received).
     """
+    if gongmun.is_body(filename):
+        return Role(DIRECTIVE, "이름의 '[본문]' 표시", "high")
     # 파일 이름은 낱말을 밑줄·붙임표로 잇는다. '결과_통보'도 '결과 통보'다.
     name = _SEPARATORS.sub(" ", f"{Path(filename).stem} {title or ''}")
     for role, pattern in _NAME_RULES:

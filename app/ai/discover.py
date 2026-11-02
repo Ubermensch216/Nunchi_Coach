@@ -22,7 +22,7 @@ import json
 import re
 from pathlib import Path
 
-from ..core import docrole, folders, scoring, discovery_index
+from ..core import docrole, folders, gongmun, scoring, discovery_index
 from ..core.clustering import DEFAULT_MIN_SIZE, Cluster, _tokenize, cluster, common_tokens
 from ..db import Database
 from ..search.vector import VectorStore
@@ -884,6 +884,8 @@ def _match_local(db: Database, tasks: list[OfficialTask], protected: set[int]) -
         "FROM documents d JOIN sources s ON s.id = d.source_id AND s.kind NOT IN ('upload', 'onnara') "
         "WHERE d.missing_since IS NULL AND d.parse_status NOT IN ('skipped', 'pending') "
         "ORDER BY d.id") if row["id"] not in protected]
+    own = {doc_id for task in tasks for record in task.records for doc_id in record.doc_ids}
+    rows = [row for row in rows if row["id"] not in own]
     by_hash: dict[str, set[int]] = {}
     by_number: dict[str, set[int]] = {}
     for index, task in enumerate(tasks):
@@ -1036,6 +1038,26 @@ def _group_leftovers(db: Database, doc_ids: list[int], min_size: int, result: Di
         f"SELECT id, filename FROM documents WHERE id IN ({marks}) "
         "  AND missing_since IS NULL "
         "  AND id NOT IN (SELECT doc_id FROM task_docs) ORDER BY id", doc_ids).fetchall()
+    # 같은 공문 키('<12자리>-')를 가진 문서는 이미 묶인 공문의 붙임이다. 그 업무에 붙인다.
+    key_re = gongmun.KEY
+    owner: dict[str, int] = {}
+    for row in db.con.execute(
+            "SELECT d.filename, td.task_id FROM documents d "
+            "JOIN task_docs td ON td.doc_id = d.id ORDER BY td.task_id DESC"):
+        found = key_re.match(row["filename"])
+        if found:
+            owner[found.group(1)] = row["task_id"]
+    left: list = []
+    for row in rows:
+        found = key_re.match(row["filename"])
+        task_id = owner.get(found.group(1)) if found else None
+        if task_id is None:
+            left.append(row)
+            continue
+        result.assigned += _attach(db, task_id, [row["id"]], confidence="low")
+        result.unassigned -= 1
+    rows = left
+
     first: dict[int, str] = {}
     for row in rows:
         tokens = _tokenize(row["filename"])
