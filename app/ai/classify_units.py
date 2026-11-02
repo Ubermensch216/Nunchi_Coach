@@ -25,11 +25,12 @@ from ..core import folders, official, units
 from . import charter_match
 
 ITEM, OUTSIDE, UNKNOWN = "item", "outside", "unknown"
+OUTSIDE_NAME, UNKNOWN_NAME = "분장 밖", "판단 불가"
 MAX_CALLS = 150
 MAX_PART_CALLS = 100        # 분장 항목 안의 세부업무를 모델에 묻는 횟수의 상한
 MAX_OPTIONS = 8
 NAME_MIN = 3                 # 이름 규칙에 쓰는 항목 이름의 최소 길이(짧은 이름은 어디에나 있다)
-WEAK_MIN = 2                 # 모델이 없을 때 낮은 확신으로 붙이는 최소 점수
+WEAK_MIN = 3                 # 모델이 없을 때 붙이는 최소 점수 — 항목 이름이나 세부업무가 통째로 나와야 한다
 
 BASIS_NAME = "이름 일치"
 BASIS_AI = "AI 판단"
@@ -61,8 +62,11 @@ def score(name: str, details: list[str], text: str) -> int:
     if len(compact_name) >= 2 and compact_name in flat:
         total += 3
     else:
-        tokens = _WORDS.findall(name)
-        if len(tokens) >= 2 and sum(token in text for token in tokens) * 2 >= len(tokens):
+        # 부분 일치는 3자 이상 낱말로만 본다. '감사'·'업무'·'지원' 같은 두 글자는 공문 어디에나 있어서
+        # '사회복지분야 감사'가 IT 공문에 붙었다(2026-11-02 실자료).
+        tokens = [token for token in _WORDS.findall(name) if len(token) >= 3]
+        hits = sum(token in text for token in tokens)
+        if hits and hits * 2 >= len(tokens):
             total += 2
     total += sum(1 for detail in details
                  if len(folders.compact(detail)) >= 3 and folders.compact(detail) in flat)
@@ -187,7 +191,7 @@ def classify(db, client=None, max_calls: int = MAX_CALLS, on_progress=None,
     options = charter_match.charter_options(db)
     if not options:
         return {}
-    expected = db.con.execute("SELECT COUNT(*) FROM documents WHERE missing_since IS NULL").fetchone()[0]
+    expected = db.con.execute("SELECT COUNT(*) FROM documents d JOIN sources s ON s.id = d.source_id WHERE d.missing_since IS NULL AND s.kind != 'upload'").fetchone()[0]
     stored_docs = db.con.execute("SELECT COUNT(DISTINCT doc_id) FROM work_unit_docs").fetchone()[0]
     if stored_docs != expected:
         units.save(db)
@@ -387,8 +391,8 @@ def summary_by_item(db) -> list[dict]:
     mine = assignments(db)
     out: dict[str, dict] = {o["name"]: {"name": o["name"], "units": 0, "docs": 0, "user": 0, "ai": 0}
                             for o in charter_match.charter_options(db)}
-    extra = {OUTSIDE: {"name": "분장 밖", "units": 0, "docs": 0, "user": 0, "ai": 0},
-             UNKNOWN: {"name": "판단 불가", "units": 0, "docs": 0, "user": 0, "ai": 0}}
+    extra = {OUTSIDE: {"name": OUTSIDE_NAME, "units": 0, "docs": 0, "user": 0, "ai": 0},
+             UNKNOWN: {"name": UNKNOWN_NAME, "units": 0, "docs": 0, "user": 0, "ai": 0}}
     for unit in units.load(db):
         a = mine.get(unit["key"])
         if a is None:

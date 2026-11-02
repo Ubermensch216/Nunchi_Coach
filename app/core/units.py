@@ -59,7 +59,8 @@ def _rows(db) -> list:
     return db.con.execute(
         "SELECT d.id, d.path, d.filename, d.hash, d.eff_year, s.id AS source_id, s.path AS root, s.kind AS source_kind "
         "FROM documents d JOIN sources s ON s.id = d.source_id "
-        "WHERE d.missing_since IS NULL ORDER BY d.id").fetchall()
+        # 업무노트에 직접 올린 자료는 전임자 자료가 아니다 — 분류 대상이 아니다.
+        "WHERE d.missing_since IS NULL AND s.kind != 'upload' ORDER BY d.id").fetchall()
 
 
 def _only(owners: set[int]) -> int | None:

@@ -105,13 +105,16 @@ def _discover(
     model = client.embed_model if client else db.get_meta("embed_model") or "bge-m3"
     store, contributions = discovery_index.load(db, model)
     protected = _protected_documents(db)
-    # 사용자가 정한 업무 분류(사무분장)가 있으면 그것이 기준이다. 자료를 먼저 분장 항목에 나누고,
-    # 나눈 자료는 아래의 공문·폴더·본문 묶기에서 뺀다. 나뉘지 않은 자료만 지금까지처럼 찾는다.
-    assigned = _assigned_plan(db, client, protected)
-    held = protected | {doc_id for task in assigned for doc_id in task.claimed}
-    # 온나라 공문이 있으면 그것이 업무의 뼈대다. 공문 업무가 가져간 문서(공문과, 공문에
-    # 대응된 PC 파일)는 아래의 폴더·본문 묶기에서 뺀다 — 남은 문서만 지금까지처럼 찾는다.
-    official = assigned + _official_plan(db, held)
+    # 사무분장이 있으면 그것이 업무 체계다. 자료를 분장 항목에 나누고, 업무는 분장 항목에서만 세운다.
+    # 어느 항목에도 들지 않은 자료는 업무를 새로 만들지 않고 미분류로 둔다(분류 확인 화면에서 옮긴다).
+    # 폴더 하나·공문 하나가 업무 하나가 되면 업무가 분장 항목보다, 심지어 폴더보다 많아진다.
+    assigned, charter_mode = _assigned_plan(db, client, protected)
+    if charter_mode:
+        with db.transaction():
+            return _save_official_only(db, result, assigned)
+    # 분장이 없을 때만 자료에서 업무를 찾는다. 온나라 공문이 있으면 그것이 업무의 뼈대다.
+    # 공문 업무가 가져간 문서(공문과, 공문에 대응된 PC 파일)는 아래의 폴더·본문 묶기에서 뺀다.
+    official = _official_plan(db, protected)
     excluded = protected | {doc_id for task in official for doc_id in task.claimed}
 
     # S3: 분장표 기반 업무 체계 대조
@@ -484,6 +487,9 @@ def _compare_charter(db: Database, result: Discovery, client=None) -> None:
         db.set_meta("charter_comparison", "")
         result.charter_matched = result.charter_only = result.data_only = 0
         return
+    if classify_units.assignments(db):
+        _compare_classified(db, result)
+        return
     details = {}
     for row in db.con.execute("SELECT parent_id, name FROM charter_items WHERE parent_id IS NOT NULL"):
         details.setdefault(row["parent_id"], []).append(row["name"])
@@ -531,6 +537,37 @@ def _compare_charter(db: Database, result: Discovery, client=None) -> None:
         len(matched), len(charter_only), len(data_only))
 
 
+def _compare_classified(db: Database, result: Discovery) -> None:
+    """분장으로 분류했을 때의 대조 — 분류 결과에서 바로 센다.
+
+    matched는 자료가 나뉜 항목, charter_only는 자료가 없는 항목, data_only는 어느 항목에도
+    들지 않은 자료 단위(분장 밖·판단 불가)다. data_only는 업무가 아니라 옮길 자료다.
+    """
+    from ..core import charter, units as work_units
+
+    matched, charter_only = [], []
+    for row in classify_units.summary_by_item(db):
+        if row["name"] in (classify_units.OUTSIDE_NAME, classify_units.UNKNOWN_NAME):
+            continue
+        (matched if row["docs"] else charter_only).append(row)
+    mine = classify_units.assignments(db)
+    data_only = sorted(
+        ({"name": unit["label"], "doc_count": len(unit["doc_ids"]), "bucket": mine[unit["key"]].bucket}
+         for unit in work_units.load(db)
+         if unit["key"] in mine and mine[unit["key"]].bucket != classify_units.ITEM),
+        key=lambda row: (-row["doc_count"], row["name"]))
+    weights = {row["name"]: row["weight"] or 0 for row in charter.current_items(db)}
+    db.set_meta("charter_comparison", json.dumps({
+        "past": [{"name": name} for name in charter.past_items(db)],
+        "matched": [{"name": row["name"], "doc_count": row["docs"]} for row in matched],
+        "charter_only": [{"name": row["name"], "weight": weights.get(row["name"], 0)} for row in
+                         sorted(charter_only, key=lambda row: (-weights.get(row["name"], 0), row["name"]))],
+        "data_only": data_only,
+    }, ensure_ascii=False))
+    result.charter_matched, result.charter_only, result.data_only = (
+        len(matched), len(charter_only), len(data_only))
+
+
 def _save_charter(db, result: Discovery, charter_tasks: list[CharterTask]) -> None:
     for ctask in charter_tasks:
         if ctask.alias_of:
@@ -540,11 +577,8 @@ def _save_charter(db, result: Discovery, charter_tasks: list[CharterTask]) -> No
                 (ctask.name, ctask.alias_of),
             )
             continue
-        if ctask.match_kind == "charter_only":
-            description = CHARTER_PLACEHOLDER
-            group = Cluster(seed_id=0, doc_ids=[])
-            _upsert_task(db, Named(ctask.name, description), group, confidence="low")
-            result.charter_tasks += 1
+        # 자료가 없는 분장 항목은 업무로 만들지 않는다 — 빈 업무가 업무 목록을 채운다.
+        # 대조 결과(charter_comparison의 charter_only)와 분류 확인 화면에 '자료 없음'으로 보인다.
 
 from ..core import bundles  # noqa: E402
 
@@ -892,13 +926,15 @@ def _round_hint(unit: dict) -> str:
     return next((key for key in (folders.parse_part(name).round_key for name in names if name) if key), "")
 
 
-def _assigned_plan(db: Database, client, protected: set[int]) -> list[OfficialTask]:
-    """분장 항목마다 그 항목으로 분류된 자료 단위를 모아 업무 하나로 만든다. 분장이 없으면 빈 목록."""
+def _assigned_plan(db: Database, client, protected: set[int]) -> tuple[list[OfficialTask], bool]:
+    """분장 항목마다 그 항목으로 분류된 자료 단위를 모아 업무 하나로 만든다.
+
+    (업무 계획, 분장으로 분류했는가). 분장이 없으면 ([], False)."""
     from collections import Counter
 
     model = client if client is not None and client.health().generation_ready else None
     if not classify_units.classify(db, model):
-        return []
+        return [], False
     plan: list[OfficialTask] = []
     for name, group in classify_units.by_item(db).items():
         local: dict[int, tuple[str, str]] = {}
@@ -936,7 +972,7 @@ def _assigned_plan(db: Database, client, protected: set[int]) -> list[OfficialTa
         plan.append(OfficialTask(name=name, basis="업무 분장", records=[], local=local,
                                  round_of=years, description=description, part_of=part_of))
     plan.sort(key=lambda task: -len(task.local))
-    return plan
+    return plan, True
 
 
 def _match_local(db: Database, tasks: list[OfficialTask], protected: set[int]) -> None:

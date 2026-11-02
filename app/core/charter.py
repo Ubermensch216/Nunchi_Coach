@@ -27,7 +27,39 @@ _HEADER_WEIGHT = re.compile(r"^(?:비중|비율|비중\(%\)|비율\(%\)|%|가중
 _NUM_ORDER_RE = re.compile(r"^\s*[0-9]{1,2}[.)]\s*")
 _STAR_BULLET_RE = re.compile(r"^\s*[*•]\s*")
 _DASH_BULLET_RE = re.compile(r"^\s*[-ㆍ]\s*")
-_ANY_BULLET_RE = re.compile(r"^\s*(?:[○□■●◇◆▶▷\-*ㆍ•]|[0-9]{1,2}[.)]|[가-하][.)])\s*")
+_ANY_BULLET_RE = re.compile(r"^\s*(?:[○□■●◇◆▶▷\-*ㆍ•∙·]|[0-9]{1,2}[.)]|[가-하][.)])\s*")
+# 줄 앞의 표지. 사무분장 공문은 업무마다 '∙'나 '○'를 단다.
+_MARK_RE = re.compile(r"^\s*(?:[○□■●◇◆▶▷ㆍ•∙·]|[0-9]{1,2}[.)])\s*\S")
+BULLET_MODE_MIN = 3        # 표지 달린 줄이 이만큼 있으면 표지 없는 줄은 업무로 보지 않는다
+
+# 분장표·공문에 함께 실리지만 업무가 아닌 줄 (2026-11-02 실자료: '부  산  광  역  시', '직위(직급)',
+# '행정6급', '전결 2026. 8. 18.', 전화번호, 주소, 표어가 업무 76개 가운데 절반을 차지했다).
+_NOISE_HEADERS = frozenset({
+    "직위", "직급", "직위(직급)", "성명", "이름", "분장사무", "분장내용", "분장업무", "담당업무", "업무내용",
+    "사무분장", "연번", "순번", "비고", "담당자", "담당", "업무", "사무", "주요업무", "소관업무",
+})
+_NOISE_PATTERNS = (
+    re.compile(r"^(?:[가-힣]{1,4}\s*)?\d\s*급(?:\s*[가-힣]{0,4})?$"),          # 행정6급 · 시설 6급
+    re.compile(r"^(?:\S\s+){2,}\S$"),                                     # 부  산  광  역  시
+    re.compile(r"https?://|www\.|[\w.]+@[\w.]+|\d{2,4}-\d{3,4}-\d{4}"),   # 누리집·전자우편·전화
+    re.compile(r"^우\s*\d{5}|전결|시행일자|대국민|비공개|부분공개|협조자|^수신|^경유|^참조|^발신"),
+    re.compile(r"^[가-힣]{2,12}-\d{1,7}$"),                               # 문서번호
+    re.compile(r"^\(.*\)$"),                                             # (AI 분야)
+    re.compile(r"(?:대로|로|길)\s*\d+.*\(.+동\)"),                           # 도로명 주소
+    re.compile(r"^\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.?"),                     # 날짜로 시작
+)
+
+
+def is_noise(name: str) -> bool:
+    """업무 이름이 될 수 없는 줄인가. 분장 문서의 머리·꼬리·표 머리글·직급 표시 같은 것이다."""
+    text = " ".join((name or "").split()).strip(" ∙·•-")
+    if len(text) < 2:
+        return True
+    if re.sub(r"\s+", "", text) in _NOISE_HEADERS:
+        return True
+    if "사무분장" in text and len(text) > 6:        # 분장 공문의 제목 줄
+        return True
+    return any(pattern.search(text) for pattern in _NOISE_PATTERNS)
 
 
 @dataclass
@@ -37,6 +69,7 @@ class ExtractedItem:
     owner: str = ""
     weight: float = 1.0
     locator: str = ""
+    marked: bool = False        # 원문 줄 앞에 업무 표지(∙·○·번호)가 있었다
 
 
 PREDECESSOR_META = "predecessor_name"
@@ -79,7 +112,9 @@ def extract_from_document(db: Database, doc_id: int, predecessor: str | None = N
         items = extract_with_model(text, predecessor, client)
     if not items:
         items = extract_items(text, predecessor)
+    items = [item for item in items if not is_noise(item.name)]
     save_charter_items(db, doc_id, items)
+    db.set_meta(RULES_META, RULES_VERSION)
     return len(items)
 
 
@@ -110,7 +145,7 @@ def extract_with_model(text: str, predecessor: str, client) -> list[ExtractedIte
         if not isinstance(raw, dict):
             continue
         name = " ".join(str(raw.get("name") or "").split())
-        if not (2 <= len(name) <= 60) or not _grounded(name, body):
+        if not (2 <= len(name) <= 60) or not _grounded(name, body) or is_noise(name):
             continue
         owner = " ".join(str(raw.get("owner") or "").split())
         if predecessor and owner and predecessor not in owner:
@@ -137,7 +172,8 @@ def refresh_items(db: Database, client=None) -> int:
     predecessor = predecessor_name(db)
     stored = db.get_meta(EXTRACTED_FOR_META) or ""
     used_model = stored.endswith(_MODEL_MARK)
-    if stored.removesuffix(_MODEL_MARK) == predecessor and (used_model or client is None):
+    current_rules = db.get_meta(RULES_META) == RULES_VERSION
+    if stored.removesuffix(_MODEL_MARK) == predecessor and (used_model or client is None) and current_rules:
         return 0
     done = 0
     for candidate in find_candidates(db):
@@ -149,6 +185,9 @@ def refresh_items(db: Database, client=None) -> int:
 
 
 _MODEL_MARK = "|model"
+# 뽑는 규칙이 바뀌면 다시 뽑는다(잡음 거르기를 넣은 2026-11-02가 2판). 판이 없는 옛 프로젝트도 다시 뽑는다.
+RULES_META = "charter_rules"
+RULES_VERSION = "2"
 
 
 def is_charter_candidate(filename: str, path: str = "") -> bool:
@@ -346,6 +385,7 @@ def _extract_from_outline(lines: list[str], predecessor: str) -> list[ExtractedI
     )
 
     current_parent: ExtractedItem | None = None
+    bullet_mode = sum(1 for line in lines if _MARK_RE.match(line.strip())) >= BULLET_MODE_MIN
 
     for row_num, line in enumerate(lines, start=1):
         stripped = line.strip()
@@ -374,6 +414,15 @@ def _extract_from_outline(lines: list[str], predecessor: str) -> list[ExtractedI
 
         is_sub = bool(re.match(r"^\s+[-*ㆍ•]", line)) or (bool(_STAR_BULLET_RE.match(stripped)) and current_parent is not None)
         is_num = bool(_NUM_ORDER_RE.match(stripped))
+        marked = bool(_MARK_RE.match(stripped))
+
+        # 'PDF 한 줄에 다 못 들어가 다음 줄로 넘어간 꼬리'('보고·처분 등')는 앞 업무에 잇는다.
+        if (bullet_mode and not marked and not is_sub and current_parent is not None
+                and len(cleaned) <= 12 and cleaned.endswith("등")):
+            current_parent.name = f"{current_parent.name}{cleaned}"
+            continue
+        if is_noise(cleaned):
+            continue
 
         if is_num or not is_sub or current_parent is None:
             item = ExtractedItem(
@@ -382,12 +431,17 @@ def _extract_from_outline(lines: list[str], predecessor: str) -> list[ExtractedI
                 owner=current_owner,
                 weight=line_weight,
                 locator=f"row:{row_num}",
+                marked=marked,
             )
             items.append(item)
             current_parent = item
         else:
             current_parent.details.append(cleaned)
 
+    # 업무마다 표지를 단 문서에서는 표지 없는 줄(표어·제목·머리글)을 업무로 보지 않는다.
+    # 세부업무를 거느린 줄은 표지가 없어도 업무다.
+    if bullet_mode:
+        items = [item for item in items if item.marked or item.details]
     return items
 
 

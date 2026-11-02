@@ -85,31 +85,27 @@ def db(tmp_path: Path) -> Database:
 
 
 def test_charter_discovery_three_branches(db: Database):
+    """분장이 있으면 업무는 분장 항목에서만 생긴다(2026-11-02 재설계).
+
+    모델이 없으면 폴더 이름에 분장 항목 이름이 통째로 있어야 붙는다. '04_청사시설관리'는 '청사관리'와
+    글자가 달라 모델 없이는 붙지 않고, '05_수질통계관리'처럼 분장 밖 자료와 함께 옮길 자료로 남는다.
+    """
     result = discover(db)
 
-    # 세 갈래 건수 확인
-    assert result.charter_matched == 4, f"matched는 4건이어야 함: {result.charter_matched}"
-    assert result.charter_only == 2, f"charter_only는 2건이어야 함: {result.charter_only}"
-    assert result.data_only == 1, f"data_only는 1건이어야 함: {result.data_only}"
+    assert result.charter_matched == 3, f"matched는 3건이어야 함: {result.charter_matched}"
+    assert result.charter_only == 3, f"charter_only는 3건이어야 함: {result.charter_only}"
 
-    # DB에 저장된 charter_comparison 메타 확인
-    raw_comp = db.get_meta("charter_comparison")
-    assert raw_comp is not None
-    comp = json.loads(raw_comp)
-
-    assert {item["name"] for item in comp["matched"]} == {"예산편성", "규제개혁", "의회대응", "청사관리"}
-    assert {item["name"] for item in comp["charter_only"]} == {"미래전략기획", "대외통상협력"}
+    comp = json.loads(db.get_meta("charter_comparison"))
+    assert {item["name"] for item in comp["matched"]} == {"예산편성", "규제개혁", "의회대응"}
+    assert {item["name"] for item in comp["charter_only"]} == {"청사관리", "미래전략기획", "대외통상협력"}
     assert any("수질통계" in item["name"] and item["doc_count"] == 2 for item in comp["data_only"])
+    assert any("청사시설" in item["name"] for item in comp["data_only"])
 
-    # 분장 이름을 대표 이름으로 채택 확인 (폴더명 '02_규제개혁추진' 대신 분장명 '규제개혁')
-    tasks = db.tasks()
-    task_names = [t["name"] for t in tasks]
-    assert "규제개혁" in task_names
+    # 업무는 분장 항목 이름으로만, 분장 항목 수를 넘지 않게 생긴다. 폴더 이름으로 업무를 새로 만들지 않는다.
+    assert {t["name"] for t in db.tasks()} == {"예산편성", "규제개혁", "의회대응"}
 
-    # summary 메시지에 세 갈래 포함 확인
-    assert "분장 일치 4개" in result.summary()
-    assert "분장 전용 2개" in result.summary()
-    assert "분장 밖 후보 1개" in result.summary()
+    assert "분장 일치 3개" in result.summary()
+    assert "분장 전용 3개" in result.summary()
 
 
 def test_comparison_covers_tasks_from_any_discovery_path_and_ranks_by_volume(tmp_path: Path):

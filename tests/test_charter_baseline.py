@@ -43,15 +43,23 @@ def names(db):
     return [r["name"] for r in db.con.execute("SELECT name FROM tasks WHERE not_a_task = 0")]
 
 
-def test_official_task_takes_user_charter_name_by_body_content(db):
+def test_without_model_a_partial_word_does_not_assign_and_makes_no_task(db):
+    """모델 없이 낱말 하나 겹친다고 붙이지 않는다. 붙지 않은 공문은 업무를 새로 만들지 않고 미분류로 남는다."""
     seed(db)
     charter.save_user_items(db, charter.parse_user_text("민원응대 개선\n예산 편성"))
     discover(db)
-    assert "민원응대 개선" in names(db)
-    assert "일일 상담 현황 점검" not in names(db)
+    assert names(db) == []
     cmp = json.loads(db.get_meta("charter_comparison"))
-    assert [m["name"] for m in cmp["matched"]] == ["민원응대 개선"]
-    assert [c["name"] for c in cmp["charter_only"]] == ["예산 편성"]
+    assert cmp["matched"] == [] and len(cmp["data_only"]) == 2
+    assert [c["name"] for c in cmp["charter_only"]] == ["민원응대 개선", "예산 편성"]
+
+
+def test_tasks_never_outnumber_charter_items(db):
+    """공문 폴더가 여럿이어도 업무는 분장 항목에서만 생긴다. 자료가 없는 항목은 빈 업무를 만들지 않는다."""
+    seed(db)
+    charter.save_user_items(db, charter.parse_user_text("상담 현황 점검\n예산 편성"))
+    discover(db)
+    assert names(db) == ["상담 현황 점검"]
 
 
 def test_without_user_charter_names_stay_as_before(db):
@@ -63,9 +71,9 @@ def test_without_user_charter_names_stay_as_before(db):
 def test_brief_shows_what_the_letter_body_says(db):
     from app.core import notebook_tasks
     seed(db)
-    charter.save_user_items(db, charter.parse_user_text("민원응대 개선"))
+    charter.save_user_items(db, charter.parse_user_text("상담 현황 점검"))
     discover(db)
-    task_id = db.con.execute("SELECT id FROM tasks WHERE name = '민원응대 개선'").fetchone()["id"]
+    task_id = db.con.execute("SELECT id FROM tasks WHERE name = '상담 현황 점검'").fetchone()["id"]
     brief = notebook_tasks.brief_markdown(db, task_id)
     assert "공문 본문에서 읽은 내용" in brief
     assert "해야 할 일" in brief and "[본문] 일일 상담 현황 점검 요청.pdf" in brief
@@ -124,9 +132,9 @@ def test_model_matches_what_rules_cannot(db):
 def test_bad_model_answers_are_not_applied(db, llm):
     _seed_unlike(db)
     discover(db, llm)
-    assert "일일 상담 현황 점검" in names(db) and "고객 응대 혁신" not in [
-        n for n in names(db) if db.con.execute(
-            "SELECT 1 FROM task_docs td JOIN tasks t ON t.id = td.task_id WHERE t.name = ?", (n,)).fetchone()]
+    # 버린 답은 배정이 되지 않는다. 분장 기준이므로 공문 제목으로 업무를 새로 만들지도 않는다.
+    assert names(db) == []
+    assert db.unclassified_count() == 2
 
 
 def test_parts_and_rounds_reach_task_docs_brief_and_handover_folder(db, tmp_path):
