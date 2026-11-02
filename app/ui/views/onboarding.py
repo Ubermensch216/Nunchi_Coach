@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QHeaderView,
     QTreeWidget,
     QTreeWidgetItem,
@@ -57,7 +58,19 @@ class OnboardingView(QWidget):
         # 첫 화면은 할 일이 하나뿐이다 — 폴더를 고르고 분석을 시작한다. 그 하나를
         # 화면 가운데의 좁은 기둥에 세운다. 예전에는 창 폭을 다 쓰는 빈 상자
         # 안에 빈 목록 상자가 또 들어 있어 화면이 덜 그려진 것처럼 보였다.
-        frame = QVBoxLayout(self)
+        # 창이 낮으면 내용이 서로 겹쳐 눌리지 않도록 화면 전체를 스크롤 영역에 담는다.
+        content = QWidget()
+        content.setObjectName("Canvas")
+        content.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        scroll = QScrollArea()
+        scroll.setObjectName("OnboardingScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(content)
+        shell = QVBoxLayout(self)
+        shell.setContentsMargins(0, 0, 0, 0)
+        shell.addWidget(scroll)
+        frame = QVBoxLayout(content)
         frame.setContentsMargins(theme.SP_XL, theme.SP_XL * 2, theme.SP_XL, theme.SP_XL)
         row, outer = center_column(ONBOARDING_W)
         outer.setSpacing(theme.SP_LG)
@@ -163,10 +176,10 @@ class OnboardingView(QWidget):
         card.body.addWidget(section_title("전임자의 업무 분장 (필수)"))
         card.body.addWidget(muted_label(
             "전임자가 맡았던 업무를 한 줄에 하나씩 적으세요. 분석은 여기 적은 업무에 자료를 나눕니다. "
-            "세부업무는 줄을 들여 쓰거나 '-'로 시작합니다.", small=True))
+            "세부업무는 줄을 들여 쓰거나 '-'로 시작합니다. "
+            "(예: 적극행정 실행계획 / - 계획 수립 / - 결과 보고)", small=True))
         self.charter_text = QPlainTextEdit(charter.user_text(self.db))
-        self.charter_text.setPlaceholderText(
-            "예)\n적극행정 실행계획\n  - 계획 수립\n  - 결과 보고\n민원 처리 실태 점검\nIRM 자원관리·등록")
+        self.charter_text.setPlaceholderText("여기에 업무를 한 줄에 하나씩 적으세요")
         self.charter_text.setAccessibleName("전임자의 업무 분장 입력")
         self.charter_text.setFixedHeight(theme.CONTROL_H * 4)
         self.charter_text.textChanged.connect(self._sync_start)
@@ -179,24 +192,33 @@ class OnboardingView(QWidget):
         foot_row = QHBoxLayout(foot)
         foot_row.setContentsMargins(0, theme.SP_MD, 0, 0)
         foot_row.setSpacing(theme.SP_SM)
-        lock = icons.label("lock", theme.CONFIRMED, 16)
-        if lock is not None:
-            foot_row.addWidget(lock, 0, Qt.AlignmentFlag.AlignTop)
-        notice = body_label(
-            "이 프로그램은 원본을 수정·이동·삭제·이름 변경하지 않습니다. "
-            "읽기만 하고, 분석 결과는 따로 저장합니다."
-        )
-        notice.setObjectName("Small")
-        foot_row.addWidget(notice, 1)
+        # 단추가 잠겨 있는 이유를 단추 옆에 바로 말한다.
+        self.start_hint = muted_label("", small=True)
+        self.start_hint.setWordWrap(True)
+        foot_row.addWidget(self.start_hint, 1)
 
         self.start = QPushButton("분석 시작")
         self.start.setEnabled(False)
-        self.start.setToolTip("업무 분장을 적고 폴더를 하나 이상 고르면 시작할 수 있습니다")
         self.start.clicked.connect(self._start)
         foot_row.addWidget(self.start, 0, Qt.AlignmentFlag.AlignVCenter)
         card.body.addWidget(foot)
 
         outer.addWidget(card)
+
+        # 원본 보호 안내는 카드 밖, 화면 맨 아래에 따로 둔다.
+        safety = QHBoxLayout()
+        safety.setSpacing(theme.SP_SM)
+        lock = icons.label("lock", theme.CONFIRMED, 16)
+        if lock is not None:
+            safety.addWidget(lock, 0, Qt.AlignmentFlag.AlignTop)
+        notice = body_label(
+            "이 프로그램은 원본을 수정·이동·삭제·이름 변경하지 않습니다. "
+            "읽기만 하고, 분석 결과는 따로 저장합니다."
+        )
+        notice.setObjectName("Small")
+        safety.addWidget(notice, 1)
+        outer.addLayout(safety)
+        self._sync_start()
 
         # 자료 지도 (개괄) 카드 — 스캔 직후 분석 중이어도 바로 확인 가능
         self.survey_card = Card()
@@ -390,11 +412,18 @@ class OnboardingView(QWidget):
     def _sync_start(self) -> None:
         """분석 시작은 업무 분장을 적고, 분석할 문서가 잡혔을 때만 열린다."""
         has_charter = bool(charter.parse_user_text(self.charter_text.toPlainText()))
-        self.start.setEnabled(getattr(self, "_has_documents", False) and has_charter)
-        if getattr(self, "_has_documents", False) and not has_charter:
-            self.start.setToolTip("전임자의 업무 분장을 먼저 적어 주세요")
+        has_documents = getattr(self, "_has_documents", False)
+        self.start.setEnabled(has_documents and has_charter)
+        if not has_documents and not has_charter:
+            hint = "분석할 폴더를 고르고 전임자의 업무 분장을 적으면 시작할 수 있습니다."
+        elif not has_documents:
+            hint = "분석할 문서가 있는 폴더를 먼저 고르세요."
+        elif not has_charter:
+            hint = "위 칸에 전임자의 업무 분장을 한 줄 이상 적으면 분석을 시작할 수 있습니다."
         else:
-            self.start.setToolTip("업무 분장을 적고 폴더를 하나 이상 고르면 시작할 수 있습니다")
+            hint = ""
+        self.start_hint.setText(hint)
+        self.start.setToolTip(hint)
         self._sync_actions()
 
     def _sync_actions(self) -> None:

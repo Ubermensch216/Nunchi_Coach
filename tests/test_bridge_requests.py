@@ -156,7 +156,8 @@ def test_onboarding_view_creates_bridge_request_and_imports_onnara_package(servi
         view.sync_requests()
         assert "수집 중 15/42건" in view.req_status.text()
 
-        # 온나라 꾸러미만 먼저 추가해도 분석 시작이 활성화된다
+        # 온나라 꾸러미만 먼저 추가해도, 업무 분장을 적으면 분석 시작이 활성화된다
+        view.charter_text.setPlainText("민원 처리 실태 점검")
         pkg = downloads / "onNara.sAIde" / "수집" / RUN
         make_package(pkg)
         view.add_onnara(pkg)
