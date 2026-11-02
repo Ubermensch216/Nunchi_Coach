@@ -224,6 +224,18 @@ class Pipeline(QObject):
         candidate = self._client = project_client(db, OllamaClient)
         return candidate if candidate.health().generation_ready else None
 
+    def _text_model(self, db: Database):
+        """의미 색인과 상관없이 생성 모델을 쓸 수 있으면 그 클라이언트, 아니면 None.
+
+        공문 본문 읽기는 의미 색인보다 먼저 돌지만 모델은 첫 실행부터 써야 한다.
+        """
+        try:
+            candidate = self._client = project_client(db, OllamaClient)
+            return candidate if candidate.health().generation_ready else None
+        except Exception as exc:
+            diagnostics.record("pipeline.text_model.error", exc)
+            return None
+
     # ── 1단계: 찾기 ─────────────────────────────────────────────────
     def _report(self, db: Database, report: StageReport) -> None:
         if not report.state:
@@ -567,7 +579,7 @@ class Pipeline(QObject):
             return
         try:
             report.done = gongmun_facts.analyze_bodies(
-                db, client=self._generation_client(db),
+                db, client=self._text_model(db),
                 on_progress=lambda n, total, name: self.progress.emit(STAGE_FACTS, n, total, name),
                 is_stopped=self._stopped)
         except Exception as exc:

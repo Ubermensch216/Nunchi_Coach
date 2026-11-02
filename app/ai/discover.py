@@ -26,6 +26,7 @@ from ..core import docrole, folders, gongmun, scoring, discovery_index
 from ..core.clustering import DEFAULT_MIN_SIZE, Cluster, _tokenize, cluster, common_tokens
 from ..db import Database
 from ..search.vector import VectorStore
+from . import charter_match
 from .analyze import name_task
 from .client import OllamaClient
 
@@ -104,6 +105,8 @@ def _discover(
     model = client.embed_model if client else db.get_meta("embed_model") or "bge-m3"
     store, contributions = discovery_index.load(db, model)
     protected = _protected_documents(db)
+    # 분류 판단에 쓸 생성 모델. 없으면 규칙과 임베딩으로만 한다.
+    model_ready = client if client is not None and client.health().generation_ready else None
     # 온나라 공문이 있으면 그것이 업무의 뼈대다. 공문 업무가 가져간 문서(공문과, 공문에
     # 대응된 PC 파일)는 아래의 폴더·본문 묶기에서 뺀다 — 남은 문서만 지금까지처럼 찾는다.
     official = _official_plan(db, protected)
@@ -112,7 +115,7 @@ def _discover(
     # S3: 분장표 기반 업무 체계 대조
     charter_tasks, charter_claimed, charter_counts = _charter_plan(db, excluded, official)
     # 사용자가 분장을 직접 적었으면 그것이 기준이다 — 공문 업무를 분장 항목에 맞추고 이름도 따른다.
-    _align_official_to_charter(db, official, charter_tasks)
+    _align_official_to_charter(db, official, charter_tasks, model_ready)
 
     if store.size:
         import numpy as np
@@ -135,6 +138,16 @@ def _discover(
                 if matched_charter.match_kind == "charter_only":
                     matched_charter.match_kind = "matched"
                     matched_charter.doc_ids = ftask.doc_ids
+            elif model_ready is not None and not ftask.loose:
+                titles = _filenames(db, (ftask.doc_ids + ftask.named_ids)[:12])
+                asked = _ask_charter(db, model_ready, charter_tasks, ftask.name, titles=titles,
+                                     folder_names=ftask.folders)
+                if asked is not None:
+                    ct, ftask.ai_note = asked
+                    ftask.name = ct.name
+                    if ct.match_kind == "charter_only":
+                        ct.match_kind = "matched"
+                        ct.doc_ids = ftask.doc_ids
 
     if store.size == 0 and plan is None:
         if official:
@@ -171,6 +184,13 @@ def _discover(
 
         excerpts = discovery_index.naming_evidence(db, group.doc_ids, contributions)
         named = _name(client if naming_ready else None, names, tokens, excerpts)
+        if charter_tasks and naming_ready and not any(_match_names(ct.name, named.label, ct.details)
+                                                       for ct in charter_tasks):
+            asked = _ask_charter(db, client, charter_tasks, named.label, titles=names,
+                                 facts=[e["text"] if isinstance(e, dict) and "text" in e else str(e)
+                                        for e in (excerpts or [])][:4])
+            if asked is not None:
+                named = Named(asked[0].name, asked[1], source="model")
         if client is not None and getattr(client, "cancelled", False):
             raise _Cancelled()
         prepared.append((group, named, excerpts))
@@ -408,6 +428,22 @@ def _charter_plan(
     return tasks, claimed, counts
 
 
+def _ask_charter(db: Database, client, charter_tasks: list[CharterTask], label: str,
+                 titles=(), folder_names=(), facts=()) -> tuple[CharterTask, str] | None:
+    """규칙이 못 맞춘 묶음을 생성 모델이 분장 항목에 맞춘다. (항목, 안내 문구) 또는 None."""
+    if client is None or not charter_tasks:
+        return None
+    options = [{"id": ct.charter_item_id, "name": ct.name, "details": ct.details} for ct in charter_tasks]
+    verdict = charter_match.judge(db, client, options,
+                                  charter_match.material_text(label, list(titles), list(folder_names), list(facts)))
+    if verdict is None or verdict.item_id is None:
+        return None
+    ct = next((c for c in charter_tasks if c.charter_item_id == verdict.item_id), None)
+    if ct is None:
+        return None
+    return ct, f"AI가 업무 분장 ‘{ct.name}’에 속한다고 판단했습니다(확신 {verdict.confidence}, 근거: {verdict.evidence})."
+
+
 _WORDS = re.compile(r"[가-힣A-Za-z0-9]{2,}")
 BODY_MATCH_MIN = 2
 
@@ -428,7 +464,8 @@ def _charter_score(name: str, details: list[str], text: str) -> int:
     return score
 
 
-def _align_official_to_charter(db: Database, official: list[OfficialTask], charter_tasks: list[CharterTask]) -> None:
+def _align_official_to_charter(db: Database, official: list[OfficialTask], charter_tasks: list[CharterTask],
+                               client=None) -> None:
     """사용자가 입력한 분장 항목에 공문 업무를 맞춘다.
 
     이름이 이미 맞은 것은 분장 이름으로 바꾸고, 안 맞은 것은 공문 제목과 본문에서 읽은 내용
@@ -437,7 +474,7 @@ def _align_official_to_charter(db: Database, official: list[OfficialTask], chart
     """
     from ..core import charter, gongmun_facts
 
-    if not official or not charter.user_items(db):
+    if not official or not charter.current_items(db):
         return
     by_alias = {ct.alias_of: ct for ct in charter_tasks if ct.alias_of}
     free = [ct for ct in charter_tasks if not ct.alias_of]
@@ -456,11 +493,18 @@ def _align_official_to_charter(db: Database, official: list[OfficialTask], chart
                          *(fact["text"] for fact in facts)])
         scored = sorted(((_charter_score(ct.name, ct.details, text), ct.charter_item_id, ct)
                          for ct in free if ct.charter_item_id not in taken), key=lambda t: -t[0])
-        if not scored or scored[0][0] < BODY_MATCH_MIN:
-            continue
-        if len(scored) > 1 and scored[1][0] == scored[0][0]:
-            continue        # 비기면 정하지 않는다
-        ct = scored[0][2]
+        sure = (scored and scored[0][0] >= BODY_MATCH_MIN
+                and not (len(scored) > 1 and scored[1][0] == scored[0][0]))      # 비기면 정하지 않는다
+        if sure:
+            ct = scored[0][2]
+        else:
+            # 규칙이 못 정했다. 이름이 달라도 하는 일이 같은지 모델이 본다.
+            asked = _ask_charter(db, client, [c for c in free if c.charter_item_id not in taken], task.name,
+                                 titles=[record.title for record in task.records],
+                                 facts=[fact["text"] for fact in facts])
+            if asked is None:
+                continue
+            ct, task.ai_note = asked
         task.name = ct.name
         ct.match_kind = "matched"
         taken.add(ct.charter_item_id)
@@ -621,6 +665,7 @@ class FolderTask:
     round_of: dict[int, str] = field(default_factory=dict)  # 문서 → 회차('2024 하반기')
     not_documents: int = 0                 # 이 폴더의 그림·글꼴 등 문서로 다루지 않은 파일 수
     loose: bool = False                    # 업무 폴더 밖의 낱장을 모은 묶음(core/bundles.py)
+    ai_note: str = ""                       # 모델이 분장 항목에 맞춘 근거
 
 
 def _folder_plan(db: Database, protected: set[int]) -> list[FolderTask] | None:
@@ -776,6 +821,8 @@ def _save_folder_discovery(db, result, plan, store, contributions, model, offici
         else:
             where = f"‘{task.folders[0]}’ 폴더" + (f" 등 {places}곳" if places > 1 else "")
             description = f"{where}의 문서 {len(every):,}건입니다."
+        if task.ai_note:
+            description += f" {task.ai_note}"
         if task.rounds:
             description += " 회차: " + " · ".join(task.rounds[:8]) + "."
         if task.named_ids:
@@ -848,6 +895,7 @@ class OfficialTask:
     local: dict[int, tuple[str, str]] = field(default_factory=dict)  # PC 파일 → (확신, 근거)
     round_of: dict[int, str] = field(default_factory=dict)
     protected: set[int] = field(default_factory=set)   # 사람이 다른 업무에 둔 공문 파일
+    ai_note: str = ""                                    # 모델이 분장 항목에 맞춘 근거
 
     @property
     def official_ids(self) -> list[int]:
@@ -1045,6 +1093,8 @@ def _save_official(db: Database, result: Discovery, plan) -> None:
         years = sorted({record.year for record in task.records if record.year})
         span = f"{years[0]}~{years[-1]}" if len(years) > 1 else (years[0] if years else "일자 미상")
         description = f"온나라 공문 {len(task.records)}건({span})을 {task.basis}(으)로 묶었습니다."
+        if task.ai_note:
+            description += f" {task.ai_note}"
         if task.local:
             counts = {evidence: sum(1 for _, e in task.local.values() if e == evidence)
                       for evidence in (SAME_EVIDENCE, NUMBER_EVIDENCE, TITLE_EVIDENCE, NEAR_EVIDENCE, CONTENT_EVIDENCE)}
