@@ -36,6 +36,7 @@ WEAK_MIN = 3                 # 모델이 없을 때 붙이는 최소 점수 — 
 
 BASIS_NAME = "이름 일치"
 BASIS_AI = "AI 판단"
+BASIS_AI_RESTATED = "AI 판단(자료 인용 없음)"
 BASIS_AI_REJECTED = "AI 답 보류(근거 불일치·확신 낮음)"
 BASIS_WORDS = "낱말 겹침"
 BASIS_CITE = "인용으로 이어진 공문"
@@ -244,7 +245,8 @@ def classify(db, client=None, max_calls: int = MAX_CALLS, on_progress=None,
                                                  verdict.evidence)
             else:
                 name = next(o["name"] for o in options if o["id"] == verdict.item_id)
-                result[unit["key"]] = Assignment(unit["key"], name, ITEM, verdict.confidence, BASIS_AI,
+                result[unit["key"]] = Assignment(unit["key"], name, ITEM, verdict.confidence,
+                                                 BASIS_AI_RESTATED if verdict.restated else BASIS_AI,
                                                  verdict.evidence)
         else:
             ranked = sorted(((score(o["name"], o["details"], text), o) for o in options),
@@ -380,7 +382,7 @@ def review_rows(db, attention_only: bool = True) -> list[ReviewRow]:
         a = mine.get(unit["key"])
         if a is None:
             continue
-        needs = (a.bucket != ITEM or a.confidence == "low" or a.basis == BASIS_AI) and a.decided_by != "user"
+        needs = (a.bucket != ITEM or a.confidence == "low" or a.basis in (BASIS_AI, BASIS_AI_RESTATED))             and a.decided_by != "user"
         if attention_only and not needs:
             continue
         card = unit["card"]

@@ -945,7 +945,7 @@ def _assigned_plan(db: Database, client, protected: set[int]) -> tuple[list[Offi
         for unit in group:
             assignment = unit["assignment"]
             kinds[unit["kind"]] += 1
-            ai += assignment.basis == classify_units.BASIS_AI
+            ai += assignment.basis in (classify_units.BASIS_AI, classify_units.BASIS_AI_RESTATED)
             hint = _round_hint(unit)
             for doc_id in unit["doc_ids"]:
                 if doc_id not in protected:

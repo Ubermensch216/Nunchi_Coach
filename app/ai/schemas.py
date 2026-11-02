@@ -232,7 +232,7 @@ CHARTER_MATCH_SCHEMA: dict[str, Any] = {
     "properties": {
         "choice": {"type": "integer"},
         "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
-        "evidence": {"type": "string"},
+        "quote": {"type": "string"},
     },
-    "required": ["choice", "confidence", "evidence"],
+    "required": ["choice", "confidence", "quote"],
 }

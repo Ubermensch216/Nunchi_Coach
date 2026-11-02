@@ -28,6 +28,7 @@ class Verdict:
     evidence: str
     cached: bool = False
     rejected: bool = False     # 모델이 항목을 골랐지만 근거가 자료와 맞지 않거나 확신이 낮아 쓰지 않았다
+    restated: bool = False     # 근거로 자료 대신 고른 항목을 되풀이했다 — 확신을 한 단계 낮춰 받는다
 
 
 def _compact(value: str) -> str:
@@ -80,7 +81,7 @@ def judge(db, client, items: list[dict], material: str) -> Verdict | None:
         try:
             data = json.loads(stored)
             return Verdict(data["item_id"], data["confidence"], data["evidence"], cached=True,
-                           rejected=bool(data.get("rejected")))
+                           rejected=bool(data.get("rejected")), restated=bool(data.get("restated")))
         except (ValueError, KeyError):
             pass
     listing = "\n".join(
@@ -92,16 +93,26 @@ def judge(db, client, items: list[dict], material: str) -> Verdict | None:
         return None
     choice = data.get("choice")
     confidence = data.get("confidence") if data.get("confidence") in ("high", "medium", "low") else "low"
-    evidence = " ".join(str(data.get("evidence") or "").split())[:300]
+    evidence = " ".join(str(data.get("quote") or data.get("evidence") or "").split())[:300]
     if not isinstance(choice, int) or not 0 <= choice <= len(items):
         return None                                  # 목록 밖 번호
     item_id = items[choice - 1]["id"] if choice else None
-    rejected = item_id is not None and (confidence not in ACCEPT or not grounded(evidence, material))
+    restated = rejected = False
+    if item_id is not None and confidence not in ACCEPT:
+        rejected = True
+    elif item_id is not None and not grounded(evidence, material):
+        # 작은 모델은 근거로 자료 대신 고른 항목을 되풀이하곤 한다(2026-11-02 실측). 고른 항목을 되풀이했으면
+        # 받되 확신을 낮춘다. 어느 쪽에도 없는 글이면 지어낸 근거다 — 쓰지 않는다.
+        chosen = items[choice - 1]
+        if confidence == "high" and grounded(evidence, f"{choice}. {chosen['name']} " + " ".join(chosen.get("details", []))):
+            restated, confidence = True, "medium"
+        else:
+            rejected = True
     if rejected:
         item_id, confidence = None, "low"            # 근거가 자료에 없거나 확신이 낮다 — '해당 없음'과는 다르다
-    verdict = Verdict(item_id, confidence, evidence, rejected=rejected)
+    verdict = Verdict(item_id, confidence, evidence, rejected=rejected, restated=restated)
     db.set_meta(key, json.dumps({"item_id": item_id, "confidence": confidence, "evidence": evidence,
-                                 "rejected": rejected}, ensure_ascii=False))
+                                 "rejected": rejected, "restated": restated}, ensure_ascii=False))
     return verdict
 
 

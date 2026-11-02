@@ -54,7 +54,7 @@ class LLM:
         for line in listing.strip().splitlines():
             if self.pick and self.pick in line:
                 number = int(line.split(".")[0])
-        material = prompt.rsplit("[자료]", 1)[1].strip()
+        material = prompt.split("[자료]")[1].split("[업무 분장]")[0].strip()
         quote = next((l.split(": ", 1)[1] for l in material.splitlines() if l.startswith("문서 제목")), "")
         return {"choice": number, "confidence": "high", "evidence": quote}, None, ""
 
@@ -233,4 +233,21 @@ def test_rejected_model_answer_is_unknown_not_outside(db):
     cu.classify(db, Unsure())
     a = result(db)["잡다"]
     assert (a.bucket, a.basis) == (cu.UNKNOWN, cu.BASIS_AI_REJECTED)
+    assert [r.label for r in cu.review_rows(db)] == ["잡다"]
+
+
+def test_restated_item_as_evidence_is_kept_with_lower_confidence(db):
+    """작은 모델이 근거로 고른 항목을 되풀이하면 받되 확신을 낮추고 확인 화면에 올린다."""
+    setup(db, "고객 응대 혁신\n예산 편성")
+    doc(db, "잡다/상담 현황.hwp", "상담")
+    doc(db, "잡다/상담 결과.hwp", "상담")
+
+    class Restating(LLM):
+        def generate_json(self, prompt, schema, num_predict=0):
+            self.calls += 1
+            return {"choice": 1, "confidence": "high", "quote": "1. 고객 응대 혁신"}, None, ""
+
+    cu.classify(db, Restating())
+    a = result(db)["잡다"]
+    assert (a.item_name, a.confidence, a.basis) == ("고객 응대 혁신", "medium", cu.BASIS_AI_RESTATED)
     assert [r.label for r in cu.review_rows(db)] == ["잡다"]
