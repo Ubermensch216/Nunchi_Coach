@@ -885,6 +885,13 @@ def _official_plan(db: Database, protected: set[int]) -> list[OfficialTask]:
 ASSIGN_EVIDENCE = "분류"
 
 
+def _round_hint(unit: dict) -> str:
+    """단위가 말하는 회차('2024 하반기', '제2차'). 공문은 제목에서, 폴더·낱장은 가장 깊은 폴더부터 올라가며 읽는다."""
+    card = unit["card"]
+    names = [card.get("title") or unit["label"]] if unit["kind"] == "letter" else         list(reversed((card.get("folder") or "").split("/"))) + [unit["label"]]
+    return next((key for key in (folders.parse_part(name).round_key for name in names if name) if key), "")
+
+
 def _assigned_plan(db: Database, client, protected: set[int]) -> list[OfficialTask]:
     """분장 항목마다 그 항목으로 분류된 자료 단위를 모아 업무 하나로 만든다. 분장이 없으면 빈 목록."""
     from collections import Counter
@@ -903,7 +910,7 @@ def _assigned_plan(db: Database, client, protected: set[int]) -> list[OfficialTa
             assignment = unit["assignment"]
             kinds[unit["kind"]] += 1
             ai += assignment.basis == classify_units.BASIS_AI
-            hint = folders.parse_part(unit["label"]).round_key
+            hint = _round_hint(unit)
             for doc_id in unit["doc_ids"]:
                 if doc_id not in protected:
                     local[doc_id] = (assignment.confidence, f"{ASSIGN_EVIDENCE} · {assignment.basis}")
