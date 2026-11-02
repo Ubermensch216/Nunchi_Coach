@@ -158,19 +158,18 @@ class OnboardingView(QWidget):
         self.summary = muted_label("아직 선택한 폴더가 없습니다.")
         card.body.addWidget(self.summary)
 
-        # 업무분장표에는 과 전체가 들어 있는 경우가 많다. 이름을 알면 그 사람의 행만 고른다.
-        self.predecessor = QLineEdit(charter.predecessor_name(self.db))
-        self.predecessor.setPlaceholderText("전임자 이름 (선택) — 업무분장표에서 이 사람의 업무만 고릅니다")
-        self.predecessor.setMinimumHeight(theme.CONTROL_H)
-        card.body.addWidget(self.predecessor)
-
-        # 사용자가 적은 업무 분장이 분석의 기준이다. 비워 두면 자료에서 분장표를 찾아 쓴다.
+        # 전임자의 업무 분장이 분석의 기준이다. 먼저 입력받고, 비어 있으면 분석을 시작하지 못한다.
+        # 전임자 이름은 묻지 않는다 — 어떤 업무를 맡았는지만 알면 된다.
+        card.body.addWidget(section_title("전임자의 업무 분장 (필수)"))
+        card.body.addWidget(muted_label(
+            "전임자가 맡았던 업무를 한 줄에 하나씩 적으세요. 분석은 여기 적은 업무에 자료를 나눕니다. "
+            "세부업무는 줄을 들여 쓰거나 '-'로 시작합니다.", small=True))
         self.charter_text = QPlainTextEdit(charter.user_text(self.db))
         self.charter_text.setPlaceholderText(
-            "내가 맡은 업무(사무분장)를 한 줄에 하나씩 적으세요. 세부업무는 줄을 들여 쓰거나 '-'로 시작합니다.\n"
-            "예)\n적극행정 실행계획\n  - 계획 수립\n  - 결과 보고\n민원 처리 실태 점검")
-        self.charter_text.setAccessibleName("업무 분장 입력")
+            "예)\n적극행정 실행계획\n  - 계획 수립\n  - 결과 보고\n민원 처리 실태 점검\nIRM 자원관리·등록")
+        self.charter_text.setAccessibleName("전임자의 업무 분장 입력")
         self.charter_text.setFixedHeight(theme.CONTROL_H * 4)
+        self.charter_text.textChanged.connect(self._sync_start)
         card.body.addWidget(self.charter_text)
 
         # 시작 버튼은 카드 안, 고른 폴더 바로 아래에 둔다. 카드 밖에 떨어져
@@ -192,7 +191,7 @@ class OnboardingView(QWidget):
 
         self.start = QPushButton("분석 시작")
         self.start.setEnabled(False)
-        self.start.setToolTip("폴더를 하나 이상 고르면 시작할 수 있습니다")
+        self.start.setToolTip("업무 분장을 적고 폴더를 하나 이상 고르면 시작할 수 있습니다")
         self.start.clicked.connect(self._start)
         foot_row.addWidget(self.start, 0, Qt.AlignmentFlag.AlignVCenter)
         card.body.addWidget(foot)
@@ -234,8 +233,6 @@ class OnboardingView(QWidget):
 
     # ── 온나라 수집 요청 및 가져오기 ────────────────────────────────
     def _on_request_clicked(self) -> None:
-        if not self.predecessor.text().strip():
-            self.predecessor.setText(self.req_author.text().strip())
         self.request_collection({
             "listName": "문서등록대장",
             "authorName": self.req_author.text(),
@@ -326,8 +323,8 @@ class OnboardingView(QWidget):
         self.placeholder.setVisible(not has_any)
         if not has_any:
             self.summary.setText("아직 선택한 폴더가 없습니다.")
-            self.start.setEnabled(False)
-            self._sync_actions()
+            self._has_documents = False
+            self._sync_start()
             return
 
         supported = set(supported_extensions())
@@ -387,7 +384,17 @@ class OnboardingView(QWidget):
             text += "\n⚠ 분석할 수 있는 문서를 찾지 못했습니다."
 
         self.summary.setText(text)
-        self.start.setEnabled(total_target > 0)
+        self._has_documents = total_target > 0
+        self._sync_start()
+
+    def _sync_start(self) -> None:
+        """분석 시작은 업무 분장을 적고, 분석할 문서가 잡혔을 때만 열린다."""
+        has_charter = bool(charter.parse_user_text(self.charter_text.toPlainText()))
+        self.start.setEnabled(getattr(self, "_has_documents", False) and has_charter)
+        if getattr(self, "_has_documents", False) and not has_charter:
+            self.start.setToolTip("전임자의 업무 분장을 먼저 적어 주세요")
+        else:
+            self.start.setToolTip("업무 분장을 적고 폴더를 하나 이상 고르면 시작할 수 있습니다")
         self._sync_actions()
 
     def _sync_actions(self) -> None:
@@ -407,9 +414,9 @@ class OnboardingView(QWidget):
             button.style().polish(button)
 
     def _start(self) -> None:
-        name = " ".join(self.predecessor.text().split())
-        if name != charter.predecessor_name(self.db):
-            charter.set_predecessor(self.db, name)
+        written = self.charter_text.toPlainText()
+        if not charter.parse_user_text(written):
+            return
         written = self.charter_text.toPlainText()
         if written.strip() != charter.user_text(self.db).strip():
             charter.save_user_items(self.db, charter.parse_user_text(written))

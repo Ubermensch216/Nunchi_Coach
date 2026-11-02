@@ -52,6 +52,8 @@ def test_precheck_counts_files_and_analysable_documents(view, tmp_path: Path):
     assert "파일 2개" in text
     assert "분석 대상 문서 1건" in text     # .docx만 파서가 있다
     assert "접근 불가 0개" in text
+    assert not view.start.isEnabled()                 # 분장이 없으면 시작할 수 없다
+    view.charter_text.setPlainText("민원 점검")
     assert view.start.isEnabled()
 
 
@@ -74,6 +76,7 @@ def test_unreadable_files_are_counted_not_silently_skipped(view, tmp_path: Path,
     text = view.summary.text()
     assert "접근 불가 1개" in text
     assert "권한이나 잠금" in text
+    view.charter_text.setPlainText("민원 점검")
     assert view.start.isEnabled()          # 나머지는 그대로 분석한다
 
 
@@ -89,6 +92,7 @@ def test_folder_chosen_on_the_launcher_is_not_asked_again(qapp, tmp_path: Path):
     try:
         assert widget._folders == [folder]
         assert widget.list.item(0).text() == str(folder)
+        widget.charter_text.setPlainText("민원 점검")
         assert widget.start.isEnabled()
     finally:
         widget.deleteLater()
@@ -107,17 +111,28 @@ def test_no_analysable_document_blocks_the_start_button(view, tmp_path: Path):
     assert not view.start.isEnabled()
 
 
-def test_predecessor_name_is_saved_when_analysis_starts(view, tmp_path: Path):
+def test_start_needs_the_predecessors_duties_and_asks_for_no_name(view, tmp_path: Path):
+    """분석은 전임자의 업무 분장을 먼저 받아야 시작한다. 전임자 이름은 묻지 않는다."""
     from app.core import charter
 
+    assert not hasattr(view, "predecessor")
     view._folders = [_folder(tmp_path)]
-    view.predecessor.setText("  홍길동 ")
+    view._precheck()
+    assert not view.start.isEnabled()                      # 문서는 잡혔지만 분장이 없다
+    view.charter_text.setPlainText("   \n")
+    assert not view.start.isEnabled()
+    view.charter_text.setPlainText("적극행정 실행계획\n  - 계획 수립\n민원 점검")
+    assert view.start.isEnabled()
     view._start()
-    assert charter.predecessor_name(view.db) == "홍길동"
+    assert [row["name"] for row in charter.user_items(view.db)] == ["적극행정 실행계획", "민원 점검"]
+    assert charter.predecessor_name(view.db) == ""
 
 
-def test_onnara_author_fills_an_empty_predecessor(view, monkeypatch):
-    monkeypatch.setattr(view, "request_collection", lambda scope=None: None)
-    view.req_author.setText("홍길동")
-    view._on_request_clicked()
-    assert view.predecessor.text() == "홍길동"
+def test_start_does_nothing_without_duties(view, tmp_path: Path):
+    from app.core import charter
+
+    started = []
+    view.started.connect(lambda: started.append(True))
+    view._folders = [_folder(tmp_path)]
+    view._start()
+    assert started == [] and not charter.user_items(view.db)

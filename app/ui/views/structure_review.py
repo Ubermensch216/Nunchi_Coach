@@ -50,19 +50,6 @@ class StructureReviewDialog(QDialog):
             "여기서 고치세요. 확인하지 않아도 분석은 제안대로 끝까지 진행됩니다. "
             "업무를 나누려면 업무 화면에서 문서를 골라 나누세요."))
 
-        # 분장표에 과 전체 담당자가 섞여 있고 전임자 이름을 모르면, 누구의 업무인지 여기서 고른다.
-        self.owner_row = QHBoxLayout()
-        self.owner_row.addWidget(muted_label(
-            "업무분장표에 여러 담당자의 업무가 함께 있습니다. 전임자를 고르면 다음 분석부터 그 사람의 업무만 씁니다."), 1)
-        self.owner = QComboBox()
-        self.owner.addItem("담당자 고르기", "")
-        for name in charter.owners(db):
-            self.owner.addItem(name, name)
-        self.owner.currentIndexChanged.connect(lambda _index: self.choose_owner(self.owner.currentData()))
-        self.owner_row.addWidget(self.owner)
-        layout.addLayout(self.owner_row)
-        self._sync_owner()
-
         self.table = QTableWidget(0, len(COLUMNS))
         self.table.setHorizontalHeaderLabels(COLUMNS)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -194,21 +181,6 @@ class StructureReviewDialog(QDialog):
     def not_a_task(self, task_id: int) -> None:
         self.db.mark_not_a_task(task_id)
         self._edited()
-
-    def _sync_owner(self) -> None:
-        shown = charter.needs_owner_choice(self.db)
-        for index in range(self.owner_row.count()):
-            widget = self.owner_row.itemAt(index).widget()
-            if widget is not None:
-                widget.setVisible(shown)
-
-    def choose_owner(self, name: str) -> None:
-        """전임자를 정한다. 분장 항목은 다음 분석이 그 사람의 행으로 다시 뽑는다."""
-        if not name:
-            return
-        charter.set_predecessor(self.db, name)
-        self.changed = True
-        self._sync_owner()
 
     def _open_classification(self) -> None:
         from .classification_review import ClassificationReviewDialog

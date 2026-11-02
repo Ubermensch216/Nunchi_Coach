@@ -181,7 +181,8 @@ class Pipeline(QObject):
                 self._embed(db)
             if not self._stop:
                 self._chunks(db)
-            if not self._stop:
+            if not self._stop and not charter.user_items(db):
+                # 사용자가 분장을 입력했으면 자료 속 분장표에서 뽑지 않는다 — 입력한 분장이 기준이다.
                 try:
                     charter.refresh_items(db, client=self._generation_client(db))
                 except Exception as exc:

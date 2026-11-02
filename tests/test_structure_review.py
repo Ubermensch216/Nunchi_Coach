@@ -171,22 +171,12 @@ def _department_charter(db):
     db.con.commit()
 
 
-def test_owner_choice_is_offered_only_when_the_charter_mixes_people(db, qapp):
-    from app.core import charter
+def test_review_dialog_asks_for_no_predecessor(db, qapp):
+    """전임자 이름은 받지 않는다 — 분장 항목은 사용자가 입력한 전임자의 업무 분장이다."""
     from app.ui.views.structure_review import StructureReviewDialog
-
-    assert not charter.needs_owner_choice(db)
-    _department_charter(db)
-    assert charter.owners(db) == ["홍길동", "김철수"]
-    assert charter.needs_owner_choice(db)
 
     dialog = StructureReviewDialog(db)
     try:
-        assert not dialog.owner.isHidden()
-        dialog.owner.setCurrentIndex(dialog.owner.findData("홍길동"))
-        assert charter.predecessor_name(db) == "홍길동" and dialog.changed
-        assert dialog.owner.isHidden()
+        assert not hasattr(dialog, "owner") and not hasattr(dialog, "choose_owner")
     finally:
         dialog.deleteLater()
-    assert charter.refresh_items(db) == 1
-    assert {item["owner"] for item in charter.get_charter_items(db) if item["parent_id"] is None} <= {"홍길동"}

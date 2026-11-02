@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core import handover
+from ..core import charter, handover
 from ..core import initial_analysis
 from ..db import Database
 from ..jobs import PipelineRunner
@@ -537,6 +537,11 @@ class MainWindow(QMainWindow):
 
     def _start_pipeline(self) -> None:
         if self.runner.running:
+            return
+        # 분석은 전임자의 업무 분장을 기준으로 자료를 나눈다. 분장이 없으면 시작하지 않고 입력을 받는다.
+        if not charter.user_items(self.db):
+            self.topbar.show_idle("전임자의 업무 분장을 먼저 입력해 주세요 (설정 › 전임자의 업무 분장)")
+            self.go("system")
             return
         if initial_analysis.pending(self.db):
             self.db.set_meta("initial_analysis_state", "pending")

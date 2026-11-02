@@ -58,3 +58,28 @@ def test_user_input_beats_file_charter(db):
     # 입력을 지우면 파일 분장으로 돌아간다.
     charter.save_user_items(db, [])
     assert [r["name"] for r in charter.current_items(db)] == ["파일 속 업무"]
+
+
+def test_pipeline_start_is_refused_until_the_duties_are_entered(tmp_path):
+    """분석 시작 지점(셸)은 분장이 없으면 파이프라인을 돌리지 않고 설정 화면으로 안내한다."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    from app.ui.shell import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+    database = Database(tmp_path / "project" / "project.db")
+    database.init()
+    window = MainWindow(database)
+    try:
+        started = []
+        window.runner.start = lambda: started.append(True)
+        window._start_pipeline()
+        assert started == []
+        charter.save_user_items(database, charter.parse_user_text("민원 점검"))
+        window._start_pipeline()
+        assert started == [True]
+    finally:
+        window.deleteLater()
+        database.close()
+        assert app is not None
