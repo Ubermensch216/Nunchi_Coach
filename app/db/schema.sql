@@ -659,3 +659,26 @@ CREATE TABLE IF NOT EXISTS official_facts (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_official_facts_doc ON official_facts(doc_id);
+
+-- ── 자료 단위와 명함 (v17) ───────────────────────────────────────────
+-- 분류의 대상. 공문 한 건(본문+붙임+이어진 PC 파일), 폴더 묶음, 낱장 파일 중 하나다.
+-- 문서에서 다시 만들 수 있는 파생 자료라서 분석 때마다 통째로 바꾼다. 사람이 고친 값은 여기 두지 않는다.
+CREATE TABLE IF NOT EXISTS work_units (
+    id          INTEGER PRIMARY KEY,
+    kind        TEXT NOT NULL,                -- letter | folder | loose
+    unit_key    TEXT NOT NULL UNIQUE,         -- 다시 만들어도 같은 단위가 같은 값을 갖는다
+    label       TEXT NOT NULL,
+    card        TEXT NOT NULL DEFAULT '{}',   -- 명함(JSON): 제목·폴더·본문 내용·붙임·연도
+    doc_count   INTEGER NOT NULL DEFAULT 0,
+    fingerprint TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS work_unit_docs (
+    unit_id INTEGER NOT NULL REFERENCES work_units(id) ON DELETE CASCADE,
+    doc_id  INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    role    TEXT NOT NULL,                    -- body | attachment | linked | member
+    basis   TEXT NOT NULL DEFAULT '',         -- 이 문서를 이 단위에 넣은 근거
+    PRIMARY KEY (unit_id, doc_id)
+);
+CREATE INDEX IF NOT EXISTS idx_work_unit_docs_doc ON work_unit_docs(doc_id);
+

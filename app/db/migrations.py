@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "16"
+SCHEMA_VERSION = "17"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -552,6 +552,30 @@ def _to_v16(con: sqlite3.Connection) -> None:
     con.execute("CREATE INDEX IF NOT EXISTS idx_official_facts_doc ON official_facts(doc_id)")
 
 
+def _to_v17(con: sqlite3.Connection) -> None:
+    """분류 대상인 자료 단위(공문 건·폴더 묶음·낱장)와 명함 표."""
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS work_units (
+            id          INTEGER PRIMARY KEY,
+            kind        TEXT NOT NULL,
+            unit_key    TEXT NOT NULL UNIQUE,
+            label       TEXT NOT NULL,
+            card        TEXT NOT NULL DEFAULT '{}',
+            doc_count   INTEGER NOT NULL DEFAULT 0,
+            fingerprint TEXT NOT NULL DEFAULT '',
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )""")
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS work_unit_docs (
+            unit_id INTEGER NOT NULL REFERENCES work_units(id) ON DELETE CASCADE,
+            doc_id  INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            role    TEXT NOT NULL,
+            basis   TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (unit_id, doc_id)
+        )""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_work_unit_docs_doc ON work_unit_docs(doc_id)")
+
+
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
@@ -568,6 +592,7 @@ STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "14": _to_v14,
     "15": _to_v15,
     "16": _to_v16,
+    "17": _to_v17,
 }
 
 

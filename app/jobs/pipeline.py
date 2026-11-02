@@ -27,7 +27,7 @@ from ..ai.settings import project_client
 from ..ai.discover import discover, has_folder_tasks, has_official_tasks
 from ..core import dating, handover_release, reconstruction, timeline, transfer
 from ..core import diagnostics, coverage, survey, charter
-from ..core import gongmun_facts, onnara_import
+from ..core import gongmun_facts, onnara_import, units
 from ..core import reindex
 from ..core import bundles, docrole, docyears, foldersteps, pictures, versions
 from ..core.chunking import build_chunks_with_context
@@ -53,6 +53,7 @@ STAGE_HASH = "중복 확인"
 STAGE_PARSE = "내용 읽기"
 STAGE_DATE = "시점 확인"
 STAGE_FACTS = "본문 읽기"
+STAGE_UNITS = "자료 묶기"
 STAGE_EMBED = "의미 색인"
 STAGE_DISCOVER = "업무 파악"
 STAGE_ROLES = "문서 갈래 확인"
@@ -63,7 +64,7 @@ STAGE_CHUNKS = "질문 준비"
 STAGE_PICTURES = "그림·스캔본 읽기"
 _STAGE_KEYS = {
     STAGE_PICTURES: "pictures",
-    STAGE_SCAN: "scan", STAGE_HASH: "hash", STAGE_FACTS: "facts", STAGE_PARSE: "parse", STAGE_DATE: "date",
+    STAGE_SCAN: "scan", STAGE_HASH: "hash", STAGE_FACTS: "facts", STAGE_UNITS: "units", STAGE_PARSE: "parse", STAGE_DATE: "date",
     STAGE_EMBED: "embed", STAGE_CHUNKS: "chunks", STAGE_DISCOVER: "discover",
     STAGE_ROLES: "roles", STAGE_CYCLES: "cycles", STAGE_STEPS: "steps", STAGE_RESTORE: "restore",
 }
@@ -175,6 +176,8 @@ class Pipeline(QObject):
             if not self._stop:
                 self._facts(db)
             if not self._stop:
+                self._units(db)
+            if not self._stop:
                 self._embed(db)
             if not self._stop:
                 self._chunks(db)
@@ -223,6 +226,18 @@ class Pipeline(QObject):
             return None
         candidate = self._client = project_client(db, OllamaClient)
         return candidate if candidate.health().generation_ready else None
+
+    def _units(self, db: Database) -> None:
+        """분류의 대상인 자료 단위(공문 건·폴더 묶음·낱장)와 명함을 만든다. 모델이 필요 없다."""
+        report = StageReport(STAGE_UNITS)
+        try:
+            counts = units.save(db)
+            report.done = report.total = sum(counts.values())
+            report.note = f"공문 {counts[units.LETTER]:,} · 폴더 {counts[units.FOLDER]:,} · 낱장 {counts[units.LOOSE]:,}"
+        except Exception as exc:
+            diagnostics.record("units.build.error", exc)
+            report.errors.append(f"자료 묶기 실패: {type(exc).__name__}")
+        self._report(db, report)
 
     def _text_model(self, db: Database):
         """의미 색인과 상관없이 생성 모델을 쓸 수 있으면 그 클라이언트, 아니면 None.
