@@ -206,6 +206,13 @@ def brief_markdown(db, task_id: int) -> str:
         charted.append(f"{found['name']}{detail} (근거: {where})")
     section("업무분장", charted, "분장표에 적힌 이 업무")
 
+    from . import gongmun_facts as gf
+    read = []
+    for fact in gf.facts_for_task(db, task_id):
+        due = f" (기한 {fact['due']})" if fact["due"] else ""
+        read.append(f"{gf.KIND_LABELS[fact['kind']]}: {_flat(fact['text'])}{due} (근거: {fact['filename']})")
+    section("공문 본문에서 읽은 내용", read[:20], "요지·해야 할 일·일정·제출처")
+
     section("업무 범위·역할", [_item_line(i) for i in group(rc.SCOPE)],
             "업무 대상·감사 대상 기간·실시 기간·담당 업무")
     section("해야 할 일", [_item_line(i) for i in group(rc.PURPOSE, rc.DEADLINE, rc.RECIPIENT, rc.AMOUNT, rc.OUTPUT)],

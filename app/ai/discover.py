@@ -111,6 +111,8 @@ def _discover(
 
     # S3: 분장표 기반 업무 체계 대조
     charter_tasks, charter_claimed, charter_counts = _charter_plan(db, excluded, official)
+    # 사용자가 분장을 직접 적었으면 그것이 기준이다 — 공문 업무를 분장 항목에 맞추고 이름도 따른다.
+    _align_official_to_charter(db, official, charter_tasks)
 
     if store.size:
         import numpy as np
@@ -404,6 +406,64 @@ def _charter_plan(
         "data_only": 0,
     }
     return tasks, claimed, counts
+
+
+_WORDS = re.compile(r"[가-힣A-Za-z0-9]{2,}")
+BODY_MATCH_MIN = 2
+
+
+def _charter_score(name: str, details: list[str], text: str) -> int:
+    """분장 항목이 이 글(업무 이름·공문 제목·본문 내용)에 얼마나 나오는가. 0이면 무관."""
+    flat = folders.compact(text)
+    score = 0
+    compact_name = folders.compact(name)
+    if len(compact_name) >= 2 and compact_name in flat:
+        score += 3
+    else:
+        tokens = _WORDS.findall(name)
+        if len(tokens) >= 2 and sum(token in text for token in tokens) * 2 >= len(tokens):
+            score += 2
+    score += sum(1 for detail in details
+                 if len(folders.compact(detail)) >= 3 and folders.compact(detail) in flat)
+    return score
+
+
+def _align_official_to_charter(db: Database, official: list[OfficialTask], charter_tasks: list[CharterTask]) -> None:
+    """사용자가 입력한 분장 항목에 공문 업무를 맞춘다.
+
+    이름이 이미 맞은 것은 분장 이름으로 바꾸고, 안 맞은 것은 공문 제목과 본문에서 읽은 내용
+    (요지·해야 할 일·일정)이 분장 항목(이름·세부업무)과 겹치는 정도로 짝을 찾는다. 가장 높은
+    점수가 둘 이상이거나 점수가 낮으면 잇지 않는다 — 분장 밖 업무 후보로 남는다.
+    """
+    from ..core import charter, gongmun_facts
+
+    if not official or not charter.user_items(db):
+        return
+    by_alias = {ct.alias_of: ct for ct in charter_tasks if ct.alias_of}
+    free = [ct for ct in charter_tasks if not ct.alias_of]
+    taken: set[int] = set()
+    for task in official:
+        ct = by_alias.get(task.name)
+        if ct is not None:
+            task.name, ct.alias_of = ct.name, None
+            ct.match_kind = "matched"
+            taken.add(ct.charter_item_id)
+    for task in official:
+        if any(ct.name == task.name for ct in charter_tasks):
+            continue
+        facts = gongmun_facts.facts_for_docs(db, task.official_ids)
+        text = " ".join([task.name, *(record.title for record in task.records),
+                         *(fact["text"] for fact in facts)])
+        scored = sorted(((_charter_score(ct.name, ct.details, text), ct.charter_item_id, ct)
+                         for ct in free if ct.charter_item_id not in taken), key=lambda t: -t[0])
+        if not scored or scored[0][0] < BODY_MATCH_MIN:
+            continue
+        if len(scored) > 1 and scored[1][0] == scored[0][0]:
+            continue        # 비기면 정하지 않는다
+        ct = scored[0][2]
+        task.name = ct.name
+        ct.match_kind = "matched"
+        taken.add(ct.charter_item_id)
 
 
 CHARTER_MEANING = 0.72   # 공문 대응의 의미 유사(5순위)와 같은 문턱

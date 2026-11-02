@@ -27,7 +27,7 @@ from ..ai.settings import project_client
 from ..ai.discover import discover, has_folder_tasks, has_official_tasks
 from ..core import dating, handover_release, reconstruction, timeline, transfer
 from ..core import diagnostics, coverage, survey, charter
-from ..core import onnara_import
+from ..core import gongmun_facts, onnara_import
 from ..core import reindex
 from ..core import bundles, docrole, docyears, foldersteps, pictures, versions
 from ..core.chunking import build_chunks_with_context
@@ -52,6 +52,7 @@ STAGE_SCAN = "파일 찾기"
 STAGE_HASH = "중복 확인"
 STAGE_PARSE = "내용 읽기"
 STAGE_DATE = "시점 확인"
+STAGE_FACTS = "본문 읽기"
 STAGE_EMBED = "의미 색인"
 STAGE_DISCOVER = "업무 파악"
 STAGE_ROLES = "문서 갈래 확인"
@@ -62,7 +63,7 @@ STAGE_CHUNKS = "질문 준비"
 STAGE_PICTURES = "그림·스캔본 읽기"
 _STAGE_KEYS = {
     STAGE_PICTURES: "pictures",
-    STAGE_SCAN: "scan", STAGE_HASH: "hash", STAGE_PARSE: "parse", STAGE_DATE: "date",
+    STAGE_SCAN: "scan", STAGE_HASH: "hash", STAGE_FACTS: "facts", STAGE_PARSE: "parse", STAGE_DATE: "date",
     STAGE_EMBED: "embed", STAGE_CHUNKS: "chunks", STAGE_DISCOVER: "discover",
     STAGE_ROLES: "roles", STAGE_CYCLES: "cycles", STAGE_STEPS: "steps", STAGE_RESTORE: "restore",
 }
@@ -171,6 +172,8 @@ class Pipeline(QObject):
                 self._pictures(db)
             if not self._stop:
                 self._date(db)
+            if not self._stop:
+                self._facts(db)
             if not self._stop:
                 self._embed(db)
             if not self._stop:
@@ -553,6 +556,25 @@ class Pipeline(QObject):
 
 
     # ── 4단계: 시점 확인 ────────────────────────────────────────────
+    def _facts(self, db: Database) -> None:
+        """공문 본문에서 요지·해야 할 일·일정·제출처를 읽는다. 업무 배정이 이 내용을 쓴다."""
+        report = StageReport(STAGE_FACTS)
+        ids = gongmun_facts.body_doc_ids(db)
+        report.total = len(ids)
+        if not ids:
+            report.note = "공문 본문이 없습니다"
+            self._report(db, report)
+            return
+        try:
+            report.done = gongmun_facts.analyze_bodies(
+                db, client=self._generation_client(db),
+                on_progress=lambda n, total, name: self.progress.emit(STAGE_FACTS, n, total, name),
+                is_stopped=self._stopped)
+        except Exception as exc:
+            diagnostics.record("gongmun.facts.error", exc)
+            report.errors.append(f"본문 읽기 실패: {type(exc).__name__}")
+        self._report(db, report)
+
     def _date(self, db: Database) -> None:
         """When과 How 전체가 이 단계에 걸려 있다.
 
