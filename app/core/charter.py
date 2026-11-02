@@ -435,6 +435,84 @@ def get_charter_items(db: Database, doc_id: int | None = None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+# ── 사용자가 직접 입력한 분장 ───────────────────────────────────────
+
+USER_SOURCE_LABEL = "사용자 입력"
+_SUB_LINE = re.compile(r"^(?:\s+\S|\s*[-*ㆍ•·]\s*\S)")
+_TOP_MARK = re.compile(r"^\s*(?:[○□■●◇◆▶▷]|\d{1,2}[.)]|[가-하][.)])\s*")
+_SUB_MARK = re.compile(r"^\s*[-*ㆍ•·]\s*")
+_WEIGHT = re.compile(r"\(?\s*(\d+(?:\.\d+)?)\s*%\s*\)?")
+_DETAIL_SPLIT = re.compile(r"[,;·/]")
+
+
+def parse_user_text(text: str) -> list[ExtractedItem]:
+    """사용자가 적은 업무 분장을 항목으로 나눈다. 모델도 담당자 필터도 쓰지 않는다.
+
+    한 줄이 업무 하나다. 들여쓰거나 '-'·'ㆍ'로 시작한 줄은 앞 업무의 세부업무다.
+    '업무명: 세부1, 세부2' 꼴도 읽는다. '(30%)'는 비중이다.
+    """
+    items: list[ExtractedItem] = []
+    current: ExtractedItem | None = None
+    for number, raw in enumerate((text or "").splitlines(), start=1):
+        if not raw.strip():
+            continue
+        is_sub = current is not None and bool(_SUB_LINE.match(raw)) and not _TOP_MARK.match(raw)
+        cleaned = _SUB_MARK.sub("", _TOP_MARK.sub("", raw)).strip()
+        weight = 1.0
+        found = _WEIGHT.search(cleaned)
+        if found:
+            weight = float(found.group(1))
+            cleaned = (cleaned[:found.start()] + cleaned[found.end():]).strip(" ()")
+        if len(cleaned) < 2:
+            continue
+        if is_sub:
+            current.details.append(cleaned)
+            continue
+        details: list[str] = []
+        name = cleaned
+        if re.search(r"[:：]\s*\S", cleaned):
+            name, rest = re.split(r"\s*[:：]\s*", cleaned, maxsplit=1)
+            details = [part.strip() for part in _DETAIL_SPLIT.split(rest) if part.strip()]
+        current = ExtractedItem(name=name.strip(), details=details, weight=weight, locator=f"입력:{number}")
+        items.append(current)
+    return items
+
+
+def save_user_items(db: Database, items: list[ExtractedItem]) -> int:
+    """사용자가 입력한 분장으로 이전 입력을 바꾼다. 빈 목록이면 입력을 지운다. 최상위 항목 수를 돌려준다."""
+    with db.transaction():
+        db.con.execute("DELETE FROM charter_items WHERE source = 'user'")
+        for item in items:
+            parent = db.con.execute(
+                "INSERT INTO charter_items(doc_id, locator, name, parent_id, owner, weight, decided_by, source) "
+                "VALUES (NULL, ?, ?, NULL, '', ?, 'user', 'user')",
+                (item.locator, item.name, item.weight)).lastrowid
+            for detail in item.details:
+                db.con.execute(
+                    "INSERT INTO charter_items(doc_id, locator, name, parent_id, owner, weight, decided_by, source) "
+                    "VALUES (NULL, ?, ?, ?, '', ?, 'user', 'user')",
+                    (item.locator, detail, parent, item.weight))
+    db.audit("charter.user_input", result=f"{len(items)}건")
+    return len(items)
+
+
+def user_items(db: Database) -> list:
+    """사용자가 입력한 최상위 분장 항목."""
+    return db.con.execute(
+        "SELECT id, doc_id, locator, name, weight, owner FROM charter_items "
+        "WHERE parent_id IS NULL AND source = 'user' ORDER BY id").fetchall()
+
+
+def user_text(db: Database) -> str:
+    """입력란에 다시 보여 줄 글 — 저장한 분장을 처음 적은 꼴로 되돌린다."""
+    lines: list[str] = []
+    for row in user_items(db):
+        lines.append(row["name"])
+        lines += [f"  - {r['name']}" for r in db.con.execute(
+            "SELECT name FROM charter_items WHERE parent_id = ? ORDER BY id", (row["id"],))]
+    return "\n".join(lines)
+
+
 # ── 여러 해의 분장표 ────────────────────────────────────────────────
 
 _YEAR_IN_NAME = re.compile(r"(?<!\d)(20\d{2})(?!\d)")
@@ -450,7 +528,7 @@ def current_doc_ids(db: Database) -> set[int] | None:
     """가장 최근 해의 분장 문서. 해를 아는 분장 문서가 둘 이상의 해에 걸치지 않으면 None(전부 현재)."""
     rows = db.con.execute(
         "SELECT DISTINCT d.id, d.filename, d.eff_year FROM charter_items c "
-        "JOIN documents d ON d.id = c.doc_id WHERE d.missing_since IS NULL").fetchall()
+        "JOIN documents d ON d.id = c.doc_id WHERE d.missing_since IS NULL AND c.source = 'file'").fetchall()
     years = {row["id"]: _charter_year(row) for row in rows}
     known = {year for year in years.values() if year}
     if len(known) < 2:
@@ -461,10 +539,16 @@ def current_doc_ids(db: Database) -> set[int] | None:
 
 
 def current_items(db: Database) -> list:
-    """업무 체계의 기준이 되는 최상위 분장 항목 — 가장 최근 해의 분장표에서."""
+    """업무 체계의 기준이 되는 최상위 분장 항목.
+
+    사용자가 직접 입력한 분장이 있으면 그것이 기준이다. 없으면 가장 최근 해의 분장표에서 뽑은 것.
+    """
+    mine = user_items(db)
+    if mine:
+        return mine
     rows = db.con.execute(
         "SELECT id, doc_id, locator, name, weight, owner FROM charter_items "
-        "WHERE parent_id IS NULL ORDER BY id").fetchall()
+        "WHERE parent_id IS NULL AND source = 'file' ORDER BY id").fetchall()
     current = current_doc_ids(db)
     return rows if current is None else [row for row in rows if row["doc_id"] in current]
 
@@ -513,8 +597,9 @@ def items_for_task(db: Database, task_name: str, description: str | None = None)
         details = [r["name"] for r in db.con.execute(
             "SELECT name FROM charter_items WHERE parent_id = ? ORDER BY id", (row["id"],))]
         if row["name"] in aliases or _match_names(row["name"], task_name, details):
-            document = db.con.execute("SELECT filename FROM documents WHERE id = ?", (row["doc_id"],)).fetchone()
+            document = (db.con.execute("SELECT filename FROM documents WHERE id = ?", (row["doc_id"],)).fetchone()
+                        if row["doc_id"] is not None else None)
             found.append({"name": row["name"], "details": details,
-                          "document": document["filename"] if document else "",
+                          "document": document["filename"] if document else USER_SOURCE_LABEL,
                           "locator": row["locator"] or ""})
     return found

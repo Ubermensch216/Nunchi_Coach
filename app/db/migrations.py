@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "15"
+SCHEMA_VERSION = "16"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -513,6 +513,45 @@ def _to_v15(con: sqlite3.Connection) -> None:
     if not column_exists(con, "task_analysis_state", "doc_fingerprint"):
         con.execute("ALTER TABLE task_analysis_state ADD COLUMN doc_fingerprint TEXT")
 
+def _to_v16(con: sqlite3.Connection) -> None:
+    """분장 항목을 사용자가 직접 입력할 수 있게(doc_id NULL 허용) 하고, 공문 본문 내용 표를 만든다."""
+    has_table = bool(con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'charter_items'").fetchone())
+    if has_table and not column_exists(con, "charter_items", "source"):
+        con.execute("ALTER TABLE charter_items RENAME TO charter_items_old")
+        con.execute("""
+            CREATE TABLE charter_items (
+                id         INTEGER PRIMARY KEY,
+                doc_id     INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+                locator    TEXT NOT NULL DEFAULT '',
+                name       TEXT NOT NULL,
+                parent_id  INTEGER REFERENCES charter_items(id) ON DELETE CASCADE,
+                owner      TEXT NOT NULL DEFAULT '',
+                weight     REAL NOT NULL DEFAULT 1.0,
+                decided_by TEXT NOT NULL DEFAULT 'ai',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                source     TEXT NOT NULL DEFAULT 'file'
+            )""")
+        con.execute(
+            "INSERT INTO charter_items(id, doc_id, locator, name, parent_id, owner, weight, decided_by, created_at) "
+            "SELECT id, doc_id, locator, name, parent_id, owner, weight, decided_by, created_at FROM charter_items_old")
+        con.execute("DROP TABLE charter_items_old")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_charter_items_doc ON charter_items(doc_id)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_charter_items_parent ON charter_items(parent_id)")
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS official_facts (
+            id         INTEGER PRIMARY KEY,
+            doc_id     INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            kind       TEXT NOT NULL,
+            text       TEXT NOT NULL,
+            due        TEXT,
+            evidence   TEXT NOT NULL DEFAULT '',
+            decided_by TEXT NOT NULL DEFAULT 'ai',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_official_facts_doc ON official_facts(doc_id)")
+
+
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
@@ -528,6 +567,7 @@ STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "13": _to_v13,
     "14": _to_v14,
     "15": _to_v15,
+    "16": _to_v16,
 }
 
 

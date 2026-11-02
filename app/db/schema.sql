@@ -624,14 +624,15 @@ CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_logs(at);
 -- ── 업무분장·업무기술서 항목 (v14) ──────────────────────────────────
 CREATE TABLE IF NOT EXISTS charter_items (
     id         INTEGER PRIMARY KEY,
-    doc_id     INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    doc_id     INTEGER REFERENCES documents(id) ON DELETE CASCADE,  -- 사용자가 직접 입력했으면 NULL
     locator    TEXT NOT NULL DEFAULT '',
     name       TEXT NOT NULL,
     parent_id  INTEGER REFERENCES charter_items(id) ON DELETE CASCADE,
     owner      TEXT NOT NULL DEFAULT '',
     weight     REAL NOT NULL DEFAULT 1.0,
     decided_by TEXT NOT NULL DEFAULT 'ai',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    source     TEXT NOT NULL DEFAULT 'file'                         -- file | user (v16)
 );
 CREATE INDEX IF NOT EXISTS idx_charter_items_doc ON charter_items(doc_id);
 CREATE INDEX IF NOT EXISTS idx_charter_items_parent ON charter_items(parent_id);
@@ -644,3 +645,17 @@ CREATE TABLE IF NOT EXISTS task_analysis_state (
     finished_at     TEXT,
     doc_fingerprint TEXT
 );
+
+-- ── 공문 본문에서 읽은 내용 (v16) ────────────────────────────────────
+-- 본문에 적힌 요지·해야 할 일·일정·제출처·관련 문서. 근거 구절(evidence)은 본문에 실제로 있는 글이다.
+CREATE TABLE IF NOT EXISTS official_facts (
+    id         INTEGER PRIMARY KEY,
+    doc_id     INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL,                 -- summary | todo | schedule | submit | refer
+    text       TEXT NOT NULL,
+    due        TEXT,                          -- YYYY-MM-DD (일정·기한이 날짜로 읽힐 때)
+    evidence   TEXT NOT NULL DEFAULT '',
+    decided_by TEXT NOT NULL DEFAULT 'ai',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_official_facts_doc ON official_facts(doc_id);

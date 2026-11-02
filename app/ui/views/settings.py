@@ -362,6 +362,7 @@ class SettingsDialog(QDialog):
             )
         body.addWidget(card)
         body.addWidget(self._predecessor_card())
+        body.addWidget(self._charter_card())
 
         # 두 경로를 헷갈리게 두지 않는다. 여기서 상대를 명시적으로 가리킨다.
         compare = Card(tone="static")
@@ -410,6 +411,32 @@ class SettingsDialog(QDialog):
         self.predecessor_state = muted_label("", small=True)
         card.body.addWidget(self.predecessor_state)
         return card
+
+    def _charter_card(self) -> Card:
+        """내가 맡은 업무(사무분장). 분석은 여기 적은 업무를 기준으로 자료를 나눈다."""
+        card = Card(tone="static")
+        card.body.addWidget(section_title("내 업무 분장"))
+        card.body.addWidget(muted_label(
+            "맡은 업무를 한 줄에 하나씩 적으세요. 세부업무는 줄을 들여 쓰거나 '-'로 시작합니다. "
+            "분석은 여기 적은 업무를 기준으로 자료를 나눕니다. 비워 두면 자료에서 분장표를 찾아 씁니다.", small=True))
+        self.charter_text = QPlainTextEdit(charter.user_text(self.db))
+        self.charter_text.setAccessibleName("업무 분장 입력")
+        self.charter_text.setMinimumHeight(theme.CONTROL_H * 4)
+        card.body.addWidget(self.charter_text)
+        line = QHBoxLayout()
+        save = QPushButton("저장")
+        save.clicked.connect(self._save_charter)
+        line.addWidget(save)
+        self.charter_state = muted_label("", small=True)
+        line.addWidget(self.charter_state, 1)
+        card.body.addLayout(line)
+        return card
+
+    def _save_charter(self) -> None:
+        count = charter.save_user_items(self.db, charter.parse_user_text(self.charter_text.toPlainText()))
+        self.charter_state.setText(
+            f"업무 {count}건을 저장했습니다. 다음 분석부터 반영됩니다." if count else "입력을 지웠습니다.")
+        self.sources_changed.emit()
 
     def _pick_predecessor(self, _index: int) -> None:
         name = self.predecessor_pick.currentData()

@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QHeaderView,
     QTreeWidget,
@@ -162,6 +163,15 @@ class OnboardingView(QWidget):
         self.predecessor.setPlaceholderText("전임자 이름 (선택) — 업무분장표에서 이 사람의 업무만 고릅니다")
         self.predecessor.setMinimumHeight(theme.CONTROL_H)
         card.body.addWidget(self.predecessor)
+
+        # 사용자가 적은 업무 분장이 분석의 기준이다. 비워 두면 자료에서 분장표를 찾아 쓴다.
+        self.charter_text = QPlainTextEdit(charter.user_text(self.db))
+        self.charter_text.setPlaceholderText(
+            "내가 맡은 업무(사무분장)를 한 줄에 하나씩 적으세요. 세부업무는 줄을 들여 쓰거나 '-'로 시작합니다.\n"
+            "예)\n적극행정 실행계획\n  - 계획 수립\n  - 결과 보고\n민원 처리 실태 점검")
+        self.charter_text.setAccessibleName("업무 분장 입력")
+        self.charter_text.setFixedHeight(theme.CONTROL_H * 4)
+        card.body.addWidget(self.charter_text)
 
         # 시작 버튼은 카드 안, 고른 폴더 바로 아래에 둔다. 카드 밖에 떨어져
         # 있으면 무엇을 시작하는 버튼인지가 카드와 끊긴다.
@@ -400,6 +410,9 @@ class OnboardingView(QWidget):
         name = " ".join(self.predecessor.text().split())
         if name != charter.predecessor_name(self.db):
             charter.set_predecessor(self.db, name)
+        written = self.charter_text.toPlainText()
+        if written.strip() != charter.user_text(self.db).strip():
+            charter.save_user_items(self.db, charter.parse_user_text(written))
         for folder in self._folders:
             self.db.add_source(folder, kind=_source_kind(folder))
         total_sources = len(self._folders) + len(self._onnara_added)
