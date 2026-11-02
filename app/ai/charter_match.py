@@ -33,7 +33,8 @@ def _compact(value: str) -> str:
     return re.sub(r"\s+", "", value or "")
 
 
-def material_text(label: str, titles: list[str] = (), folders: list[str] = (), facts: list[str] = ()) -> str:
+def material_text(label: str, titles: list[str] = (), folders: list[str] = (), facts: list[str] = (),
+                  excerpts: list[str] = ()) -> str:
     parts = [f"묶음 이름: {label}"]
     if titles:
         parts.append("문서 제목: " + " / ".join(dict.fromkeys(titles[:12])))
@@ -41,6 +42,8 @@ def material_text(label: str, titles: list[str] = (), folders: list[str] = (), f
         parts.append("폴더: " + " / ".join(dict.fromkeys(folders[:6])))
     if facts:
         parts.append("공문 본문에서 읽은 내용:\n- " + "\n- ".join(facts[:8]))
+    if excerpts:
+        parts.append("문서 앞부분:\n- " + "\n- ".join(excerpts[:3]))
     return "\n".join(parts)[:MATERIAL_LIMIT]
 
 

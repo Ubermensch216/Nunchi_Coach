@@ -109,7 +109,7 @@ def test_model_matches_what_rules_cannot(db):
     discover(db, llm)
     assert "고객 응대 혁신" in names(db) and "일일 상담 현황 점검" not in names(db)
     description = db.con.execute("SELECT description FROM tasks WHERE name = '고객 응대 혁신'").fetchone()[0]
-    assert "AI가 업무 분장" in description
+    assert "AI가 분장 항목" in description
     calls = llm.calls
     discover(db, llm)                       # 같은 입력이면 다시 묻지 않는다
     assert llm.calls == calls

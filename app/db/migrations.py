@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "17"
+SCHEMA_VERSION = "18"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -576,6 +576,20 @@ def _to_v17(con: sqlite3.Connection) -> None:
     con.execute("CREATE INDEX IF NOT EXISTS idx_work_unit_docs_doc ON work_unit_docs(doc_id)")
 
 
+def _to_v18(con: sqlite3.Connection) -> None:
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS unit_assignments (
+            unit_key   TEXT PRIMARY KEY,
+            item_name  TEXT,
+            bucket     TEXT NOT NULL,
+            confidence TEXT NOT NULL DEFAULT 'low',
+            basis      TEXT NOT NULL DEFAULT '',
+            evidence   TEXT NOT NULL DEFAULT '',
+            decided_by TEXT NOT NULL DEFAULT 'ai',
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""")
+
+
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
@@ -593,6 +607,7 @@ STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "15": _to_v15,
     "16": _to_v16,
     "17": _to_v17,
+    "18": _to_v18,
 }
 
 

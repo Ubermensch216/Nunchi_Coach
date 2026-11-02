@@ -682,3 +682,17 @@ CREATE TABLE IF NOT EXISTS work_unit_docs (
 );
 CREATE INDEX IF NOT EXISTS idx_work_unit_docs_doc ON work_unit_docs(doc_id);
 
+-- ── 자료 단위의 업무 분류 결과 (v18) ─────────────────────────────────
+-- 단위는 분석 때마다 다시 만들어지므로 단위 열쇠(unit_key)와 분장 항목 이름으로 이어 둔다.
+-- decided_by='user'인 행은 재분류가 덮어쓰지 않는다.
+CREATE TABLE IF NOT EXISTS unit_assignments (
+    unit_key   TEXT PRIMARY KEY,
+    item_name  TEXT,                          -- 분장 항목 이름. bucket이 item일 때만
+    bucket     TEXT NOT NULL,                 -- item | outside | unknown
+    confidence TEXT NOT NULL DEFAULT 'low',   -- high | medium | low
+    basis      TEXT NOT NULL DEFAULT '',      -- 이름 일치 | AI 판단 | 인용으로 이어진 공문 | 사용자 지정 …
+    evidence   TEXT NOT NULL DEFAULT '',
+    decided_by TEXT NOT NULL DEFAULT 'ai',    -- ai | user
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
