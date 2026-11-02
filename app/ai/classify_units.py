@@ -26,6 +26,7 @@ from . import charter_match
 
 ITEM, OUTSIDE, UNKNOWN = "item", "outside", "unknown"
 MAX_CALLS = 150
+MAX_PART_CALLS = 100        # 분장 항목 안의 세부업무를 모델에 묻는 횟수의 상한
 MAX_OPTIONS = 8
 NAME_MIN = 3                 # 이름 규칙에 쓰는 항목 이름의 최소 길이(짧은 이름은 어디에나 있다)
 WEAK_MIN = 2                 # 모델이 없을 때 낮은 확신으로 붙이는 최소 점수
@@ -49,6 +50,7 @@ class Assignment:
     basis: str = ""
     evidence: str = ""
     decided_by: str = "ai"
+    part: str = ""
 
 
 def score(name: str, details: list[str], text: str) -> int:
@@ -77,11 +79,11 @@ def _body_text(card: dict) -> str:
     return " ".join([*(f["text"] for f in card.get("facts", [])), *card.get("excerpts", [])])
 
 
-def _by_name(options: list[dict], identity: str) -> dict | None:
+def _by_name(options: list[dict], identity: str, min_len: int = NAME_MIN) -> dict | None:
     """제목·폴더에 이름이 통째로 들어 있는 항목. 가장 긴 이름이 이기고, 길이가 같은 둘이면 정하지 않는다."""
     flat = folders.compact(identity)
     hits = sorted(((len(folders.compact(o["name"])), o) for o in options
-                   if len(folders.compact(o["name"])) >= NAME_MIN and folders.compact(o["name"]) in flat),
+                   if len(folders.compact(o["name"])) >= min_len and folders.compact(o["name"]) in flat),
                   key=lambda pair: -pair[0])
     if not hits or (len(hits) > 1 and hits[0][0] == hits[1][0]):
         return None
@@ -105,7 +107,7 @@ def _material(unit: dict) -> str:
 
 def _stored_user(db) -> dict[str, Assignment]:
     return {r["unit_key"]: Assignment(r["unit_key"], r["item_name"], r["bucket"], r["confidence"],
-                                      r["basis"], r["evidence"], "user")
+                                      r["basis"], r["evidence"], "user", r["part"])
             for r in db.con.execute("SELECT * FROM unit_assignments WHERE decided_by = 'user'")}
 
 
@@ -179,7 +181,8 @@ def _apply_taught(unit: dict, folder_rules: dict, label_rules: dict) -> tuple[st
     return None
 
 
-def classify(db, client=None, max_calls: int = MAX_CALLS, on_progress=None) -> dict[str, int]:
+def classify(db, client=None, max_calls: int = MAX_CALLS, on_progress=None,
+             max_part_calls: int = MAX_PART_CALLS) -> dict[str, int]:
     """저장된 자료 단위를 분류해 unit_assignments에 남긴다. 건수 요약을 돌려준다."""
     options = charter_match.charter_options(db)
     if not options:
@@ -189,6 +192,7 @@ def classify(db, client=None, max_calls: int = MAX_CALLS, on_progress=None) -> d
     if stored_docs != expected:
         units.save(db)
     loaded = units.load(db)
+    model_client = client
     names = {o["name"] for o in options}
     users = {k: a for k, a in _stored_user(db).items() if a.bucket != ITEM or a.item_name in names}
 
@@ -256,6 +260,7 @@ def classify(db, client=None, max_calls: int = MAX_CALLS, on_progress=None) -> d
                     current.bucket == ITEM and current.confidence in ("high", "medium")):
                 result[key] = Assignment(key, name, ITEM, "medium", BASIS_CITE, "문서번호를 서로 인용하는 공문")
 
+    parts = _assign_parts(db, model_client, options, loaded, result, max_part_calls)
     with db.transaction():
         db.con.execute("DELETE FROM unit_assignments WHERE decided_by = 'ai'")
         # 분장에서 사라진 항목을 가리키는 사람의 지정은 쓸 수 없다.
@@ -264,15 +269,47 @@ def classify(db, client=None, max_calls: int = MAX_CALLS, on_progress=None) -> d
         for a in result.values():
             if a.decided_by == "ai":
                 db.con.execute(
-                    "INSERT INTO unit_assignments(unit_key, item_name, bucket, confidence, basis, evidence, decided_by) "
-                    "VALUES (?,?,?,?,?,?, 'ai') ON CONFLICT(unit_key) DO NOTHING",
-                    (a.unit_key, a.item_name, a.bucket, a.confidence, a.basis, a.evidence))
+                    "INSERT INTO unit_assignments(unit_key, item_name, bucket, confidence, basis, evidence, decided_by, part) "
+                    "VALUES (?,?,?,?,?,?, 'ai', ?) ON CONFLICT(unit_key) DO NOTHING",
+                    (a.unit_key, a.item_name, a.bucket, a.confidence, a.basis, a.evidence, parts.get(a.unit_key, "")))
+        for key, a in result.items():
+            if a.decided_by == "user" and a.bucket == ITEM:
+                db.con.execute("UPDATE unit_assignments SET part = ? WHERE unit_key = ?", (parts.get(key, ""), key))
     counts = {ITEM: 0, OUTSIDE: 0, UNKNOWN: 0}
     for a in result.values():
         counts[a.bucket] += 1
     counts["model_calls"] = calls
     counts["not_judged"] = skipped
     return counts
+
+
+def _assign_parts(db, client, options: list[dict], loaded: list[dict], result: dict[str, Assignment],
+                  max_calls: int = MAX_PART_CALLS) -> dict[str, str]:
+    """분장 항목에 세부업무가 적혀 있으면, 그 항목으로 나뉜 단위가 어느 세부업무인지 정한다.
+
+    항목 이름과 같은 방식이다 — 제목·폴더에 세부업무 이름이 통째로 있으면 규칙으로, 아니면 모델이
+    세부업무 가운데 하나(또는 해당 없음)를 고른다. 해당 없음은 항목 전체에 속한 자료로 둔다.
+    """
+    details = {o["name"]: [{"id": n, "name": d, "details": []} for n, d in enumerate(o["details"], start=1)]
+               for o in options if len(o["details"]) >= 2}
+    out: dict[str, str] = {}
+    calls = 0
+    for unit in sorted(loaded, key=lambda u: -len(u["doc_ids"])):
+        a = result.get(unit["key"])
+        if a is None or a.bucket != ITEM or a.item_name not in details:
+            continue
+        choices = details[a.item_name]
+        card = unit["card"]
+        winner = _by_name(choices, _identity(card, unit["label"]), min_len=2)
+        if winner is None and client is not None and calls < max_calls:
+            text = _identity(card, unit["label"]) + " " + _body_text(card)
+            verdict = charter_match.judge(db, client, _candidates(choices, text), _material(unit))
+            calls += 1
+            if verdict is not None and verdict.item_id is not None:
+                winner = next(c for c in choices if c["id"] == verdict.item_id)
+        if winner is not None:
+            out[unit["key"]] = winner["name"]
+    return out
 
 
 def set_user_assignment(db, unit_key: str, item_name: str | None, bucket: str | None = None) -> None:
@@ -282,13 +319,14 @@ def set_user_assignment(db, unit_key: str, item_name: str | None, bucket: str | 
         db.con.execute(
             "INSERT INTO unit_assignments(unit_key, item_name, bucket, confidence, basis, decided_by) "
             "VALUES (?,?,?, 'high', ?, 'user') ON CONFLICT(unit_key) DO UPDATE SET item_name=excluded.item_name, "
-            "bucket=excluded.bucket, confidence='high', basis=excluded.basis, decided_by='user', updated_at=datetime('now')",
+            "bucket=excluded.bucket, confidence='high', basis=excluded.basis, decided_by='user', part='', "
+            "updated_at=datetime('now')",
             (unit_key, item_name if bucket == ITEM else None, bucket, BASIS_USER))
 
 
 def assignments(db) -> dict[str, Assignment]:
     return {r["unit_key"]: Assignment(r["unit_key"], r["item_name"], r["bucket"], r["confidence"], r["basis"],
-                                      r["evidence"], r["decided_by"])
+                                      r["evidence"], r["decided_by"], r["part"])
             for r in db.con.execute("SELECT * FROM unit_assignments")}
 
 

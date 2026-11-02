@@ -794,6 +794,7 @@ class OfficialTask:
     round_of: dict[int, str] = field(default_factory=dict)
     protected: set[int] = field(default_factory=set)   # 사람이 다른 업무에 둔 공문 파일
     description: str = ""                              # 분류로 만든 업무의 설명(비어 있으면 공문 업무 설명)
+    part_of: dict[int, str] = field(default_factory=dict)  # 문서 → 분장 항목 안의 세부업무
 
     @property
     def official_ids(self) -> list[int]:
@@ -894,26 +895,39 @@ def _assigned_plan(db: Database, client, protected: set[int]) -> list[OfficialTa
     plan: list[OfficialTask] = []
     for name, group in classify_units.by_item(db).items():
         local: dict[int, tuple[str, str]] = {}
+        part_of: dict[int, str] = {}
+        unit_round: dict[int, str] = {}
         kinds: Counter = Counter()
         ai = 0
         for unit in group:
             assignment = unit["assignment"]
             kinds[unit["kind"]] += 1
             ai += assignment.basis == classify_units.BASIS_AI
+            hint = folders.parse_part(unit["label"]).round_key
             for doc_id in unit["doc_ids"]:
                 if doc_id not in protected:
                     local[doc_id] = (assignment.confidence, f"{ASSIGN_EVIDENCE} · {assignment.basis}")
+                    if assignment.part:
+                        part_of[doc_id] = assignment.part
+                    unit_round[doc_id] = hint
         if not local:
             continue
         marks = ", ".join("?" * len(local))
-        years = {r["id"]: str(r["eff_year"] or "") for r in db.con.execute(
-            f"SELECT id, eff_year FROM documents WHERE id IN ({marks})", list(local))}
+        years = {}
+        for r in db.con.execute(f"SELECT id, eff_year FROM documents WHERE id IN ({marks})", list(local)):
+            year = str(r["eff_year"] or "")
+            hint = unit_round.get(r["id"], "")
+            # '하반기'·'제2차'처럼 해가 없는 회차 표시는 문서의 연도를 앞에 붙인다.
+            years[r["id"]] = hint if re.match(r"\d{4}", hint) else " ".join(p for p in (year, hint) if p)
         description = (f"업무 분장 ‘{name}’으로 분류한 자료 {len(local)}건"
                        f"(공문 {kinds['letter']} · 폴더 {kinds['folder']} · 낱장 {kinds['loose']}).")
         if ai:
             description += f" 이 가운데 {ai}건은 AI가 분장 항목과 하는 일이 같다고 판단했습니다."
+        if part_of:
+            counts = Counter(part_of.values())
+            description += " 세부업무: " + ", ".join(f"{part} {n}건" for part, n in counts.most_common()) + "."
         plan.append(OfficialTask(name=name, basis="업무 분장", records=[], local=local,
-                                 round_of=years, description=description))
+                                 round_of=years, description=description, part_of=part_of))
     plan.sort(key=lambda task: -len(task.local))
     return plan
 
@@ -1048,7 +1062,7 @@ def _save_official(db: Database, result: Discovery, plan) -> None:
         for confidence, evidence in sorted(set(task.local.values()), key=lambda v: (rank[v[0]], v[1])):
             ids = sorted(doc_id for doc_id, value in task.local.items() if value == (confidence, evidence))
             result.matched_to_official += _attach(db, task_id, ids, confidence=confidence,
-                                                  evidence=evidence, rounds=task.round_of)
+                                                  evidence=evidence, rounds=task.round_of, parts=task.part_of)
         _store_reading(db, task_id, every)
         result.named_by_official += 1
 
@@ -1234,7 +1248,8 @@ def _upsert_task(db: Database, named: Named, group: Cluster, confidence: str | N
 
 
 def _attach(db: Database, task_id: int, doc_ids: list[int], confidence: str = "medium",
-            evidence: str | None = None, rounds: dict[int, str] | None = None) -> int:
+            evidence: str | None = None, rounds: dict[int, str] | None = None,
+            parts: dict[int, str] | None = None) -> int:
     """문서를 업무에 붙인다. 사용자가 직접 배정한 문서는 건드리지 않는다."""
     if not doc_ids:
         return 0
@@ -1248,9 +1263,9 @@ def _attach(db: Database, task_id: int, doc_ids: list[int], confidence: str = "m
     }
     targets = [doc_id for doc_id in doc_ids if doc_id not in manual]
     db.con.executemany(
-        "INSERT INTO task_docs(task_id, doc_id, origin, confidence, evidence, round_key) "
-        "VALUES (?, ?, 'ai', ?, ?, ?) ON CONFLICT(task_id, doc_id) DO NOTHING",
-        [(task_id, doc_id, confidence, evidence, (rounds or {}).get(doc_id, ""))
+        "INSERT INTO task_docs(task_id, doc_id, origin, confidence, evidence, round_key, part) "
+        "VALUES (?, ?, 'ai', ?, ?, ?, ?) ON CONFLICT(task_id, doc_id) DO NOTHING",
+        [(task_id, doc_id, confidence, evidence, (rounds or {}).get(doc_id, ""), (parts or {}).get(doc_id, ""))
          for doc_id in targets],
     )
     return len(targets)

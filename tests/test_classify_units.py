@@ -192,3 +192,20 @@ def test_review_rows_and_summary(db):
     cu.set_user_assignment(db, rows[0].unit_key, "고객 응대 혁신")
     assert cu.review_rows(db) == []                       # 사람이 정한 것은 더 묻지 않는다
     assert {r["name"]: r for r in cu.summary_by_item(db)}["고객 응대 혁신"]["user"] == 1
+
+
+def test_parts_inside_an_item_by_name_and_by_model(db):
+    setup(db, "예산 편성\n  - 본예산\n  - 추경예산\n  - 결산")
+    doc(db, "예산 편성/본예산/a.xlsx", "x")
+    doc(db, "예산 편성/본예산/b.xlsx", "x")
+    doc(db, "예산 편성/잡다/c.xlsx", "추경 세입 조정")
+    doc(db, "예산 편성/잡다/d.xlsx", "추경 세출 조정")
+    cu.classify(db)
+    mine = result(db)
+    assert mine["본예산"].part == "본예산"          # 폴더 이름에 세부업무가 통째로 있다
+    assert mine["잡다"].part == ""                  # 규칙이 못 정했고 모델도 없다
+    cu.classify(db, LLM(pick="추경"))
+    assert result(db)["잡다"].part == "추경예산"
+    key = result(db)["잡다"].unit_key
+    cu.set_user_assignment(db, key, "예산 편성")        # 사람이 항목을 다시 지정하면 세부업무는 다시 정한다
+    assert cu.assignments(db)[key].part == ""

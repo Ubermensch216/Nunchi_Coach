@@ -18,7 +18,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 # 이 앱이 쓰는 스키마 버전. schema.sql과 함께 올린다.
-SCHEMA_VERSION = "18"
+SCHEMA_VERSION = "19"
 
 
 def column_exists(con: sqlite3.Connection, table: str, column: str) -> bool:
@@ -590,6 +590,14 @@ def _to_v18(con: sqlite3.Connection) -> None:
         )""")
 
 
+def _to_v19(con: sqlite3.Connection) -> None:
+    """분장 항목 안의 세부업무: 자료 단위 분류 결과와 업무 문서에 part 열을 더한다."""
+    for table in ("task_docs", "unit_assignments"):
+        # 표가 아직 없는 옛 DB는 schema.sql이 새 모양으로 만든다.
+        if con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone():
+            add_column(con, table, "part", "part TEXT NOT NULL DEFAULT ''")
+
+
 STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "2": _to_v2,
     "3": _to_v3,
@@ -608,6 +616,7 @@ STEPS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "16": _to_v16,
     "17": _to_v17,
     "18": _to_v18,
+    "19": _to_v19,
 }
 
 

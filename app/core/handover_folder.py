@@ -221,7 +221,7 @@ def export_handover_folder(
 
         rows = db.con.execute(
             "SELECT d.id, d.path, d.filename, d.ext, d.hash, d.eff_year, d.eff_date, "
-            "td.confidence, td.evidence, td.round_key, s.kind AS source_kind, s.path AS source_root "
+            "td.confidence, td.evidence, td.round_key, td.part, s.kind AS source_kind, s.path AS source_root "
             "FROM task_docs td "
             "JOIN documents d ON d.id = td.doc_id "
             "JOIN sources s ON s.id = d.source_id "
@@ -246,7 +246,9 @@ def export_handover_folder(
                 missing_in_task.append(row["filename"] or str(src_path))
                 continue
 
-            dest_dir = task_dir / _safe_name(year_label, UNKNOWN_YEAR) / sub_label
+            # 분장에 세부업무가 있으면 <업무>/<세부업무>/<연도>/…로 나눈다.
+            base_dir = task_dir / _safe_name(row["part"]) if row["part"] else task_dir
+            dest_dir = base_dir / _safe_name(year_label, UNKNOWN_YEAR) / sub_label
             dest_dir.mkdir(parents=True, exist_ok=True)
             dest_path = _unique_path(dest_dir, _export_filename(row, off_info))
             # 다시 한 번 대상 파일이 안전한지 확인 후 사본 복사

@@ -206,6 +206,13 @@ def brief_markdown(db, task_id: int) -> str:
         charted.append(f"{found['name']}{detail} (근거: {where})")
     section("업무분장", charted, "분장표에 적힌 이 업무")
 
+    parted = db.con.execute(
+        "SELECT td.part, COUNT(*) AS n, MAX(d.eff_year) AS last FROM task_docs td JOIN documents d ON d.id = td.doc_id "
+        "WHERE td.task_id = ? AND td.part != '' AND d.missing_since IS NULL GROUP BY td.part ORDER BY n DESC, td.part",
+        (task_id,)).fetchall()
+    section("세부업무", [f"{row['part']}: 자료 {row['n']}건" + (f" (최근 {row['last']}년)" if row["last"] else "")
+                       for row in parted], "분장에 적은 세부업무별 자료")
+
     from . import gongmun_facts as gf
     read = []
     for fact in gf.facts_for_task(db, task_id):

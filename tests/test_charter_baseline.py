@@ -127,3 +127,28 @@ def test_bad_model_answers_are_not_applied(db, llm):
     assert "일일 상담 현황 점검" in names(db) and "고객 응대 혁신" not in [
         n for n in names(db) if db.con.execute(
             "SELECT 1 FROM task_docs td JOIN tasks t ON t.id = td.task_id WHERE t.name = ?", (n,)).fetchone()]
+
+
+def test_parts_and_rounds_reach_task_docs_brief_and_handover_folder(db, tmp_path):
+    from app.core import handover_folder, notebook_tasks
+    source = db.con.execute("INSERT INTO sources (path, kind) VALUES (?, 'local')", (str(tmp_path / "자료"),)).lastrowid
+    root = tmp_path / "자료"
+    for rel in ("예산 편성/2024 하반기 본예산/요구서.txt", "예산 편성/2024 하반기 본예산/집행.txt",
+                "예산 편성/결산/a.txt", "예산 편성/결산/b.txt"):
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("예산 자료", encoding="utf-8")
+        doc = db.con.execute(
+            "INSERT INTO documents (source_id, path, filename, ext, hash, eff_year, parse_status) "
+            "VALUES (?, ?, ?, '.txt', ?, 2024, 'ok')", (source, str(path), path.name, rel)).lastrowid
+        db.con.execute("INSERT INTO chunks(doc_id, ordinal, locator, text) VALUES (?, 0, 'p1', '예산 자료')", (doc,))
+    charter.save_user_items(db, charter.parse_user_text("예산 편성\n  - 본예산\n  - 결산"))
+    discover(db)
+    task_id = db.con.execute("SELECT id FROM tasks WHERE name = '예산 편성'").fetchone()["id"]
+    rows = db.con.execute("SELECT part, round_key FROM task_docs WHERE task_id = ?", (task_id,)).fetchall()
+    assert sorted(r["part"] for r in rows) == ["결산", "결산", "본예산", "본예산"]
+    assert {r["round_key"] for r in rows if r["part"] == "본예산"} == {"2024 하반기"}
+    assert "세부업무" in notebook_tasks.brief_markdown(db, task_id)
+    out = tmp_path / "out"
+    handover_folder.export_handover_folder(db, out)
+    assert (out / "예산 편성" / "본예산").is_dir() and (out / "예산 편성" / "결산").is_dir()

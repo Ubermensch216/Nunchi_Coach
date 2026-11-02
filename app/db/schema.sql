@@ -197,6 +197,7 @@ CREATE TABLE IF NOT EXISTS task_docs (
     evidence   TEXT,
     is_primary INTEGER NOT NULL DEFAULT 0,    -- v2: 이 업무의 대표 문서
     round_key  TEXT NOT NULL DEFAULT '',      -- 회차 ('2024 하반기'). 빈 값은 모름
+    part       TEXT NOT NULL DEFAULT '',      -- v19: 분장 항목 안의 세부업무. 빈 값은 항목 전체
     PRIMARY KEY (task_id, doc_id)
 );
 CREATE INDEX IF NOT EXISTS idx_task_docs_doc ON task_docs(doc_id);
@@ -693,6 +694,7 @@ CREATE TABLE IF NOT EXISTS unit_assignments (
     basis      TEXT NOT NULL DEFAULT '',      -- 이름 일치 | AI 판단 | 인용으로 이어진 공문 | 사용자 지정 …
     evidence   TEXT NOT NULL DEFAULT '',
     decided_by TEXT NOT NULL DEFAULT 'ai',    -- ai | user
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    part       TEXT NOT NULL DEFAULT ''       -- v19: 항목 안의 세부업무(분장에 적은 세부업무 중 하나)
 );
 
