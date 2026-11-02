@@ -205,3 +205,23 @@ CHARTER_SCHEMA: dict[str, Any] = {
     },
     "required": ["items"],
 }
+
+
+GONGMUN_FACTS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "facts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["summary", "todo", "schedule", "submit"]},
+                    "text": {"type": "string"},
+                    "evidence": {"type": "string"},
+                },
+                "required": ["kind", "text", "evidence"],
+            },
+        },
+    },
+    "required": ["facts"],
+}
