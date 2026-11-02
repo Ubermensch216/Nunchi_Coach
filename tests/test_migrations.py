@@ -289,7 +289,8 @@ def test_v14_project_upgrades_to_v15_and_adds_doc_fingerprint(tmp_path: Path):
     db = Database(path)
     db.init()
 
-    assert db.get_meta("schema_version") == "15"
+    from app.db.migrations import SCHEMA_VERSION
+    assert db.get_meta("schema_version") == SCHEMA_VERSION
     cols = {r[1] for r in db.con.execute("PRAGMA table_info(task_analysis_state)")}
     assert "doc_fingerprint" in cols
 
@@ -297,4 +298,32 @@ def test_v14_project_upgrades_to_v15_and_adds_doc_fingerprint(tmp_path: Path):
     assert row["task_id"] == 1
     assert row["state"] == "completed"
     assert row["doc_fingerprint"] is None
+    db.close()
+
+
+def test_v15_charter_items_survive_rebuild_and_accept_user_rows(tmp_path: Path):
+    """v16: 분장 항목 표를 다시 만들어도 기존 항목이 남고, 문서 없는 사용자 입력이 들어간다."""
+    path = tmp_path / "project.db"
+    db = Database(path)
+    db.init()
+    db.close()
+    con = sqlite3.connect(path)
+    con.execute("DROP TABLE charter_items")
+    con.execute("""CREATE TABLE charter_items (
+        id INTEGER PRIMARY KEY, doc_id INTEGER NOT NULL, locator TEXT NOT NULL DEFAULT '',
+        name TEXT NOT NULL, parent_id INTEGER, owner TEXT NOT NULL DEFAULT '',
+        weight REAL NOT NULL DEFAULT 1.0, decided_by TEXT NOT NULL DEFAULT 'ai',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')))""")
+    con.execute("INSERT INTO sources(id, path) VALUES (1, 'D:/x')")
+    con.execute("INSERT INTO documents(id, source_id, path, filename, ext) VALUES (1, 1, 'D:/x/a.xlsx', 'a.xlsx', '.xlsx')")
+    con.execute("INSERT INTO charter_items(id, doc_id, name) VALUES (7, 1, '옛 업무')")
+    con.execute("UPDATE meta SET value = '15' WHERE key = 'schema_version'")
+    con.commit()
+    con.close()
+
+    db = Database(path)
+    db.init()
+    row = db.con.execute("SELECT name, source FROM charter_items WHERE id = 7").fetchone()
+    assert (row["name"], row["source"]) == ("옛 업무", "file")
+    db.con.execute("INSERT INTO charter_items(doc_id, name, source) VALUES (NULL, '내 업무', 'user')")
     db.close()
