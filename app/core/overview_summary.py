@@ -39,6 +39,8 @@ _JOSA = sorted(("으로써", "에서는", "으로는", "에게서", "까지는",
                 "으로", "에게", "까지", "부터", "처럼", "보다", "하는", "하여", "하고", "하며",
                 "되는", "되어", "된", "한", "은", "는", "이", "가", "을", "를", "에", "의",
                 "와", "과", "로", "도", "만", "및"), key=len, reverse=True)
+# 조사를 떼고 남은 동사·어미 꼴('단축되었다', '분보다', '분으')은 키워드가 아니다.
+_NOT_NOUN = ("다", "며", "서", "고", "게", "으", "보다", "하여", "되어", "니다")
 _STOP = {
     "확인", "필요", "경우", "위하여", "위해", "협조", "주시기", "바랍니다", "있음", "있습니다",
     "대한", "관련", "해당", "다음", "같이", "아래", "또한", "다만", "등을", "부탁드립니다",
@@ -75,7 +77,8 @@ def keywords(texts: list[str], limit: int = _MAX_KEYWORDS) -> list[str]:
     for index, text in enumerate(texts):
         words = {_stem(w) for w in _WORD.findall(text)}
         for word in words:
-            if len(word) >= 2 and word not in _STOP and not word.isdigit():
+            if (len(word) >= 2 and word not in _STOP and not word.isdigit()
+                    and not word.endswith(_NOT_NOUN)):
                 counts[word] += 1
                 first.setdefault(word, index)
     ranked = sorted(counts, key=lambda w: (-counts[w], first[w], w))

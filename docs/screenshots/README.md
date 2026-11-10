@@ -1,46 +1,62 @@
 # 화면 캡처 — 촬영 조건
 
-촬영일: **2026-10-08** · 소스 기준: 커밋 `cca4444` 위에 UI 개편(글자 크기 체계·밑줄 탭·본문 기둥 정렬·상태 표시 정리·Pretendard 동봉)을 얹은 작업 폴더 상태. 촬영 시점에 이 변경은 아직 커밋되지 않았습니다 — 커밋한 뒤 여기에 그 커밋을 적어 주세요. · 루트 [README](../../README.md)(사용 설명서)가 이 폴더의 이미지를 씁니다.
+최신 갱신일: **2026-11-10** · 소스 기준: 전임자 업무 분장 필수 입력, 시작 잠금 사유 인라인 표시, 자료 단위(공문·폴더·낱장) 분장 분류(P1~P5), 자료 분류 확인 대화상자, 업무 개요 종합 요약(`overview_summary`) 반영 상태. · 루트 [README](../../README.md)(사용 설명서)가 이 폴더의 이미지를 씁니다.
 
 ## 촬영 조건
 
-- 현재 소스의 `MainWindow`·대화상자를 Windows에서 실제 PySide6 위젯으로 그려 `QWidget.grab()`으로 저장했습니다. 다시 그린 시안이나 생성 이미지가 아닙니다. 창은 화면에 띄우지 않고 그렸습니다(`WA_DontShowOnScreen`).
-- 자료는 **합성 자료 90건**입니다 — `app.tools.make_fixtures`의 합성 표본 77건과 `tests/fixtures/scenarios/corpus.json`의 시나리오 자료 13건. 실제 기관 자료·개인정보는 없습니다.
-- 이 폴더(`data/manual-demo/전임자자료`)만 연결한 빈 프로젝트에서 분석 파이프라인을 처음부터 끝까지 한 번 돌렸습니다(`python -m app.tools.scan … --fresh`). 사람이 확인·수정한 것은 없습니다. 그래서 화면의 `인수인계 0%`, `확인 필요`는 연출이 아니라 그 상태 그대로입니다.
-- 분석 결과: 문서 90건(완전 중복 8건), 업무 9개(그중 2개는 파일명으로 묶은 낮은 확신의 제안), 배정 87건·미분류 3건, 업무 항목 14개, 문서에 적힌 절차 8단계, 문장에서 찾은 내용 4건, 확인할 공백 35건, 질문용 조각 154개. 분석 시간은 재지 않았습니다.
-- 모델은 이 PC의 Ollama에 설치된 것을 썼습니다 — 생성 모델 `gemma4:e2b`, 검색 모델 `bge-m3`. 업무 이름·설명과 질문의 답은 모델이 만든 것이라 실행마다 달라질 수 있습니다(이번 실행에서는 행정사무감사 묶음의 이름이 ‘감사준비’로 붙었습니다).
-- 질문 화면의 대기·답변·보류는 실제 실행 결과입니다. 답을 주입하지 않았습니다. 촬영 때 물은 세 질문 가운데 둘은 답했고 하나(자료에 없는 내용)는 보류했습니다.
-- 주 화면 1440×960, 자료 폴더 연결 화면 1120×720, 대화상자는 각자의 크기. 글자 크기 ‘보통’, 테마 ‘밝게’(23번만 어두운 테마). 글꼴은 함께 싣는 Pretendard. 기준일은 촬영일(2026-10-08)입니다.
-- 테마는 촬영용 프로젝트의 설정에 ‘밝게’로 저장해 두고 찍었습니다. 그래서 20번 화면에 ‘밝게’가 골라져 있습니다(새 프로젝트의 기본값은 ‘시스템’).
-- 일부 화면에 합성 자료의 로컬 경로(`D:\Dev\Nunchi_Coach\data\manual-demo\…`)가 보입니다. `data/`는 저장소에 올리지 않는 폴더입니다.
+- 현재 소스의 `MainWindow`·대화상자를 Windows에서 실제 PySide6 위젯으로 그려 `QWidget.grab()`으로 저장했습니다. 다시 그린 시안이나 생성 이미지가 아닙니다. 창은 화면에 띄우지 않고 오프스크린(`QT_QPA_PLATFORM=offscreen`)으로 렌더링했습니다.
+- Pretendard 번들 글꼴 및 FreeType 벡터 글꼴 엔진(`text_rendering.configure()`)을 적용하여 렌더링했습니다.
+- 자료는 합성 자료 및 시나리오 픽스처 기준이며 실제 기관 자료·개인정보는 포함되지 않았습니다.
+- 주 화면 1440×960, 자료 폴더 연결 화면 1120×720, 대화상자는 각자의 규격 크기(720×480 ~ 880×640). 글자 크기 ‘보통’, 테마 ‘밝게’(23번만 어두운 테마).
 
 ## 이미지 목록
 
 | 파일 | 화면 |
 |---|---|
-| [01-launcher.png](01-launcher.png) | 시작 화면 — 인수인계 선택 |
-| [02-onboarding.png](02-onboarding.png) | 자료 폴더 연결(빈 인수인계) |
-| [03-tasks.png](03-tasks.png) | 업무 목록 |
-| [04-work-next-actions.png](04-work-next-actions.png) | 업무 상세 › 지금 할 일 — 다음 행동(업무 ‘실적보고’) |
-| [05-work-evidence.png](05-work-evidence.png) | 지금 할 일 — 해야 할 일과 근거 서랍(제출기한의 근거) |
-| [06-work-steps.png](06-work-steps.png) | 지금 할 일 — 처리 순서, 과거 수행 사례 |
-| [07-work-gaps.png](07-work-gaps.png) | 지금 할 일 — 확인이 필요한 정보 |
-| [08-work-statements.png](08-work-statements.png) | 지금 할 일 — 문장에서 찾은 내용(파일명으로 묶은 업무 ‘보조금’) |
-| [09-task-reading.png](09-task-reading.png) | 업무 상세 › 먼저 읽을 문서(업무 ‘감사준비’) |
-| [10-task-when.png](10-task-when.png) | 업무 상세 › 언제 하는 일인가 |
-| [11-task-how.png](11-task-how.png) | 업무 상세 › 어떻게 처리했나 |
+| [01-launcher.png](01-launcher.png) | 시작 화면 — 인수인계 선택 및 새 인수인계 시작 |
+| [02-onboarding.png](02-onboarding.png) | 자료 폴더 연결 — 전임자의 업무 분장 필수 입력, 분석 시작 잠금 사유 안내, 자료 지도(개괄) |
+| [03-tasks.png](03-tasks.png) | 업무 홈 — 상단 4대 메뉴(업무·챙길 일·업무노트·인수인계), 업무 카드, 연간 일정표 |
+| [04-work-next-actions.png](04-work-next-actions.png) | 업무 상세 › 일정·진행 — 다음 행동과 해야 할 일 |
+| [05-work-evidence.png](05-work-evidence.png) | 업무 상세 › 업무 자료(근거) — 문서별 근거 인용문과 원본 열기 |
+| [06-work-steps.png](06-work-steps.png) | 업무 상세 › 일정·진행 — 처리 순서 및 수행 기록 |
+| [07-work-gaps.png](07-work-gaps.png) | 업무 상세 › 일정·진행 — 확인이 필요한 정보(공백) |
+| [08-work-statements.png](08-work-statements.png) | 업무 상세 › 업무 안내 — 문장에서 찾은 내용의 종합 요약, 핵심 키워드, 근거 문장 접기 |
+| [09-task-reading.png](09-task-reading.png) | 업무 상세 › 먼저 읽을 문서 — 읽을 순서와 추천 근거 |
+| [10-task-when.png](10-task-when.png) | 업무 상세 › 언제 하는 일인가 — 주기 및 연도별 분포 |
+| [11-task-how.png](11-task-how.png) | 업무 상세 › 어떻게 처리했나 — 지난 회차 처리 순서 |
 | [12-calendar-year.png](12-calendar-year.png) | 일정 › 연간 패턴 |
 | [13-calendar-now.png](13-calendar-now.png) | 일정 › 지금 챙길 일 |
 | [14-calendar-review.png](14-calendar-review.png) | 일정 › 확인 필요 |
-| [15-documents.png](15-documents.png) | 문서 — 목록과 선택한 문서의 상세 |
+| [15-documents.png](15-documents.png) | 문서 — 검색, 필터, 문서 목록과 선택한 문서의 상세 |
 | [16-ask-waiting.png](16-ask-waiting.png) | 질문 — 답을 만드는 중 |
 | [17-ask-answer.png](17-ask-answer.png) | 질문 — 답변과 근거 원문 |
 | [18-ask-withheld.png](18-ask-withheld.png) | 질문 — 답변 보류 |
 | [19-snapshots.png](19-snapshots.png) | 업무 복원본 대화상자 |
 | [20-settings-appearance.png](20-settings-appearance.png) | 설정 › 화면 |
-| [21-settings-sources.png](21-settings-sources.png) | 설정 › 자료 폴더 |
-| [22-settings-system.png](22-settings-system.png) | 설정 › 시스템 |
-| [23-tasks-dark.png](23-tasks-dark.png) | 어두운 테마의 업무 목록 |
+| [21-settings-sources.png](21-settings-sources.png) | 설정 › 자료 폴더 — 전임자의 업무 분장 카드 |
+| [22-settings-system.png](22-settings-system.png) | 설정 › 시스템 — AI 모델, 브리지, 저장 위치 |
+| [23-tasks-dark.png](23-tasks-dark.png) | 어두운 테마의 업무 홈 |
+| [24-notebook.png](24-notebook.png) | 업무노트 작업 화면 — 출처 \| 대화 \| 스튜디오 |
+| [26-notebook-home.png](26-notebook-home.png) | 업무노트 홈 — 업무별 자동 생성 노트와 카드 |
+| [27-initial-analysis.png](27-initial-analysis.png) | 최초 분석 진행 화면 |
+| [28-initial-analysis-paused.png](28-initial-analysis-paused.png) | 최초 분석 명시적 중단 및 이어서 분석 |
+| [29-work-home.png](29-work-home.png) | 업무 홈 — 카드 목록과 연간 일정 |
+| [30-work-guide.png](30-work-guide.png) | 업무 상세 › 업무 안내 — 좌측 업무 목록과 종합 요약·안내 |
+| [55-classification-review.png](55-classification-review.png) | 자료 분류 확인 — 분장 항목별 자료 단위(공문·폴더·낱장) 배정 및 교정 |
+
+## 2026-11-10 촬영 및 화면 현행화
+
+1. **온보딩 화면 (`02-onboarding.png`) 현행화:**
+   - 전임자의 업무 분장이 분석의 필수 기준으로 지정됨에 따라, 분장 입력란이 비어 있으면 '분석 시작' 단추가 잠기고 단추 옆에 이유(예: *"전임자의 업무 분장을 입력하세요"*, *"자료 폴더를 하나 이상 추가하세요"*)가 실시간으로 안내되는 최신 동작을 반영했습니다.
+   - 스캔 직후 바로 확인할 수 있는 **자료 지도 (개괄)** 카드(폴더 트리, 문서 수, 연도 띠, 업무 비중)를 포함했습니다.
+2. **설정 › 자료 폴더 (`21-settings-sources.png`) 현행화:**
+   - 기존의 전임자 이름 입력란이 제거되고, 내가 맡은 업무 체계를 관리·저장할 수 있는 **전임자의 업무 분장** 카드가 추가된 최신 UI를 렌더링했습니다.
+3. **업무 개요 종합 요약 (`30-work-guide.png`, `08-work-statements.png`):**
+   - 개별 문장을 수십 줄 나열하던 기존 방식에서, 문장을 종합한 400자 이내의 **종합 요약**과 **핵심 키워드**(3~8개)를 업무 개요 맨 위에 먼저 배치하고, 원문 문장은 **근거 문장 N건 펼치기/접기**로 제공하는 최신 UI 구조를 반영했습니다.
+4. **자료 분류 확인 대화상자 (`55-classification-review.png`) 신규 추가:**
+   - P1~P5 프로세스에 따라 자료 단위(공문 건, 폴더 묶음, 낱장)가 사무분장 항목에 분류된 결과를 확인하고 사람이 직접 교정할 수 있는 대화상자 화면을 추가했습니다.
+5. **업무 홈 및 상세 (`03-tasks.png`, `29-work-home.png`, `04~07`):**
+   - 상단 4대 주 메뉴(업무·챙길 일·업무노트·인수인계)와 Pretendard FreeType 렌더링, 일정/진행 및 업무 자료(근거) 탭 통합 구조를 완결되게 반영했습니다.
 
 ## 촬영하지 않은 것
 

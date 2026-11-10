@@ -40,7 +40,7 @@
 | `.gitignore`에 `*.bak-v*`, `*.sqlite`, `*.sqlite3` 추가 | 완료 |
 | 추적 금지 검사 `python -m app.tools.repo_guard` 신설, 시험 `tests/test_repo_guard.py` | 완료 (git이 없으면 종료 코드 2 = 검사 못 함. 통과로 치지 않는다) |
 | CI에 `guard` 작업 추가(GitHub Actions·GitLab) | 완료 — **추적 해제 전에는 이 작업이 실패한다. 의도한 동작이다** |
-| `.analysis_audit/` 추적 해제 | **사용자 실행 필요** (4절) |
+| `.analysis_audit/` 추적 해제 | 완료 (커밋 `ef7dd84`에서 추적 해제 완료, `repo_guard` 0건 무결성 통과) |
 | 과거 이력 감사 | **미실행** (4절) |
 | 이력 재작성·강제 푸시 | 하지 않는다. 별도 승인 사항 |
 

@@ -1,6 +1,6 @@
 # 요구사항 추적표
 
-> **갱신일:** 2026-10-31
+> **갱신일:** 2026-11-10
 
 이 문서는 눈치코치(NunchiCoach)의 핵심 요구사항별 구현 소스와 회귀 시험 매핑을 관리합니다. `TESTED_LOCAL`은 개발 PC의 합성 자료·모의 시험 통과를 뜻하며, 실제 기관 온나라 서버 검증 전인 항목은 `실환경 미확인`(`BLOCKED_EXTERNAL`)과 구분해 표기합니다.
 
@@ -38,3 +38,23 @@
 | P4b | 사본 인계 폴더 내보내기 (`<업무>/<연도>/공문·PC자료/` + 안내문 + `manifest.json`) | `app/core/handover_folder.py`, `app/ui/views/handover.py` | `tests/test_handover_folder.py` | `TESTED_LOCAL` | 원본 불변성(`output_policy`) 준수 |
 | P5 | 공문↔로컬 비교 고도화 (초안↔등록본 판 묶음, 공문 기둥 시간표·주기, 공백 3종, 값 충돌 출처 대비) | `app/core/versions.py`, `timeline.py`, `continuity.py`, `workstate.py`, `app/db/repo.py` | `tests/test_official_comparison.py` | `TESTED_LOCAL` | |
 | P6 (V1) | 실제 기관 온나라 5~10건 종단 실증 | — | — | `BLOCKED_EXTERNAL` | G1~G5 기관 환경 확보 후 수행 |
+
+## 4. 업무 분석 프로세스 개선 및 분장 기준 자료 단위 분류 (2026-10-31 ~ 2026-11-10)
+
+세부 설계와 상태표는 [업무 분석 프로세스 개선 계획서](업무분석_프로세스_개선계획서_2026-10-31.md)를 따른다.
+
+| ID | 요구사항 | 구현 소스 | 회귀 시험 | 상태 | 비고 |
+|---|---|---|---|---|---|
+| S1 | 빠른 개괄 (자료 지도) — 파싱 전 파일 메타데이터 집계 및 연도/비중 시각화 | `app/core/survey.py`, `app/ui/views/onboarding.py` | `tests/test_survey.py` | `TESTED_LOCAL` | 1,000건 2초 내 집계 |
+| S2 | 전임자 업무 분장 필수 입력 및 잠금 안내 (전임자 이름 제거, 스크롤 지원) | `app/core/charter.py`, `app/ui/views/onboarding.py`, `app/ui/views/settings.py` | `tests/test_charter.py`, `tests/test_charter_user_input.py`, `tests/test_onboarding.py` | `TESTED_LOCAL` | 분장 미입력 시 분석 시작 차단 |
+| S3 | 분장 ↔ 자료 대조 및 임베딩 의미 연결 | `app/ai/discover.py` | `tests/test_charter_discovery.py` | `TESTED_LOCAL` | `matched`, `charter_only`, `data_only` |
+| S4 | 막지 않는 업무 체계 확인 게이트 및 사본 인계 폴더 연계 | `app/core/structure_review.py`, `app/ui/views/structure_review.py` | `tests/test_structure_review.py` | `TESTED_LOCAL` | |
+| S5 | 업무 단위 집중 분석 무결성 및 일괄 분석 동등성 확보 | `app/jobs/pipeline.py`, `app/ui/widgets/work_folder_card.py` | `tests/test_pipeline_tasks.py`, `tests/test_s5_equivalence.py` | `TESTED_LOCAL` | 6대 결함 개선 완료 |
+| S6 | 업무 카드 ↔ 노트북 자동 연동, 5대 추천 질문 칩 및 정리본 판 관리 | `app/core/notebook_tasks.py`, `app/ui/views/notebooks/chat_panel.py` | `tests/test_auto_notebooks.py`, `tests/test_notebook_tasks.py` | `TESTED_LOCAL` | 추천 질문 QLineEdit 채우기 버그 수정 |
+| S8 | 분장 입력 기준 분석 재정비 및 공문 본문 추출 | `app/core/gongmun_facts.py`, `app/jobs/pipeline.py` | `tests/test_gongmun_facts.py` | `TESTED_LOCAL` | DB `v16` (`official_facts`) |
+| S9-P1 | 분류 대상인 자료 단위(공문·폴더·낱장)와 명함 구성 | `app/core/units.py`, `app/core/unit_cards.py` | `tests/test_units.py` | `TESTED_LOCAL` | DB `v17` (`work_units`, `work_unit_docs`) |
+| S9-P2 | 자료 단위를 사무분장 항목에 먼저 나누고 업무 생성 | `app/ai/classify_units.py`, `app/ai/charter_match.py` | `tests/test_classify_units.py` | `TESTED_LOCAL` | DB `v18` (`unit_assignments`), 프롬프트 v2 |
+| S9-P3 | 자료 분류 확인 대화상자 및 사용자 교정 학습 | `app/ui/views/classification_review.py` | `tests/test_classification_review.py` | `TESTED_LOCAL` | 교정 내용 다음 분석 영속 반영 |
+| S9-P4 | 분장 항목 안 세부업무 및 회차(`part`) 분할 | `app/core/units.py`, `app/ai/classify_units.py` | `tests/test_units.py`, `tests/test_classify_units.py` | `TESTED_LOCAL` | DB `v19` (`task_docs.part`, `unit_assignments.part`) |
+| S9-P5 | 업무 분류 정확도 측정 CLI 도구 | `app/tools/classify_eval.py` | `tests/test_classify_eval.py` | `TESTED_LOCAL` | 정답 CSV 대조 및 골드셋 검증 |
+| OV-01 | 업무 개요 종합 요약 및 핵심 키워드 도출, 근거 접기/펼치기 | `app/core/overview_summary.py`, `app/ui/widgets/work_brief.py` | `tests/test_overview_summary.py`, `tests/test_work_brief.py` | `TESTED_LOCAL` | 400자 이내 3~5문장 요약 + 핵심 키워드 3~8개 |
