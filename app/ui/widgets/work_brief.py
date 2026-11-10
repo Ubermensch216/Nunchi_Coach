@@ -140,7 +140,7 @@ class WorkBrief(_WrapFrame):
         if brief.stages:
             column.addWidget(ProcedureFlow(brief.stages, brief.ordered))
         if brief.details:
-            toggle = QPushButton('상세 안내 펼치기')
+            toggle = QPushButton(brief.details_label + ' 펼치기')
             toggle.setObjectName('Link')
             toggle.setCheckable(True)
             column.addWidget(toggle)
@@ -153,7 +153,7 @@ class WorkBrief(_WrapFrame):
                 if checked and detail_column.count() == 0:
                     detail_column.addWidget(BulletList(brief.details))
                 detail_holder.setVisible(checked)
-                toggle.setText('상세 안내 접기' if checked else '상세 안내 펼치기')
+                toggle.setText(brief.details_label + (' 접기' if checked else ' 펼치기'))
             toggle.toggled.connect(show_details)
 
 

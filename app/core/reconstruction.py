@@ -1580,7 +1580,7 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
     from datetime import datetime
 
     from . import changes, continuity, evaluation, handover_notes, matter_trail, matters, relations
-    from . import statements as statement_finder
+    from . import overview_summary, statements as statement_finder
 
     run = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1617,6 +1617,9 @@ def restore(db, basis: date | None = None, should_stop=lambda: False,
         told = (statement_finder.find(db, task["id"], client, basis, common)
                 if statements else [])
         totals["statements"] += len(told)
+        if statements:
+            # 찾은 문장들을 업무 개요 한 덩어리로 묶는다. 원문 문장은 그 근거로 남는다.
+            overview_summary.refresh(db, dict(task), told, client)
         before = changes.values(db, task["id"])
         with db.transaction():
             result = db.sync_task_items(

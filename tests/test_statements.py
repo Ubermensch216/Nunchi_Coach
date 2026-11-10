@@ -265,7 +265,8 @@ def test_the_same_sentences_reuse_the_last_answer(contract):
 
     # 같은 모델·같은 문장이면 다시 묻지 않는다.
     rc.restore(contract, BASIS, client=client)
-    assert len(client.prompts) == 1
+    # 문장 가르기 한 번 + 업무 개요 요약 한 번(요약을 못 낸 답도 다시 묻지 않는다).
+    assert len(client.prompts) == 2
     # 모델이 꺼져 있어도, 실패해도 남는다.
     rc.restore(contract, BASIS)
     rc.restore(contract, BASIS, client=FakeClient(error="연결 오류"))

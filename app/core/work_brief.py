@@ -31,6 +31,14 @@ class Brief:
     caption: str = ''
     ordered: bool = False
     details: list[str] = field(default_factory=list)
+    details_label: str = '상세 안내'
+
+
+def found_evidence(item):
+    """근거 문장 한 줄 — '[갈래] 문장 (파일명)'."""
+    category = (item.get('slot') or '').split(' · ')[0].strip()
+    names = list(dict.fromkeys(e.get('filename') for e in item.get('evidence') or [] if e.get('filename')))
+    return (f'[{category}] ' if category else '') + item['content'] + (f"  — {', '.join(names)}" if names else '')
 
 
 def points(text):
@@ -76,7 +84,7 @@ def _label(item):
     return rc.KIND_LABEL.get(item['kind'], item['slot'])
 
 
-def populate(task, card, sections, cycle=None):
+def populate(task, card, sections, cycle=None, summary=None):
     """UI 개요·표·흐름도는 상세 매뉴얼과 같은 분석 항목에서 구성한다."""
     task = dict(task)
     by_key = {s.key: s for s in sections}
@@ -115,7 +123,20 @@ def populate(task, card, sections, cycle=None):
             overview.bullets.append('업무 목적·담당 범위 · 요청 공문과 업무분장 확인 필요')
     if not any(i['kind'] == rc.SCOPE and i['slot'].replace(' ', '') == '담당업무' for i in items):
         overview.bullets.append('내 역할 확인 · 직접 작성 / 타 부서 취합 / 최종 검토·제출 담당 구분')
-    overview.facts.extend(Fact('문장에서 찾은 내용', i['content'], _state(i)) for i in card.found)
+    if card.found:
+        # 문장을 하나씩 늘어놓지 않는다. 종합 요약을 맨 위에 두고 원문 문장은 근거로 접어 둔다.
+        summary = summary or {}
+        by_model = summary.get('by') not in (None, 'rule')
+        state = (f"자료 문장 {len(card.found)}건 종합 · "
+                 + ('AI 요약 · ' if by_model else '자동 정리 · ') + '자료에서 추정 · 사람 확인 없음')
+        lead = []
+        if summary.get('summary'):
+            lead.append(Fact('종합 요약', summary['summary'], state))
+        if summary.get('keywords'):
+            lead.append(Fact('핵심 키워드', ' · '.join(summary['keywords'])))
+        overview.facts[:0] = lead
+        overview.details = [found_evidence(i) for i in card.found]
+        overview.details_label = f'근거 문장 {len(card.found)}건'
     by_key['overview'].brief = overview
 
     first = Brief(bullets=['대조 자료 · 이번 회차 요청 공문·시행계획 ↔ 지난 회차 제출본',

@@ -5,7 +5,8 @@ import re
 
 from dataclasses import dataclass, field
 
-from . import changes, matters, reconstruction as rc, workcard, workstate as ws, work_instruction, work_brief
+from . import (changes, matters, overview_summary, reconstruction as rc, workcard, workstate as ws,
+               work_instruction, work_brief)
 
 
 @dataclass
@@ -154,5 +155,6 @@ def build(db, task_id: int, card=None) -> Manual:
             }.get(section.key, '요청 공문·운영 지침에서 이 항목을 확인해 업무 안내에 보완하세요.'))
     if not by_key['basis'].lines:
         by_key['basis'].lines.append('자료에 적힌 내용과 현재 적용 여부·사람 확인 상태를 구분해 표시합니다.')
-    work_brief.populate(task, card, sections, cycle)
+    work_brief.populate(task, card, sections, cycle,
+                        summary=overview_summary.read(db, dict(task), card.found))
     return Manual(task_id, task['name'], sections)
