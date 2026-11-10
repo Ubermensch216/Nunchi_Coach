@@ -68,7 +68,9 @@ def grounded(evidence: str, material: str) -> bool:
 
 def _fingerprint(items: list[dict], material: str) -> str:
     raw = json.dumps([[i["id"], i["name"], i.get("details", [])] for i in items], ensure_ascii=False) + material
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:20]
+    # 변경 감지용 지문일 뿐 보안 서명이 아니다. 값을 바꾸면 저장된 지문이 모두 달라지므로 SHA1을 유지한다.
+    # nosemgrep: opt.security.rules.python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
+    return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:20]
 
 
 def judge(db, client, items: list[dict], material: str) -> Verdict | None:

@@ -227,7 +227,9 @@ def build(db) -> list[Unit]:
 def _fingerprint(unit: Unit, rows_by_id: dict) -> str:
     raw = unit.label + "|" + ",".join(
         f"{i}:{rows_by_id[i]['hash'] if i in rows_by_id else ''}" for i in unit.doc_ids)
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+    # 변경 감지용 지문일 뿐 보안 서명이 아니다. 값을 바꾸면 저장된 지문이 모두 달라지므로 SHA1을 유지한다.
+    # nosemgrep: opt.security.rules.python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
+    return hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
 
 
 def save(db, units: list[Unit] | None = None) -> dict[str, int]:
